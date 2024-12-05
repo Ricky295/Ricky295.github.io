@@ -1,4 +1,7 @@
 <!DOCTYPE html>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&display=swap" rel="stylesheet">
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -6,21 +9,28 @@
     <title>Sudoku Challenge</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+              font-family: "Caveat", cursive;
+  font-optical-sizing: auto;
+  font-weight: 500;
+  font-style: normal;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             margin: 0;
-            background-color: #f4f4f4;
+            background-color: #fff;
             flex-direction: column;
+background-image:
+linear-gradient(90deg, transparent 79px, #abced4 79px, #abced4 81px, transparent 81px),
+linear-gradient(#eee .1em, transparent .1em);
+background-size: 100% 1.2em;
         }
         .timer {
-            font-size: 24px;
+            font-size: 40px;
             margin-bottom: 20px;
         }
         #stats {
-            font-size: 18px;
+            font-size: 32px;
             margin-bottom: 20px;
         }
         table {
@@ -84,6 +94,7 @@
         <table id="sudoku-grid"></table>
         <button onclick="validateSudoku()">Validate Sudoku</button>
         <button onclick="giveHint()">Hint</button>
+        <button id="pauseButton" onclick="togglePause()">Pause</button> <!-- Pause button -->
     </div>
 
     <script>
@@ -93,6 +104,7 @@
         let lastcompletedtimestamp = 900;
         let sudokuscompleted = 0;
         let timeRemaining = 900; // Initial time in seconds
+		let paused = false;
         const baseSolution = [
             [5, 3, 4, 6, 7, 8, 9, 1, 2],
             [6, 7, 2, 1, 9, 5, 3, 4, 8],
@@ -192,54 +204,60 @@
         }
 
         let timerInterval;
-
+        
         function startTimer() {
-    timeRemaining = 900; // Reset to 15 minutes in seconds
-    document.getElementById('timer').innerText = `Time remaining: 15:00`;
+            timeRemaining = 900; // Reset to 15 minutes in seconds
+            document.getElementById('timer').innerText = `Time remaining: 15:00`;
 
-    clearInterval(timerInterval);
-    timerInterval = setInterval(() => {
-        timeRemaining--;
-        const minutes = Math.floor(timeRemaining / 60);
-        const seconds = timeRemaining % 60;
-        document.getElementById('timer').innerText = `Time remaining: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (paused) return; // If paused, do not update time
 
-        // Update progress bar
-        const progress = (timeRemaining / 9); // Should be 100% when timeRemaining is 900
-        document.getElementById('progress-bar').style.width = `${progress}%`;
+                timeRemaining--;
+                const minutes = Math.floor(timeRemaining / 60);
+                const seconds = timeRemaining % 60;
+                document.getElementById('timer').innerText = `Time remaining: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
-        let digitsleft = 0;
+                // Update progress bar
+                const progress = (timeRemaining / 9); // Should be 100% when timeRemaining is 900
+                document.getElementById('progress-bar').style.width = `${progress}%`;
 
-        // Stop the timer when time runs out
-        if (timeRemaining <= 0) {
-            const inputs = [...document.querySelectorAll('#sudoku-grid input')];
-            const userSolution = [];
-            for (let i = 0; i < 9; i++) userSolution.push([]);
-            inputs.forEach((input, index) => {
-                const row = Math.floor(index / 9);
-                const col = index % 9;
-                userSolution[row][col] = parseInt(input.value) || 0;
-            });
+                let digitsleft = 0;
 
-            // Check for remaining incorrect digits
-            for (let row = 0; row < 9; row++) {
-                for (let col = 0; col < 9; col++) {
-                    if (userSolution[row][col] !== solution[row][col]) {
-                        digitsleft += 1;
+                // Stop the timer when time runs out
+                if (timeRemaining <= 0) {
+                    const inputs = [...document.querySelectorAll('#sudoku-grid input')];
+                    const userSolution = [];
+                    for (let i = 0; i < 9; i++) userSolution.push([]);
+                    inputs.forEach((input, index) => {
+                        const row = Math.floor(index / 9);
+                        const col = index % 9;
+                        userSolution[row][col] = parseInt(input.value) || 0;
+                    });
+
+                    // Check for remaining incorrect digits
+                    for (let row = 0; row < 9; row++) {
+                        for (let col = 0; col < 9; col++) {
+                            if (userSolution[row][col] !== currentSolution[row][col]) {
+                                digitsleft++;
+                            }
+                        }
                     }
+                    score = digitsleft * 1000;
+                    clearInterval(timerInterval);
+                    alert(`Out of time! Score: ${score}`);
                 }
-            }
-
-            // Add points based on the number of digits left
-            score += Math.round((1e6 / lastcompletedtimestamp) * (31 - digitsleft) / 31);
-            document.getElementById('stats').innerText = `Score: ${String(score)} - Completed: ${String(sudokuscompleted)}`;
-
-            // Alert user and stop the timer
-            alert('Time is up!');
-            clearInterval(timerInterval);  // Ensure the timer is cleared
+            }, 1000);
         }
-    }, 1000);
-}
+
+function togglePause() {
+            paused = !paused;
+            if (paused) {
+                document.getElementById('pauseButton').innerText = 'Resume'; // Change button text to Resume
+            } else {
+                document.getElementById('pauseButton').innerText = 'Pause'; // Change button text to Pause
+            }
+        }
 
 
         function validateSudoku() {
@@ -298,7 +316,7 @@
         const col = td.cellIndex;  // Get the column index from the 'td' itself
         
         randomCell.value = solution[row][col];  // Fill the hint in the empty cell
-	timeRemaining -= 10; //HERE!!! LOOK OVER THERE! LOOK! 10 SECONDS EXTRA FOR HINT! THIS PREVENTS HINT ABUSE!!!
+	timeRemaining -= 15; //HERE!!! LOOK OVER THERE! LOOK! 10 SECONDS EXTRA FOR HINT! THIS PREVENTS HINT ABUSE!!!
     }
 }
 
