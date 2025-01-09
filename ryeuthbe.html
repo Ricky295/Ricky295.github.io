@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sudoku Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background-color: #f4f4f4;
+    }
+    form {
+      margin-bottom: 20px;
+    }
+    input[type="text"], input[type="date"] {
+      margin: 5px;
+      padding: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sudoku Dashboard</h1>
+
+  <!-- Form to Log Completion -->
+  <form id="log-form">
+    <label for="date">Date:</label>
+    <input type="date" id="date" required>
+    <label for="time">Time:</label>
+    <input type="text" id="time" placeholder="e.g., 04m 57s">
+    <label for="difficulty">Difficulty:</label>
+    <input type="text" id="difficulty" placeholder="e.g., Hard">
+    <button type="submit">Log Completion</button>
+  </form>
+
+  <!-- Table to Display Data -->
+  <table id="log-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Time</th>
+        <th>Difficulty</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Rows will be dynamically added here -->
+    </tbody>
+  </table>
+
+  <script>
+    // Initialize data from `data.json`
+    let completions = [];
+
+    async function loadJSON() {
+      try {
+        const response = await fetch('data.json');
+        completions = await response.json();
+        populateTable();
+        addToday();
+      } catch (error) {
+        console.error("Error loading JSON data:", error);
+      }
+    }
+
+    // Save JSON data back to file (for server-side use)
+    async function saveJSON() {
+      try {
+        const response = await fetch('save.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(completions)
+        });
+        if (!response.ok) {
+          throw new Error('Failed to save data.');
+        }
+      } catch (error) {
+        console.error("Error saving JSON data:", error);
+      }
+    }
+
+    // Populate the table
+    function populateTable() {
+      const tbody = document.getElementById("log-table").querySelector("tbody");
+      tbody.innerHTML = ""; // Clear existing rows
+
+      completions.forEach(entry => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td><a href="https://sudoku.coach/en/sudoku-of-the-day/${entry.Day}" target="_blank">${entry.Day}</a></td>
+          <td>${entry.Time}</td>
+          <td>${entry.Difficulty}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    // Log new completion
+    document.getElementById("log-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      const date = document.getElementById("date").value;
+      const time = document.getElementById("time").value || "Not done";
+      const difficulty = document.getElementById("difficulty").value || "";
+
+      completions.push({ "Day": date, "Time": time, "Difficulty": difficulty });
+      populateTable();
+      saveJSON();
+    });
+
+    // Automatically add today's puzzle
+    function addToday() {
+      const today = new Date().toISOString().split("T")[0];
+      if (!completions.some(entry => entry.Day === today)) {
+        completions.push({ "Day": today, "Time": "Not done", "Difficulty": "" });
+        populateTable();
+        saveJSON();
+      }
+    }
+
+    // Load data on page load
+    loadJSON();
+  </script>
+</body>
+</html>
