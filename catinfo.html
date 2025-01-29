@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Cat Breed Info</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        #catImage {
+            max-width: 80%;
+            max-height: 400px;
+            object-fit: contain;
+            margin-top: 20px;
+        }
+        .info {
+            font-size: 18px;
+            margin: 10px 0;
+        }
+        .bar-container {
+            display: inline-block;
+            width: 200px;
+            height: 10px;
+            background-color: #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+            vertical-align: middle;
+            margin-left: 10px;
+        }
+        .bar {
+            height: 100%;
+            background-color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="breedName">Loading...</h1>
+    <p id="breedDescription">Fetching data...</p>
+    <img id="catImage" src="" alt="Cat Image" />
+
+    <div class="info"><strong>Temperament:</strong> <span id="breedTemperament">Loading...</span></div>
+
+    <div class="info">
+        <strong>Weight (kg):</strong> <span id="breedWeight">Loading...</span>
+        <div class="bar-container"><div id="breedWeightBar" class="bar"></div></div>
+    </div>
+
+    <div class="info">
+        <strong>Lifespan (years):</strong> <span id="breedLifespan">Loading...</span>
+        <div class="bar-container"><div id="breedLifespanBar" class="bar"></div></div>
+    </div>
+
+    <div class="info">
+        <strong>Energy Level:</strong> <span id="breedEnergyValue"></span>
+        <div class="bar-container"><div id="breedEnergy" class="bar"></div></div>
+    </div>
+
+    <div class="info">
+        <strong>Intelligence:</strong> <span id="breedIntelligenceValue"></span>
+        <div class="bar-container"><div id="breedIntelligence" class="bar"></div></div>
+    </div>
+
+    <div class="info">
+        <strong>Dog Friendliness:</strong> <span id="breedDogFriendlyValue"></span>
+        <div class="bar-container"><div id="breedDogFriendly" class="bar"></div></div>
+    </div>
+
+    <div class="info">
+        <strong>Shedding Level:</strong> <span id="breedSheddingValue"></span>
+        <div class="bar-container"><div id="breedShedding" class="bar"></div></div>
+    </div>
+
+    <script>
+        function getBreedFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get("breed") || "bengal"; // Default to Bengal if no breed is specified
+        }
+
+        function setBarValue(elementId, value, maxValue) {
+            document.getElementById(elementId).style.width = (value / maxValue) * 100 + "%";
+        }
+
+        function loadBreedInfo() {
+            const breedName = getBreedFromURL();
+            fetch("https://api.thecatapi.com/v1/breeds")
+                .then(response => response.json())
+                .then(data => {
+                    const breed = data.find(b => b.name.toLowerCase() === breedName.toLowerCase());
+
+                    if (!breed) {
+                        document.getElementById("breedName").textContent = "Breed not found!";
+                        return;
+                    }
+
+                    document.getElementById("breedName").textContent = breed.name;
+                    document.getElementById("breedDescription").textContent = breed.description;
+                    document.getElementById("breedTemperament").textContent = breed.temperament;
+
+                    // Weight range and bar
+                    const weightMin = parseFloat(breed.weight.metric.split(" - ")[0]);
+                    const weightMax = parseFloat(breed.weight.metric.split(" - ")[1]);
+                    const weightAvg = (weightMin + weightMax) / 2;
+                    document.getElementById("breedWeight").textContent = `${weightMin} - ${weightMax} kg`;
+                    setBarValue("breedWeightBar", weightAvg, 10);
+
+                    // Lifespan range and bar
+                    const lifespanMin = parseFloat(breed.life_span.split(" - ")[0]);
+                    const lifespanMax = parseFloat(breed.life_span.split(" - ")[1]);
+                    const lifespanAvg = (lifespanMin + lifespanMax) / 2;
+                    document.getElementById("breedLifespan").textContent = `${lifespanMin} - ${lifespanMax} years`;
+                    setBarValue("breedLifespanBar", lifespanAvg, 20);
+
+                    // Traits (1-5 scale) with values
+                    document.getElementById("breedEnergyValue").textContent = breed.energy_level;
+                    setBarValue("breedEnergy", breed.energy_level, 5);
+
+                    document.getElementById("breedIntelligenceValue").textContent = breed.intelligence;
+                    setBarValue("breedIntelligence", breed.intelligence, 5);
+
+                    document.getElementById("breedDogFriendlyValue").textContent = breed.dog_friendly;
+                    setBarValue("breedDogFriendly", breed.dog_friendly, 5);
+
+                    document.getElementById("breedSheddingValue").textContent = breed.shedding_level;
+                    setBarValue("breedShedding", breed.shedding_level, 5);
+
+                    // Load image
+                    fetch(`https://api.thecatapi.com/v1/images/search?limit=1&breed_ids=${breed.id}`)
+                        .then(response => response.json())
+                        .then(imageData => {
+                            document.getElementById("catImage").src = imageData[0].url;
+                        })
+                        .catch(error => console.error('Error fetching cat image:', error));
+                })
+                .catch(error => console.error('Error fetching breed info:', error));
+        }
+
+        window.onload = loadBreedInfo;
+    </script>
+</body>
+</html>
