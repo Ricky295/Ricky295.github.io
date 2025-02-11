@@ -1,10 +1,11 @@
 let solution;
-const urlParams = new URLSearchParams(window.location.search);
 let givens;
 let seed;
 
 function seededRandom(seed) {
-    return (((seed - 390627) ^ 1.79324 * (seed % 1.79324 + 0.25897) % 0.15823) / 0.15823);
+    let a = 0.15873;
+    let b = 1 + (((a % 0.073)/0.073) / 2);
+    return ((seed^b)%a)/a;
 }
 
 const baseSolution = [
@@ -20,7 +21,7 @@ const baseSolution = [
 ];
 
 function calculateDifficulty(day, difficulty) {
-    const seed = day; 
+    seed = day; 
     const random = seededRandom(seed);
     const difficulties = [];
 
@@ -29,6 +30,7 @@ function calculateDifficulty(day, difficulty) {
     }
 
     difficulties.sort((a, b) => a - b);
+    console.log("Difficulties: " + difficulties[difficulty])
     return difficulties[difficulty];
 }
 
@@ -58,15 +60,17 @@ function flipGrid(grid) {
 function createPuzzle(base) {
     let newBase = base.map(row => [...row]);
     let numbersToRemove = 81 - givens;
+    let i = 0;
 
     while (numbersToRemove > 0) {
-        const row = Math.floor(seededRandom(seed) * 9);
-        const col = Math.floor(seededRandom(seed) * 9);
+        const row = Math.floor(seededRandom(seed + i) * 9);
+        const col = Math.floor(seededRandom(seed + i * Math.sqrt(3)) * 9);
 
         if (newBase[row][col] !== 0) {
             newBase[row][col] = 0;
             numbersToRemove--;
         }
+        i++;
     }
 
     return newBase;
