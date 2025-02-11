@@ -1,6 +1,11 @@
 let solution;
 const urlParams = new URLSearchParams(window.location.search);
-const givens = parseInt(urlParams.get('givens')) || (50 - Math.floor(parseFloat(urlParams.get('difficulty') || 0) * 6.25)) || Math.floor(Math.random() * 17) / 4;
+let givens;
+let seed;
+
+function seededRandom(seed) {
+    return (((seed - 390627) ^ 1.79324 * (seed % 1.79324 + 0.25897) % 0.15823) / 0.15823);
+}
 
 const baseSolution = [
     [5, 3, 4, 6, 7, 8, 9, 1, 2],
@@ -14,43 +19,49 @@ const baseSolution = [
     [3, 4, 5, 2, 8, 6, 1, 7, 9]
 ];
 
-// Shuffle array using Fisher-Yates algorithm
+function calculateDifficulty(day, difficulty) {
+    const seed = day; 
+    const random = seededRandom(seed);
+    const difficulties = [];
+
+    for (let i = 0; i < 6; i++) {
+        difficulties.push(Math.floor(seededRandom(seed * 6 + i) * 17) / 4);
+    }
+
+    difficulties.sort((a, b) => a - b);
+    return difficulties[difficulty];
+}
+
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = Math.floor(seededRandom(seed) * (i + 1));
         [array[i], array[j]] = [array[j], array[i]];
     }
     return array;
 }
 
-// Swap numbers based on a shuffled array of 1-9
 function swapNumbers(base) {
     const baseNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
     const shuffledNumbers = shuffleArray([...baseNumbers]);
 
-    // Map each cell in the base solution to a shuffled number
     return base.map(row => row.map(cell => shuffledNumbers[cell - 1]));
 }
 
-// Rotate the grid 90 degrees clockwise
 function rotateGrid(grid) {
     return grid[0].map((_, colIndex) => grid.map(row => row[colIndex])).reverse();
 }
 
-// Flip the grid horizontally
 function flipGrid(grid) {
     return grid.map(row => row.reverse());
 }
 
-// Remove numbers to create the puzzle based on givens
 function createPuzzle(base) {
-    let newBase = base.map(row => [...row]); // Clone the base grid
-    let numbersToRemove = 81 - givens; // Calculate how many cells to remove
+    let newBase = base.map(row => [...row]);
+    let numbersToRemove = 81 - givens;
 
-    // Randomly remove numbers until the puzzle has the desired number of givens
     while (numbersToRemove > 0) {
-        const row = Math.floor(Math.random() * 9);
-        const col = Math.floor(Math.random() * 9);
+        const row = Math.floor(seededRandom(seed) * 9);
+        const col = Math.floor(seededRandom(seed) * 9);
 
         if (newBase[row][col] !== 0) {
             newBase[row][col] = 0;
@@ -61,34 +72,30 @@ function createPuzzle(base) {
     return newBase;
 }
 
-// Check if a puzzle has a unique solution (using a solver library)
 function hasUniqueSolution(puzzleString) {
     const solver = createSolver(puzzleString);
     const solutions = solver.findSolutions(2);
     return solutions.length === 1;
 }
 
-// Generate a valid Sudoku puzzle with a unique solution
-function generateSudokuPuzzle() {
-    // Start with the base solution
+function generateSudokuPuzzle(day, dailyDifficulty) {
     solution = baseSolution;
+    givens = Math.max(41 - (dailyDifficulty * 4), 50 - (dailyDifficulty * 8));
 
-    // Apply random transformations (number swapping, rotation, and/or flipping)
+    const difficulty = calculateDifficulty(day, dailyDifficulty);
+
     solution = swapNumbers(solution);
-    if (Math.random() > 0.5) solution = rotateGrid(solution);
-    if (Math.random() > 0.5) solution = flipGrid(solution);
+    if (seededRandom(seed) > 0.5) solution = rotateGrid(solution);
+    if (seededRandom(seed) % 0.5 > 0.25) solution = flipGrid(solution);
 
-    // Create the puzzle by removing numbers
     let grid = createPuzzle(solution);
-
-    // Convert the grid to a string format for uniqueness check
     let puzzleString = grid.flat().map(cell => cell === 0 ? "." : cell).join("");
 
-    // Ensure the puzzle has a unique solution
     if (hasUniqueSolution(puzzleString)) {
         return grid;
     } else {
-        // Retry if the puzzle does not have a unique solution
-        return generateSudokuPuzzle();
+        return generateSudokuPuzzle(day, dailyDifficulty); // Retry with same parameters
     }
 }
+
+console.log(generateSudokuPuzzle(123, 2)); // Example usage
