@@ -5,7 +5,7 @@ let seed;
 function seededRandom(seed) {
     let a = 0.15873;
     let b = 1 + (((a % 0.073)/0.073) / 2);
-    return ((seed^b)%a)/a;
+    return ((seed**b)%a)/a;
 }
 
 const baseSolution = [
