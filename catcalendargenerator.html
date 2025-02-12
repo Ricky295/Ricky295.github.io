@@ -90,14 +90,22 @@
 <script>
     let breeds = [];
 
-    // Fetch cat breeds from API
     async function fetchBreeds() {
         const response = await fetch("https://api.thecatapi.com/v1/breeds");
         const data = await response.json();
-        breeds = data;
+        breeds = [{ id: "random", name: "Random" }, ...data]; // Add "Random" as an option
     }
 
-    // Generate month input fields
+    async function fetchRandomCatImage(breedId) {
+        let url = "https://api.thecatapi.com/v1/images/search";
+        if (breedId !== "random") url += `?breed_ids=${breedId}`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        return data[0]?.id || ""; // Return the image ID or empty string if not found
+    }
+
     function generateInputs() {
         const container = document.getElementById("monthsContainer");
         container.innerHTML = "";
@@ -121,33 +129,34 @@
         }
     }
 
-    // Generate link with user selections
-    function generateLink() {
+    async function generateLink() {
         const year = document.getElementById("year").value;
         const startMonth = document.getElementById("month").value;
         const numMonths = document.getElementById("numMonths").value;
 
-        const photoIds = [];
         const breedSelectors = document.querySelectorAll(".breedSelect");
         const photoIdInputs = document.querySelectorAll(".photoIdInput");
+        const photoIds = [];
 
-        breedSelectors.forEach((select, index) => {
-            const breedId = select.value;
-            const photoId = photoIdInputs[index].value.trim();
+        for (let i = 0; i < breedSelectors.length; i++) {
+            const breedId = breedSelectors[i].value;
+            const photoId = photoIdInputs[i].value.trim();
+
             if (photoId) {
                 photoIds.push(photoId);
             } else if (breedId) {
-                photoIds.push(`random:${breedId}`);
+                const imageId = await fetchRandomCatImage(breedId);
+                photoIds.push(imageId);
             } else {
                 photoIds.push(""); // Empty if neither is selected
             }
-        });
+        }
 
-        const url = `ricky295.github.io/catcalendar.html?year=${year}&month=${startMonth}&ids=${photoIds.join(",")}`;
+        const url = `catcalendar.html?year=${year}&month=${startMonth}&ids=${photoIds.join(",")}`;
         document.getElementById("result").innerHTML = `<a href="${url}" target="_blank">Open Calendar</a>`;
     }
 
-    fetchBreeds(); // Load breeds on page load
+    fetchBreeds();
 </script>
 
 </body>
