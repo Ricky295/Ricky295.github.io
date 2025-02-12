@@ -30,7 +30,6 @@ function calculateDifficulty(day, difficulty) {
     }
 
     difficulties.sort((a, b) => a - b);
-    console.log("Difficulties: " + difficulties[difficulty])
     return difficulties[difficulty];
 }
 
@@ -84,9 +83,9 @@ function hasUniqueSolution(puzzleString) {
 
 function generateSudokuPuzzle(day, dailyDifficulty) {
     solution = baseSolution;
-    givens = Math.max(41 - (dailyDifficulty * 4), 50 - (dailyDifficulty * 8));
 
     const difficulty = calculateDifficulty(day, dailyDifficulty);
+    givens = Math.max(41 - (difficulty * 4), 50 - (difficulty * 8));
 
     solution = swapNumbers(solution);
     if (seededRandom(seed) > 0.5) solution = rotateGrid(solution);
