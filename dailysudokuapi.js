@@ -101,5 +101,3 @@ function generateSudokuPuzzle(day, dailyDifficulty) {
         return generateSudokuPuzzle(day, dailyDifficulty); // Retry with same parameters
     }
 }
-
-console.log(generateSudokuPuzzle(123, 2)); // Example usage
