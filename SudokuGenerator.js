@@ -64,8 +64,8 @@ class SudokuGenerator {
         
         let attempts = cellsToRemove;
         while (attempts > 0) {
-            const row = Math.floor(Math.random() * 9);
-            const col = Math.floor(Math.random() * 9);
+            const row = Math.floor(this.seededRandom(this.randomSeed * (attempts * 69)) * 9);
+            const col = Math.floor(this.seededRandom(this.randomSeed * (attempts * 420)) * 9);
             
             if (puzzle[row][col] !== 0) {
                 puzzle[row][col] = 0;
