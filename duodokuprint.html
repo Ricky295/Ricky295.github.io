@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="duodokusolver.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Duodoku Puzzle Printer</title>
+  <style>
+    table {
+      border-collapse: collapse;
+      margin: 20px auto;
+    }
+    td {
+      text-align: center;
+      border: 1px solid black;
+      background-color: #ccc;
+    }
+    
+    /* Add thicker borders to create bold 4x2 boxes */
+    td:nth-child(4n) {
+      border-right: 3px solid black;
+    }
+    td:nth-child(1) {
+      border-left: 3px solid black;
+    }
+    
+    tr:nth-child(2n) td {
+      border-bottom: 3px solid black;
+    }
+    tr:nth-child(1) td {
+      border-top: 3px solid black;
+    }
+    
+    .editable {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #fff;
+      cursor: pointer;
+    }
+
+    #checkButton {
+      display: block;
+      margin: 20px auto;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    #feedback {
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1 style="text-align: center;">Duodoku Puzzle</h1>
+  <table id="puzzleTable">
+    <!-- Table will be filled dynamically -->
+  </table>
+
+  <button id="checkButton">Check Solution</button>
+  <div id="feedback"></div>
+
+  <script>
+    // Function to extract the puzzle string from the URL query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    function getPuzzleFromURL() {
+      return urlParams.get('puzzle') || '';
+    }
+
+    // Function to render the puzzle as an 8x8 table with editable cells
+    function renderPuzzle() {
+      const puzzleString = getPuzzleFromURL();
+      const zoom = parseInt(urlParams.get('zoom')) || 50; // Default to 50 if no zoom is provided
+      if (puzzleString.length !== 64) {
+        alert('Puzzle string must be exactly 64 characters.');
+        return;
+      }
+
+      const table = document.getElementById('puzzleTable');
+      let tableHTML = '';
+
+      // Set the zoom size dynamically for the cells
+      const cellSize = zoom + 'px';
+
+      for (let row = 0; row < 8; row++) {
+        tableHTML += '<tr>';
+        for (let col = 0; col < 8; col++) {
+          const cellValue = puzzleString[row * 8 + col];
+          // If the value is 0, leave the cell empty; otherwise, display the value
+          tableHTML += `<td><div class="editable" contenteditable="${cellValue === '0'}" style="width: ${cellSize}; height: ${cellSize}; font-size: ${zoom / 2}px;">${cellValue != '0' ? cellValue : ''}</div></td>`;
+        }
+        tableHTML += '</tr>'; // Close the row after finishing the columns
+      }
+
+      table.innerHTML = tableHTML;
+    }
+
+    function getCurrentPuzzle() {
+  const grid = document.getElementById('puzzleTable'); // Change to the actual table id
+  const puzzle = Array.from({ length: 8 }, () => Array(8).fill(0));
+
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const cell = grid.rows[r].cells[c].querySelector('div'); // Access the div instead of input
+      puzzle[r][c] = cell.textContent ? parseInt(cell.textContent, 10) : 0; // Use textContent instead of value
+    }
+  }
+  return puzzle;
+}
+
+
+  function checkPuzzle() {
+    const solver = new DuoDoKuSolver();
+    const userSolution = getCurrentPuzzle();
+    
+    solver.enterPuzzle(getPuzzleFromURL());  // Solve the given puzzle
+    const correctSolution = solver.mPuzzle; // Assuming solver updates mPuzzle with the correct answer
+
+    const feedbackElement = document.getElementById('feedback');
+
+    // Compare the user solution with the correct solution element by element
+    let isCorrect = true;
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            if (userSolution[r][c] !== correctSolution[r][c]) {
+                isCorrect = false;
+                break;
+            }
+        }
+        if (!isCorrect) break;
+    }
+
+    // Provide feedback based on the comparison
+    if (isCorrect) {
+        feedbackElement.textContent = 'Correct! Well done!';
+        feedbackElement.style.color = 'green';
+    } else {
+        feedbackElement.textContent = 'Incorrect. Try again!';
+        feedbackElement.style.color = 'red';
+    }
+}
+
+    // Call renderPuzzle on page load
+    renderPuzzle();
+
+    // Add event listener to the "Check Solution" button
+    document.getElementById('checkButton').addEventListener('click', checkPuzzle);
+  </script>
+</body>
+</html>
