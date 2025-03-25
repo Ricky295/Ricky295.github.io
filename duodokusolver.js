@@ -88,40 +88,44 @@ class DuoDoKuSolver {
     }
 
     bruteForcePuzzle(r, c, puz, sol) {
-        if (r === 8) {
-            if (this.checkSolution(sol)) {
-                this.solutionCount++;
-                this.displayPuzzle(sol);
-            }
-            return;
+    if (r === 8) {
+        if (this.checkSolution(sol)) {
+            this.solutionCount++;
+            this.displayPuzzle(sol);
+            return puz; // Return the puzzle after the first solution is found
         }
+        return;
+    }
 
-        if (puz[r][c] !== 0) {
-            if (this.isNotDuplicated(r, c, puz[r][c], sol)) {
-                sol[r][c] = puz[r][c];
-                if (c !== 7) {
-                    this.bruteForcePuzzle(r, c + 1, puz, sol);
-                } else {
-                    this.bruteForcePuzzle(r + 1, 0, puz, sol);
-                }
-                if (this.solutionCount > 1) return;
-                sol[r][c] = 0;
+    if (puz[r][c] !== 0) {
+        if (this.isNotDuplicated(r, c, puz[r][c], sol)) {
+            sol[r][c] = puz[r][c];
+            if (c !== 7) {
+                const result = this.bruteForcePuzzle(r, c + 1, puz, sol);
+                if (result) return result; // Propagate the result back up if a solution is found
+            } else {
+                const result = this.bruteForcePuzzle(r + 1, 0, puz, sol);
+                if (result) return result; // Propagate the result back up if a solution is found
             }
-        } else {
-            for (let n = 1; n <= 4; n++) {
-                if (this.isNotDuplicated(r, c, n, sol)) {
-                    sol[r][c] = n;
-                    if (c !== 7) {
-                        this.bruteForcePuzzle(r, c + 1, puz, sol);
-                    } else {
-                        this.bruteForcePuzzle(r + 1, 0, puz, sol);
-                    }
-                    if (this.solutionCount > 1) return;
-                    sol[r][c] = 0;
+            sol[r][c] = 0;
+        }
+    } else {
+        for (let n = 1; n <= 4; n++) {
+            if (this.isNotDuplicated(r, c, n, sol)) {
+                sol[r][c] = n;
+                if (c !== 7) {
+                    const result = this.bruteForcePuzzle(r, c + 1, puz, sol);
+                    if (result) return result; // Propagate the result back up if a solution is found
+                } else {
+                    const result = this.bruteForcePuzzle(r + 1, 0, puz, sol);
+                    if (result) return result; // Propagate the result back up if a solution is found
                 }
+                sol[r][c] = 0;
             }
         }
     }
+}
+
 
     displayPuzzle(solution) {
         console.log(`Solution ${this.solutionCount}:`);
