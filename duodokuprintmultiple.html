@@ -19,22 +19,28 @@
         }
         .grid-container {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr); /* 2 columns for the 2x3 grid layout */
             gap: 15px;
             justify-content: center;
         }
         .grid {
-            display: grid;
-            grid-template-columns: repeat(8, 50px); /* 8 columns for 8x8 grid */
-            grid-gap: 5px;
-            justify-content: center;
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .grid td {
+            width: 50px;
+            height: 50px;
+            text-align: center;
+            font-size: 20px;
+            border: 1px solid #ccc;
         }
         .grid input {
             width: 50px;
             height: 50px;
             text-align: center;
             font-size: 20px;
-            border: 1px solid #ccc;
+            border: none;
+            text-align: center;
         }
         .puzzle-container {
             text-align: center;
@@ -65,53 +71,62 @@
     <!-- External JS API for generating Dudooku puzzles -->
     <script src="duodokuapi.js"></script>
     <script>
-    // Function to create a grid for each puzzle
-    function createPuzzleGrid(puzzleString) {
-        const gridContainer = document.getElementById('grid-container'); //you should do a 2x3 layout instead of 3x2
-        const grid = document.createElement('div'); //additionally, <table> is better. That way we can do borders.
-        grid.classList.add('puzzle-container');
-        
-        const gridDiv = document.createElement('div');
-        gridDiv.classList.add('grid');
+        // Function to create a grid for each puzzle using table
+        function createPuzzleGrid(puzzleString) {
+            const gridContainer = document.getElementById('grid-container'); 
+            const grid = document.createElement('div');
+            grid.classList.add('puzzle-container');
 
-        // Generate a grid of 64 cells (8x8 grid)
-        for (let i = 0; i < 64; i++) {
-            const cell = document.createElement('input');
-            cell.type = 'text';
-            cell.maxLength = 1;
-            cell.value = puzzleString[i] !== '0' ? puzzleString[i] : ''; // Use '0' for blank cells
-            gridDiv.appendChild(cell);
+            // Create a table for better structure
+            const table = document.createElement('table');
+            table.classList.add('grid');
+
+            // Create the rows and cells for the puzzle
+            for (let row = 0; row < 8; row++) {
+                const tr = document.createElement('tr'); // Table row
+
+                for (let col = 0; col < 8; col++) {
+                    const td = document.createElement('td'); // Table cell
+                    const cell = document.createElement('input');
+                    cell.type = 'text';
+                    cell.maxLength = 1;
+                    cell.value = puzzleString[row * 8 + col] !== '0' ? puzzleString[row * 8 + col] : ''; // Use '0' for blank cells
+                    td.appendChild(cell); // Add input element to cell
+                    tr.appendChild(td); // Add cell to row
+                }
+
+                table.appendChild(tr); // Add row to table
+            }
+
+            grid.appendChild(table); // Add table to grid container
+            gridContainer.appendChild(grid); // Add grid to page
         }
 
-        grid.appendChild(gridDiv);
-        gridContainer.appendChild(grid);
-    }
+        // Function to generate 6 random puzzles on page load
+        window.onload = function() {
+            for (let i = 0; i < 6; i++) {
+                let generator = new DuoDoKuGenerator();
+                
+                // Generate the solution first
+                generator.generateSeedPuzzle(); // generates the solution
+                let solution = generator.mPuzzle; // Access the solution
 
-    // Function to generate 6 random puzzles on page load
-    window.onload = function() {
-        for (let i = 0; i < 6; i++) {
-            let generator = new DuoDoKuGenerator();
-            
-            // Generate the solution first
-            generator.generateSeedPuzzle(); // generates the solution
-            let solution = generator.mPuzzle; // Access the solution
+                // Now generate the puzzle with missing clues (i.e., a solved puzzle with some numbers removed)
+                generator.generatePuzzle(40); // 40 clues left for the puzzle (adjust as needed)
+                let puzzle = generator.mPuzzle; // Access the generated puzzle with clues removed
 
-            // Now generate the puzzle with missing clues (i.e., a solved puzzle with some numbers removed)
-            generator.generatePuzzle(40); // 40 clues left for the puzzle (adjust as needed)
-            let puzzle = generator.mPuzzle; // Access the generated puzzle with clues removed
+                // Flatten the puzzle and create a string without commas
+                let flatPuzzle = puzzle.flat(); // Flatten the nested array
+                let puzzleString = flatPuzzle.join(''); // Join the elements without commas
 
-            // Flatten the puzzle and create a string without commas
-            let flatPuzzle = puzzle.flat(); // Flatten the nested array
-            let puzzleString = flatPuzzle.join(''); // Join the elements without commas
+                // Debugging output
+                console.log("Puzzle String:", puzzleString); // Check the format of the generated puzzle
 
-            // Debugging output
-            console.log("Puzzle String:", puzzleString); // Check the format of the generated puzzle
-
-            // Create the puzzle grid on the page
-            createPuzzleGrid(puzzleString);
-        }
-    };
-</script>
+                // Create the puzzle grid on the page
+                createPuzzleGrid(puzzleString);
+            }
+        };
+    </script>
 
 </body>
 </html>
