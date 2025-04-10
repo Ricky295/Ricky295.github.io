@@ -72,14 +72,19 @@
     }
 
     function convertToArray(puzzleString) {
-    let array = [];
-    for (let i = 0; i < puzzleString.length; i += 8) {
-        // Slice the string in chunks of 8, convert each chunk to an array of numbers
-        array.push(puzzleString.slice(i, i + 8).split('').map(Number));
-    }
-    return array;
-}
+      let array = [];
+      // Ensure the puzzle string is exactly 64 characters
+      if (puzzleString.length !== 64) {
+        alert('Puzzle string must be exactly 64 characters.');
+        return array;
+      }
 
+      // Slice the string in chunks of 8, convert each chunk to an array of numbers
+      for (let i = 0; i < puzzleString.length; i += 8) {
+        array.push(puzzleString.slice(i, i + 8).split('').map(Number));
+      }
+      return array;
+    }
 
     // Function to render the puzzle as an 8x8 table with editable cells
     function renderPuzzle() {
@@ -110,56 +115,59 @@
     }
 
     function getCurrentPuzzle() {
-  const grid = document.getElementById('puzzleTable'); // Change to the actual table id
-  const puzzle = Array.from({ length: 8 }, () => Array(8).fill(0));
+      const grid = document.getElementById('puzzleTable'); // Change to the actual table id
+      const puzzle = Array.from({ length: 8 }, () => Array(8).fill(0));
 
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      const cell = grid.rows[r].cells[c].querySelector('div'); // Access the div instead of input
-      puzzle[r][c] = cell.textContent ? parseInt(cell.textContent, 10) : 0; // Use textContent instead of value
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const cell = grid.rows[r].cells[c].querySelector('div'); // Access the div instead of input
+          puzzle[r][c] = cell.textContent ? parseInt(cell.textContent, 10) : 0; // Use textContent instead of value
+        }
+      }
+      return puzzle;
     }
-  }
-  return puzzle;
-}
 
+    function checkPuzzle() {
+      const solver = new DuoDoKuSolver();
+      const userSolution = getCurrentPuzzle();
+      console.log('User Solution:', userSolution);
 
-  function checkPuzzle() {
-  const solver = new DuoDoKuSolver();
-  const userSolution = getCurrentPuzzle();
-  console.log(userSolution);
+      const puzzleString = getPuzzleFromURL();
+      const puzzleArray = convertToArray(puzzleString);
+
+      if (puzzleArray.length === 0) {
+        return;
+      }
+
+      // Pass the puzzle array to the solver to set up the puzzle
+      solver.enterPuzzle(puzzleArray);  // Now passing the array directly
+
+      const correctSolution = solver.mPuzzle;  // This will be the solver's result
+      console.log('Correct Solution:', correctSolution);
+
+      const feedbackElement = document.getElementById('feedback');
       
-  
-  // Pass the puzzle string from the URL to the solver to set up the puzzle
-  solver.enterPuzzle(convertToArray(getPuzzleFromURL()));  // the error is 100% in this line
+      // Compare the user solution with the correct solution element by element
+      let isCorrect = true;
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          if (userSolution[r][c] !== correctSolution[r][c]) {
+            isCorrect = false;
+            break;
+          }
+        }
+        if (!isCorrect) break;
+      }
 
-  const correctSolution = solver.mPuzzle;  // This will be the solver's result
-
-  console.log(correctSolution)
-  
-  const feedbackElement = document.getElementById('feedback');
-  
-  // Compare the user solution with the correct solution element by element
-  let isCorrect = true;
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      if (userSolution[r][c] !== correctSolution[r][c]) {
-        isCorrect = false;
-        break;
+      // Provide feedback based on the comparison
+      if (isCorrect) {
+        feedbackElement.textContent = 'Correct! Well done!';
+        feedbackElement.style.color = 'green';
+      } else {
+        feedbackElement.textContent = 'Incorrect. Try again!';
+        feedbackElement.style.color = 'red';
       }
     }
-    if (!isCorrect) break;
-  }
-
-  // Provide feedback based on the comparison
-  if (isCorrect) {
-    feedbackElement.textContent = 'Correct! Well done!';
-    feedbackElement.style.color = 'green';
-  } else {
-    feedbackElement.textContent = 'Incorrect. Try again!';
-    feedbackElement.style.color = 'red';
-  }
-}
-
 
     // Call renderPuzzle on page load
     renderPuzzle();
