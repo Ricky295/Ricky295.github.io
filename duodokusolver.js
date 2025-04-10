@@ -15,6 +15,7 @@ class DuoDoKuSolver {
 
         this.solutionCount = 0;
         this.setOfSolutions = new Set();
+        this.solutions = [];  // To store the solutions
     }
 
     block(r, c) {
@@ -88,31 +89,19 @@ class DuoDoKuSolver {
     }
 
     bruteForcePuzzle(r, c, puz, sol) {
-    if (r === 8) {
-        if (this.checkSolution(sol)) {
-            this.solutionCount++;
-            this.displayPuzzle(sol);
-            return puz; // Return the puzzle after the first solution is found
-        }
-        return;
-    }
-
-    if (puz[r][c] !== 0) {
-        if (this.isNotDuplicated(r, c, puz[r][c], sol)) {
-            sol[r][c] = puz[r][c];
-            if (c !== 7) {
-                const result = this.bruteForcePuzzle(r, c + 1, puz, sol);
-                if (result) return result; // Propagate the result back up if a solution is found
-            } else {
-                const result = this.bruteForcePuzzle(r + 1, 0, puz, sol);
-                if (result) return result; // Propagate the result back up if a solution is found
+        if (r === 8) {
+            if (this.checkSolution(sol)) {
+                this.solutionCount++;
+                this.displayPuzzle(sol);
+                this.solutions.push(JSON.parse(JSON.stringify(sol))); // Store the solution
+                return puz; // Return the puzzle after the first solution is found
             }
-            sol[r][c] = 0;
+            return;
         }
-    } else {
-        for (let n = 1; n <= 4; n++) {
-            if (this.isNotDuplicated(r, c, n, sol)) {
-                sol[r][c] = n;
+
+        if (puz[r][c] !== 0) {
+            if (this.isNotDuplicated(r, c, puz[r][c], sol)) {
+                sol[r][c] = puz[r][c];
                 if (c !== 7) {
                     const result = this.bruteForcePuzzle(r, c + 1, puz, sol);
                     if (result) return result; // Propagate the result back up if a solution is found
@@ -122,10 +111,22 @@ class DuoDoKuSolver {
                 }
                 sol[r][c] = 0;
             }
+        } else {
+            for (let n = 1; n <= 4; n++) {
+                if (this.isNotDuplicated(r, c, n, sol)) {
+                    sol[r][c] = n;
+                    if (c !== 7) {
+                        const result = this.bruteForcePuzzle(r, c + 1, puz, sol);
+                        if (result) return result; // Propagate the result back up if a solution is found
+                    } else {
+                        const result = this.bruteForcePuzzle(r + 1, 0, puz, sol);
+                        if (result) return result; // Propagate the result back up if a solution is found
+                    }
+                    sol[r][c] = 0;
+                }
+            }
         }
     }
-}
-
 
     displayPuzzle(solution) {
         console.log(`Solution ${this.solutionCount}:`);
@@ -150,4 +151,25 @@ class DuoDoKuSolver {
         this.setOfSolutions.add(JSON.stringify(s));
         return this.setOfSolutions.size !== count0;
     }
+
+    // Accessor method to get all solutions
+    getSolutions() {
+        return this.solutions;
+    }
 }
+
+// Example usage:
+
+const solver = new DuoDoKuSolver();
+solver.enterPuzzle([
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0]
+]);
+
+console.log(solver.getSolutions());  // Get all the solutions
