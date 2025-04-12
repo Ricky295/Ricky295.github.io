@@ -68,6 +68,19 @@
       background-color: #e6e6e6;
     }
     
+    .cell-content.hint {
+      color: #1e88e5;
+      font-weight: bold;
+    }
+    
+    .cell-content.incorrect {
+      color: #e53935;
+    }
+
+    .cell-content.correct {
+      color: #43a047;
+    }
+    
     .cell-content[contenteditable="true"] {
       cursor: text;
       outline: none;
@@ -94,6 +107,30 @@
       background-color: #45a049;
     }
     
+    button.secondary {
+      background-color: #2196F3;
+    }
+    
+    button.secondary:hover {
+      background-color: #1976D2;
+    }
+    
+    button.check {
+      background-color: #FF9800;
+    }
+    
+    button.check:hover {
+      background-color: #F57C00;
+    }
+    
+    button.print {
+      background-color: #9C27B0;
+    }
+    
+    button.print:hover {
+      background-color: #7B1FA2;
+    }
+    
     .difficulty-control {
       display: flex;
       align-items: center;
@@ -117,6 +154,34 @@
       min-width: 80px;
       text-align: center;
     }
+    
+    .timer {
+      font-size: 24px;
+      margin: 10px 0;
+    }
+    
+    @media print {
+      .controls, .date-control, button, .difficulty-control {
+        display: none !important;
+      }
+      
+      body {
+        margin: 0;
+        padding: 20px;
+      }
+      
+      .info {
+        margin-top: 10px;
+      }
+      
+      .sudoku-table {
+        page-break-inside: avoid;
+      }
+      
+      .timer {
+        display: none;
+      }
+    }
   </style>
 </head>
 <body>
@@ -139,8 +204,16 @@
     <button id="generate-custom-daily">Generate</button>
   </div>
   
+  <div class="timer" id="timer">00:00</div>
+  
   <div class="sudoku-container">
     <table class="sudoku-table" id="sudoku-table"></table>
+  </div>
+  
+  <div class="controls">
+    <button id="hint-btn" class="secondary">Get Hint</button>
+    <button id="check-btn" class="check">Check Solution</button>
+    <button id="print-btn" class="print">Print Puzzle</button>
   </div>
   
   <div class="info">
@@ -161,10 +234,17 @@
       const puzzleInfo = document.getElementById('puzzle-info');
       const customDateInput = document.getElementById('custom-date');
       const generateCustomDailyBtn = document.getElementById('generate-custom-daily');
+      const hintBtn = document.getElementById('hint-btn');
+      const checkBtn = document.getElementById('check-btn');
+      const printBtn = document.getElementById('print-btn');
+      const timerElement = document.getElementById('timer');
       
       let generator = new NEWSudokuGenerator();
       let currentPuzzle = null;
       let currentSolution = null;
+      let timerInterval = null;
+      let seconds = 0;
+      let hints = [];
       
       // Initialize date input with today's date
       const today = new Date();
@@ -172,6 +252,32 @@
       const month = String(today.getMonth() + 1).padStart(2, '0');
       const day = String(today.getDate()).padStart(2, '0');
       customDateInput.value = `${year}-${month}-${day}`;
+      
+      // Timer functions
+      function startTimer() {
+        // Reset timer if it's already running
+        stopTimer();
+        seconds = 0;
+        updateTimerDisplay();
+        
+        timerInterval = setInterval(() => {
+          seconds++;
+          updateTimerDisplay();
+        }, 1000);
+      }
+      
+      function stopTimer() {
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+      }
+      
+      function updateTimerDisplay() {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        timerElement.textContent = `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+      }
       
       // Update difficulty value display
       function updateDifficultyLabel() {
@@ -206,6 +312,7 @@
       // Update the grid with puzzle values
       function updateGrid(puzzle) {
         const cells = tableElement.querySelectorAll('.cell-content');
+        hints = []; // Reset hints
         
         let givensCount = 0;
         
@@ -213,6 +320,9 @@
           const row = parseInt(cell.dataset.row);
           const col = parseInt(cell.dataset.col);
           const value = puzzle[row][col];
+          
+          // Remove any previous classes
+          cell.classList.remove('given', 'hint', 'incorrect', 'correct');
           
           if (value !== 0) {
             // This is a given
@@ -223,7 +333,6 @@
           } else {
             // This is an empty cell for user input
             cell.textContent = '';
-            cell.classList.remove('given');
             cell.contentEditable = true;
             
             // Add event listener to validate input
@@ -238,6 +347,9 @@
               
               // Update content
               e.target.textContent = text;
+              
+              // Remove any validation classes when user edits
+              e.target.classList.remove('hint', 'incorrect', 'correct');
               
               // Position cursor at the end
               if (text) {
@@ -275,6 +387,7 @@
         
         puzzleInfo.textContent = `Random Puzzle`;
         updateGrid(currentPuzzle);
+        startTimer();
       }
       
       // Generate today's daily puzzle
@@ -287,6 +400,7 @@
         const today = new Date();
         puzzleInfo.textContent = `Daily Puzzle for ${today.toLocaleDateString()}`;
         updateGrid(currentPuzzle);
+        startTimer();
       }
       
       // Generate custom daily puzzle
@@ -311,13 +425,102 @@
         const displayDate = new Date(year, month - 1, day);
         puzzleInfo.textContent = `Daily Puzzle for ${displayDate.toLocaleDateString()}`;
         updateGrid(currentPuzzle);
+        startTimer();
       }
       
       // Show solution
       function showSolution() {
         if (currentSolution) {
           updateGrid(currentSolution);
+          stopTimer();
         }
+      }
+      
+      // Get a hint
+      function getHint() {
+        if (!currentPuzzle || !currentSolution) return;
+        
+        const cells = tableElement.querySelectorAll('.cell-content:not(.given)');
+        const emptyCells = Array.from(cells).filter(cell => !cell.textContent.trim());
+        
+        if (emptyCells.length === 0) {
+          alert('No empty cells to provide hints for!');
+          return;
+        }
+        
+        // Find cells not already in hints
+        const availableCells = emptyCells.filter(cell => {
+          const row = parseInt(cell.dataset.row);
+          const col = parseInt(cell.dataset.col);
+          return !hints.some(hint => hint.row === row && hint.col === col);
+        });
+        
+        if (availableCells.length === 0) {
+          // All empty cells already have hints, start over
+          hints = [];
+          getHint();
+          return;
+        }
+        
+        // Pick a random cell to hint
+        const randomCell = availableCells[Math.floor(Math.random() * availableCells.length)];
+        const row = parseInt(randomCell.dataset.row);
+        const col = parseInt(randomCell.dataset.col);
+        
+        // Record this hint
+        hints.push({ row, col });
+        
+        // Show the hint
+        randomCell.textContent = currentSolution[row][col];
+        randomCell.classList.add('hint');
+        randomCell.contentEditable = false;
+      }
+      
+      // Check solution
+      function checkSolution() {
+        if (!currentPuzzle || !currentSolution) return;
+        
+        const cells = tableElement.querySelectorAll('.cell-content');
+        let allCorrect = true;
+        
+        cells.forEach(cell => {
+          const row = parseInt(cell.dataset.row);
+          const col = parseInt(cell.dataset.col);
+          
+          // Skip given cells and hint cells
+          if (cell.classList.contains('given') || cell.classList.contains('hint')) {
+            return;
+          }
+          
+          const userValue = parseInt(cell.textContent) || 0;
+          const correctValue = currentSolution[row][col];
+          
+          if (userValue === 0) {
+            // Empty cell
+            allCorrect = false;
+          } else if (userValue === correctValue) {
+            // Correct value
+            cell.classList.remove('incorrect');
+            cell.classList.add('correct');
+          } else {
+            // Incorrect value
+            cell.classList.remove('correct');
+            cell.classList.add('incorrect');
+            allCorrect = false;
+          }
+        });
+        
+        if (allCorrect) {
+          stopTimer();
+          setTimeout(() => {
+            alert(`Congratulations! You solved the puzzle in ${timerElement.textContent}!`);
+          }, 100);
+        }
+      }
+      
+      // Print puzzle
+      function printPuzzle() {
+        window.print();
       }
       
       // Set up event listeners
@@ -326,6 +529,9 @@
       dailyPuzzleBtn.addEventListener('click', generateTodaysPuzzle);
       generateCustomDailyBtn.addEventListener('click', generateCustomDailyPuzzle);
       showSolutionBtn.addEventListener('click', showSolution);
+      hintBtn.addEventListener('click', getHint);
+      checkBtn.addEventListener('click', checkSolution);
+      printBtn.addEventListener('click', printPuzzle);
       
       // Initialize
       updateDifficultyLabel();
