@@ -1,5 +1,5 @@
-// sudoku-generator.js
-class SudokuGenerator {
+// NEWSudokuGenerator.js
+class NEWSudokuGenerator {
   constructor() {
     this.grid = Array(9).fill().map(() => Array(9).fill(0));
   }
@@ -263,7 +263,7 @@ class SudokuGenerator {
 
 // Export for use in browser or Node.js
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = SudokuGenerator;
+  module.exports = NEWSudokuGenerator;
 } else if (typeof window !== 'undefined') {
-  window.SudokuGenerator = SudokuGenerator;
+  window.NEWSudokuGenerator = NEWSudokuGenerator;
 }
