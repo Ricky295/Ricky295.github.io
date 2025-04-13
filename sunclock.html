@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sunclock</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            width: 100%;
+        }
+        .sunclock-container {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            margin: 0 auto;
+        }
+        .clock-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .day-night-band {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+        }
+        .clock-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            background-color: #333;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+        .hour-hand, .minute-hand, .second-hand {
+            position: absolute;
+            bottom: 50%;
+            left: 50%;
+            transform-origin: center bottom;
+            z-index: 5;
+        }
+        .hour-hand {
+            width: 8px;
+            height: 25%;
+            background-color: #333;
+            transform: translateX(-50%);
+        }
+        .minute-hand {
+            width: 6px;
+            height: 35%;
+            background-color: #555;
+            transform: translateX(-50%);
+        }
+        .second-hand {
+            width: 2px;
+            height: 40%;
+            background-color: #f00;
+            transform: translateX(-50%);
+        }
+        .hour-marks {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+        .hour-mark {
+            position: absolute;
+            width: 4px;
+            height: 15px;
+            background-color: #333;
+            transform-origin: center 200px;
+            left: 198px;
+            top: 0;
+        }
+        .minute-mark {
+            position: absolute;
+            width: 2px;
+            height: 8px;
+            background-color: #999;
+            transform-origin: center 200px;
+            left: 199px;
+            top: 0;
+        }
+        .location-form {
+            margin: 20px 0;
+            text-align: center;
+        }
+        input, button {
+            padding: 8px 12px;
+            margin: 5px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .countdown {
+            margin-top: 15px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .countdown div {
+            margin: 5px 0;
+        }
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 10px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 5px;
+            border-radius: 3px;
+        }
+        .time-display {
+            text-align: center;
+            font-size: 24px;
+            margin: 10px 0;
+        }
+        .error {
+            color: red;
+            text-align: center;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="text-align: center;">Sunclock</h1>
+        
+        <div class="location-form">
+            <div id="location-inputs">
+                <input type="number" id="latitude" placeholder="Latitude" step="0.0001" min="-90" max="90">
+                <input type="number" id="longitude" placeholder="Longitude" step="0.0001" min="-180" max="180">
+                <button id="set-location">Set Location</button>
+                <button id="use-current-location">Use My Location</button>
+            </div>
+            <div id="current-location" style="margin-top: 10px;"></div>
+            <div id="location-error" class="error"></div>
+        </div>
+        
+        <div class="time-display" id="time-display"></div>
+        
+        <div class="sunclock-container">
+            <div class="clock-face">
+                <div class="day-night-band" id="day-night-band"></div>
+                <div class="hour-marks" id="hour-marks"></div>
+                <div class="hour-hand" id="hour-hand"></div>
+                <div class="minute-hand" id="minute-hand"></div>
+                <div class="second-hand" id="second-hand"></div>
+                <div class="clock-center"></div>
+            </div>
+        </div>
+        
+        <div class="countdown" id="countdown"></div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #87CEEB;"></div>
+                <span>Day</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #FFC107;"></div>
+                <span>Civil Twilight</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #FF5722;"></div>
+                <span>Nautical Twilight</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #3F51B5;"></div>
+                <span>Astronomical Twilight</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #1A237E;"></div>
+                <span>Night</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Constants
+        const DEGREES_TO_RADIANS = Math.PI / 180;
+        
+        // DOM Elements
+        const hourHand = document.getElementById('hour-hand');
+        const minuteHand = document.getElementById('minute-hand');
+        const secondHand = document.getElementById('second-hand');
+        const dayNightBand = document.getElementById('day-night-band');
+        const timeDisplay = document.getElementById('time-display');
+        const countdownElement = document.getElementById('countdown');
+        const currentLocationElement = document.getElementById('current-location');
+        const locationErrorElement = document.getElementById('location-error');
+        
+        // Create hour and minute marks
+        const hourMarksContainer = document.getElementById('hour-marks');
+        for (let i = 0; i < 12; i++) {
+            const hourMark = document.createElement('div');
+            hourMark.className = 'hour-mark';
+            hourMark.style.transform = `rotate(${i * 30}deg)`;
+            hourMarksContainer.appendChild(hourMark);
+            
+            // Add minute marks between hour marks
+            for (let j = 1; j < 5; j++) {
+                const minuteMark = document.createElement('div');
+                minuteMark.className = 'minute-mark';
+                minuteMark.style.transform = `rotate(${i * 30 + j * 6}deg)`;
+                hourMarksContainer.appendChild(minuteMark);
+            }
+        }
+        
+        // State variables
+        let latitude = null;
+        let longitude = null;
+        let sunriseData = null;
+        let updateInterval = null;
+        
+        // Helper functions
+        function parseTime(timeStr) {
+            const [time, modifier] = timeStr.split(' ');
+            let [hours, minutes, seconds] = time.split(':');
+            
+            hours = parseInt(hours, 10);
+            minutes = parseInt(minutes, 10);
+            seconds = parseInt(seconds, 10);
+            
+            if (modifier === 'PM' && hours < 12) {
+                hours += 12;
+            } else if (modifier === 'AM' && hours === 12) {
+                hours = 0;
+            }
+            
+            return { hours, minutes, seconds };
+        }
+        
+        function timeStrToDate(timeStr, baseDate) {
+            const { hours, minutes, seconds } = parseTime(timeStr);
+            const date = new Date(baseDate);
+            date.setHours(hours, minutes, seconds);
+            return date;
+        }
+        
+        function formatTimeRemaining(milliseconds) {
+            if (milliseconds <= 0) return "Now";
+            
+            const seconds = Math.floor(milliseconds / 1000) % 60;
+            const minutes = Math.floor(milliseconds / (1000 * 60)) % 60;
+            const hours = Math.floor(milliseconds / (1000 * 60 * 60));
+            
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        function getFormattedTime(date) {
+            const hours = date.getHours();
+            const minutes = date.getMinutes();
+            const seconds = date.getSeconds();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            const formattedHours = hours % 12 || 12;
+            
+            return `${formattedHours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} ${ampm}`;
+        }
+        
+        // Update functions
+        function updateClock() {
+            const now = new Date();
+            
+            // Update analog clock hands
+            const hours = now.getHours() % 12;
+            const minutes = now.getMinutes();
+            const seconds = now.getSeconds();
+            
+            const hourDegrees = (hours * 30) + (minutes * 0.5);
+            const minuteDegrees = minutes * 6;
+            const secondDegrees = seconds * 6;
+            
+            hourHand.style.transform = `translateX(-50%) rotate(${hourDegrees}deg)`;
+            minuteHand.style.transform = `translateX(-50%) rotate(${minuteDegrees}deg)`;
+            secondHand.style.transform = `translateX(-50%) rotate(${secondDegrees}deg)`;
+            
+            // Update digital time display
+            timeDisplay.textContent = getFormattedTime(now);
+            
+            // Update day/night band only if we have data
+            if (sunriseData) {
+                updateDayNightBand();
+                updateCountdowns();
+            }
+        }
+        
+        function updateDayNightBand() {
+            const now = new Date();
+            const canvas = document.createElement('canvas');
+            canvas.width = 400;
+            canvas.height = 400;
+            const ctx = canvas.getContext('2d');
+            
+            // Define today's date at midnight for reference
+            const today = new Date(now);
+            today.setHours(0, 0, 0, 0);
+            
+            // Parse all times into Date objects
+            const times = {
+                astronomicalTwilightBegin: timeStrToDate(sunriseData.astronomical_twilight_begin, today),
+                nauticalTwilightBegin: timeStrToDate(sunriseData.nautical_twilight_begin, today),
+                civilTwilightBegin: timeStrToDate(sunriseData.civil_twilight_begin, today),
+                sunrise: timeStrToDate(sunriseData.sunrise, today),
+                sunset: timeStrToDate(sunriseData.sunset, today),
+                civilTwilightEnd: timeStrToDate(sunriseData.civil_twilight_end, today),
+                nauticalTwilightEnd: timeStrToDate(sunriseData.nautical_twilight_end, today),
+                astronomicalTwilightEnd: timeStrToDate(sunriseData.astronomical_twilight_end, today)
+            };
+            
+            // Handle day wrapping (if astronomical twilight end is before begin)
+            if (times.astronomicalTwilightEnd < times.astronomicalTwilightBegin) {
+                if (now < times.astronomicalTwilightBegin) {
+                    // We're in astronomical twilight end from yesterday
+                    times.astronomicalTwilightEnd.setDate(times.astronomicalTwilightEnd.getDate() + 1);
+                } else {
+                    // All other times should be moved to tomorrow
+                    for (const key in times) {
+                        if (times[key] < times.astronomicalTwilightBegin) {
+                            times[key].setDate(times[key].getDate() + 1);
+                        }
+                    }
+                }
+            }
+            
+            // Define colors
+            const colors = {
+                day: '#87CEEB',              // Sky blue
+                civilTwilight: '#FFC107',    // Amber
+                nauticalTwilight: '#FF5722', // Deep orange
+                astronomicalTwilight: '#3F51B5', // Indigo
+                night: '#1A237E'             // Dark blue
+            };
+            
+            // Draw the clock face segments
+            const centerX = 200;
+            const centerY = 200;
+            const radius = 200;
+            
+            // Convert times to angles (12 at the top, clockwise)
+            function timeToAngle(time) {
+                const totalMinutes = time.getHours() * 60 + time.getMinutes();
+                return ((totalMinutes / (24 * 60)) * 360 - 90) * DEGREES_TO_RADIANS;
+            }
+            
+            // Draw segments
+            function drawSegment(startTime, endTime, color) {
+                const startAngle = timeToAngle(startTime);
+                const endAngle = timeToAngle(endTime);
+                
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                ctx.fillStyle = color;
+                ctx.fill();
+            }
+            
+            // Night (from astronomical twilight end to astronomical twilight begin)
+            drawSegment(times.astronomicalTwilightEnd, times.astronomicalTwilightBegin, colors.night);
+            
+            // Astronomical twilight (morning)
+            drawSegment(times.astronomicalTwilightBegin, times.nauticalTwilightBegin, colors.astronomicalTwilight);
+            
+            // Nautical twilight (morning)
+            drawSegment(times.nauticalTwilightBegin, times.civilTwilightBegin, colors.nauticalTwilight);
+            
+            // Civil twilight (morning)
+            drawSegment(times.civilTwilightBegin, times.sunrise, colors.civilTwilight);
+            
+            // Day
+            drawSegment(times.sunrise, times.sunset, colors.day);
+            
+            // Civil twilight (evening)
+            drawSegment(times.sunset, times.civilTwilightEnd, colors.civilTwilight);
+            
+            // Nautical twilight (evening)
+            drawSegment(times.civilTwilightEnd, times.nauticalTwilightEnd, colors.nauticalTwilight);
+            
+            // Astronomical twilight (evening)
+            drawSegment(times.nauticalTwilightEnd, times.astronomicalTwilightEnd, colors.astronomicalTwilight);
+            
+            // Draw the current time indicator
+            const currentTimeAngle = timeToAngle(now);
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(currentTimeAngle) * radius,
+                centerY + Math.sin(currentTimeAngle) * radius
+            );
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Apply the canvas to the day-night band
+            dayNightBand.style.backgroundImage = `url(${canvas.toDataURL()})`;
+        }
+        
+        function updateCountdowns() {
+            const now = new Date();
+            const today = new Date(now);
+            today.setHours(0, 0, 0, 0);
+            
+            // Parse all event times
+            const events = [
+                { name: "Astronomical Dawn", time: timeStrToDate(sunriseData.astronomical_twilight_begin, today) },
+                { name: "Nautical Dawn", time: timeStrToDate(sunriseData.nautical_twilight_begin, today) },
+                { name: "Civil Dawn", time: timeStrToDate(sunriseData.civil_twilight_begin, today) },
+                { name: "Sunrise", time: timeStrToDate(sunriseData.sunrise, today) },
+                { name: "Sunset", time: timeStrToDate(sunriseData.sunset, today) },
+                { name: "Civil Dusk", time: timeStrToDate(sunriseData.civil_twilight_end, today) },
+                { name: "Nautical Dusk", time: timeStrToDate(sunriseData.nautical_twilight_end, today) },
+                { name: "Astronomical Dusk", time: timeStrToDate(sunriseData.astronomical_twilight_end, today) }
+            ];
+            
+            // Handle day wrapping (if an event is in the past, it might be for tomorrow)
+            events.forEach(event => {
+                if (event.time < now) {
+                    event.time.setDate(event.time.getDate() + 1);
+                }
+            });
+            
+            // Sort events by time
+            events.sort((a, b) => a.time - b.time);
+            
+            // Get the next 3 events
+            const nextEvents = events.slice(0, 3);
+            
+            // Create countdown HTML
+            let countdownHTML = '<h3>Next Events</h3>';
+            
+            nextEvents.forEach(event => {
+                const timeRemaining = event.time - now;
+                const formattedTime = formatTimeRemaining(timeRemaining);
+                countdownHTML += `<div><strong>${event.name}</strong>: ${getFormattedTime(event.time)} (in ${formattedTime})</div>`;
+            });
+            
+            countdownElement.innerHTML = countdownHTML;
+        }
+        
+        // API functions
+        async function fetchSunriseSunsetData() {
+            if (!latitude || !longitude) {
+                return;
+            }
+            
+            try {
+                locationErrorElement.textContent = '';
+                const today = new Date().toISOString().split('T')[0];
+                const url = `https://api.sunrise-sunset.org/json?lat=${latitude}&lng=${longitude}&date=${today}&formatted=0`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.status === 'OK') {
+                    // Convert UTC times to local time and formatted strings
+                    sunriseData = {
+                        sunrise: formatUTCtoLocal(data.results.sunrise),
+                        sunset: formatUTCtoLocal(data.results.sunset),
+                        civil_twilight_begin: formatUTCtoLocal(data.results.civil_twilight_begin),
+                        civil_twilight_end: formatUTCtoLocal(data.results.civil_twilight_end),
+                        nautical_twilight_begin: formatUTCtoLocal(data.results.nautical_twilight_begin),
+                        nautical_twilight_end: formatUTCtoLocal(data.results.nautical_twilight_end),
+                        astronomical_twilight_begin: formatUTCtoLocal(data.results.astronomical_twilight_begin),
+                        astronomical_twilight_end: formatUTCtoLocal(data.results.astronomical_twilight_end)
+                    };
+                    
+                    // Start updating the clock and day/night band
+                    if (updateInterval) {
+                        clearInterval(updateInterval);
+                    }
+                    updateClock();
+                    updateInterval = setInterval(updateClock, 1000);
+                } else {
+                    locationErrorElement.textContent = 'Error fetching sunrise/sunset data.';
+                }
+            } catch (error) {
+                locationErrorElement.textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        function formatUTCtoLocal(utcTimeStr) {
+            const date = new Date(utcTimeStr);
+            const hours = date.getHours();
+            const minutes = date.getMinutes();
+            const seconds = date.getSeconds();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            const formattedHours = hours % 12 || 12;
+            
+            return `${formattedHours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} ${ampm}`;
+        }
+        
+        // Location functions
+        function setLocation(lat, lng) {
+            latitude = parseFloat(lat);
+            longitude = parseFloat(lng);
+            
+            // Update URL with new coordinates without reloading
+            const url = new URL(window.location);
+            url.searchParams.set('lat', latitude);
+            url.searchParams.set('lon', longitude);
+            window.history.pushState({}, '', url);
+            
+            // Update displayed location
+            currentLocationElement.textContent = `Current Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+            
+            // Fetch new data
+            fetchSunriseSunsetData();
+        }
+        
+        function getUserLocation() {
+            if (navigator.geolocation) {
+                locationErrorElement.textContent = 'Getting your location...';
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        
+                        document.getElementById('latitude').value = lat;
+                        document.getElementById('longitude').value = lng;
+                        
+                        setLocation(lat, lng);
+                        locationErrorElement.textContent = '';
+                    },
+                    (error) => {
+                        let errorMessage = 'Error getting your location.';
+                        switch (error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMessage = 'Location access denied. Please enter coordinates manually.';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMessage = 'Location information unavailable. Please enter coordinates manually.';
+                                break;
+                            case error.TIMEOUT:
+                                errorMessage = 'Location request timed out. Please enter coordinates manually.';
+                                break;
+                        }
+                        locationErrorElement.textContent = errorMessage;
+                    }
+                );
+            } else {
+                locationErrorElement.textContent = 'Geolocation is not supported by your browser. Please enter coordinates manually.';
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('set-location').addEventListener('click', () => {
+            const lat = document.getElementById('latitude').value;
+            const lng = document.getElementById('longitude').value;
+            
+            if (!lat || !lng) {
+                locationErrorElement.textContent = 'Please enter both latitude and longitude.';
+                return;
+            }
+            
+            setLocation(lat, lng);
+        });
+        
+        document.getElementById('use-current-location').addEventListener('click', getUserLocation);
+        
+        // Initialize
+        function initialize() {
+            // Check for coordinates in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlLat = urlParams.get('lat');
+            const urlLon = urlParams.get('lon');
+            
+            if (urlLat && urlLon) {
+                document.getElementById('latitude').value = urlLat;
+                document.getElementById('longitude').value = urlLon;
+                setLocation(urlLat, urlLon);
+            } else {
+                // Try to get user's location
+                getUserLocation();
+            }
+            
+            // Start the clock even without location data
+            updateClock();
+            if (!updateInterval) {
+                updateInterval = setInterval(updateClock, 1000);
+            }
+        }
+        
+        // Start the application
+        initialize();
+    </script>
+</body>
+</html>
