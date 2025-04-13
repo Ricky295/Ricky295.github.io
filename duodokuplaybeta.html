@@ -248,7 +248,7 @@
   </div>
 
   <div id="feedback"></div>
-  <p id="rules">Rules: Numbers 1–4 appear twice in each row, column, and 2x4 box. No two numbers should touch each other.</p>
+  <p id="rules">Rules: Numbers 1–4 appear TWICE in each row, column, and 2x4 box. No two identical numbers should touch each other orthogonally.</p>
 
   <script>
     const urlParams = new URLSearchParams(window.location.search);
@@ -369,7 +369,7 @@
             
             // Apply auto candidates if enabled
             if (document.getElementById('auto-candidates').checked) {
-              removeConflictingCandidates(row, col, parseInt(value));
+              removeInvalidCandidates();
             }
           } else {
             toggleCandidate(selectedCell, value);
@@ -440,7 +440,7 @@
           
           // Apply auto candidates if enabled
           if (document.getElementById('auto-candidates').checked) {
-            removeConflictingCandidates(row, col, parseInt(key));
+            removeInvalidCandidates();
           }
         } else {
           // Candidate mode - toggle candidate
@@ -643,7 +643,7 @@
       window.location.href = `https://ricky295.github.io/duodokuprint.html?puzzle=${puzzleString}&zoom=84`;
     }
     
-    // Function to count occurrences of a digit in a row
+    // New function to count occurrences of a digit in a row
     function countInRow(row, digit) {
       let count = 0;
       for (let col = 0; col < 8; col++) {
@@ -652,7 +652,7 @@
       return count;
     }
     
-    // Function to count occurrences of a digit in a column
+    // New function to count occurrences of a digit in a column
     function countInCol(col, digit) {
       let count = 0;
       for (let row = 0; row < 8; row++) {
@@ -661,7 +661,7 @@
       return count;
     }
     
-    // Function to count occurrences of a digit in a 2x4 box
+    // New function to count occurrences of a digit in a 2x4 box
     function countInBox(row, col, digit) {
       const boxRow = Math.floor(row / 2) * 2;
       const boxCol = Math.floor(col / 4) * 4;
@@ -675,65 +675,77 @@
       return count;
     }
     
-    // New function to remove conflicting candidates
-    function removeConflictingCandidates(row, col, digit) {
+    // Check if a digit would be adjacent to the same digit
+    function hasAdjacentSameDigit(row, col, digit) {
+      const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]]; // up, down, left, right
+      
+      for (const [dr, dc] of directions) {
+        const newRow = row + dr;
+        const newCol = col + dc;
+        
+        if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 && grid[newRow][newCol] === digit) {
+          return true;
+        }
+      }
+      
+      return false;
+    }
+    
+    // New function - only remove invalid candidates without adding new ones
+    function removeInvalidCandidates() {
       const table = document.getElementById('puzzleTable');
       
-      // Remove candidate from same row
-      for (let c = 0; c < 8; c++) {
-        if (c !== col && grid[row][c] === 0) {
-          removeCandidate(row, c, digit);
-        }
-      }
-      
-      // Remove candidate from same column
-      for (let r = 0; r < 8; r++) {
-        if (r !== row && grid[r][col] === 0) {
-          removeCandidate(r, col, digit);
-        }
-      }
-      
-      // Remove candidate from same box
-      const boxRow = Math.floor(row / 2) * 2;
-      const boxCol = Math.floor(col / 4) * 4;
-      for (let r = 0; r < 2; r++) {
-        for (let c = 0; c < 4; c++) {
-          const r2 = boxRow + r;
-          const c2 = boxCol + c;
-          if ((r2 !== row || c2 !== col) && grid[r2][c2] === 0) {
-            removeCandidate(r2, c2, digit);
+      // For each empty cell, check which candidates should be removed
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          if (grid[row][col] === 0) {
+            const cell = table.rows[row].cells[col].querySelector('.cell-div');
+            if (cell.classList.contains('editable')) {
+              const candidatesDiv = cell.querySelector('.candidates');
+              if (candidatesDiv.style.display === 'grid') {
+                // Check each candidate
+                for (let digit = 1; digit <= 4; digit++) {
+                  const candidate = candidatesDiv.querySelector(`.candidate[data-value="${digit}"]`);
+                  if (candidate.textContent === digit.toString()) {
+                    let shouldRemove = false;
+                    
+                    // Remove if digit appears twice in row already
+                    if (countInRow(row, digit) >= 2) {
+                      shouldRemove = true;
+                    }
+                    
+                    // Remove if digit appears twice in column already
+                    if (countInCol(col, digit) >= 2) {
+                      shouldRemove = true;
+                    }
+                    
+                    // Remove if digit appears twice in box already
+                    if (countInBox(row, col, digit) >= 2) {
+                      shouldRemove = true;
+                    }
+                    
+                    // Remove if digit would be adjacent to the same digit
+                    if (hasAdjacentSameDigit(row, col, digit)) {
+                      shouldRemove = true;
+                    }
+                    
+                    // Remove if invalid
+                    if (shouldRemove) {
+                      candidate.textContent = '';
+                      candidate.classList.remove('active');
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
       
-      // Remove candidate from adjacent cells (no touching rule)
-      const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-      for (const [dr, dc] of directions) {
-        const r2 = row + dr;
-        const c2 = col + dc;
-        if (r2 >= 0 && r2 < 8 && c2 >= 0 && c2 < 8 && grid[r2][c2] === 0) {
-          removeCandidate(r2, c2, digit);
-        }
-      }
+      document.getElementById('feedback').textContent = 'Invalid candidates removed.';
     }
     
-    // Helper function to remove a specific candidate from a cell
-    function removeCandidate(row, col, digit) {
-      const table = document.getElementById('puzzleTable');
-      const cell = table.rows[row].cells[col].querySelector('.cell-div');
-      
-      if (!cell.classList.contains('editable')) return;
-      
-      const candidatesDiv = cell.querySelector('.candidates');
-      const candidate = candidatesDiv.querySelector(`.candidate[data-value="${digit}"]`);
-      
-      if (candidate.textContent === digit.toString()) {
-        candidate.textContent = '';
-        candidate.classList.remove('active');
-      }
-    }
-    
-    // New function to fill all valid candidates in empty cells
+    // Function to fill all possible candidates
     function fillAllCandidates() {
       const table = document.getElementById('puzzleTable');
       
@@ -743,23 +755,12 @@
           if (grid[row][col] === 0) {
             const cell = table.rows[row].cells[col].querySelector('.cell-div');
             if (cell.classList.contains('editable')) {
+              // Clear all candidates first
               const candidatesDiv = cell.querySelector('.candidates');
               candidatesDiv.style.display = 'grid';
-            }
-          }
-        }
-      }
-      
-      // For each empty cell, determine valid candidates
-      for (let row = 0; row < 8; row++) {
-        for (let col = 0; col < 8; col++) {
-          if (grid[row][col] === 0) {
-            const cell = table.rows[row].cells[col].querySelector('.cell-div');
-            if (cell.classList.contains('editable')) {
-              // Clear all candidates first
               clearCellCandidates(cell);
               
-              // Check each possible digit
+              // Add all possible candidates
               for (let digit = 1; digit <= 4; digit++) {
                 let isValid = true;
                 
@@ -778,23 +779,14 @@
                   isValid = false;
                 }
                 
-                // Check if digit would touch the same digit orthogonally
-                for (let dr = -1; dr <= 1; dr++) {
-                  for (let dc = -1; dc <= 1; dc++) {
-                    // Only check orthogonal neighbors (not diagonals)
-                    if ((Math.abs(dr) + Math.abs(dc)) === 1) {
-                      const nr = row + dr;
-                      const nc = col + dc;
-                      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && grid[nr][nc] === digit) {
-                        isValid = false;
-                      }
-                    }
-                  }
+                // Check if digit would be adjacent to the same digit
+                if (hasAdjacentSameDigit(row, col, digit)) {
+                  isValid = false;
                 }
                 
                 // If valid, add as candidate
                 if (isValid) {
-                  const candidate = cell.querySelector(`.candidate[data-value="${digit}"]`);
+                  const candidate = candidatesDiv.querySelector(`.candidate[data-value="${digit}"]`);
                   candidate.textContent = digit;
                   candidate.classList.add('active');
                 }
@@ -804,7 +796,7 @@
         }
       }
       
-      document.getElementById('feedback').textContent = 'All candidates filled.';
+      document.getElementById('feedback').textContent = 'All possible candidates filled.';
     }
 
     // Initialize puzzle
