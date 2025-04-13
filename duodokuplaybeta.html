@@ -84,6 +84,7 @@
       text-align: center;
       font-size: 18px;
       font-weight: bold;
+      margin: 15px 0;
     }
 
     #rules {
@@ -95,26 +96,31 @@
       margin: 10px 0;
     }
     
-    .candidate-panel {
-      display: none;
-      position: absolute;
-      background: #f0f0f0;
-      border: 1px solid #999;
-      box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
-      z-index: 100;
-      padding: 5px;
-    }
-    
-    .candidate-panel button {
-      width: 30px;
-      height: 30px;
-      margin: 2px;
-      padding: 0;
-      font-size: 14px;
-    }
-    
     .selected-cell {
       outline: 2px solid #0066cc;
+    }
+    
+    .controls-info {
+      text-align: center;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 10px;
+      background-color: #f8f8f8;
+      border-radius: 5px;
+      margin-bottom: 20px;
+    }
+    
+    .controls-info kbd {
+      background-color: #eee;
+      border-radius: 3px;
+      border: 1px solid #b4b4b4;
+      box-shadow: 0 1px 1px rgba(0, 0, 0, .2);
+      color: #333;
+      display: inline-block;
+      font-size: 0.9em;
+      font-family: monospace;
+      padding: 2px 5px;
+      margin: 0 3px;
     }
   </style>
 </head>
@@ -130,13 +136,14 @@
       <input type="radio" name="input-mode" value="candidate"> Candidate Mode
     </label>
   </div>
-  
-  <div id="candidate-panel" class="candidate-panel">
-    <button data-value="1">1</button>
-    <button data-value="2">2</button>
-    <button data-value="3">3</button>
-    <button data-value="4">4</button>
-    <button data-value="clear">X</button>
+
+  <div class="controls-info">
+    <p><strong>Keyboard Controls:</strong></p>
+    <p>
+      <kbd>1</kbd>-<kbd>4</kbd>: In Normal Mode, enter a value. In Candidate Mode, toggle a candidate<br>
+      <kbd>Delete</kbd> or <kbd>Backspace</kbd>: Clear cell or candidates<br>
+      <kbd>Arrow Keys</kbd>: Navigate between cells
+    </p>
   </div>
 
   <div class="button-container">
@@ -148,15 +155,10 @@
 
   <div id="feedback"></div>
   <p id="rules">Rules: Numbers 1–4 appear twice in each row, column, and 2x4 box. No two numbers should touch each other.</p>
-  <p style="text-align: center;">
-    <strong>Normal Mode:</strong> Click a cell and type 1-4 to enter a solution.<br>
-    <strong>Candidate Mode:</strong> Click a cell to open the candidate panel. Click numbers to toggle candidates.
-  </p>
 
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     let selectedCell = null;
-    let candidatePanel = null;
 
     function getPuzzleFromURL() {
       return urlParams.get('puzzle') || '0023101401403400302040210140300312002401341003021204200343121304';
@@ -191,7 +193,6 @@
         for (let col = 0; col < 8; col++) {
           const cellValue = puzzleString[row * 8 + col];
           const isEditable = cellValue == '0';
-          const extra = isEditable ? ' class="editable"' : "";
           
           tableHTML += `
             <td>
@@ -213,44 +214,17 @@
       }
       table.innerHTML = tableHTML;
       
-      candidatePanel = document.getElementById('candidate-panel');
-      
       // Set up event listeners for the cells
       setupCellListeners();
-      setupCandidatePanelListeners();
-      
-      // Close candidate panel when clicking elsewhere
-      document.addEventListener('click', function(event) {
-        if (!candidatePanel.contains(event.target) && 
-            (!selectedCell || !selectedCell.contains(event.target))) {
-          closeCandidatePanel();
-        }
-      });
       
       // Add keyboard support
-      document.addEventListener('keydown', function(event) {
-        if (!selectedCell || selectedCell.classList.contains('editable') === false) return;
-        
-        const mode = document.querySelector('input[name="input-mode"]:checked').value;
-        const key = event.key;
-        
-        if (['1', '2', '3', '4'].includes(key)) {
-          if (mode === 'normal') {
-            // Normal mode - set value directly
-            selectedCell.childNodes[0].nodeValue = key;
-            clearCellCandidates(selectedCell);
-          } else {
-            // Candidate mode - toggle candidate
-            toggleCandidate(selectedCell, key);
-          }
-          event.preventDefault();
-        } else if (key === 'Delete' || key === 'Backspace') {
-          if (mode === 'normal') {
-            selectedCell.childNodes[0].nodeValue = '';
-          } else {
-            clearCellCandidates(selectedCell);
-          }
-          event.preventDefault();
+      document.addEventListener('keydown', handleKeyboardInput);
+      
+      // Deselect when clicking elsewhere
+      document.addEventListener('click', function(event) {
+        if (selectedCell && !selectedCell.contains(event.target)) {
+          selectedCell.classList.remove('selected-cell');
+          selectedCell = null;
         }
       });
     }
@@ -260,8 +234,6 @@
       
       cells.forEach(cell => {
         cell.addEventListener('click', function(event) {
-          const mode = document.querySelector('input[name="input-mode"]:checked').value;
-          
           // Deselect previously selected cell
           if (selectedCell) {
             selectedCell.classList.remove('selected-cell');
@@ -271,105 +243,111 @@
           selectedCell = this;
           selectedCell.classList.add('selected-cell');
           
-          if (mode === 'normal') {
-            // Normal mode - allow direct input
-            const candidatesDiv = this.querySelector('.candidates');
-            candidatesDiv.style.display = 'none';
-            
-            // Prompt for input
-            const currentValue = this.childNodes[0]?.nodeValue?.trim() || '';
-            const newValue = prompt(`Enter a value (1-4) for this cell:`, currentValue);
-            
-            if (newValue === null) return; // User cancelled
-            
-            if (newValue === '' || ['1', '2', '3', '4'].includes(newValue)) {
-              this.childNodes[0].nodeValue = newValue;
-              // Clear candidates when setting a value
-              clearCellCandidates(this);
-            } else {
-              alert('Please enter a valid number (1-4) or leave empty.');
-            }
-          } else {
-            // Candidate mode - show the candidate panel
-            openCandidatePanel(this);
-          }
-          
           event.stopPropagation();
         });
       });
     }
     
-    function setupCandidatePanelListeners() {
-      const buttons = candidatePanel.querySelectorAll('button');
-      buttons.forEach(button => {
-        button.addEventListener('click', function(event) {
-          if (!selectedCell) return;
-          
-          const value = this.dataset.value;
-          
-          if (value === 'clear') {
-            clearCellCandidates(selectedCell);
-          } else {
-            toggleCandidate(selectedCell, value);
-          }
-          
-          event.stopPropagation();
-        });
-      });
-    }
-    
-    function openCandidatePanel(cell) {
-      // Position the panel next to the cell
-      const rect = cell.getBoundingClientRect();
-      const panel = document.getElementById('candidate-panel');
+    function handleKeyboardInput(event) {
+      if (!selectedCell || !selectedCell.classList.contains('editable')) return;
       
-      panel.style.top = (rect.bottom + window.scrollY) + 'px';
-      panel.style.left = (rect.left + window.scrollX) + 'px';
-      panel.style.display = 'block';
+      const mode = document.querySelector('input[name="input-mode"]:checked').value;
+      const key = event.key;
       
-      // Clear the main value if present
-      if (cell.childNodes[0]?.nodeValue?.trim()) {
-        if (confirm('This cell already has a value. Clear it to use candidates?')) {
-          cell.childNodes[0].nodeValue = '';
+      // Number input (1-4)
+      if (['1', '2', '3', '4'].includes(key)) {
+        if (mode === 'normal') {
+          // Normal mode - set value directly
+          setCellValue(selectedCell, key);
         } else {
-          closeCandidatePanel();
-          return;
+          // Candidate mode - toggle candidate
+          toggleCandidate(selectedCell, key);
         }
+        event.preventDefault();
+      } 
+      // Clear cell
+      else if (key === 'Delete' || key === 'Backspace') {
+        if (mode === 'normal') {
+          setCellValue(selectedCell, '');
+        } else {
+          clearCellCandidates(selectedCell);
+        }
+        event.preventDefault();
+      }
+      // Navigation with arrow keys
+      else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+        navigateWithArrowKeys(key);
+        event.preventDefault();
+      }
+    }
+    
+    function navigateWithArrowKeys(key) {
+      if (!selectedCell) return;
+      
+      const currentRow = parseInt(selectedCell.dataset.row);
+      const currentCol = parseInt(selectedCell.dataset.col);
+      let newRow = currentRow;
+      let newCol = currentCol;
+      
+      switch (key) {
+        case 'ArrowUp':
+          newRow = Math.max(0, currentRow - 1);
+          break;
+        case 'ArrowDown':
+          newRow = Math.min(7, currentRow + 1);
+          break;
+        case 'ArrowLeft':
+          newCol = Math.max(0, currentCol - 1);
+          break;
+        case 'ArrowRight':
+          newCol = Math.min(7, currentCol + 1);
+          break;
       }
       
-      // Show candidates
-      const candidatesDiv = cell.querySelector('.candidates');
-      candidatesDiv.style.display = 'grid';
+      const table = document.getElementById('puzzleTable');
+      const newCell = table.rows[newRow].cells[newCol].querySelector('.cell-div');
       
-      // Update button states to match current candidates
-      updateCandidatePanelButtons(cell);
-    }
-    
-    function updateCandidatePanelButtons(cell) {
-      const candidatesDiv = cell.querySelector('.candidates');
-      const buttons = candidatePanel.querySelectorAll('button[data-value]:not([data-value="clear"])');
-      
-      buttons.forEach(button => {
-        const value = button.dataset.value;
-        const candidate = candidatesDiv.querySelector(`.candidate[data-value="${value}"]`);
-        
-        if (candidate.textContent === value) {
-          button.classList.add('active');
-        } else {
-          button.classList.remove('active');
-        }
-      });
-    }
-    
-    function closeCandidatePanel() {
-      candidatePanel.style.display = 'none';
-      if (selectedCell) {
+      // Only select if the cell is editable
+      if (newCell.classList.contains('editable')) {
         selectedCell.classList.remove('selected-cell');
-        selectedCell = null;
+        selectedCell = newCell;
+        selectedCell.classList.add('selected-cell');
+      } else {
+        // Skip over non-editable cells
+        if (key === 'ArrowUp' && newRow > 0) {
+          newRow--;
+          navigateWithArrowKeys(key);
+        } else if (key === 'ArrowDown' && newRow < 7) {
+          newRow++;
+          navigateWithArrowKeys(key);
+        } else if (key === 'ArrowLeft' && newCol > 0) {
+          newCol--;
+          navigateWithArrowKeys(key);
+        } else if (key === 'ArrowRight' && newCol < 7) {
+          newCol++;
+          navigateWithArrowKeys(key);
+        }
+      }
+    }
+    
+    function setCellValue(cell, value) {
+      // Update the text content
+      cell.childNodes[0].nodeValue = value;
+      
+      // Hide candidates if a value is set
+      const candidatesDiv = cell.querySelector('.candidates');
+      if (value) {
+        candidatesDiv.style.display = 'none';
+        clearCellCandidates(cell);
       }
     }
     
     function toggleCandidate(cell, value) {
+      // Clear the main value if present
+      if (cell.childNodes[0]?.nodeValue?.trim()) {
+        cell.childNodes[0].nodeValue = '';
+      }
+      
       const candidatesDiv = cell.querySelector('.candidates');
       candidatesDiv.style.display = 'grid';
       
@@ -381,11 +359,6 @@
         candidate.textContent = value;
         candidate.classList.add('active');
       }
-      
-      // Update panel buttons if open
-      if (candidatePanel.style.display === 'block') {
-        updateCandidatePanelButtons(cell);
-      }
     }
 
     function clearCellCandidates(cell) {
@@ -395,11 +368,6 @@
         candidate.textContent = '';
         candidate.classList.remove('active');
       });
-      
-      // Update panel buttons if open
-      if (candidatePanel.style.display === 'block') {
-        updateCandidatePanelButtons(cell);
-      }
     }
 
     function getCurrentPuzzle() {
@@ -498,13 +466,6 @@
     document.getElementById('resetHighlights').addEventListener('click', resetHighlights);
     document.getElementById('clearCandidates').addEventListener('click', clearAllCandidates);
     document.getElementById('print').addEventListener('click', printPuzzle);
-    
-    // Add mode change listener
-    document.querySelectorAll('input[name="input-mode"]').forEach(radio => {
-      radio.addEventListener('change', function() {
-        closeCandidatePanel();
-      });
-    });
   </script>
 </body>
 </html>
