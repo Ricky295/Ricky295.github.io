@@ -45,6 +45,10 @@
       align-items: center;
       color: #666;
     }
+
+    .inputbuttons {
+      width: 40px
+    }
     
     .candidate.active {
       color: #0066cc;
@@ -154,15 +158,15 @@
   </div>
 
   <div class="button-container">
+    <button class="inputbuttons" id="button1"> 1 </button>
+    <button class="inputbuttons" id="button2"> 2 </button>
+    <button class="inputbuttons" id="button3"> 3 </button>
+    <button class="inputbuttons" id="button4"> 4 </button>
+    <p>
     <button id="checkButton">Check Solution</button>
     <button id="resetHighlights">Reset Highlights</button>
     <button id="clearCandidates">Clear All Candidates</button>
     <button id="print">Print this puzzle</button>
-    <!-- Added buttons for numbers 1-4 -->
-    <button id="button1" class="input-button">1</button>
-    <button id="button2" class="input-button">2</button>
-    <button id="button3" class="input-button">3</button>
-    <button id="button4" class="input-button">4</button>
   </div>
 
   <div id="feedback"></div>
@@ -172,8 +176,7 @@
     const urlParams = new URLSearchParams(window.location.search);
     let selectedCell = null;
     let grid = [];
-    let inputMode = 'normal'; // Default mode is normal
-    
+
     function getPuzzleFromURL() {
       return urlParams.get('puzzle') || '0023101401403400302040210140300312002401341003021204200343121304';
     }
@@ -234,6 +237,9 @@
       // Set up event listeners for the cells
       setupCellListeners();
       
+      // Add keyboard support
+      document.addEventListener('keydown', handleKeyboardInput);
+      
       // Deselect when clicking elsewhere
       document.addEventListener('click', function(event) {
         if (selectedCell && !selectedCell.contains(event.target)) {
@@ -241,23 +247,8 @@
           selectedCell = null;
         }
       });
-      
-      // Add button event listeners
-      document.getElementById('button1').addEventListener('click', () => handleButtonInput('1'));
-      document.getElementById('button2').addEventListener('click', () => handleButtonInput('2'));
-      document.getElementById('button3').addEventListener('click', () => handleButtonInput('3'));
-      document.getElementById('button4').addEventListener('click', () => handleButtonInput('4'));
-
-      // Handle input mode switch
-      const modeRadios = document.querySelectorAll('input[name="input-mode"]');
-      modeRadios.forEach(radio => {
-        radio.addEventListener('change', () => {
-          inputMode = radio.value;
-          updateCellDisplay();
-        });
-      });
     }
-
+    
     function setupCellListeners() {
       const cells = document.querySelectorAll('.cell-div.editable');
       
@@ -272,57 +263,387 @@
           selectedCell = this;
           selectedCell.classList.add('selected-cell');
           
-          updateCellDisplay();
+          event.stopPropagation();
         });
       });
     }
-
-    function updateCellDisplay() {
-      if (!selectedCell) return;
+    
+    function handleKeyboardInput(event) {
+      if (!selectedCell || !selectedCell.classList.contains('editable')) return;
       
-      const candidatesDiv = selectedCell.querySelector('.candidates');
-      if (inputMode === 'candidate') {
-        candidatesDiv.style.display = 'grid';
-      } else {
-        candidatesDiv.style.display = 'none';
+      const mode = document.querySelector('input[name="input-mode"]:checked').value;
+      const key = event.key;
+      
+      // Number input (1-4)
+      if (['1', '2', '3', '4'].includes(key)) {
+        if (mode === 'normal') {
+          // Normal mode - set value directly
+          setCellValue(selectedCell, key);
+          
+          // Update grid
+          const row = parseInt(selectedCell.dataset.row);
+          const col = parseInt(selectedCell.dataset.col);
+          grid[row][col] = parseInt(key);
+          
+          // Apply auto candidates if enabled
+          if (document.getElementById('auto-candidates').checked) {
+          }
+        } else {
+          // Candidate mode - toggle candidate
+          toggleCandidate(selectedCell, key);
+        }
+        event.preventDefault();
+      } 
+      // Clear cell
+      else if (key === 'Delete' || key === 'Backspace') {
+        if (mode === 'normal') {
+          setCellValue(selectedCell, '');
+          
+          // Update grid
+          const row = parseInt(selectedCell.dataset.row);
+          const col = parseInt(selectedCell.dataset.col);
+          grid[row][col] = 0;
+          
+          // Apply auto candidates if enabled
+          if (document.getElementById('auto-candidates').checked) {
+            applyAutoCandidates();
+          }
+        } else {
+          clearCellCandidates(selectedCell);
+        }
+        event.preventDefault();
       }
-    }
-
-    function handleButtonInput(value) {
-      if (inputMode === 'normal') {
-        setCellValue(selectedCell, value);
-      } else if (inputMode === 'candidate') {
-        toggleCandidate(selectedCell, value);
-      }
-    }
-
-    function toggleCandidate(cell, value) {
-      const candidateDiv = cell.querySelector(`.candidate[data-value="${value}"]`);
-      candidateDiv.classList.toggle('active');
-    }
-
-    function setCellValue(cell, value) {
-      if (cell) {
-        const row = cell.dataset.row;
-        const col = cell.dataset.col;
-        grid[row][col] = value;
-        cell.textContent = value;
+      // Navigation with arrow keys
+      else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+        navigateWithArrowKeys(key);
+        event.preventDefault();
       }
     }
     
-    function handleKeyboardInput(event) {
+    function navigateWithArrowKeys(key) {
       if (!selectedCell) return;
-      const value = event.key;
-      if (['1', '2', '3', '4'].includes(value)) {
-        handleButtonInput(value);
-      } else if (event.key === 'Backspace' || event.key === 'Delete') {
-        selectedCell.textContent = '';
-        grid[selectedCell.dataset.row][selectedCell.dataset.col] = '0';
+      
+      const currentRow = parseInt(selectedCell.dataset.row);
+      const currentCol = parseInt(selectedCell.dataset.col);
+      let newRow = currentRow;
+      let newCol = currentCol;
+      
+      switch (key) {
+        case 'ArrowUp':
+          newRow = Math.max(0, currentRow - 1);
+          break;
+        case 'ArrowDown':
+          newRow = Math.min(7, currentRow + 1);
+          break;
+        case 'ArrowLeft':
+          newCol = Math.max(0, currentCol - 1);
+          break;
+        case 'ArrowRight':
+          newCol = Math.min(7, currentCol + 1);
+          break;
+      }
+      
+      const table = document.getElementById('puzzleTable');
+      const newCell = table.rows[newRow].cells[newCol].querySelector('.cell-div');
+      
+      // Only select if the cell is editable
+      if (newCell.classList.contains('editable')) {
+        selectedCell.classList.remove('selected-cell');
+        selectedCell = newCell;
+        selectedCell.classList.add('selected-cell');
+      } else {
+        // Skip over non-editable cells
+        if (key === 'ArrowUp' && newRow > 0) {
+          newRow--;
+          navigateWithArrowKeys(key);
+        } else if (key === 'ArrowDown' && newRow < 7) {
+          newRow++;
+          navigateWithArrowKeys(key);
+        } else if (key === 'ArrowLeft' && newCol > 0) {
+          newCol--;
+          navigateWithArrowKeys(key);
+        } else if (key === 'ArrowRight' && newCol < 7) {
+          newCol++;
+          navigateWithArrowKeys(key);
+        }
+      }
+    }
+    
+    function setCellValue(cell, value) {
+      // Update the text content
+      cell.childNodes[0].nodeValue = value;
+      
+      // Hide candidates if a value is set
+      const candidatesDiv = cell.querySelector('.candidates');
+      if (value) {
+        candidatesDiv.style.display = 'none';
+        clearCellCandidates(cell);
+      }
+    }
+    
+    function toggleCandidate(cell, value) {
+      // Clear the main value if present
+      if (cell.childNodes[0]?.nodeValue?.trim()) {
+        cell.childNodes[0].nodeValue = '';
+        
+        // Update grid
+        const row = parseInt(cell.dataset.row);
+        const col = parseInt(cell.dataset.col);
+        grid[row][col] = 0;
+      }
+      
+      const candidatesDiv = cell.querySelector('.candidates');
+      candidatesDiv.style.display = 'grid';
+      
+      const candidate = candidatesDiv.querySelector(`.candidate[data-value="${value}"]`);
+      if (candidate.textContent === value) {
+        candidate.textContent = '';
+        candidate.classList.remove('active');
+      } else {
+        candidate.textContent = value;
+        candidate.classList.add('active');
       }
     }
 
-    // Initialize puzzle rendering
+    function clearCellCandidates(cell) {
+      const candidatesDiv = cell.querySelector('.candidates');
+      const candidates = candidatesDiv.querySelectorAll('.candidate');
+      candidates.forEach(candidate => {
+        candidate.textContent = '';
+        candidate.classList.remove('active');
+      });
+    }
+
+    function getCurrentPuzzle() {
+      return grid;
+    }
+
+    function checkPuzzle() {
+      const solver = new DuoDoKuSolver();
+      const userSolution = getCurrentPuzzle();
+      const puzzleString = getPuzzleFromURL();
+      const puzzleArray = convertToArray(puzzleString);
+      const feedbackElement = document.getElementById('feedback');
+
+      if (puzzleArray.length === 0) return;
+
+      solver.enterPuzzle(puzzleArray);
+      const correctSolution = solver.solutions[0];
+      const table = document.getElementById('puzzleTable');
+
+      let left = 0;
+      let incorrect = 0;
+
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const cell = table.rows[r].cells[c].querySelector('.cell-div');
+          const userVal = userSolution[r][c];
+          const correctVal = correctSolution[r][c];
+
+          // Clear previous highlight
+          cell.style.backgroundColor = '#fff';
+
+          if (userVal !== correctVal) {
+            if (userVal === 0) {
+              left += 1;
+            } else {
+              cell.style.backgroundColor = '#ffcccc';
+              incorrect += 1;
+            }
+          }
+        }
+      }
+
+      if (incorrect === 0) {
+        if (left === 0) {
+          feedbackElement.textContent = 'Correct! Well done!';
+          clearInterval(timerInterval);  // This stops the timer
+        } else {
+          feedbackElement.textContent = `So far so good, you still have ${left} digits to go!`;
+        }
+        feedbackElement.style.color = 'green';
+      } else {
+        feedbackElement.textContent = 'Incorrect. Highlighted cells are wrong.';
+        feedbackElement.style.color = 'red';
+      }
+    }
+
+    function resetHighlights() {
+      const table = document.getElementById('puzzleTable');
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const cell = table.rows[r].cells[c].querySelector('.cell-div');
+          cell.style.backgroundColor = '#fff';
+        }
+      }
+      document.getElementById('feedback').textContent = '';
+    }
+
+    function clearAllCandidates() {
+      const cells = document.querySelectorAll('.cell-div.editable');
+      cells.forEach(cell => {
+        clearCellCandidates(cell);
+        const candidatesDiv = cell.querySelector('.candidates');
+        candidatesDiv.style.display = 'none';
+      });
+      document.getElementById('feedback').textContent = 'All candidates cleared.';
+    }
+
+    function printPuzzle() {
+      const puzzleString = getPuzzleFromURL();
+      window.location.href = `https://ricky295.github.io/duodokuprint.html?puzzle=${puzzleString}&zoom=84`;
+    }
+    
+    // New function to count occurrences of a digit in a row
+    function countInRow(row, digit) {
+      let count = 0;
+      for (let col = 0; col < 8; col++) {
+        if (grid[row][col] === digit) count++;
+      }
+      return count;
+    }
+    
+    // New function to count occurrences of a digit in a column
+    function countInCol(col, digit) {
+      let count = 0;
+      for (let row = 0; row < 8; row++) {
+        if (grid[row][col] === digit) count++;
+      }
+      return count;
+    }
+    
+    // New function to count occurrences of a digit in a 2x4 box
+    function countInBox(row, col, digit) {
+      const boxRow = Math.floor(row / 2) * 2;
+      const boxCol = Math.floor(col / 4) * 4;
+      let count = 0;
+      
+      for (let r = 0; r < 2; r++) {
+        for (let c = 0; c < 4; c++) {
+          if (grid[boxRow + r][boxCol + c] === digit) count++;
+        }
+      }
+      return count;
+    }
+    
+    // Check if two positions are adjacent (touch orthogonally)
+    function areAdjacent(row1, col1, row2, col2) {
+      return (Math.abs(row1 - row2) === 1 && col1 === col2) || 
+             (Math.abs(col1 - col2) === 1 && row1 === row2);
+    }
+    
+    // New function for automatic candidate management
+    function applyAutoCandidates() {
+      const table = document.getElementById('puzzleTable');
+      
+      // First, ensure all empty cells have candidates display shown
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          if (grid[row][col] === 0) {
+            const cell = table.rows[row].cells[col].querySelector('.cell-div');
+            if (cell.classList.contains('editable')) {
+              const candidatesDiv = cell.querySelector('.candidates');
+              candidatesDiv.style.display = 'grid';
+            }
+          }
+        }
+      }
+      
+      // For each empty cell, determine valid candidates
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          if (grid[row][col] === 0) {
+            const cell = table.rows[row].cells[col].querySelector('.cell-div');
+            if (cell.classList.contains('editable')) {
+              // Clear all candidates first
+              clearCellCandidates(cell);
+              
+              // Check each possible digit
+              for (let digit = 1; digit <= 4; digit++) {
+                let isValid = true;
+                
+                // Check if digit appears twice in row already
+                if (countInRow(row, digit) >= 2) {
+                  isValid = false;
+                }
+                
+                // Check if digit appears twice in column already
+                if (countInCol(col, digit) >= 2) {
+                  isValid = false;
+                }
+                
+                // Check if digit appears twice in box already
+                if (countInBox(row, col, digit) >= 2) {
+                  isValid = false;
+                }
+                
+                // Check if digit would touch the same digit orthogonally
+                for (let dr = -1; dr <= 1; dr++) {
+                  for (let dc = -1; dc <= 1; dc++) {
+                    // Only check orthogonal neighbors (not diagonals)
+                    if ((Math.abs(dr) + Math.abs(dc)) === 1) {
+                      const nr = row + dr;
+                      const nc = col + dc;
+                      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && grid[nr][nc] === digit) {
+                        isValid = false;
+                      }
+                    }
+                  }
+                }
+                
+                // If valid, add as candidate
+                if (isValid) {
+                  const candidate = cell.querySelector(`.candidate[data-value="${digit}"]`);
+                  candidate.textContent = digit;
+                  candidate.classList.add('active');
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      document.getElementById('feedback').textContent = 'Auto candidates applied.';
+    }
+
+    function handleButtonInput(selectedCell, button){
+      if (mode == "normal") {
+        setCellValue(selectedCell, button);
+      } else {
+        toggleCandidate(selectedCell, button);
+      }
+    }
+
+
+    // Initialize puzzle
     renderPuzzle();
+
+    // Add event listeners
+    document.getElementById('checkButton').addEventListener('click', checkPuzzle);
+    document.getElementById('resetHighlights').addEventListener('click', resetHighlights);
+    document.getElementById('clearCandidates').addEventListener('click', clearAllCandidates);
+    document.getElementById('applyAutoCandidates').addEventListener('click', applyAutoCandidates);
+    document.getElementById('print').addEventListener('click', printPuzzle);
+    document.getElementById('button1').addEventListener('click', handleButtonInput(selectedCell, 1);
+    document.getElementById('button2').addEventListener('click', handleButtonInput(selectedCell, 2);
+    document.getElementById('button3').addEventListener('click', handleButtonInput(selectedCell, 3);
+    document.getElementById('button4').addEventListener('click', handleButtonInput(selectedCell, 4);
+    
+    
+
+    let startTime = Date.now();
+    const timerElement = document.getElementById('timer');
+
+    function updateTimer() {
+      const now = Date.now();
+      const elapsed = Math.floor((now - startTime) / 1000); // in seconds
+      const minutes = Math.floor(elapsed / 60);
+      const seconds = elapsed % 60;
+      timerElement.textContent = `Time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    let timerInterval;
+    timerInterval = setInterval(updateTimer, 1000);
   </script>
 </body>
 </html>
