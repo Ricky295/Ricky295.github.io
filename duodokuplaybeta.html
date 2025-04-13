@@ -172,7 +172,8 @@
     const urlParams = new URLSearchParams(window.location.search);
     let selectedCell = null;
     let grid = [];
-
+    let inputMode = 'normal'; // Default mode is normal
+    
     function getPuzzleFromURL() {
       return urlParams.get('puzzle') || '0023101401403400302040210140300312002401341003021204200343121304';
     }
@@ -233,9 +234,6 @@
       // Set up event listeners for the cells
       setupCellListeners();
       
-      // Add keyboard support
-      document.addEventListener('keydown', handleKeyboardInput);
-      
       // Deselect when clicking elsewhere
       document.addEventListener('click', function(event) {
         if (selectedCell && !selectedCell.contains(event.target)) {
@@ -245,12 +243,21 @@
       });
       
       // Add button event listeners
-      document.getElementById('button1').addEventListener('click', () => setCellValue(selectedCell, '1'));
-      document.getElementById('button2').addEventListener('click', () => setCellValue(selectedCell, '2'));
-      document.getElementById('button3').addEventListener('click', () => setCellValue(selectedCell, '3'));
-      document.getElementById('button4').addEventListener('click', () => setCellValue(selectedCell, '4'));
+      document.getElementById('button1').addEventListener('click', () => handleButtonInput('1'));
+      document.getElementById('button2').addEventListener('click', () => handleButtonInput('2'));
+      document.getElementById('button3').addEventListener('click', () => handleButtonInput('3'));
+      document.getElementById('button4').addEventListener('click', () => handleButtonInput('4'));
+
+      // Handle input mode switch
+      const modeRadios = document.querySelectorAll('input[name="input-mode"]');
+      modeRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+          inputMode = radio.value;
+          updateCellDisplay();
+        });
+      });
     }
-    
+
     function setupCellListeners() {
       const cells = document.querySelectorAll('.cell-div.editable');
       
@@ -264,10 +271,36 @@
           // Select current cell
           selectedCell = this;
           selectedCell.classList.add('selected-cell');
+          
+          updateCellDisplay();
         });
       });
     }
-    
+
+    function updateCellDisplay() {
+      if (!selectedCell) return;
+      
+      const candidatesDiv = selectedCell.querySelector('.candidates');
+      if (inputMode === 'candidate') {
+        candidatesDiv.style.display = 'grid';
+      } else {
+        candidatesDiv.style.display = 'none';
+      }
+    }
+
+    function handleButtonInput(value) {
+      if (inputMode === 'normal') {
+        setCellValue(selectedCell, value);
+      } else if (inputMode === 'candidate') {
+        toggleCandidate(selectedCell, value);
+      }
+    }
+
+    function toggleCandidate(cell, value) {
+      const candidateDiv = cell.querySelector(`.candidate[data-value="${value}"]`);
+      candidateDiv.classList.toggle('active');
+    }
+
     function setCellValue(cell, value) {
       if (cell) {
         const row = cell.dataset.row;
@@ -281,7 +314,7 @@
       if (!selectedCell) return;
       const value = event.key;
       if (['1', '2', '3', '4'].includes(value)) {
-        setCellValue(selectedCell, value);
+        handleButtonInput(value);
       } else if (event.key === 'Backspace' || event.key === 'Delete') {
         selectedCell.textContent = '';
         grid[selectedCell.dataset.row][selectedCell.dataset.col] = '0';
