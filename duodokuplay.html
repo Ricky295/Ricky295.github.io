@@ -139,6 +139,9 @@
     <label>
       <input type="radio" name="input-mode" value="candidate"> Candidate Mode
     </label>
+    <label>
+      <input type="checkbox" id="auto-candidates" checked> Auto Candidate Removal
+    </label>
   </div>
 
   <div class="controls-info">
@@ -163,6 +166,7 @@
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     let selectedCell = null;
+    let grid = [];
 
     function getPuzzleFromURL() {
       return urlParams.get('puzzle') || '0023101401403400302040210140300312002401341003021204200343121304';
@@ -191,6 +195,9 @@
       const table = document.getElementById('puzzleTable');
       let tableHTML = '';
       const cellSize = zoom + 'px';
+
+      // Initialize grid
+      grid = convertToArray(puzzleString);
 
       for (let row = 0; row < 8; row++) {
         tableHTML += '<tr>';
@@ -263,6 +270,16 @@
         if (mode === 'normal') {
           // Normal mode - set value directly
           setCellValue(selectedCell, key);
+          
+          // Update grid
+          const row = parseInt(selectedCell.dataset.row);
+          const col = parseInt(selectedCell.dataset.col);
+          grid[row][col] = parseInt(key);
+          
+          // Apply auto candidates if enabled
+          if (document.getElementById('auto-candidates').checked) {
+            applyAutoCandidates();
+          }
         } else {
           // Candidate mode - toggle candidate
           toggleCandidate(selectedCell, key);
@@ -273,6 +290,16 @@
       else if (key === 'Delete' || key === 'Backspace') {
         if (mode === 'normal') {
           setCellValue(selectedCell, '');
+          
+          // Update grid
+          const row = parseInt(selectedCell.dataset.row);
+          const col = parseInt(selectedCell.dataset.col);
+          grid[row][col] = 0;
+          
+          // Apply auto candidates if enabled
+          if (document.getElementById('auto-candidates').checked) {
+            applyAutoCandidates();
+          }
         } else {
           clearCellCandidates(selectedCell);
         }
@@ -350,6 +377,11 @@
       // Clear the main value if present
       if (cell.childNodes[0]?.nodeValue?.trim()) {
         cell.childNodes[0].nodeValue = '';
+        
+        // Update grid
+        const row = parseInt(cell.dataset.row);
+        const col = parseInt(cell.dataset.col);
+        grid[row][col] = 0;
       }
       
       const candidatesDiv = cell.querySelector('.candidates');
@@ -375,16 +407,7 @@
     }
 
     function getCurrentPuzzle() {
-      const grid = document.getElementById('puzzleTable');
-      const puzzle = Array.from({ length: 8 }, () => Array(8).fill(0));
-      for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-          const cell = grid.rows[r].cells[c].querySelector('.cell-div');
-          const textContent = cell.childNodes[0]?.nodeValue?.trim() || '';
-          puzzle[r][c] = textContent ? parseInt(textContent, 10) || 0 : 0;
-        }
-      }
-      return puzzle;
+      return grid;
     }
 
     function checkPuzzle() {
@@ -462,6 +485,118 @@
       const puzzleString = getPuzzleFromURL();
       window.location.href = `https://ricky295.github.io/duodokuprint.html?puzzle=${puzzleString}&zoom=84`;
     }
+    
+    // New function to count occurrences of a digit in a row
+    function countInRow(row, digit) {
+      let count = 0;
+      for (let col = 0; col < 8; col++) {
+        if (grid[row][col] === digit) count++;
+      }
+      return count;
+    }
+    
+    // New function to count occurrences of a digit in a column
+    function countInCol(col, digit) {
+      let count = 0;
+      for (let row = 0; row < 8; row++) {
+        if (grid[row][col] === digit) count++;
+      }
+      return count;
+    }
+    
+    // New function to count occurrences of a digit in a 2x4 box
+    function countInBox(row, col, digit) {
+      const boxRow = Math.floor(row / 2) * 2;
+      const boxCol = Math.floor(col / 4) * 4;
+      let count = 0;
+      
+      for (let r = 0; r < 2; r++) {
+        for (let c = 0; c < 4; c++) {
+          if (grid[boxRow + r][boxCol + c] === digit) count++;
+        }
+      }
+      return count;
+    }
+    
+    // Check if two positions are adjacent (touch orthogonally)
+    function areAdjacent(row1, col1, row2, col2) {
+      return (Math.abs(row1 - row2) === 1 && col1 === col2) || 
+             (Math.abs(col1 - col2) === 1 && row1 === row2);
+    }
+    
+    // New function for automatic candidate management
+    function applyAutoCandidates() {
+      const table = document.getElementById('puzzleTable');
+      
+      // First, ensure all empty cells have candidates display shown
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          if (grid[row][col] === 0) {
+            const cell = table.rows[row].cells[col].querySelector('.cell-div');
+            if (cell.classList.contains('editable')) {
+              const candidatesDiv = cell.querySelector('.candidates');
+              candidatesDiv.style.display = 'grid';
+            }
+          }
+        }
+      }
+      
+      // For each empty cell, determine valid candidates
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          if (grid[row][col] === 0) {
+            const cell = table.rows[row].cells[col].querySelector('.cell-div');
+            if (cell.classList.contains('editable')) {
+              // Clear all candidates first
+              clearCellCandidates(cell);
+              
+              // Check each possible digit
+              for (let digit = 1; digit <= 4; digit++) {
+                let isValid = true;
+                
+                // Check if digit appears twice in row already
+                if (countInRow(row, digit) >= 2) {
+                  isValid = false;
+                }
+                
+                // Check if digit appears twice in column already
+                if (countInCol(col, digit) >= 2) {
+                  isValid = false;
+                }
+                
+                // Check if digit appears twice in box already
+                if (countInBox(row, col, digit) >= 2) {
+                  isValid = false;
+                }
+                
+                // Check if digit would touch the same digit orthogonally
+                for (let dr = -1; dr <= 1; dr++) {
+                  for (let dc = -1; dc <= 1; dc++) {
+                    // Only check orthogonal neighbors (not diagonals)
+                    if ((Math.abs(dr) + Math.abs(dc)) === 1) {
+                      const nr = row + dr;
+                      const nc = col + dc;
+                      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && grid[nr][nc] === digit) {
+                        isValid = false;
+                      }
+                    }
+                  }
+                }
+                
+                // If valid, add as candidate
+                if (isValid) {
+                  const candidate = cell.querySelector(`.candidate[data-value="${digit}"]`);
+                  candidate.textContent = digit;
+                  candidate.classList.add('active');
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      document.getElementById('feedback').textContent = 'Auto candidates applied.';
+    }
 
     // Initialize puzzle
     renderPuzzle();
@@ -470,24 +605,22 @@
     document.getElementById('checkButton').addEventListener('click', checkPuzzle);
     document.getElementById('resetHighlights').addEventListener('click', resetHighlights);
     document.getElementById('clearCandidates').addEventListener('click', clearAllCandidates);
+    document.getElementById('applyAutoCandidates').addEventListener('click', applyAutoCandidates);
     document.getElementById('print').addEventListener('click', printPuzzle);
 
-  let startTime = Date.now();
-const timerElement = document.getElementById('timer');
+    let startTime = Date.now();
+    const timerElement = document.getElementById('timer');
 
-function updateTimer() {
-  const now = Date.now();
-  const elapsed = Math.floor((now - startTime) / 1000); // in seconds
-  const minutes = Math.floor(elapsed / 60);
-  const seconds = elapsed % 60;
-  timerElement.textContent = `Time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
+    function updateTimer() {
+      const now = Date.now();
+      const elapsed = Math.floor((now - startTime) / 1000); // in seconds
+      const minutes = Math.floor(elapsed / 60);
+      const seconds = elapsed % 60;
+      timerElement.textContent = `Time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
 
-let timerInterval;
-
-timerInterval = setInterval(updateTimer, 1000);
-
-    
+    let timerInterval;
+    timerInterval = setInterval(updateTimer, 1000);
   </script>
 </body>
 </html>
