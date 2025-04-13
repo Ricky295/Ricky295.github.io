@@ -11,14 +11,14 @@ class NEWSudokuGenerator {
   }
 
   // Get seed based on a specific date
-  getDateSeed(year, month, day) {
-    return year * 10000 + month * 100 + day;
+  getDateSeed(year, month, day, index) {
+    return (year * 10000 + month * 100 + day) * 10 + index;
   }
 
   // Get today's seed based on current date
   getTodaySeed() {
     const now = new Date();
-    return this.getDateSeed(now.getFullYear(), now.getMonth() + 1, now.getDate());
+    return this.getDateSeed(now.getFullYear(), now.getMonth() + 1, now.getDate(), 1);
   }
 
   // Check if num is valid at position
@@ -232,7 +232,7 @@ class NEWSudokuGenerator {
     
     if (year && month && day) {
       // Use provided date
-      seed = this.getDateSeed(year, month, day);
+      seed = this.getDateSeed(year, month, day, 1);
     } else {
       // Use today's date
       seed = this.getTodaySeed();
