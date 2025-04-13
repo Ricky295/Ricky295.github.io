@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="duodokusolver.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Duodoku Puzzle Viewer</title>
+  <style>
+    table {
+      border-collapse: collapse;
+      margin: 20px auto;
+    }
+
+    td {
+      text-align: center;
+      border: 1px solid black;
+      background-color: #ccc;
+    }
+
+    .editable {
+      color: blue;
+    }
+
+    .cell-div {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #fff;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .candidates {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      width: 100%;
+      height: 100%;
+      font-size: 40%;
+    }
+
+    .candidate {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: #666;
+    }
+
+    td:nth-child(4n) {
+      border-right: 3px solid black;
+    }
+
+    td:nth-child(1) {
+      border-left: 3px solid black;
+    }
+
+    tr:nth-child(2n) td {
+      border-bottom: 3px solid black;
+    }
+
+    tr:nth-child(1) td {
+      border-top: 3px solid black;
+    }
+
+    .button-container {
+      text-align: center;
+    }
+
+    button {
+      display: inline-block;
+      margin: 20px 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      width: 200px;
+    }
+
+    #feedback {
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    #rules {
+      text-align: center;
+    }
+
+    .mode-selector {
+      text-align: center;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1 style="text-align: center;">Duodoku Puzzle</h1>
+  <table id="puzzleTable"></table>
+
+  <div class="mode-selector">
+    <label>
+      <input type="radio" name="input-mode" value="normal" checked> Normal Mode
+    </label>
+    <label>
+      <input type="radio" name="input-mode" value="candidate"> Candidate Mode
+    </label>
+  </div>
+
+  <div class="button-container">
+    <button id="checkButton">Check Solution</button>
+    <button id="resetHighlights">Reset Highlights</button>
+    <button id="clearCandidates">Clear Candidates</button>
+    <button id="print">Print this puzzle</button>
+  </div>
+
+  <div id="feedback"></div>
+  <p id="rules">Rules: Numbers 1–4 appear twice in each row, column, and 2x4 box. No two numbers should touch each other.</p>
+  <p style="text-align: center;">
+    <strong>Normal Mode:</strong> Click and type a number to enter a solution.<br>
+    <strong>Candidate Mode:</strong> Click and type a number to toggle it as a candidate.
+  </p>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+
+    function getPuzzleFromURL() {
+      return urlParams.get('puzzle') || '0023101401403400302040210140300312002401341003021204200343121304';
+    }
+
+    function convertToArray(puzzleString) {
+      let array = [];
+      if (puzzleString.length !== 64) {
+        alert('Puzzle string must be exactly 64 characters.');
+        return array;
+      }
+      for (let i = 0; i < puzzleString.length; i += 8) {
+        array.push(puzzleString.slice(i, i + 8).split('').map(Number));
+      }
+      return array;
+    }
+
+    function renderPuzzle() {
+      const puzzleString = getPuzzleFromURL();
+      const zoom = parseInt(urlParams.get('zoom')) || 50;
+      if (puzzleString.length !== 64) {
+        alert('Puzzle string must be exactly 64 characters.');
+        return;
+      }
+
+      const table = document.getElementById('puzzleTable');
+      let tableHTML = '';
+      const cellSize = zoom + 'px';
+
+      for (let row = 0; row < 8; row++) {
+        tableHTML += '<tr>';
+        for (let col = 0; col < 8; col++) {
+          const cellValue = puzzleString[row * 8 + col];
+          const isEditable = cellValue == '0';
+          const extra = isEditable ? ' class="editable"' : "";
+          
+          tableHTML += `
+            <td>
+              <div class="cell-div${isEditable ? ' editable' : ''}" 
+                   data-row="${row}" 
+                   data-col="${col}" 
+                   style="width: ${cellSize}; height: ${cellSize}; font-size: ${zoom / 2}px;">
+                ${cellValue !== '0' ? cellValue : ''}
+                <div class="candidates" style="display: none"></div>
+              </div>
+            </td>`;
+        }
+        tableHTML += '</tr>';
+      }
+      table.innerHTML = tableHTML;
+      
+      // Set up event listeners for the cells
+      setupCellListeners();
+    }
+    
+    function setupCellListeners() {
+      const cells = document.querySelectorAll('.cell-div.editable');
+      
+      cells.forEach(cell => {
+        // Create candidate grid
+        const candidatesDiv = cell.querySelector('.candidates');
+        candidatesDiv.innerHTML = '';
+        for (let i = 1; i <= 4; i++) {
+          const candidateDiv = document.createElement('div');
+          candidateDiv.className = 'candidate';
+          candidateDiv.dataset.value = i;
+          candidatesDiv.appendChild(candidateDiv);
+        }
+        
+        // Handle click event
+        cell.addEventListener('click', function(event) {
+          const mode = document.querySelector('input[name="input-mode"]:checked').value;
+          
+          if (mode === 'normal') {
+            // Normal mode - enter a value directly
+            if (candidatesDiv.style.display !== 'none') {
+              candidatesDiv.style.display = 'none';
+            }
+            
+            const currentValue = this.textContent.trim();
+            const newValue = prompt(`Enter a value (1-4) for this cell:`, currentValue);
+            
+            if (newValue === null) return; // User cancelled
+            
+            if (newValue === '' || ['1', '2', '3', '4'].includes(newValue)) {
+              this.textContent = newValue;
+              // Make sure to clear candidates when setting a value
+              clearCellCandidates(this);
+            } else {
+              alert('Please enter a valid number (1-4) or leave empty.');
+            }
+          } else {
+            // Candidate mode - toggle candidates
+            const textValue = this.textContent.trim();
+            if (textValue) {
+              if (!confirm('This cell already has a value. Clear it to use candidates?')) {
+                return;
+              }
+              this.textContent = '';
+            }
+            
+            candidatesDiv.style.display = 'grid';
+            
+            const candidateValue = prompt('Enter a candidate number (1-4) to toggle:');
+            if (candidateValue === null) return; // User cancelled
+            
+            if (['1', '2', '3', '4'].includes(candidateValue)) {
+              const candidate = candidatesDiv.querySelector(`.candidate[data-value="${candidateValue}"]`);
+              if (candidate.textContent === candidateValue) {
+                candidate.textContent = '';
+              } else {
+                candidate.textContent = candidateValue;
+              }
+            } else {
+              alert('Please enter a valid candidate number (1-4).');
+            }
+          }
+          
+          event.stopPropagation();
+        });
+      });
+    }
+
+    function clearCellCandidates(cell) {
+      const candidatesDiv = cell.querySelector('.candidates');
+      candidatesDiv.style.display = 'none';
+      const candidates = candidatesDiv.querySelectorAll('.candidate');
+      candidates.forEach(candidate => {
+        candidate.textContent = '';
+      });
+    }
+
+    function getCurrentPuzzle() {
+      const grid = document.getElementById('puzzleTable');
+      const puzzle = Array.from({ length: 8 }, () => Array(8).fill(0));
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const cell = grid.rows[r].cells[c].querySelector('.cell-div');
+          const textContent = cell.childNodes[0]?.nodeValue?.trim() || '';
+          puzzle[r][c] = textContent ? parseInt(textContent, 10) || 0 : 0;
+        }
+      }
+      return puzzle;
+    }
+
+    function checkPuzzle() {
+      const solver = new DuoDoKuSolver();
+      const userSolution = getCurrentPuzzle();
+      const puzzleString = getPuzzleFromURL();
+      const puzzleArray = convertToArray(puzzleString);
+      const feedbackElement = document.getElementById('feedback');
+
+      if (puzzleArray.length === 0) return;
+
+      solver.enterPuzzle(puzzleArray);
+      const correctSolution = solver.solutions[0];
+      const table = document.getElementById('puzzleTable');
+
+      let left = 0;
+      let incorrect = 0;
+
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const cell = table.rows[r].cells[c].querySelector('.cell-div');
+          const userVal = userSolution[r][c];
+          const correctVal = correctSolution[r][c];
+
+          // Clear previous highlight
+          cell.style.backgroundColor = '#fff';
+
+          if (userVal !== correctVal) {
+            if (userVal === 0) {
+              left += 1;
+            } else {
+              cell.style.backgroundColor = '#ffcccc';
+              incorrect += 1;
+            }
+          }
+        }
+      }
+
+      if (incorrect === 0) {
+        if (left === 0) {
+          feedbackElement.textContent = 'Correct! Well done!';
+        } else {
+          feedbackElement.textContent = `So far so good, you still have ${left} digits to go!`;
+        }
+        feedbackElement.style.color = 'green';
+      } else {
+        feedbackElement.textContent = 'Incorrect. Highlighted cells are wrong.';
+        feedbackElement.style.color = 'red';
+      }
+    }
+
+    function resetHighlights() {
+      const table = document.getElementById('puzzleTable');
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const cell = table.rows[r].cells[c].querySelector('.cell-div');
+          cell.style.backgroundColor = '#fff';
+        }
+      }
+      document.getElementById('feedback').textContent = '';
+    }
+
+    function clearAllCandidates() {
+      const cells = document.querySelectorAll('.cell-div.editable');
+      cells.forEach(cell => {
+        const candidatesDiv = cell.querySelector('.candidates');
+        candidatesDiv.style.display = 'none';
+        const candidates = candidatesDiv.querySelectorAll('.candidate');
+        candidates.forEach(candidate => {
+          candidate.textContent = '';
+        });
+      });
+      document.getElementById('feedback').textContent = 'All candidates cleared.';
+    }
+
+    function printPuzzle() {
+      const puzzleString = getPuzzleFromURL();
+      window.location.href = `https://ricky295.github.io/duodokuprint.html?puzzle=${puzzleString}&zoom=84`;
+    }
+
+    // Initialize puzzle
+    renderPuzzle();
+
+    // Add event listeners
+    document.getElementById('checkButton').addEventListener('click', checkPuzzle);
+    document.getElementById('resetHighlights').addEventListener('click', resetHighlights);
+    document.getElementById('clearCandidates').addEventListener('click', clearAllCandidates);
+    document.getElementById('print').addEventListener('click', printPuzzle);
+  </script>
+</body>
+</html>
