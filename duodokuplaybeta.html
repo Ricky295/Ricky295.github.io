@@ -123,7 +123,7 @@
       margin: 0 3px;
     }
     
-    .option-container {
+    .auto-features {
       text-align: center;
       margin: 10px 0;
     }
@@ -141,10 +141,10 @@
       <input type="radio" name="input-mode" value="candidate"> Candidate Mode
     </label>
   </div>
-  
-  <div class="option-container">
+
+  <div class="auto-features">
     <label>
-      <input type="checkbox" id="auto-remove-candidates" checked> Auto-remove conflicting candidates
+      <input type="checkbox" id="autoRemove" checked> Auto-remove impossible candidates
     </label>
   </div>
 
@@ -238,6 +238,11 @@
           selectedCell = null;
         }
       });
+      
+      // Initialize candidates removal based on fixed cells
+      if (document.getElementById('autoRemove').checked) {
+        updateAllCandidates();
+      }
     }
     
     function setupCellListeners() {
@@ -272,8 +277,8 @@
           setCellValue(selectedCell, key);
           
           // Auto-remove candidates if enabled
-          if (document.getElementById('auto-remove-candidates').checked) {
-            removeConflictingCandidates(parseInt(selectedCell.dataset.row), parseInt(selectedCell.dataset.col), key);
+          if (document.getElementById('autoRemove').checked) {
+            updateAllCandidates();
           }
         } else {
           // Candidate mode - toggle candidate
@@ -284,7 +289,13 @@
       // Clear cell
       else if (key === 'Delete' || key === 'Backspace') {
         if (mode === 'normal') {
+          const oldValue = selectedCell.childNodes[0]?.nodeValue?.trim() || '';
           setCellValue(selectedCell, '');
+          
+          // Update candidates if a value was cleared and auto-remove is enabled
+          if (oldValue && document.getElementById('autoRemove').checked) {
+            updateAllCandidates();
+          }
         } else {
           clearCellCandidates(selectedCell);
         }
@@ -329,15 +340,47 @@
         selectedCell = newCell;
         selectedCell.classList.add('selected-cell');
       } else {
-        // Skip over non-editable cells if still within bounds
+        // Skip over non-editable cells
         if (key === 'ArrowUp' && newRow > 0) {
-          navigateWithArrowKeys(key);
+          newRow--;
+          selectedCell.classList.remove('selected-cell');
+          const tempCell = table.rows[newRow].cells[newCol].querySelector('.cell-div');
+          if (tempCell.classList.contains('editable')) {
+            selectedCell = tempCell;
+            selectedCell.classList.add('selected-cell');
+          } else {
+            navigateWithArrowKeys(key);
+          }
         } else if (key === 'ArrowDown' && newRow < 7) {
-          navigateWithArrowKeys(key);
+          newRow++;
+          selectedCell.classList.remove('selected-cell');
+          const tempCell = table.rows[newRow].cells[newCol].querySelector('.cell-div');
+          if (tempCell.classList.contains('editable')) {
+            selectedCell = tempCell;
+            selectedCell.classList.add('selected-cell');
+          } else {
+            navigateWithArrowKeys(key);
+          }
         } else if (key === 'ArrowLeft' && newCol > 0) {
-          navigateWithArrowKeys(key);
+          newCol--;
+          selectedCell.classList.remove('selected-cell');
+          const tempCell = table.rows[newRow].cells[newCol].querySelector('.cell-div');
+          if (tempCell.classList.contains('editable')) {
+            selectedCell = tempCell;
+            selectedCell.classList.add('selected-cell');
+          } else {
+            navigateWithArrowKeys(key);
+          }
         } else if (key === 'ArrowRight' && newCol < 7) {
-          navigateWithArrowKeys(key);
+          newCol++;
+          selectedCell.classList.remove('selected-cell');
+          const tempCell = table.rows[newRow].cells[newCol].querySelector('.cell-div');
+          if (tempCell.classList.contains('editable')) {
+            selectedCell = tempCell;
+            selectedCell.classList.add('selected-cell');
+          } else {
+            navigateWithArrowKeys(key);
+          }
         }
       }
     }
@@ -382,72 +425,101 @@
       });
     }
     
-    function removeConflictingCandidates(row, col, value) {
+    function updateAllCandidates() {
+      const grid = getCurrentPuzzle();
       const table = document.getElementById('puzzleTable');
       
-      // Define 2x4 box boundaries
-      const boxStartRow = Math.floor(row / 2) * 2;
-      const boxStartCol = Math.floor(col / 4) * 4;
-      
-      // Remove from row
-      for (let c = 0; c < 8; c++) {
-        if (c !== col) {
-          removeCandidateFromCell(row, c, value);
-        }
-      }
-      
-      // Remove from column
+      // First, identify all cells with values
+      const cellsWithValues = [];
       for (let r = 0; r < 8; r++) {
-        if (r !== row) {
-          removeCandidateFromCell(r, col, value);
-        }
-      }
-      
-      // Remove from 2x4 box
-      for (let r = boxStartRow; r < boxStartRow + 2; r++) {
-        for (let c = boxStartCol; c < boxStartCol + 4; c++) {
-          if (r !== row || c !== col) {
-            removeCandidateFromCell(r, c, value);
+        for (let c = 0; c < 8; c++) {
+          if (grid[r][c] !== 0) {
+            cellsWithValues.push({row: r, col: c, value: grid[r][c]});
           }
         }
       }
       
-      // Remove from adjacent cells (no touching rule)
-      const adjacentPositions = [
-        [row-1, col], // top
-        [row+1, col], // bottom
-        [row, col-1], // left
-        [row, col+1], // right
-        [row-1, col-1], // top-left
-        [row-1, col+1], // top-right
-        [row+1, col-1], // bottom-left
-        [row+1, col+1]  // bottom-right
-      ];
-      
-      for (const [r, c] of adjacentPositions) {
-        if (r >= 0 && r < 8 && c >= 0 && c < 8) {
-          removeCandidateFromCell(r, c, value);
+      // Now, process each editable cell to remove impossible candidates
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const cell = table.rows[r].cells[c].querySelector('.cell-div');
+          
+          // Skip cells with values
+          if (grid[r][c] !== 0) continue;
+          
+          // Make sure candidates div is created
+          const candidatesDiv = cell.querySelector('.candidates');
+          
+          // Get current candidates
+          const possibleValues = [1, 2, 3, 4];
+          
+          // Check row, column and box constraints
+          cellsWithValues.forEach(({row, col, value}) => {
+            // Same row - can't have more than 2 of the same number
+            if (row === r) {
+              let countInRow = 0;
+              for (let i = 0; i < 8; i++) {
+                if (grid[r][i] === value) countInRow++;
+              }
+              if (countInRow >= 2) {
+                const index = possibleValues.indexOf(value);
+                if (index > -1) possibleValues.splice(index, 1);
+              }
+            }
+            
+            // Same column - can't have more than 2 of the same number
+            if (col === c) {
+              let countInCol = 0;
+              for (let i = 0; i < 8; i++) {
+                if (grid[i][c] === value) countInCol++;
+              }
+              if (countInCol >= 2) {
+                const index = possibleValues.indexOf(value);
+                if (index > -1) possibleValues.splice(index, 1);
+              }
+            }
+            
+            // Same box - can't have more than 2 of the same number
+            const boxRowStart = Math.floor(r / 2) * 2;
+            const boxColStart = Math.floor(c / 4) * 4;
+            const boxRowStart2 = Math.floor(row / 2) * 2;
+            const boxColStart2 = Math.floor(col / 4) * 4;
+            
+            if (boxRowStart === boxRowStart2 && boxColStart === boxColStart2) {
+              let countInBox = 0;
+              for (let i = boxRowStart; i < boxRowStart + 2; i++) {
+                for (let j = boxColStart; j < boxColStart + 4; j++) {
+                  if (grid[i][j] === value) countInBox++;
+                }
+              }
+              if (countInBox >= 2) {
+                const index = possibleValues.indexOf(value);
+                if (index > -1) possibleValues.splice(index, 1);
+              }
+            }
+            
+            // Adjacent cells - can't have the same number
+            if ((Math.abs(row - r) === 1 && col === c) || (row === r && Math.abs(col - c) === 1)) {
+              const index = possibleValues.indexOf(value);
+              if (index > -1) possibleValues.splice(index, 1);
+            }
+          });
+          
+          // Update the candidates for this cell
+          const candidates = candidatesDiv.querySelectorAll('.candidate');
+          candidates.forEach(candidate => {
+            const value = parseInt(candidate.dataset.value);
+            if (!possibleValues.includes(value)) {
+              candidate.textContent = '';
+              candidate.classList.remove('active');
+            } else if (possibleValues.length === 1 && possibleValues[0] === value) {
+              // If only one value is possible, set it as a candidate
+              candidatesDiv.style.display = 'grid';
+              candidate.textContent = value;
+              candidate.classList.add('active');
+            }
+          });
         }
-      }
-    }
-    
-    function removeCandidateFromCell(row, col, value) {
-      const table = document.getElementById('puzzleTable');
-      const cell = table.rows[row].cells[col].querySelector('.cell-div');
-      
-      // Skip if the cell isn't editable
-      if (!cell.classList.contains('editable')) return;
-      
-      // Skip if the cell already has a value
-      if (cell.childNodes[0]?.nodeValue?.trim()) return;
-      
-      const candidatesDiv = cell.querySelector('.candidates');
-      if (candidatesDiv.style.display === 'none') return;
-      
-      const candidate = candidatesDiv.querySelector(`.candidate[data-value="${value}"]`);
-      if (candidate && candidate.textContent === value) {
-        candidate.textContent = '';
-        candidate.classList.remove('active');
       }
     }
 
@@ -547,6 +619,11 @@
     document.getElementById('resetHighlights').addEventListener('click', resetHighlights);
     document.getElementById('clearCandidates').addEventListener('click', clearAllCandidates);
     document.getElementById('print').addEventListener('click', printPuzzle);
+    document.getElementById('autoRemove').addEventListener('change', function() {
+      if (this.checked) {
+        updateAllCandidates();
+      }
+    });
   </script>
 </body>
 </html>
