@@ -122,6 +122,11 @@
       padding: 2px 5px;
       margin: 0 3px;
     }
+    
+    .option-container {
+      text-align: center;
+      margin: 10px 0;
+    }
   </style>
 </head>
 <body>
@@ -134,6 +139,12 @@
     </label>
     <label>
       <input type="radio" name="input-mode" value="candidate"> Candidate Mode
+    </label>
+  </div>
+  
+  <div class="option-container">
+    <label>
+      <input type="checkbox" id="auto-remove-candidates" checked> Auto-remove conflicting candidates
     </label>
   </div>
 
@@ -259,6 +270,11 @@
         if (mode === 'normal') {
           // Normal mode - set value directly
           setCellValue(selectedCell, key);
+          
+          // Auto-remove candidates if enabled
+          if (document.getElementById('auto-remove-candidates').checked) {
+            removeConflictingCandidates(parseInt(selectedCell.dataset.row), parseInt(selectedCell.dataset.col), key);
+          }
         } else {
           // Candidate mode - toggle candidate
           toggleCandidate(selectedCell, key);
@@ -313,18 +329,14 @@
         selectedCell = newCell;
         selectedCell.classList.add('selected-cell');
       } else {
-        // Skip over non-editable cells
+        // Skip over non-editable cells if still within bounds
         if (key === 'ArrowUp' && newRow > 0) {
-          newRow--;
           navigateWithArrowKeys(key);
         } else if (key === 'ArrowDown' && newRow < 7) {
-          newRow++;
           navigateWithArrowKeys(key);
         } else if (key === 'ArrowLeft' && newCol > 0) {
-          newCol--;
           navigateWithArrowKeys(key);
         } else if (key === 'ArrowRight' && newCol < 7) {
-          newCol++;
           navigateWithArrowKeys(key);
         }
       }
@@ -368,6 +380,75 @@
         candidate.textContent = '';
         candidate.classList.remove('active');
       });
+    }
+    
+    function removeConflictingCandidates(row, col, value) {
+      const table = document.getElementById('puzzleTable');
+      
+      // Define 2x4 box boundaries
+      const boxStartRow = Math.floor(row / 2) * 2;
+      const boxStartCol = Math.floor(col / 4) * 4;
+      
+      // Remove from row
+      for (let c = 0; c < 8; c++) {
+        if (c !== col) {
+          removeCandidateFromCell(row, c, value);
+        }
+      }
+      
+      // Remove from column
+      for (let r = 0; r < 8; r++) {
+        if (r !== row) {
+          removeCandidateFromCell(r, col, value);
+        }
+      }
+      
+      // Remove from 2x4 box
+      for (let r = boxStartRow; r < boxStartRow + 2; r++) {
+        for (let c = boxStartCol; c < boxStartCol + 4; c++) {
+          if (r !== row || c !== col) {
+            removeCandidateFromCell(r, c, value);
+          }
+        }
+      }
+      
+      // Remove from adjacent cells (no touching rule)
+      const adjacentPositions = [
+        [row-1, col], // top
+        [row+1, col], // bottom
+        [row, col-1], // left
+        [row, col+1], // right
+        [row-1, col-1], // top-left
+        [row-1, col+1], // top-right
+        [row+1, col-1], // bottom-left
+        [row+1, col+1]  // bottom-right
+      ];
+      
+      for (const [r, c] of adjacentPositions) {
+        if (r >= 0 && r < 8 && c >= 0 && c < 8) {
+          removeCandidateFromCell(r, c, value);
+        }
+      }
+    }
+    
+    function removeCandidateFromCell(row, col, value) {
+      const table = document.getElementById('puzzleTable');
+      const cell = table.rows[row].cells[col].querySelector('.cell-div');
+      
+      // Skip if the cell isn't editable
+      if (!cell.classList.contains('editable')) return;
+      
+      // Skip if the cell already has a value
+      if (cell.childNodes[0]?.nodeValue?.trim()) return;
+      
+      const candidatesDiv = cell.querySelector('.candidates');
+      if (candidatesDiv.style.display === 'none') return;
+      
+      const candidate = candidatesDiv.querySelector(`.candidate[data-value="${value}"]`);
+      if (candidate && candidate.textContent === value) {
+        candidate.textContent = '';
+        candidate.classList.remove('active');
+      }
     }
 
     function getCurrentPuzzle() {
