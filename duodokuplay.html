@@ -209,6 +209,17 @@
       background-color: #ccffcc;
     }
     
+    /* New style for digit highlighting */
+    .digit-highlight {
+      background-color: #ffffcc !important;
+    }
+    
+    /* New style for candidate highlighting */
+    .candidate-highlight {
+      color: #ff6600 !important;
+      font-weight: bold;
+    }
+    
     @media (max-width: 768px) {
       .puzzle-container {
         flex-direction: column;
@@ -294,6 +305,7 @@
     const urlParams = new URLSearchParams(window.location.search);
     let selectedCell = null;
     let grid = [];
+    let currentHighlightedDigit = null;
 
     function getPuzzleFromURL() {
       return urlParams.get('puzzle') || '0023101401403400302040210140300312002401341003021204200343121304';
@@ -371,10 +383,23 @@
     }
     
     function setupCellListeners() {
-      const cells = document.querySelectorAll('.cell-div.editable');
+      const cells = document.querySelectorAll('.cell-div');
       
       cells.forEach(cell => {
         cell.addEventListener('click', function(event) {
+          // Check if the user is clicking to highlight a digit
+          const cellValue = this.childNodes[0]?.nodeValue?.trim();
+          if (cellValue && ["1", "2", "3", "4"].includes(cellValue)) {
+            highlightDigit(parseInt(cellValue));
+            event.stopPropagation();
+            return;
+          }
+          
+          // Only proceed with selection if it's an editable cell
+          if (!this.classList.contains('editable')) {
+            return;
+          }
+          
           // Deselect previously selected cell
           if (selectedCell) {
             selectedCell.classList.remove('selected-cell');
@@ -387,6 +412,58 @@
           event.stopPropagation();
         });
       });
+    }
+    
+    // New function to highlight all cells with a specific digit
+    function highlightDigit(digit) {
+      // Remove any existing highlights first
+      clearDigitHighlights();
+      
+      // If we're clicking the already highlighted digit, just clear the highlights
+      if (currentHighlightedDigit === digit) {
+        currentHighlightedDigit = null;
+        return;
+      }
+      
+      currentHighlightedDigit = digit;
+      
+      // Highlight all cells with this digit
+      const table = document.getElementById('puzzleTable');
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const cell = table.rows[row].cells[col].querySelector('.cell-div');
+          const cellValue = cell.childNodes[0]?.nodeValue?.trim();
+          
+          if (cellValue === digit.toString()) {
+            cell.classList.add('digit-highlight');
+          }
+          
+          // Also highlight candidates with this digit
+          const candidatesDiv = cell.querySelector('.candidates');
+          if (candidatesDiv.style.display === 'grid') {
+            const candidate = candidatesDiv.querySelector(`.candidate[data-value="${digit}"]`);
+            if (candidate.textContent === digit.toString()) {
+              candidate.classList.add('candidate-highlight');
+            }
+          }
+        }
+      }
+    }
+    
+    // Function to clear all digit highlights
+    function clearDigitHighlights() {
+      const cells = document.querySelectorAll('.cell-div');
+      cells.forEach(cell => {
+        cell.classList.remove('digit-highlight');
+        
+        // Also clear candidate highlights
+        const candidates = cell.querySelectorAll('.candidate');
+        candidates.forEach(candidate => {
+          candidate.classList.remove('candidate-highlight');
+        });
+      });
+      
+      currentHighlightedDigit = null;
     }
     
     function setupNumpadListeners() {
@@ -411,8 +488,18 @@
             if (document.getElementById('auto-candidates').checked) {
               removeInvalidCandidates();
             }
+            
+            // Rehighlight if a digit is currently highlighted
+            if (currentHighlightedDigit !== null) {
+              highlightDigit(currentHighlightedDigit);
+            }
           } else {
             toggleCandidate(selectedCell, value);
+            
+            // Rehighlight if a digit is currently highlighted
+            if (currentHighlightedDigit !== null) {
+              highlightDigit(currentHighlightedDigit);
+            }
           }
         });
       });
@@ -432,6 +519,11 @@
           grid[row][col] = 0;
         } else {
           clearCellCandidates(selectedCell);
+        }
+        
+        // Rehighlight if a digit is currently highlighted
+        if (currentHighlightedDigit !== null) {
+          highlightDigit(currentHighlightedDigit);
         }
       });
       
@@ -486,6 +578,12 @@
           // Candidate mode - toggle candidate
           toggleCandidate(selectedCell, key);
         }
+        
+        // Rehighlight if a digit is currently highlighted
+        if (currentHighlightedDigit !== null) {
+          highlightDigit(currentHighlightedDigit);
+        }
+        
         event.preventDefault();
       } 
       // Clear cell
@@ -500,6 +598,12 @@
         } else {
           clearCellCandidates(selectedCell);
         }
+        
+        // Rehighlight if a digit is currently highlighted
+        if (currentHighlightedDigit !== null) {
+          highlightDigit(currentHighlightedDigit);
+        }
+        
         event.preventDefault();
       }
       // Navigation with arrow keys
@@ -655,6 +759,9 @@
         feedbackElement.textContent = 'Incorrect. Highlighted cells are wrong.';
         feedbackElement.style.color = 'red';
       }
+      
+      // Clear digit highlights when checking
+      clearDigitHighlights();
     }
 
     function resetHighlights() {
@@ -666,6 +773,9 @@
         }
       }
       document.getElementById('feedback').textContent = '';
+      
+      // Also clear digit highlights
+      clearDigitHighlights();
     }
 
     function clearAllCandidates() {
