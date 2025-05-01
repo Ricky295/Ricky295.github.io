@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake AI Simulation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .simulation {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        canvas {
+            background-color: #000;
+            display: block;
+            margin: 0 auto;
+            border-radius: 4px;
+        }
+        .stats {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        h1, h2 {
+            color: #333;
+            text-align: center;
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .legend {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 10px;
+        }
+        .legend-basic {
+            background-color: #3498db;
+        }
+        .legend-cautious {
+            background-color: #f1c40f;
+        }
+        .legend-hunter {
+            background-color: #e74c3c;
+        }
+        .legend-food {
+            background-color: #2ecc71;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Snake AI Simulation</h1>
+    
+    <div class="container">
+        <div class="simulation">
+            <canvas id="gameCanvas" width="700" height="500"></canvas>
+            
+            <div class="controls">
+                <button id="toggleSimulation">Pause</button>
+                <button id="resetSimulation">Reset</button>
+                <button id="speedUp">Speed Up</button>
+                <button id="slowDown">Slow Down</button>
+            </div>
+            
+            <div class="legend">
+                <h3>Snake Types:</h3>
+                <div class="legend-item">
+                    <div class="legend-color legend-basic"></div>
+                    <span>Basic (Level 0) - Seeks food</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color legend-cautious"></div>
+                    <span>Cautious (Level 1) - Avoids other snakes</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color legend-hunter"></div>
+                    <span>Hunter (Level 2) - Seeks food and hunts smaller snakes</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color legend-food"></div>
+                    <span>Food</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="stats">
+            <h2>Simulation Stats</h2>
+            <div class="stat-row">
+                <span>Living Snakes:</span>
+                <span id="livingSnakes">0</span>
+            </div>
+            <div class="stat-row">
+                <span>Average Intelligence:</span>
+                <span id="avgIntelligence">0</span>
+            </div>
+            <div class="stat-row">
+                <span>Average Length:</span>
+                <span id="avgLength">0</span>
+            </div>
+            <div class="stat-row">
+                <span>Intelligence Distribution:</span>
+                <span id="intelDist">Basic: 0, Cautious: 0, Hunter: 0</span>
+            </div>
+            <div class="stat-row">
+                <span>Food Eaten:</span>
+                <span id="foodEaten">0</span>
+            </div>
+            <div class="stat-row">
+                <span>Snakes Eaten:</span>
+                <span id="snakesEaten">0</span>
+            </div>
+            <div class="stat-row">
+                <span>Deaths:</span>
+                <span id="snakeDeaths">0</span>
+            </div>
+            <div class="stat-row">
+                <span>New Spawns:</span>
+                <span id="newSpawns">0</span>
+            </div>
+            <div class="stat-row">
+                <span>Longest Snake:</span>
+                <span id="longestSnake">ID: 0, Length: 0</span>
+            </div>
+            <div class="stat-row">
+                <span>Iteration:</span>
+                <span id="iterationCount">0</span>
+            </div>
+            <div class="stat-row">
+                <span>Simulation Speed:</span>
+                <span id="simulationSpeed">1x</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get the canvas and its context
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Game parameters
+        let INITIAL_SNAKES = 5;
+        const MAX_SNAKES = 50;
+        const NUM_FOOD = 10;
+        const SNAKE_GROWTH_PER_FOOD = 1;
+        const MAX_SNAKE_LENGTH = 40;
+        let MOVE_DELAY = 30; // milliseconds
+        const SPAWN_CHANCE = 0.01; // Chance of spawning a new snake each turn
+        const STATS_UPDATE_INTERVAL = 1; // Update stats every N iterations
+        
+        // Colors for different intelligence levels
+        const COLORS = {
+            FOOD: '#2ecc71', // Green
+            SNAKE_BASIC: '#3498db', // Blue
+            SNAKE_CAUTIOUS: '#f1c40f', // Yellow
+            SNAKE_HUNTER: '#e74c3c', // Red
+            BACKGROUND: '#000000', // Black
+        };
+        
+        // Directions: Right, Down, Left, Up
+        const DIRECTIONS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+        
+        // Game state
+        let snakes = [];
+        let food = [];
+        let iterationCount = 0;
+        let foodEaten = 0;
+        let snakesEaten = 0;
+        let snakeDeaths = 0;
+        let newSpawns = 0;
+        let simulationRunning = true;
+        let speedMultiplier = 1;
+        
+        // Initialize cell size based on canvas dimensions
+        const CELL_SIZE = 5;
+        const GRID_WIDTH = Math.floor(canvas.width / CELL_SIZE);
+        const GRID_HEIGHT = Math.floor(canvas.height / CELL_SIZE);
+        
+        // Function to create a new snake
+        function createSnake(intelligence = null) {
+            if (intelligence === null) {
+                const luckyspawn = Math.floor(Math.random() * 100) + 1;
+                intelligence = luckyspawn === 100 ? 2 : luckyspawn >= 90 ? 1 : 0;
+            }
+            
+            // Start with a snake of length 3 at a random position
+            const x = Math.floor(Math.random() * (GRID_WIDTH - 10)) + 5;
+            const y = Math.floor(Math.random() * (GRID_HEIGHT - 10)) + 5;
+            const directionIndex = Math.floor(Math.random() * DIRECTIONS.length);
+            const direction = DIRECTIONS[directionIndex];
+            const body = [[x, y]];
+            
+            // Add 2 body segments in the opposite direction of movement
+            for (let j = 1; j < 3; j++) {
+                const prevX = body[j-1][0];
+                const prevY = body[j-1][1];
+                const newX = Math.max(0, Math.min(GRID_WIDTH - 1, prevX - direction[0]));
+                const newY = Math.max(0, Math.min(GRID_HEIGHT - 1, prevY - direction[1]));
+                body.push([newX, newY]);
+            }
+            
+            return {
+                body: body,
+                direction: direction,
+                alive: true,
+                growthPending: 0,
+                id: snakes.length,
+                pattern: 0
+                intelligence: intelligence,
+                age: 0,
+                color: intelligence === 0 ? COLORS.SNAKE_BASIC : 
+                       intelligence === 1 ? COLORS.SNAKE_CAUTIOUS : 
+                       COLORS.SNAKE_HUNTER
+            };
+        }
+        
+        // Function to spawn food
+        function spawnFood(count) {
+            let spawned = 0;
+            let attempts = 0;
+            
+            while (spawned < count && attempts < 100) {
+                attempts++;
+                const x = Math.floor(Math.random() * GRID_WIDTH);
+                const y = Math.floor(Math.random() * GRID_HEIGHT);
+                
+                // Check if position is free from snakes and other food
+                let positionFree = true;
+                
+                for (const snake of snakes) {
+                    if (snake.alive) {
+                        for (const segment of snake.body) {
+                            if (segment[0] === x && segment[1] === y) {
+                                positionFree = false;
+                                break;
+                            }
+                        }
+                        if (!positionFree) break;
+                    }
+                }
+                
+                if (positionFree) {
+                    let foodExists = false;
+                    for (const f of food) {
+                        if (f[0] === x && f[1] === y) {
+                            foodExists = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!foodExists) {
+                        food.push([x, y]);
+                        spawned++;
+                    }
+                }
+            }
+        }
+        
+        // Function to determine best direction for a snake based on intelligence
+        function findBestMove(snake) {
+            if (!snake.alive) {
+                return [0, 0];
+            }
+            
+            const head = snake.body[0];
+            const currentDir = snake.direction;
+            const intelligence = snake.intelligence;
+            
+            // Find closest food
+            let minDistFood = Infinity;
+            let closestFood = null;
+            
+            for (const f of food) {
+                const dist = Math.abs(head[0] - f[0]) + Math.abs(head[1] - f[1]); // Manhattan distance
+                if (dist < minDistFood) {
+                    minDistFood = dist;
+                    closestFood = f;
+                }
+            }
+            
+            // Find closest smaller snake if we're a hunter (intelligence level 2)
+            let minDistPrey = Infinity;
+            let preyHead = null;
+            
+            if (intelligence === 2) {
+                const myLength = snake.body.length;
+                
+                for (const otherSnake of snakes) {
+                    if (otherSnake.alive && 
+                        otherSnake.id !== snake.id && 
+                        otherSnake.body.length < myLength * 0.8) { // Only go after significantly smaller snakes
+                        
+                        const otherHead = otherSnake.body[0];
+                        const dist = Math.abs(head[0] - otherHead[0]) + Math.abs(head[1] - otherHead[1]);
+                        
+                        if (dist < minDistPrey && dist < 45) { // Only chase if relatively close
+                            minDistPrey = dist;
+                            preyHead = otherHead;
+                        }
+                    }
+                }
+            }
+            
+            // Determine target based on intelligence and situation
+            let target = null;
+            
+            // Intelligence 0: Always goes for food
+            if (intelligence === 0) {
+                target = closestFood;
+            }
+            // Intelligence 1 or 2: Consider options more carefully
+            else if (intelligence >= 1) {
+                // If very hungry or no threats nearby, go for food
+                if (closestFood && (minDistFood < 10 || snake.body.length < 5)) {
+                    target = closestFood;
+                }
+                // Hunter snake with prey nearby
+                else if (intelligence === 2 && preyHead && minDistPrey < minDistFood) {
+                    target = preyHead;
+                }
+                // Default to food
+                else {
+                    target = closestFood;
+                }
+            }
+            
+            if (!target) {
+                // No target available, continue in current direction
+                return currentDir;
+            }
+            
+            // Determine best direction to reach target
+            const possibleDirs = [];
+            
+            // Horizontal alignment
+            if (head[0] < target[0]) {
+                possibleDirs.push([1, 0]); // Right
+            } else if (head[0] > target[0]) {
+                possibleDirs.push([-1, 0]); // Left
+            }
+            
+            // Vertical alignment
+            if (head[1] < target[1]) {
+                possibleDirs.push([0, 1]); // Down
+            } else if (head[1] > target[1]) {
+                possibleDirs.push([0, -1]); // Up
+            }
+            
+            // No possible movements (shouldn't happen)
+            if (possibleDirs.length === 0) {
+                return currentDir;
+            }
+            
+            // Filter directions that would cause immediate collision
+            const safeDirs = [];
+            
+            for (const d of possibleDirs) {
+                const newHead = [head[0] + d[0], head[1] + d[1]];
+                
+                // Check if out of bounds
+                if (newHead[0] < 0 || newHead[0] >= GRID_WIDTH || newHead[1] < 0 || newHead[1] >= GRID_HEIGHT) {
+                    continue;
+                }
+                
+                // Check collision with self (except tail which will move)
+                let selfCollision = false;
+                for (let i = 0; i < snake.body.length - 1; i++) {
+                    if (newHead[0] === snake.body[i][0] && newHead[1] === snake.body[i][1]) {
+                        selfCollision = true;
+                        break;
+                    }
+                }
+                
+                if (selfCollision) {
+                    continue;
+                }
+                
+                // For intelligence >= 1, avoid other snakes' bodies
+                if (intelligence >= 1) {
+                    let collision = false;
+                    
+                    for (const otherSnake of snakes) {
+                        if (otherSnake.id !== snake.id && otherSnake.alive) {
+                            // For intelligence level 2 (hunters), allow colliding with smaller snake heads
+                            if (intelligence === 2 && 
+                                newHead[0] === otherSnake.body[0][0] && 
+                                newHead[1] === otherSnake.body[0][1] && 
+                                otherSnake.body.length < snake.body.length * 0.8) {
+                                continue;
+                            }
+                            
+                            for (const segment of otherSnake.body) {
+                                if (newHead[0] === segment[0] && newHead[1] === segment[1]) {
+                                    collision = true;
+                                    break;
+                                }
+                            }
+                            
+                            if (collision) break;
+                        }
+                    }
+                    
+                    if (collision) {
+                        continue;
+                    }
+                }
+                
+                safeDirs.push(d);
+            }
+            
+            // If no safe directions, try all directions
+            if (safeDirs.length === 0) {
+                for (const d of DIRECTIONS) {
+                    const newHead = [head[0] + d[0], head[1] + d[1]];
+                    
+                    if (newHead[0] >= 0 && newHead[0] < GRID_WIDTH && 
+                        newHead[1] >= 0 && newHead[1] < GRID_HEIGHT) {
+                        
+                        // Avoid running into self
+                        let selfCollision = false;
+                        for (let i = 0; i < snake.body.length - 1; i++) {
+                            if (newHead[0] === snake.body[i][0] && newHead[1] === snake.body[i][1]) {
+                                selfCollision = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!selfCollision) {
+                            safeDirs.push(d);
+                        }
+                    }
+                }
+            }
+            
+            // If still no options, current direction will lead to death
+            if (safeDirs.length === 0) {
+                return currentDir;
+            }
+            
+            // Pick randomly between the equally good options
+            return safeDirs[Math.floor(Math.random() * safeDirs.length)];
+        }
+        
+        // Get string representation of intelligence level
+        function getIntelligenceName(level) {
+            if (level === 0) {
+                return "Basic";
+            } else if (level === 1) {
+                return "Cautious";
+            } else {
+                return "Hunter";
+            }
+        }
+        
+        // Calculate snake statistics
+        function calculateSnakeStats() {
+            const livingSnakes = snakes.filter(s => s.alive);
+            
+            if (livingSnakes.length === 0) {
+                return {
+                    avgIntelligence: 0,
+                    avgLength: 0,
+                    intelCounts: [0, 0, 0],
+                    maxLength: 0,
+                    longest: { id: 0 }
+                };
+            }
+            
+            const totalIntelligence = livingSnakes.reduce((sum, snake) => sum + snake.intelligence, 0);
+            const totalLength = livingSnakes.reduce((sum, snake) => sum + snake.body.length, 0);
+            
+            // Find longest snake
+            let maxLength = 0;
+            let longest = null;
+            
+            for (const snake of livingSnakes) {
+                if (snake.body.length > maxLength) {
+                    maxLength = snake.body.length;
+                    longest = snake;
+                }
+            }
+            
+            const avgIntelligence = totalIntelligence / livingSnakes.length;
+            const avgLength = totalLength / livingSnakes.length;
+            
+            // Count snakes of each intelligence level
+            const intelCounts = [0, 0, 0];
+            
+            for (const snake of livingSnakes) {
+                intelCounts[snake.intelligence]++;
+            }
+            
+            return {
+                avgIntelligence,
+                avgLength,
+                intelCounts,
+                maxLength,
+                longest: longest || { id: 0 }
+            };
+        }
+        
+        // Draw a snake with pattern
+        function drawSnake(snake) {
+            if (!snake.alive) {
+                return;
+            }
+            
+            const head = snake.body[0];
+            const pattern = snake.pattern;
+            
+            // Draw the head (slightly larger)
+            ctx.fillStyle = snake.color;
+            ctx.fillRect(
+                head[0] * CELL_SIZE, 
+                head[1] * CELL_SIZE, 
+                CELL_SIZE, 
+                CELL_SIZE
+            );
+            
+            // Draw body with pattern based on intelligence
+            if (pattern === 0) { // Basic - solid body
+                for (let i = 1; i < snake.body.length; i++) {
+                    const segment = snake.body[i];
+                    ctx.fillRect(
+                        segment[0] * CELL_SIZE, 
+                        segment[1] * CELL_SIZE, 
+                        CELL_SIZE, 
+                        CELL_SIZE
+                    );
+                }
+            } else if (pattern === 1) { // Cautious - dotted pattern
+                for (let i = 1; i < snake.body.length; i++) {
+                    if (i % 2 === 0) { // Only draw even segments
+                        const segment = snake.body[i];
+                        ctx.fillRect(
+                            segment[0] * CELL_SIZE, 
+                            segment[1] * CELL_SIZE, 
+                            CELL_SIZE, 
+                            CELL_SIZE
+                        );
+                    }
+                }
+            } else if (pattern === 2) { // Hunter - dash pattern (2 on, 1 off)
+                for (let i = 1; i < snake.body.length; i++) {
+                    if (i % 3 !== 2) { // Skip every third segment
+                        const segment = snake.body[i];
+                        ctx.fillRect(
+                            segment[0] * CELL_SIZE, 
+                            segment[1] * CELL_SIZE, 
+                            CELL_SIZE, 
+                            CELL_SIZE
+                        );
+                    }
+                }
+            }
+        }
+        
+        // Initialize game
+        function initGame() {
+            // Reset game state
+            snakes = [];
+            food = [];
+            iterationCount = 0;
+            foodEaten = 0;
+            snakesEaten = 0;
+            snakeDeaths = 0;
+            newSpawns = 0;
+            
+            // Create initial snakes
+            for (let i = 0; i < INITIAL_SNAKES; i++) {
+                const newSnake = createSnake();
+                snakes.push(newSnake);
+                console.log(`Snake ${newSnake.id} created with intelligence ${getIntelligenceName(newSnake.intelligence)}`);
+            }
+            
+            // Add initial food
+            spawnFood(NUM_FOOD);
+            
+            // Start game loop
+            if (!simulationRunning) {
+                simulationRunning = true;
+                gameLoop();
+            }
+            
+            // Update stats display
+            updateStatsDisplay();
+        }
+        
+        // Update stats display
+        function updateStatsDisplay() {
+            const { avgIntelligence, avgLength, intelCounts, maxLength, longest } = calculateSnakeStats();
+            const livingCount = snakes.filter(s => s.alive).length;
+            
+            document.getElementById('livingSnakes').textContent = livingCount;
+            document.getElementById('avgIntelligence').textContent = avgIntelligence.toFixed(2);
+            document.getElementById('avgLength').textContent = avgLength.toFixed(2);
+            document.getElementById('intelDist').textContent = `Basic: ${intelCounts[0]}, Cautious: ${intelCounts[1]}, Hunter: ${intelCounts[2]}`;
+            document.getElementById('foodEaten').textContent = foodEaten;
+            document.getElementById('snakesEaten').textContent = snakesEaten;
+            document.getElementById('snakeDeaths').textContent = snakeDeaths;
+            document.getElementById('newSpawns').textContent = newSpawns;
+            document.getElementById('longestSnake').textContent = `ID: ${longest.id}, Length: ${maxLength}`;
+            document.getElementById('iterationCount').textContent = iterationCount;
+            document.getElementById('simulationSpeed').textContent = `${speedMultiplier}x`;
+        }
+        
+        // Main game loop
+        function gameLoop() {
+            if (!simulationRunning) {
+                return;
+            }
+            
+            iterationCount++;
+            
+            // Update snake directions based on AI
+            for (const snake of snakes) {
+                if (snake.alive) {
+                    snake.direction = findBestMove(snake);
+                    snake.age++;
+                }
+            }
+            
+            // Move snakes
+            for (const snake of snakes) {
+                if (!snake.alive) {
+                    continue;
+                }
+                
+                const head = snake.body[0];
+                const newHead = [head[0] + snake.direction[0], head[1] + snake.direction[1]];
+                
+                // Check for collisions with walls
+                if (newHead[0] < 0 || newHead[0] >= GRID_WIDTH || newHead[1] < 0 || newHead[1] >= GRID_HEIGHT) {
+                    snake.alive = false;
+                    snakeDeaths++;
+                    console.log(`Snake ${snake.id} died due to hitting a wall.`);
+                    continue;
+                }
+                
+                // Check for collisions with self
+                let selfCollision = false;
+                for (let i = 0; i < snake.body.length - 1; i++) {
+                    if (newHead[0] === snake.body[i][0] && newHead[1] === snake.body[i][1]) {
+                        selfCollision = true;
+                        break;
+                    }
+                }
+                
+                if (selfCollision) {
+                    snake.alive = false;
+                    snakeDeaths++;
+                    console.log(`Snake ${snake.id} died due to eating itself.`);
+                    continue;
+                }
+                
+                // Check for collisions with other snakes
+                let eatenSnake = null;
+                
+                for (const otherSnake of snakes) {
+                    if (otherSnake.id === snake.id || !otherSnake.alive) {
+                        continue;
+                    }
+                    
+                    // Check if we hit another snake's head
+                    if (newHead[0] === otherSnake.body[0][0] && newHead[1] === otherSnake.body[0][1]) {
+                        // Head-to-head collision: longer snake wins
+                        if (snake.body.length <= otherSnake.body.length) {
+                            snake.alive = false;
+                            snakeDeaths++;
+                            console.log(`Snake ${snake.id} died due to trying to hunt ${otherSnake.id}`);
+                            break;
+                        } else {
+                            // We eat the other snake
+                            otherSnake.alive = false;
+                            snakeDeaths++;
+                            eatenSnake = otherSnake;
+                            break;
+                        }
+                    }
+                    
+                    // Check if we hit another snake's body
+                    let bodyCollision = false;
+                    
+                    for (let i = 1; i < otherSnake.body.length; i++) {
+                        if (newHead[0] === otherSnake.body[i][0] && newHead[1] === otherSnake.body[i][1]) {
+                            bodyCollision = true;
+                            break;
+                        }
+                    }
+                    
+                    if (bodyCollision) {
+                        // We hit another snake's body - we can eat it if we're bigger
+                        if (snake.body.length >= otherSnake.body.length * 0.8) {
+                            otherSnake.alive = false;
+                            snakeDeaths++;
+                            eatenSnake = otherSnake;
+                        } else {
+                            snake.alive = false;
+                            snakeDeaths++;
+                            console.log(`Snake ${snake.id} died due trying to eat ${otherSnake.id}.`);
+                        }
+                        break;
+                    }
+                }
+                
+                if (!snake.alive) {
+                    continue;
+                }
+                
+                // If we ate another snake, grow based on square root of its length
+                if (eatenSnake) {
+                    const growth = Math.floor(Math.sqrt(eatenSnake.body.length) + eatenSnake.body.length / 4);
+                    snake.growthPending += Math.min(growth, 10); // Cap growth to prevent memory issues
+                    const previousLength = eatenSnake.body.length;
+                    snakesEaten++;
+                    console.log(`Snake ${snake.id} (${getIntelligenceName(snake.intelligence)}) ate snake ${eatenSnake.id} and grew ${growth} segments out of ${previousLength}!`);
+                }
+                
+                // Check for food
+                let foundFood = false;
+                let foodIndex = -1;
+                
+                for (let i = 0; i < food.length; i++) {
+                    if (newHead[0] === food[i][0] && newHead[1] === food[i][1]) {
+                        foundFood = true;
+                        foodIndex = i;
+                        break;
+                    }
+                }
+                
+                if (foundFood) {
+                    food.splice(foodIndex, 1);
+                    snake.growthPending += SNAKE_GROWTH_PER_FOOD;
+                    foodEaten++;
+                    // Spawn new food
+                    spawnFood(1);
+                }
+                
+                // Move snake
+                snake.body.unshift(newHead);
+                
+                // Only remove tail if not growing
+                if (snake.growthPending > 0) {
+                    snake.growthPending--;
+                } else {
+                    // Maintain maximum length
+                    if (snake.body.length > MAX_SNAKE_LENGTH) {
+                        snake.body.pop();
+                    } else {
+                        snake.body.pop();
+                    }
+                }
+            }
+            
+            // Chance to spawn a new snake if under max limit
+            const livingCount = snakes.filter(s => s.alive).length;
+            
+            if (livingCount < MAX_SNAKES && Math.random() < SPAWN_CHANCE) {
+                const newSnake = createSnake();
+                snakes.push(newSnake);
+                newSpawns++;
+                console.log(`New snake spawned! ID: ${newSnake.id}, Intelligence: ${getIntelligenceName(newSnake.intelligence)}`);
+            }
+            
+            // Cleanup dead snakes
+            if (iterationCount % 100 === 0) {
+              // Cleanup dead snakes
+            if (iterationCount % 100 === 0) {
+                // Keep track of dead snakes but don't remove them from the array
+                // to maintain consistent IDs
+            }
+            
+            // Update stats
+            if (iterationCount % STATS_UPDATE_INTERVAL === 0) {
+                updateStatsDisplay();
+            }
+            
+            // Draw everything
+            draw();
+            
+            // Check if all snakes are dead
+            if (livingCount === 0) {
+                console.log("All snakes have died! Respawning...");
+                for (let i = 0; i < INITIAL_SNAKES; i++) {
+                    const newSnake = createSnake();
+                    snakes.push(newSnake);
+                    newSpawns++;
+                }
+            }
+            
+            // Continue the game loop
+            setTimeout(gameLoop, MOVE_DELAY / speedMultiplier);
+        }
+        
+        // Draw everything
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = COLORS.BACKGROUND;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw food
+            ctx.fillStyle = COLORS.FOOD;
+            for (const f of food) {
+                // Draw food as small circles
+                ctx.beginPath();
+                ctx.arc(
+                    f[0] * CELL_SIZE + CELL_SIZE/2, 
+                    f[1] * CELL_SIZE + CELL_SIZE/2, 
+                    CELL_SIZE/3, 
+                    0, 
+                    Math.PI * 2
+                );
+                ctx.fill();
+            }
+            
+            // Draw snakes
+            for (const snake of snakes) {
+                drawSnake(snake);
+            }
+        }
+        
+        // Event listeners for buttons
+        document.getElementById('toggleSimulation').addEventListener('click', function() {
+            simulationRunning = !simulationRunning;
+            this.textContent = simulationRunning ? 'Pause' : 'Resume';
+            
+            if (simulationRunning) {
+                gameLoop();
+            }
+        });
+        
+        document.getElementById('resetSimulation').addEventListener('click', function() {
+            initGame();
+        });
+        
+        document.getElementById('speedUp').addEventListener('click', function() {
+            speedMultiplier = Math.min(speedMultiplier * 2, 16);
+            document.getElementById('simulationSpeed').textContent = `${speedMultiplier}x`;
+        });
+        
+        document.getElementById('slowDown').addEventListener('click', function() {
+            speedMultiplier = Math.max(speedMultiplier / 2, 0.25);
+            document.getElementById('simulationSpeed').textContent = `${speedMultiplier}x`;
+        });
+        
+        // Initialize and start the game
+        initGame();
+    </script>
+</body>
+</html>
