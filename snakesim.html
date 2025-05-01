@@ -313,104 +313,175 @@
         }
         
         // Function to determine best direction for a snake based on intelligence
-        function findBestMove(snake) {
-            if (!snake.alive) {
-                return [0, 0];
-            }
-            
-            const head = snake.body[0];
-            const currentDir = snake.direction;
-            const intelligence = snake.intelligence;
-            
-            // Find closest food
-            let minDistFood = Infinity;
-            let closestFood = null;
-            
-            for (const f of food) {
-                const dist = Math.abs(head[0] - f[0]) + Math.abs(head[1] - f[1]); // Manhattan distance
-                if (dist < minDistFood) {
-                    minDistFood = dist;
-                    closestFood = f;
+function findBestMove(snake) {
+    if (!snake.alive) {
+        return [0, 0];
+    }
+    
+    const head = snake.body[0];
+    const currentDir = snake.direction;
+    const intelligence = snake.intelligence;
+    
+    // Find closest food
+    let minDistFood = Infinity;
+    let closestFood = null;
+    
+    for (const f of food) {
+        const dist = Math.abs(head[0] - f[0]) + Math.abs(head[1] - f[1]); // Manhattan distance
+        if (dist < minDistFood) {
+            minDistFood = dist;
+            closestFood = f;
+        }
+    }
+    
+    // Find closest smaller snake if we're a hunter (intelligence level 2)
+    let minDistPrey = Infinity;
+    let preyHead = null;
+    
+    if (intelligence === 2) {
+        const myLength = snake.body.length;
+        
+        for (const otherSnake of snakes) {
+            if (otherSnake.alive && 
+                otherSnake.id !== snake.id && 
+                otherSnake.body.length < myLength * 0.8) { // Only go after significantly smaller snakes
+                
+                const otherHead = otherSnake.body[0];
+                const dist = Math.abs(head[0] - otherHead[0]) + Math.abs(head[1] - otherHead[1]);
+                
+                if (dist < minDistPrey && dist < 45) { // Only chase if relatively close
+                    minDistPrey = dist;
+                    preyHead = otherHead;
                 }
             }
+        }
+    }
+    
+    // Determine target based on intelligence and situation
+    let target = null;
+    
+    // Intelligence 0: Always goes for food
+    if (intelligence === 0) {
+        target = closestFood;
+    }
+    // Intelligence 1 or 2: Consider options more carefully
+    else if (intelligence >= 1) {
+        // If very hungry or no threats nearby, go for food
+        if (closestFood && (minDistFood < 10 || snake.body.length < 5)) {
+            target = closestFood;
+        }
+        // Hunter snake with prey nearby
+        else if (intelligence === 2 && preyHead && minDistPrey < minDistFood) {
+            target = preyHead;
+        }
+        // Default to food
+        else {
+            target = closestFood;
+        }
+    }
+    
+    if (!target) {
+        // No target available, continue in current direction
+        return currentDir;
+    }
+    
+    // Determine best direction to reach target
+    const possibleDirs = [];
+    
+    // Horizontal alignment
+    if (head[0] < target[0]) {
+        possibleDirs.push([1, 0]); // Right
+    } else if (head[0] > target[0]) {
+        possibleDirs.push([-1, 0]); // Left
+    }
+    
+    // Vertical alignment
+    if (head[1] < target[1]) {
+        possibleDirs.push([0, 1]); // Down
+    } else if (head[1] > target[1]) {
+        possibleDirs.push([0, -1]); // Up
+    }
+    
+    // No possible movements (shouldn't happen)
+    if (possibleDirs.length === 0) {
+        return currentDir;
+    }
+    
+    // Filter directions that would cause immediate collision
+    const safeDirs = [];
+    
+    for (const d of possibleDirs) {
+        const newHead = [head[0] + d[0], head[1] + d[1]];
+        
+        // Check if out of bounds
+        if (newHead[0] < 0 || newHead[0] >= GRID_WIDTH || newHead[1] < 0 || newHead[1] >= GRID_HEIGHT) {
+            continue;
+        }
+        
+        // Check collision with self (except tail which will move)
+        let selfCollision = false;
+        for (let i = 0; i < snake.body.length - 1; i++) {
+            if (newHead[0] === snake.body[i][0] && newHead[1] === snake.body[i][1]) {
+                selfCollision = true;
+                break;
+            }
+        }
+        
+        if (selfCollision) {
+            continue;
+        }
+        
+        // For intelligence >= 1 (cautious and hunter), avoid other snakes' bodies
+        if (intelligence >= 1) {
+            let collision = false;
             
-            // Find closest smaller snake if we're a hunter (intelligence level 2)
-            let minDistPrey = Infinity;
-            let preyHead = null;
-            
-            if (intelligence === 2) {
-                const myLength = snake.body.length;
-                
-                for (const otherSnake of snakes) {
-                    if (otherSnake.alive && 
-                        otherSnake.id !== snake.id && 
-                        otherSnake.body.length < myLength * 0.8) { // Only go after significantly smaller snakes
+            for (const otherSnake of snakes) {
+                if (otherSnake.id !== snake.id && otherSnake.alive) {
+                    // Check collision with other snake's body
+                    for (let i = 0; i < otherSnake.body.length; i++) {
+                        const segment = otherSnake.body[i];
                         
-                        const otherHead = otherSnake.body[0];
-                        const dist = Math.abs(head[0] - otherHead[0]) + Math.abs(head[1] - otherHead[1]);
+                        // For intelligence level 2 (hunters), allow colliding with smaller snake heads
+                        // but only if it's the head segment and the snake is significantly smaller
+                        if (intelligence === 2 && 
+                            i === 0 && // Only for head segment
+                            newHead[0] === segment[0] && 
+                            newHead[1] === segment[1] && 
+                            otherSnake.body.length < snake.body.length * 0.8) {
+                            continue; // Allow this collision - it's a valid hunt
+                        }
                         
-                        if (dist < minDistPrey && dist < 45) { // Only chase if relatively close
-                            minDistPrey = dist;
-                            preyHead = otherHead;
+                        // Otherwise, any collision with any part of another snake is avoided
+                        if (newHead[0] === segment[0] && newHead[1] === segment[1]) {
+                            collision = true;
+                            break;
                         }
                     }
+                    
+                    if (collision) break;
                 }
             }
             
-            // Determine target based on intelligence and situation
-            let target = null;
-            
-            // Intelligence 0: Always goes for food
-            if (intelligence === 0) {
-                target = closestFood;
+            if (collision) {
+                continue;
             }
-            // Intelligence 1 or 2: Consider options more carefully
-            else if (intelligence >= 1) {
-                // If very hungry or no threats nearby, go for food
-                if (closestFood && (minDistFood < 10 || snake.body.length < 5)) {
-                    target = closestFood;
+        }
+        
+        safeDirs.push(d);
+    }
+    
+    // If no safe directions along direct path to target, consider all directions
+    if (safeDirs.length === 0) {
+        // For cautious and hunter (intelligence >= 1), be smarter about avoiding obstacles
+        if (intelligence >= 1) {
+            const allPossibleDirs = [...DIRECTIONS]; // Try all four directions
+            
+            for (const d of allPossibleDirs) {
+                // Skip the direction opposite to current (no 180-degree turns)
+                if (d[0] === -currentDir[0] && d[1] === -currentDir[1]) {
+                    continue;
                 }
-                // Hunter snake with prey nearby
-                else if (intelligence === 2 && preyHead && minDistPrey < minDistFood) {
-                    target = preyHead;
-                }
-                // Default to food
-                else {
-                    target = closestFood;
-                }
-            }
-            
-            if (!target) {
-                // No target available, continue in current direction
-                return currentDir;
-            }
-            
-            // Determine best direction to reach target
-            const possibleDirs = [];
-            
-            // Horizontal alignment
-            if (head[0] < target[0]) {
-                possibleDirs.push([1, 0]); // Right
-            } else if (head[0] > target[0]) {
-                possibleDirs.push([-1, 0]); // Left
-            }
-            
-            // Vertical alignment
-            if (head[1] < target[1]) {
-                possibleDirs.push([0, 1]); // Down
-            } else if (head[1] > target[1]) {
-                possibleDirs.push([0, -1]); // Up
-            }
-            
-            // No possible movements (shouldn't happen)
-            if (possibleDirs.length === 0) {
-                return currentDir;
-            }
-            
-            // Filter directions that would cause immediate collision
-            const safeDirs = [];
-            
-            for (const d of possibleDirs) {
+                
                 const newHead = [head[0] + d[0], head[1] + d[1]];
                 
                 // Check if out of bounds
@@ -418,7 +489,7 @@
                     continue;
                 }
                 
-                // Check collision with self (except tail which will move)
+                // Check collision with self
                 let selfCollision = false;
                 for (let i = 0; i < snake.body.length - 1; i++) {
                     if (newHead[0] === snake.body[i][0] && newHead[1] === snake.body[i][1]) {
@@ -431,71 +502,201 @@
                     continue;
                 }
                 
-                // For intelligence >= 1, avoid other snakes' bodies
-                if (intelligence >= 1) {
-                    let collision = false;
-                    
-                    for (const otherSnake of snakes) {
-                        if (otherSnake.id !== snake.id && otherSnake.alive) {
-                            // For intelligence level 2 (hunters), allow colliding with smaller snake heads
+                // Check collision with other snakes
+                let collision = false;
+                for (const otherSnake of snakes) {
+                    if (otherSnake.id !== snake.id && otherSnake.alive) {
+                        for (let i = 0; i < otherSnake.body.length; i++) {
+                            const segment = otherSnake.body[i];
+                            
+                            // Hunter can attempt to eat head of significantly smaller snake
                             if (intelligence === 2 && 
-                                newHead[0] === otherSnake.body[0][0] && 
-                                newHead[1] === otherSnake.body[0][1] && 
+                                i === 0 && 
+                                newHead[0] === segment[0] && 
+                                newHead[1] === segment[1] && 
                                 otherSnake.body.length < snake.body.length * 0.8) {
                                 continue;
                             }
                             
-                            for (const segment of otherSnake.body) {
-                                if (newHead[0] === segment[0] && newHead[1] === segment[1]) {
-                                    collision = true;
-                                    break;
-                                }
-                            }
-                            
-                            if (collision) break;
-                        }
-                    }
-                    
-                    if (collision) {
-                        continue;
-                    }
-                }
-                
-                safeDirs.push(d);
-            }
-            
-            // If no safe directions, try all directions
-            if (safeDirs.length === 0) {
-                for (const d of DIRECTIONS) {
-                    const newHead = [head[0] + d[0], head[1] + d[1]];
-                    
-                    if (newHead[0] >= 0 && newHead[0] < GRID_WIDTH && 
-                        newHead[1] >= 0 && newHead[1] < GRID_HEIGHT) {
-                        
-                        // Avoid running into self
-                        let selfCollision = false;
-                        for (let i = 0; i < snake.body.length - 1; i++) {
-                            if (newHead[0] === snake.body[i][0] && newHead[1] === snake.body[i][1]) {
-                                selfCollision = true;
+                            if (newHead[0] === segment[0] && newHead[1] === segment[1]) {
+                                collision = true;
                                 break;
                             }
                         }
                         
-                        if (!selfCollision) {
-                            safeDirs.push(d);
+                        if (collision) break;
+                    }
+                }
+                
+                if (!collision) {
+                    safeDirs.push(d);
+                }
+            }
+            
+            // If still no options, do a more desperate search
+            if (safeDirs.length === 0) {
+                // Just find any direction that doesn't immediately kill us
+                for (const d of DIRECTIONS) {
+                    const newHead = [head[0] + d[0], head[1] + d[1]];
+                    
+                    // Skip if out of bounds
+                    if (newHead[0] < 0 || newHead[0] >= GRID_WIDTH || newHead[1] < 0 || newHead[1] >= GRID_HEIGHT) {
+                        continue;
+                    }
+                    
+                    // Skip if self-collision (except with tail that will move)
+                    let selfCollision = false;
+                    for (let i = 0; i < snake.body.length - 1; i++) {
+                        if (newHead[0] === snake.body[i][0] && newHead[1] === snake.body[i][1]) {
+                            selfCollision = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!selfCollision) {
+                        safeDirs.push(d);
+                    }
+                }
+            }
+        } else {
+            // Basic snake (intelligence 0) just tries to avoid walls and itself
+            for (const d of DIRECTIONS) {
+                const newHead = [head[0] + d[0], head[1] + d[1]];
+                
+                if (newHead[0] >= 0 && newHead[0] < GRID_WIDTH && 
+                    newHead[1] >= 0 && newHead[1] < GRID_HEIGHT) {
+                    
+                    // Avoid running into self
+                    let selfCollision = false;
+                    for (let i = 0; i < snake.body.length - 1; i++) {
+                        if (newHead[0] === snake.body[i][0] && newHead[1] === snake.body[i][1]) {
+                            selfCollision = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!selfCollision) {
+                        safeDirs.push(d);
+                    }
+                }
+            }
+        }
+    }
+    
+    // If still no options, current direction will lead to death
+    if (safeDirs.length === 0) {
+        return currentDir; // Will probably die, but we have no choice
+    }
+    
+    // Implement more sophisticated decision making for higher intelligence
+    if (intelligence >= 1 && safeDirs.length > 1) {
+        // Score each direction
+        const dirScores = safeDirs.map(dir => {
+            const newHead = [head[0] + dir[0], head[1] + dir[1]];
+            let score = 0;
+            
+            // Prefer directions that lead toward the target
+            if (target) {
+                const currentDist = Math.abs(head[0] - target[0]) + Math.abs(head[1] - target[1]);
+                const newDist = Math.abs(newHead[0] - target[0]) + Math.abs(newHead[1] - target[1]);
+                
+                if (newDist < currentDist) {
+                    score += 3; // Strong preference for getting closer to target
+                }
+            }
+            
+            // Avoid getting too close to other snakes for cautious snakes
+            if (intelligence === 1) {
+                let nearestSnakeDist = Infinity;
+                
+                for (const otherSnake of snakes) {
+                    if (otherSnake.id !== snake.id && otherSnake.alive) {
+                        for (const segment of otherSnake.body) {
+                            const dist = Math.abs(newHead[0] - segment[0]) + Math.abs(newHead[1] - segment[1]);
+                            nearestSnakeDist = Math.min(nearestSnakeDist, dist);
+                        }
+                    }
+                }
+                
+                // Prefer paths that keep us away from other snakes
+                if (nearestSnakeDist > 3) {
+                    score += 2;
+                } else if (nearestSnakeDist > 1) {
+                    score += 1;
+                }
+            }
+            
+            // For hunters, don't penalize closeness to smaller prey
+            if (intelligence === 2) {
+                for (const otherSnake of snakes) {
+                    if (otherSnake.id !== snake.id && 
+                        otherSnake.alive && 
+                        otherSnake.body.length < snake.body.length * 0.8) {
+                        
+                        const preyDist = Math.abs(newHead[0] - otherSnake.body[0][0]) + 
+                                         Math.abs(newHead[1] - otherSnake.body[0][1]);
+                        
+                        if (preyDist === 1) { // Adjacent to prey head - good for hunting
+                            score += 4;
+                        } else if (preyDist < 5) { // Close to prey - moderately good
+                            score += 2;
                         }
                     }
                 }
             }
             
-            // If still no options, current direction will lead to death
-            if (safeDirs.length === 0) {
-                return currentDir;
+            // Prefer open spaces
+            let openSpaces = 0;
+            const checkDirections = [[1,0], [-1,0], [0,1], [0,-1]];
+            
+            for (const checkDir of checkDirections) {
+                const checkPos = [newHead[0] + checkDir[0], newHead[1] + checkDir[1]];
+                
+                // Check if the position is within bounds
+                if (checkPos[0] >= 0 && checkPos[0] < GRID_WIDTH && 
+                    checkPos[1] >= 0 && checkPos[1] < GRID_HEIGHT) {
+                    
+                    // Check if the position is occupied by any snake
+                    let occupied = false;
+                    
+                    for (const checkSnake of snakes) {
+                        if (checkSnake.alive) {
+                            for (const segment of checkSnake.body) {
+                                if (segment[0] === checkPos[0] && segment[1] === checkPos[1]) {
+                                    occupied = true;
+                                    break;
+                                }
+                            }
+                            if (occupied) break;
+                        }
+                    }
+                    
+                    if (!occupied) {
+                        openSpaces++;
+                    }
+                }
             }
             
-            // Pick randomly between the equally good options
-            return safeDirs[Math.floor(Math.random() * safeDirs.length)];
+            score += openSpaces * 0.5; // Slight preference for open spaces
+            
+            return { dir, score };
+        });
+        
+        // Sort directions by score
+        dirScores.sort((a, b) => b.score - a.score);
+        
+        // Add some randomness for non-optimal choices to prevent predictable patterns
+        if (dirScores.length > 1 && Math.random() < 0.2) {
+            return dirScores[1].dir; // Sometimes take the second-best option
         }
+        
+        return dirScores[0].dir; // Best direction
+    }
+    
+    // Basic snake or only one safe direction
+    // Pick randomly if multiple options (adds unpredictability)
+    return safeDirs[Math.floor(Math.random() * safeDirs.length)];
+}
         
         // Get string representation of intelligence level
         function getIntelligenceName(level) {
