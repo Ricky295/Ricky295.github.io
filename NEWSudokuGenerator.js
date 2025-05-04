@@ -11,14 +11,14 @@ class NEWSudokuGenerator {
   }
 
   // Get seed based on a specific date
-  getDateSeed(year, month, day, index) {
-    return (year * 10000 + month * 100 + day) * 10 + index;
+  getDateSeed(year, month, day) {
+    return year * 10000 + month * 100 + day;
   }
 
   // Get today's seed based on current date
   getTodaySeed() {
     const now = new Date();
-    return this.getDateSeed(now.getFullYear(), now.getMonth() + 1, now.getDate(), 1);
+    return this.getDateSeed(now.getFullYear(), now.getMonth() + 1, now.getDate());
   }
 
   // Check if num is valid at position
@@ -227,16 +227,18 @@ class NEWSudokuGenerator {
   }
 
   // Create a daily puzzle based on a specific date
-  createDailyPuzzle(difficulty, year, month, day) {
+  createDailyPuzzle(year, month, day) {
     let seed;
     
     if (year && month && day) {
       // Use provided date
-      seed = this.getDateSeed(year, month, day, 1);
+      seed = this.getDateSeed(year, month, day);
     } else {
       // Use today's date
       seed = this.getTodaySeed();
     }
+
+    difficulty = round(seededRandom(seed) * 17) / 4;
     
     return this.createPuzzle(difficulty, seed);
   }
