@@ -5,69 +5,109 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Duodoku Puzzles to print</title>
     <style>
+        @media print {
+            @page {
+                size: A4;
+                margin: 1cm;
+            }
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            .container {
+                page-break-after: always;
+            }
+        }
+        
         body {
             font-family: Arial, sans-serif;
             text-align: center;
         }
         .container {
-            max-width: 900px;
+            max-width: 210mm; /* A4 width */
             margin: 0 auto;
         }
         h1 {
-            font-size: 2em;
-            margin-bottom: 20px;
+            font-size: 1.5em;
+            margin-bottom: 15px;
         }
         .grid-container {
             display: grid;
-            grid-template-columns: repeat(2, 1fr); /* 2 columns for the 2x3 grid layout */
-            gap: 15px;
+            grid-template-columns: repeat(3, 1fr); /* 3 columns for better fit */
+            gap: 10px;
             justify-content: center;
+            margin-bottom: 20px;
         }
         .grid {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
         }
         .grid td {
-            width: 50px;
-            height: 50px;
+            width: 30px;
+            height: 30px;
             text-align: center;
-            font-size: 20px;
+            font-size: 16px;
             border: 1px solid #ccc;
         }
         .grid input {
-            width: 50px;
-            height: 50px;
+            width: 28px;
+            height: 28px;
             text-align: center;
-            font-size: 20px;
+            font-size: 16px;
             border: none;
-            text-align: center;
         }
         .puzzle-container {
             text-align: center;
+            margin-bottom: 10px;
         }
         .instructions {
-            margin-top: 20px;
-            font-size: 1.1em;
+            margin-top: 15px;
+            font-size: 1em;
         }
         td:nth-child(4n) {
-            border-right: 3px solid black;
+            border-right: 2px solid black;
         }
         td:nth-child(1) {
-            border-left: 3px solid black;
+            border-left: 2px solid black;
         }
-
         tr:nth-child(2n) td {
-            border-bottom: 3px solid black;
+            border-bottom: 2px solid black;
         }
         tr:nth-child(1) td {
-            border-top: 3px solid black;
+            border-top: 2px solid black;
         }
-
+        /* Print button styling */
+        .print-button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        .print-button:hover {
+            background-color: #45a049;
+        }
+        /* Hide inputs when printing */
+        @media print {
+            input {
+                border: none !important;
+            }
+            .print-button {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Duodoku Puzzles to print</h1>
+        <h1>Duodoku Puzzles</h1>
+        
+        <!-- Print button -->
+        <button class="print-button" onclick="window.print()">Print Puzzles</button>
 
         <!-- Puzzle Grid -->
         <div class="grid-container" id="grid-container">
@@ -86,10 +126,17 @@
     <script src="duodokuapi.js"></script>
     <script>
         // Function to create a grid for each puzzle using table
-        function createPuzzleGrid(puzzleString) {
+        function createPuzzleGrid(puzzleString, index) {
             const gridContainer = document.getElementById('grid-container'); 
             const grid = document.createElement('div');
             grid.classList.add('puzzle-container');
+            
+            // Add puzzle number
+            const puzzleNumber = document.createElement('div');
+            puzzleNumber.textContent = `Puzzle ${index + 1}`;
+            puzzleNumber.style.fontWeight = 'bold';
+            puzzleNumber.style.marginBottom = '5px';
+            grid.appendChild(puzzleNumber);
 
             // Create a table for better structure
             const table = document.createElement('table');
@@ -105,6 +152,13 @@
                     cell.type = 'text';
                     cell.maxLength = 1;
                     cell.value = puzzleString[row * 8 + col] !== '0' ? puzzleString[row * 8 + col] : ''; // Use '0' for blank cells
+                    
+                    // Make preset clues readonly with gray background
+                    if (puzzleString[row * 8 + col] !== '0') {
+                        cell.readOnly = true;
+                        cell.style.backgroundColor = '#f0f0f0';
+                    }
+                    
                     td.appendChild(cell); // Add input element to cell
                     tr.appendChild(td); // Add cell to row
                 }
@@ -120,6 +174,7 @@
         window.onload = function() {
             const params = new URLSearchParams(window.location.search);
             let clues = params.get("clues") ? params.get("clues").split(",") : [30, 30, 30, 30, 30, 30];
+            
             for (let i = 0; i < 6; i++) {
                 let generator = new DuoDoKuGenerator();
                 
@@ -128,21 +183,17 @@
                 let solution = generator.mPuzzle; // Access the solution
 
                 // Now generate the puzzle with missing clues (i.e., a solved puzzle with some numbers removed)
-                generator.generatePuzzle(parseInt(clues[i])); // 40 clues left for the puzzle (adjust as needed)
+                generator.generatePuzzle(parseInt(clues[i])); // Use clues parameter
                 let puzzle = generator.mPuzzle; // Access the generated puzzle with clues removed
 
                 // Flatten the puzzle and create a string without commas
                 let flatPuzzle = puzzle.flat(); // Flatten the nested array
                 let puzzleString = flatPuzzle.join(''); // Join the elements without commas
 
-                // Debugging output
-                console.log("Puzzle String:", puzzleString); // Check the format of the generated puzzle
-
                 // Create the puzzle grid on the page
-                createPuzzleGrid(puzzleString);
+                createPuzzleGrid(puzzleString, i);
             }
         };
     </script>
-
 </body>
 </html>
