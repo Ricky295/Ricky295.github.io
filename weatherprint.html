@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeatherPrint</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+        }
+        .forecast {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+        }
+        .day {
+            padding: 10px;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .day h3 {
+            margin: 0;
+        }
+        .print-button {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .print-button:hover {
+            background-color: #0056b3;
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                font-size: 12pt;
+            }
+            .container {
+                width: 100%;
+                max-width: none;
+            }
+            .forecast {
+                grid-template-columns: 1fr;
+            }
+            .print-button {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WeatherPrint</h1>
+        <form id="weather-form">
+            <label for="api-key">Enter API Key:</label>
+            <input type="text" id="api-key" placeholder="Your OpenWeather API Key" required><br><br>
+            <label for="location">Enter Location (City Name):</label>
+            <input type="text" id="location" placeholder="e.g., London" required><br><br>
+            <button type="submit">Get Weather</button>
+        </form>
+
+        <div id="weather-output" style="display: none;">
+            <div class="forecast" id="forecast"></div>
+            <button class="print-button" onclick="window.print()">Print Weather</button>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('weather-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const apiKey = document.getElementById('api-key').value;
+            const location = document.getElementById('location').value;
+            fetchWeather(apiKey, location);
+        });
+
+        function fetchWeather(apiKey, location) {
+            const url = `https://api.openweathermap.org/data/2.5/forecast?q=${location}&cnt=5&units=metric&appid=${apiKey}`;
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.cod === '200') {
+                        displayWeather(data);
+                    } else {
+                        alert('City not found or invalid API key');
+                    }
+                })
+                .catch(err => {
+                    alert('Error fetching weather data');
+                    console.error(err);
+                });
+        }
+
+        function displayWeather(data) {
+            const forecastContainer = document.getElementById('forecast');
+            forecastContainer.innerHTML = ''; // Clear previous weather data
+
+            data.list.forEach(item => {
+                const date = new Date(item.dt * 1000);
+                const dayOfWeek = date.toLocaleString('en-US', { weekday: 'long' });
+                const temperature = item.main.temp;
+                const description = item.weather[0].description;
+                const icon = `http://openweathermap.org/img/wn/${item.weather[0].icon}.png`;
+
+                const dayDiv = document.createElement('div');
+                dayDiv.classList.add('day');
+                dayDiv.innerHTML = `
+                    <h3>${dayOfWeek}</h3>
+                    <img src="${icon}" alt="${description}">
+                    <p>${description}</p>
+                    <p>${temperature}°C</p>
+                `;
+                forecastContainer.appendChild(dayDiv);
+            });
+
+            document.getElementById('weather-output').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
