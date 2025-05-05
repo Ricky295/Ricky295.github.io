@@ -238,7 +238,7 @@ class NEWSudokuGenerator {
       seed = this.getTodaySeed();
     }
 
-    difficulty = Math.round(seededRandom(seed) * 17) / 4;
+    difficulty = Math.round(this.seededRandom(seed) * 17) / 4;
     
     return this.createPuzzle(difficulty, seed);
   }
