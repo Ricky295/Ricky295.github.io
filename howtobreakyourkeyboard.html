@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keyboard Spam Game</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        #game-container {
+            text-align: center;
+            width: 80%;
+            max-width: 600px;
+        }
+        
+        #instructions {
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+        
+        #timer-display {
+            font-size: 48px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        #score-display {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        
+        #start-btn {
+            padding: 12px 24px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        #start-btn:hover {
+            background-color: #45a049;
+        }
+        
+        #start-btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        .key-bubble {
+            position: absolute;
+            font-size: 24px;
+            font-weight: bold;
+            animation: float 2s ease-out;
+            opacity: 1;
+            pointer-events: none;
+        }
+        
+        @keyframes float {
+            0% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-100px);
+                opacity: 0;
+            }
+        }
+        
+        #high-scores {
+            margin-top: 30px;
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        #high-scores h2 {
+            margin-bottom: 10px;
+        }
+        
+        #high-scores-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        
+        #high-scores-list li {
+            padding: 8px;
+            background-color: #e9e9e9;
+            margin-bottom: 5px;
+            border-radius: 3px;
+        }
+        
+        #game-state {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <h1>Keyboard Spam Game</h1>
+        <div id="instructions">Press SPACE to start a 10-second timer, then spam any keys!</div>
+        <div id="game-state">Ready to play</div>
+        <div id="timer-display">10.0</div>
+        <div id="score-display">Score: 0 (CPS: 0.0)</div>
+        <button id="start-btn">Start Game (or press SPACE)</button>
+        
+        <div id="high-scores">
+            <h2>High Scores</h2>
+            <ol id="high-scores-list"></ol>
+        </div>
+    </div>
+
+    <script>
+        // Game variables
+        let gameActive = false;
+        let timer = 10.0;
+        let score = 0;
+        let timerInterval;
+        let highScores = [];
+        
+        // DOM elements
+        const timerDisplay = document.getElementById('timer-display');
+        const scoreDisplay = document.getElementById('score-display');
+        const startBtn = document.getElementById('start-btn');
+        const gameState = document.getElementById('game-state');
+        const highScoresList = document.getElementById('high-scores-list');
+        
+        // Load high scores from local storage
+        function loadHighScores() {
+            const savedScores = localStorage.getItem('keyboardSpamHighScores');
+            if (savedScores) {
+                highScores = JSON.parse(savedScores);
+                updateHighScoresList();
+            }
+        }
+        
+        // Save high scores to local storage
+        function saveHighScores() {
+            localStorage.setItem('keyboardSpamHighScores', JSON.stringify(highScores));
+        }
+        
+        // Update the high scores list in the DOM
+        function updateHighScoresList() {
+            highScoresList.innerHTML = '';
+            highScores.sort((a, b) => b - a).slice(0, 5).forEach((score, index) => {
+                const li = document.createElement('li');
+                li.textContent = `#${index + 1}: ${score} keys`;
+                highScoresList.appendChild(li);
+            });
+        }
+        
+        // Start the game
+        function startGame() {
+            if (gameActive) return;
+            
+            gameActive = true;
+            timer = 10.0;
+            score = 0;
+            
+            timerDisplay.textContent = timer.toFixed(1);
+            scoreDisplay.textContent = `Score: ${score}`;
+            gameState.textContent = "GO! SPAM THOSE KEYS!";
+            gameState.style.color = "#FF0000";
+            startBtn.disabled = true;
+            
+            timerInterval = setInterval(() => {
+                timer -= 0.1;
+                timer = Math.max(0, timer);
+                timerDisplay.textContent = timer.toFixed(1);
+                
+                if (timer <= 0) {
+                    endGame();
+                }
+            }, 100);
+        }
+        
+        // End the game
+        function endGame() {
+            clearInterval(timerInterval);
+            gameActive = false;
+            startBtn.disabled = false;
+            gameState.textContent = "Game Over!";
+            gameState.style.color = "#333";
+            scoreDisplay.textContent = `Score: ${score} (CPS: ${CPS})`;
+            
+            // Add score to high scores
+            highScores.push(score);
+            highScores.sort((a, b) => b - a);
+            if (highScores.length > 10) {
+                highScores = highScores.slice(0, 10);
+            }
+            saveHighScores();
+            updateHighScoresList();
+        }
+        
+        // Create floating key bubble
+        function createKeyBubble(key) {
+            const bubble = document.createElement('div');
+            bubble.className = 'key-bubble';
+            bubble.textContent = key;
+            
+            // Position randomly on the screen
+            const x = Math.random() * window.innerWidth;
+            const y = Math.random() * (window.innerHeight - 200) + 200;
+            
+            // Generate random pastel color
+            const hue = Math.floor(Math.random() * 360);
+            const color = `hsl(${hue}, 70%, 80%)`;
+            
+            bubble.style.left = `${x}px`;
+            bubble.style.top = `${y}px`;
+            bubble.style.color = color;
+            
+            document.body.appendChild(bubble);
+            
+            // Remove bubble after animation completes
+            setTimeout(() => {
+                document.body.removeChild(bubble);
+            }, 2000);
+        }
+        
+        // Event listeners
+        startBtn.addEventListener('click', startGame);
+        
+        document.addEventListener('keydown', (event) => {
+            // Start game with space bar
+            if (event.code === 'Space' && !gameActive) {
+                event.preventDefault();
+                startGame();
+                return;
+            }
+            
+            // Record keypress during active game
+            if (gameActive) {
+                score++;
+                let CPS = score / (10 - timer);
+                scoreDisplay.textContent = `Score: ${score} (CPS: ${CPS})`;
+                
+                // Create floating key bubble
+                createKeyBubble(event.key);
+            }
+        });
+        
+        // Initialize
+        loadHighScores();
+    </script>
+</body>
+</html>
