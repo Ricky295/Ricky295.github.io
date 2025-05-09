@@ -1,82 +1,217 @@
-import { useState, useEffect } from 'react';
-
-const CompositeClock = () => {
-  const [time, setTime] = useState(new Date());
-  
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTime(new Date());
-    }, 1000);
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Composite Clock</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
     
-    return () => clearInterval(timer);
-  }, []);
+    #clock-container {
+      display: flex;
+      margin-top: 20px;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .time-bar {
+      margin: 0 4px;
+      width: 30px;
+      position: relative;
+      display: flex;
+      flex-direction: column-reverse;
+    }
+    
+    .bar-label {
+      text-align: center;
+      margin-top: 10px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    
+    .segment {
+      border: 1px solid #ccc;
+      margin: 1px 0;
+      box-sizing: border-box;
+      transition: background-color 0.2s;
+    }
+    
+    .segment.filled {
+      background-color: #4CAF50;
+    }
+    
+    #digital-clock {
+      font-size: 24px;
+      margin: 20px 0;
+      font-family: monospace;
+    }
+    
+    #controls {
+      margin: 20px 0;
+    }
+    
+    button {
+      padding: 8px 16px;
+      margin: 0 5px;
+      cursor: pointer;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+    
+    button:hover {
+      background-color: #45a049;
+    }
+    
+    .toggle-container {
+      margin: 10px 0;
+    }
+    
+    .toggle-container label {
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Composite Clock</h1>
   
-  // Calculate total seconds since start of day
-  const totalSeconds = time.getHours() * 3600 + time.getMinutes() * 60 + time.getSeconds();
+  <div id="digital-clock"></div>
   
-  // Define our time segments
-  const timeSegments = [
-    { label: "12H", total: 2, value: Math.floor(totalSeconds / 43200) % 2 },
-    { label: "6H", total: 2, value: Math.floor(totalSeconds / 21600) % 2 },
-    { label: "3H", total: 2, value: Math.floor(totalSeconds / 10800) % 2 },
-    { label: "1H", total: 3, value: Math.floor(totalSeconds / 3600) % 3 },
-    { label: "30M", total: 2, value: Math.floor(totalSeconds / 1800) % 2 },
-    { label: "15M", total: 2, value: Math.floor(totalSeconds / 900) % 2 },
-    { label: "5M", total: 3, value: Math.floor(totalSeconds / 300) % 3 },
-    { label: "1M", total: 5, value: Math.floor(totalSeconds / 60) % 5 },
-    { label: "30S", total: 2, value: Math.floor(totalSeconds / 30) % 2 },
-    { label: "15S", total: 2, value: Math.floor(totalSeconds / 15) % 2 },
-    { label: "5S", total: 3, value: Math.floor(totalSeconds / 5) % 3 },
-    { label: "1S", total: 5, value: totalSeconds % 5 }
-  ];
 
-  // Format time as HH:MM:SS
-  const formattedTime = time.toTimeString().substring(0, 8);
   
-  return (
-    <div className="flex flex-col items-center p-4 bg-gray-100 rounded-lg shadow-md w-full max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Composite Clock: {formattedTime}</h1>
+  <div id="clock-container"></div>
+
+  <script>
+    // Define time units and their segments
+    const timeUnits = [
+      { name: '12H', seconds: 43200, segments: 2 },
+      { name: '6H', seconds: 21600, segments: 2 },
+      { name: '3H', seconds: 10800, segments: 2 },
+      { name: '1H', seconds: 3600, segments: 3 },
+      { name: '30M', seconds: 1800, segments: 2 },
+      { name: '15M', seconds: 900, segments: 2 },
+      { name: '5M', seconds: 300, segments: 3 },
+      { name: '1M', seconds: 60, segments: 5 },
+      { name: '30S', seconds: 30, segments: 2 },
+      { name: '15S', seconds: 15, segments: 2 },
+      { name: '5S', seconds: 5, segments: 3 },
+      { name: '1S', seconds: 1, segments: 5 }
+    ];
+
+    // DOM elements
+    const clockContainer = document.getElementById('clock-container');
+    const digitalClock = document.getElementById('digital-clock');
+    
+    // Setup URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const equalHeight = urlParams.has('equalheight') ? urlParams.get('equalheight') === '1' : false;
+    const showClock = urlParams.has('showclock') ? urlParams.get('showclock') === '1' : true;
+    
+    // Create the clock bars and segments
+    function createClockBars() {
+      timeUnits.forEach(unit => {
+        const bar = document.createElement('div');
+        bar.className = 'time-bar';
+        bar.dataset.unit = unit.name;
+        bar.dataset.seconds = unit.seconds;
+        
+        // Create label
+        const label = document.createElement('div');
+        label.className = 'bar-label';
+        label.textContent = unit.name;
+        
+        // Create segments
+        for (let i = 0; i < unit.segments; i++) {
+          const segment = document.createElement('div');
+          segment.className = 'segment';
+          segment.dataset.index = i;
+          bar.appendChild(segment);
+        }
+        
+        bar.appendChild(label);
+        clockContainer.appendChild(bar);
+      });
       
-      <div className="flex space-x-2 mb-6">
-        {timeSegments.map((segment, index) => {
-          // Calculate segment height based on number of segments
-          // All bars will be 300px tall
-          const segmentHeight = (() => {
-            if (segment.total === 2) return 150;
-            if (segment.total === 3) return 100;
-            if (segment.total === 5) return 60;
-            return 75; // Fallback
-          })();
+      // Initial update of segment heights
+      updateSegmentHeights();
+    }
+    
+    // Update segment heights based on URL parameter
+    function updateSegmentHeights() {
+      const bars = document.querySelectorAll('.time-bar');
+      
+      bars.forEach(bar => {
+        const unit = timeUnits.find(u => u.name === bar.dataset.unit);
+        const segments = bar.querySelectorAll('.segment');
+        
+        if (equalHeight) {
+          // All bars have same total height, segments within adjust
+          const totalHeight = 300; // pixels
+          const segmentHeight = totalHeight / unit.segments;
           
-          return (
-            <div key={index} className="flex flex-col items-center">
-              <div className="text-xs font-semibold mb-1">{segment.label}</div>
-              <div className="w-8 bg-gray-200 rounded-md overflow-hidden" style={{ height: '300px' }}>
-                {Array.from({ length: segment.total }).map((_, i) => {
-                  const isFilled = i < segment.value;
-                  return (
-                    <div
-                      key={i}
-                      style={{ height: `${segmentHeight}px` }}
-                      className={`w-full border-b border-gray-300 ${
-                        isFilled ? 'bg-blue-500' : 'bg-gray-100'
-                      }`}
-                    />
-                  );
-                })}
-              </div>
-              <div className="text-xs mt-1">{segment.value}/{segment.total}</div>
-            </div>
-          );
-        })}
-      </div>
+          segments.forEach(segment => {
+            segment.style.height = `${segmentHeight}px`;
+          });
+        } else {
+          // All segments have same height across all bars
+          const segmentHeight = 30; // pixels
+          
+          segments.forEach(segment => {
+            segment.style.height = `${segmentHeight}px`;
+          });
+        }
+      });
+    }
+    
+    // Update the clock display
+    function updateClock() {
+      const now = new Date();
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+      const seconds = now.getSeconds();
       
-      <div className="text-sm text-gray-600">
-        <p>Time is represented as composite segments where each bar fills based on different intervals</p>
-        <p>Total seconds in a day (86400) = 2×2×2×3×2×2×3×5×2×2×3×5</p>
-      </div>
-    </div>
-  );
-};
-
-export default CompositeClock;
+      // Update digital clock if visible
+      if (showClock) {
+        digitalClock.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        digitalClock.style.display = 'block';
+      } else {
+        digitalClock.style.display = 'none';
+      }
+      
+      // Calculate total seconds since midnight
+      const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+      
+      // Update all bars
+      timeUnits.forEach(unit => {
+        const bar = document.querySelector(`.time-bar[data-unit="${unit.name}"]`);
+        const segments = bar.querySelectorAll('.segment');
+        const unitValue = Math.floor(totalSeconds / unit.seconds) % unit.segments;
+        
+        segments.forEach((segment, index) => {
+          if (index < unitValue) {
+            segment.classList.add('filled');
+          } else {
+            segment.classList.remove('filled');
+          }
+        });
+      });
+    }
+    
+    // No event listeners needed as we're only using URL parameters
+    
+    // Initialize the clock
+    createClockBars();
+    updateClock();
+    setInterval(updateClock, 1000);
+  </script>
+</body>
+</html>
