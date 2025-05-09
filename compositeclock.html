@@ -1,0 +1,82 @@
+import { useState, useEffect } from 'react';
+
+const CompositeClock = () => {
+  const [time, setTime] = useState(new Date());
+  
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTime(new Date());
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, []);
+  
+  // Calculate total seconds since start of day
+  const totalSeconds = time.getHours() * 3600 + time.getMinutes() * 60 + time.getSeconds();
+  
+  // Define our time segments
+  const timeSegments = [
+    { label: "12H", total: 2, value: Math.floor(totalSeconds / 43200) % 2 },
+    { label: "6H", total: 2, value: Math.floor(totalSeconds / 21600) % 2 },
+    { label: "3H", total: 2, value: Math.floor(totalSeconds / 10800) % 2 },
+    { label: "1H", total: 3, value: Math.floor(totalSeconds / 3600) % 3 },
+    { label: "30M", total: 2, value: Math.floor(totalSeconds / 1800) % 2 },
+    { label: "15M", total: 2, value: Math.floor(totalSeconds / 900) % 2 },
+    { label: "5M", total: 3, value: Math.floor(totalSeconds / 300) % 3 },
+    { label: "1M", total: 5, value: Math.floor(totalSeconds / 60) % 5 },
+    { label: "30S", total: 2, value: Math.floor(totalSeconds / 30) % 2 },
+    { label: "15S", total: 2, value: Math.floor(totalSeconds / 15) % 2 },
+    { label: "5S", total: 3, value: Math.floor(totalSeconds / 5) % 3 },
+    { label: "1S", total: 5, value: totalSeconds % 5 }
+  ];
+
+  // Format time as HH:MM:SS
+  const formattedTime = time.toTimeString().substring(0, 8);
+  
+  return (
+    <div className="flex flex-col items-center p-4 bg-gray-100 rounded-lg shadow-md w-full max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">Composite Clock: {formattedTime}</h1>
+      
+      <div className="flex space-x-2 mb-6">
+        {timeSegments.map((segment, index) => {
+          // Calculate segment height based on number of segments
+          // All bars will be 300px tall
+          const segmentHeight = (() => {
+            if (segment.total === 2) return 150;
+            if (segment.total === 3) return 100;
+            if (segment.total === 5) return 60;
+            return 75; // Fallback
+          })();
+          
+          return (
+            <div key={index} className="flex flex-col items-center">
+              <div className="text-xs font-semibold mb-1">{segment.label}</div>
+              <div className="w-8 bg-gray-200 rounded-md overflow-hidden" style={{ height: '300px' }}>
+                {Array.from({ length: segment.total }).map((_, i) => {
+                  const isFilled = i < segment.value;
+                  return (
+                    <div
+                      key={i}
+                      style={{ height: `${segmentHeight}px` }}
+                      className={`w-full border-b border-gray-300 ${
+                        isFilled ? 'bg-blue-500' : 'bg-gray-100'
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+              <div className="text-xs mt-1">{segment.value}/{segment.total}</div>
+            </div>
+          );
+        })}
+      </div>
+      
+      <div className="text-sm text-gray-600">
+        <p>Time is represented as composite segments where each bar fills based on different intervals</p>
+        <p>Total seconds in a day (86400) = 2×2×2×3×2×2×3×5×2×2×3×5</p>
+      </div>
+    </div>
+  );
+};
+
+export default CompositeClock;
