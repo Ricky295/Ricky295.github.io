@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2 Numbers In - Sudoku Challenge</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            color: #333;
+        }
+        header {
+            background-color: #2c3e50;
+            color: white;
+            width: 100%;
+            text-align: center;
+            padding: 1rem 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        h1 {
+            margin: 0;
+            font-size: 2rem;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 600px;
+            width: 100%;
+            padding: 0 1rem;
+        }
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+        .sudoku-container {
+            margin-bottom: 2rem;
+            position: relative;
+        }
+        .difficulty-info {
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            text-align: center;
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .sudoku-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            grid-template-rows: repeat(9, 1fr);
+            gap: 1px;
+            background-color: #aaa;
+            border: 2px solid #333;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        .cell {
+            width: 40px;
+            height: 40px;
+            background-color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            cursor: pointer;
+            position: relative;
+            user-select: none;
+        }
+        .cell.given {
+            background-color: #eee;
+            font-weight: bold;
+            cursor: not-allowed;
+        }
+        .cell:nth-child(3n+3):not(:nth-child(9n)) {
+            border-right: 2px solid #333;
+        }
+        .cell:nth-child(n+19):nth-child(-n+27),
+        .cell:nth-child(n+46):nth-child(-n+54) {
+            border-bottom: 2px solid #333;
+        }
+        .cell.selected {
+            background-color: #d6eaf8;
+        }
+        .cell.correct {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .cell.incorrect {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .cell-highlight {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            width: 100%;
+            margin-bottom: 2rem;
+        }
+        .number-pad {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0.5rem;
+            width: 100%;
+        }
+        .number-btn {
+            padding: 0.75rem;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .number-btn:hover {
+            background-color: #2980b9;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+            width: 100%;
+        }
+        .action-btn {
+            padding: 0.75rem;
+            background-color: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            flex: 1;
+            transition: background-color 0.2s;
+        }
+        .action-btn:hover {
+            background-color: #1a252f;
+        }
+        .action-btn.new-game {
+            background-color: #e74c3c;
+        }
+        .action-btn.new-game:hover {
+            background-color: #c0392b;
+        }
+        .score-card {
+            background-color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            width: 100%;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        .score-title {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            color: #2c3e50;
+        }
+        .score-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .message {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 1rem;
+            border-radius: 4px;
+            text-align: center;
+            width: 100%;
+            margin: 1rem 0;
+            font-weight: bold;
+            display: none;
+        }
+        .message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .message.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        .challenge-info {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            background-color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;
+        }
+        .challenge-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .challenge-label {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .challenge-value {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        footer {
+            margin-top: auto;
+            width: 100%;
+            text-align: center;
+            padding: 1rem;
+            background-color: #2c3e50;
+            color: white;
+        }
+        .rules {
+            background-color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            width: 100%;
+            margin-bottom: 2rem;
+        }
+        .rules h2 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        .rules p {
+            margin-bottom: 0.5rem;
+        }
+        @media (max-width: 500px) {
+            .cell {
+                width: 32px;
+                height: 32px;
+                font-size: 1rem;
+            }
+            .number-pad {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>2 Numbers In</h1>
+        <p>Place just 2 numbers correctly to win!</p>
+    </header>
+    
+    <div class="container">
+        <div class="challenge-info">
+            <div class="challenge-item">
+                <div class="challenge-label">Target</div>
+                <div class="challenge-value">2</div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-label">Placed</div>
+                <div class="challenge-value" id="placed-count">0</div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-label">Correct</div>
+                <div class="challenge-value" id="correct-count">0</div>
+            </div>
+        </div>
+        
+        <div class="difficulty-info">Difficulty: Very Hard</div>
+        
+        <div id="message" class="message">Message goes here</div>
+        
+        <div class="sudoku-container">
+            <div class="sudoku-grid" id="sudoku-grid"></div>
+        </div>
+        
+        <div class="controls">
+            <div class="number-pad" id="number-pad">
+                <button class="number-btn" data-value="1">1</button>
+                <button class="number-btn" data-value="2">2</button>
+                <button class="number-btn" data-value="3">3</button>
+                <button class="number-btn" data-value="4">4</button>
+                <button class="number-btn" data-value="5">5</button>
+                <button class="number-btn" data-value="6">6</button>
+                <button class="number-btn" data-value="7">7</button>
+                <button class="number-btn" data-value="8">8</button>
+                <button class="number-btn" data-value="9">9</button>
+                <button class="number-btn" data-value="0">Clear</button>
+            </div>
+            
+            <div class="action-buttons">
+                <button class="action-btn new-game" id="new-game-btn">New Game</button>
+                <button class="action-btn" id="check-btn">Check Solution</button>
+            </div>
+        </div>
+        
+        <div class="rules">
+            <h2>How to Play</h2>
+            <p>1. You are presented with a partially filled sudoku grid</p>
+            <p>2. Your goal is to correctly place just 2 numbers</p>
+            <p>3. Click on an empty cell, then use the number pad to enter a value</p>
+            <p>4. When you've placed 2 numbers, click "Check Solution" to verify</p>
+            <p>5. Each puzzle has exactly one valid solution</p>
+        </div>
+    </div>
+    
+    <footer>
+        <p>2 Numbers In | A Sudoku Challenge Game</p>
+    </footer>
+
+    <script>
+        class SudokuSolver {
+            constructor(board) {
+                this.board = board;
+                this.emptyCells = [];
+                this.solutions = 0;
+                this.solutionFound = false;
+                this.solution = null;
+            }
+            
+            solve() {
+                // Create a deep copy of the board
+                const boardCopy = JSON.parse(JSON.stringify(this.board));
+                
+                // Find all empty cells
+                this.emptyCells = [];
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        if (boardCopy[i][j] === 0) {
+                            this.emptyCells.push([i, j]);
+                        }
+                    }
+                }
+                
+                this.solutions = 0;
+                this.solutionFound = false;
+                this.solution = null;
+                
+                // Solve using backtracking
+                this.backtrack(boardCopy, 0);
+                
+                return {
+                    solutions: this.solutions,
+                    solution: this.solution
+                };
+            }
+            
+            backtrack(board, index) {
+                // If we've reached the end of empty cells, we found a solution
+                if (index >= this.emptyCells.length) {
+                    this.solutions++;
+                    
+                    // Store the first solution found
+                    if (!this.solutionFound) {
+                        this.solution = JSON.parse(JSON.stringify(board));
+                        this.solutionFound = true;
+                    }
+                    
+                    // Stop if we've found more than one solution
+                    return this.solutions <= 1;
+                }
+                
+                // Get the current empty cell
+                const [row, col] = this.emptyCells[index];
+                
+                // Try each number 1-9
+                for (let num = 1; num <= 9; num++) {
+                    if (this.isValid(board, row, col, num)) {
+                        // Place the number
+                        board[row][col] = num;
+                        
+                        // Continue with the next empty cell
+                        if (!this.backtrack(board, index + 1)) {
+                            return false;
+                        }
+                        
+                        // Backtrack
+                        board[row][col] = 0;
+                    }
+                }
+                
+                return true;
+            }
+            
+            isValid(board, row, col, num) {
+                // Check row
+                for (let j = 0; j < 9; j++) {
+                    if (board[row][j] === num) {
+                        return false;
+                    }
+                }
+                
+                // Check column
+                for (let i = 0; i < 9; i++) {
+                    if (board[i][col] === num) {
+                        return false;
+                    }
+                }
+                
+                // Check 3x3 box
+                const boxRow = Math.floor(row / 3) * 3;
+                const boxCol = Math.floor(col / 3) * 3;
+                
+                for (let i = 0; i < 3; i++) {
+                    for (let j = 0; j < 3; j++) {
+                        if (board[boxRow + i][boxCol + j] === num) {
+                            return false;
+                        }
+                    }
+                }
+                
+                return true;
+            }
+        }
+
+        class SudokuGenerator {
+            constructor() {
+                this.solver = new SudokuSolver([]);
+            }
+            
+            generate(difficulty = 'very-hard') {
+                // Start with an empty board
+                const board = Array(9).fill().map(() => Array(9).fill(0));
+                
+                // Fill the diagonal boxes
+                this.fillDiagonalBoxes(board);
+                
+                // Fill the rest of the board
+                this.solver.board = board;
+                this.solveBoard(board);
+                
+                // Make a deep copy of the full board
+                const solution = JSON.parse(JSON.stringify(board));
+                
+                // Remove numbers according to difficulty
+                let cellsToRemove;
+                
+                switch (difficulty) {
+                    case 'easy':
+                        cellsToRemove = 40;
+                        break;
+                    case 'medium':
+                        cellsToRemove = 50;
+                        break;
+                    case 'hard':
+                        cellsToRemove = 55;
+                        break;
+                    case 'very-hard':
+                    default:
+                        cellsToRemove = 60;
+                        break;
+                }
+                
+                this.removeNumbers(board, cellsToRemove);
+                
+                return {
+                    puzzle: board,
+                    solution: solution
+                };
+            }
+            
+            fillDiagonalBoxes(board) {
+                // Fill the three diagonal 3x3 boxes
+                for (let box = 0; box < 3; box++) {
+                    const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+                    this.shuffleArray(numbers);
+                    
+                    for (let i = 0; i < 3; i++) {
+                        for (let j = 0; j < 3; j++) {
+                            board[box * 3 + i][box * 3 + j] = numbers.pop();
+                        }
+                    }
+                }
+            }
+            
+            solveBoard(board) {
+                for (let row = 0; row < 9; row++) {
+                    for (let col = 0; col < 9; col++) {
+                        if (board[row][col] === 0) {
+                            const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+                            this.shuffleArray(numbers);
+                            
+                            for (const num of numbers) {
+                                if (this.solver.isValid(board, row, col, num)) {
+                                    board[row][col] = num;
+                                    
+                                    if (this.isBoardFull(board) || this.solveBoard(board)) {
+                                        return true;
+                                    }
+                                    
+                                    board[row][col] = 0;
+                                }
+                            }
+                            
+                            return false;
+                        }
+                    }
+                }
+                
+                return true;
+            }
+            
+            isBoardFull(board) {
+                for (let row = 0; row < 9; row++) {
+                    for (let col = 0; col < 9; col++) {
+                        if (board[row][col] === 0) {
+                            return false;
+                        }
+                    }
+                }
+                
+                return true;
+            }
+            
+            removeNumbers(board, count) {
+                // Collect all cell positions
+                const positions = [];
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        positions.push([i, j]);
+                    }
+                }
+                
+                // Shuffle the positions
+                this.shuffleArray(positions);
+                
+                // Remove numbers one by one, ensuring unique solution
+                let removed = 0;
+                
+                for (const [row, col] of positions) {
+                    if (removed >= count) break;
+                    
+                    const temp = board[row][col];
+                    board[row][col] = 0;
+                    
+                    // Check if the puzzle still has a unique solution
+                    const boardCopy = JSON.parse(JSON.stringify(board));
+                    this.solver.board = boardCopy;
+                    const result = this.solver.solve();
+                    
+                    if (result.solutions === 1) {
+                        removed++;
+                    } else {
+                        // If not, restore the number
+                        board[row][col] = temp;
+                    }
+                }
+            }
+            
+            shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+            }
+        }
+
+        class Game {
+            constructor() {
+                this.grid = document.getElementById('sudoku-grid');
+                this.messageEl = document.getElementById('message');
+                this.numberPad = document.getElementById('number-pad');
+                this.newGameBtn = document.getElementById('new-game-btn');
+                this.checkBtn = document.getElementById('check-btn');
+                this.placedCountEl = document.getElementById('placed-count');
+                this.correctCountEl = document.getElementById('correct-count');
+                
+                this.generator = new SudokuGenerator();
+                this.solver = new SudokuSolver([]);
+                
+                this.puzzle = null;
+                this.solution = null;
+                this.selectedCell = null;
+                this.userInputs = [];
+                this.correctInputs = 0;
+                
+                this.init();
+            }
+            
+            init() {
+                this.createGrid();
+                this.setupEventListeners();
+                this.loadStreak();
+                this.newGame();
+            }
+            
+            createGrid() {
+                this.grid.innerHTML = '';
+                
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'cell';
+                        cell.dataset.row = i;
+                        cell.dataset.col = j;
+                        this.grid.appendChild(cell);
+                    }
+                }
+            }
+            
+            setupEventListeners() {
+                // Cell selection
+                this.grid.addEventListener('click', (e) => {
+                    const cell = e.target.closest('.cell');
+                    if (cell && !cell.classList.contains('given')) {
+                        this.selectCell(cell);
+                    }
+                });
+                
+                // Number pad input
+                this.numberPad.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('number-btn')) {
+                        const value = e.target.dataset.value;
+                        this.inputNumber(value);
+                    }
+                });
+                
+                // Keyboard input
+                document.addEventListener('keydown', (e) => {
+                    if (this.selectedCell) {
+                        if (e.key >= '1' && e.key <= '9') {
+                            this.inputNumber(e.key);
+                        } else if (e.key === '0' || e.key === 'Backspace' || e.key === 'Delete') {
+                            this.inputNumber('0');
+                        }
+                    }
+                });
+                
+                // New game button
+                this.newGameBtn.addEventListener('click', () => {
+                    this.newGame();
+                });
+                
+                // Check solution button
+                this.checkBtn.addEventListener('click', () => {
+                    this.checkSolution();
+                });
+            }
+            
+            newGame() {
+                const result = this.generator.generate('very-hard');
+                this.puzzle = result.puzzle;
+                this.solution = result.solution;
+                this.userInputs = [];
+                this.correctInputs = 0;
+                
+                this.updatePlacedCount();
+                this.updateCorrectCount();
+                
+                // Clear all cells
+                const cells = this.grid.querySelectorAll('.cell');
+                cells.forEach(cell => {
+                    cell.textContent = '';
+                    cell.classList.remove('given', 'selected', 'correct', 'incorrect');
+                });
+                
+                // Fill the puzzle
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        const index = i * 9 + j;
+                        const cell = cells[index];
+                        
+                        if (this.puzzle[i][j] !== 0) {
+                            cell.textContent = this.puzzle[i][j];
+                            cell.classList.add('given');
+                        }
+                    }
+                }
+                
+                this.selectedCell = null;
+                this.hideMessage();
+            }
+            
+            selectCell(cell) {
+                // Remove selected class from previously selected cell
+                const prevSelected = this.grid.querySelector('.cell.selected');
+                if (prevSelected) {
+                    prevSelected.classList.remove('selected');
+                }
+                
+                // Add selected class to the current cell
+                cell.classList.add('selected');
+                this.selectedCell = cell;
+            }
+            
+            inputNumber(value) {
+                if (!this.selectedCell) return;
+                
+                const row = parseInt(this.selectedCell.dataset.row);
+                const col = parseInt(this.selectedCell.dataset.col);
+                
+                // Clear input
+                if (value === '0') {
+                    // Check if the cell was previously a user input
+                    const existingInputIndex = this.userInputs.findIndex(input => input.row === row && input.col === col);
+                    
+                    if (existingInputIndex !== -1) {
+                        // Remove from user inputs
+                        const wasCorrect = this.userInputs[existingInputIndex].correct;
+                        this.userInputs.splice(existingInputIndex, 1);
+                        
+                        if (wasCorrect) {
+                            this.correctInputs--;
+                        }
+                        
+                        this.updatePlacedCount();
+                        this.updateCorrectCount();
+                    }
+                    
+                    this.selectedCell.textContent = '';
+                    this.selectedCell.classList.remove('correct', 'incorrect');
+                    return;
+                }
+                
+                // Check if there are already 2 inputs and this is not updating an existing input
+                const existingInputIndex = this.userInputs.findIndex(input => input.row === row && input.col === col);
+                
+                if (this.userInputs.length >= 2 && existingInputIndex === -1) {
+                    this.showMessage('You can only place 2 numbers!', 'error');
+                    return;
+                }
+                
+                const num = parseInt(value);
+                const isCorrect = this.solution[row][col] === num;
+                
+                // Update or add user input
+                if (existingInputIndex !== -1) {
+                    const wasCorrect = this.userInputs[existingInputIndex].correct;
+                    
+                    this.userInputs[existingInputIndex] = {
+                        row,
+                        col,
+                        value: num,
+                        correct: isCorrect
+                    };
+                    
+                    if (wasCorrect && !isCorrect) {
+                        this.correctInputs--;
+                    } else if (!wasCorrect && isCorrect) {
+                        this.correctInputs++;
+                    }
+                } else {
+                    this.userInputs.push({
+                        row,
+                        col,
+                        value: num,
+                        correct: isCorrect
+                    });
+                    
+                    if (isCorrect) {
+                        this.correctInputs++;
+                    }
+                }
+                
+                this.selectedCell.textContent = num;
+                this.selectedCell.classList.remove('correct', 'incorrect');
+                
+                this.updatePlacedCount();
+                this.updateCorrectCount();
+            }
+            
+            checkSolution() {
+                if (this.userInputs.length !== 2) {
+                    this.showMessage('You need to place exactly 2 numbers!', 'error');
+                    return;
+                }
+                
+                const cells = this.grid.querySelectorAll('.cell');
+                
+                // Mark correct and incorrect cells
+                this.userInputs.forEach(input => {
+                    const index = input.row * 9 + input.col;
+                    const cell = cells[index];
+                    
+                    if (input.correct) {
+                        cell.classList.add('correct');
+                    } else {
+                        cell.classList.add('incorrect');
+                    }
+                });
+                
+                // Check if all inputs are correct
+                if (this.correctInputs === 2) {
+                    this.showMessage('Correct! You win!', 'success');
+                } else {
+                    this.showMessage('Not quite right. Try again!', 'error');
+                }
+            }
+            
+            showMessage(text, type = 'success') {
+                this.messageEl.textContent = text;
+                this.messageEl.className = `message ${type}`;
+                this.messageEl.style.display = 'block';
+                
+                setTimeout(() => {
+                    this.messageEl.style.display = 'none';
+                }, 3000);
+            }
+            
+            hideMessage() {
+                this.messageEl.style.display = 'none';
+            }
+            
+            updatePlacedCount() {
+                this.placedCountEl.textContent = this.userInputs.length;
+            }
+            
+            updateCorrectCount() {
+                this.correctCountEl.textContent = this.correctInputs;
+            }
+        }
+
+        // Initialize the game when the DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            const game = new Game();
+        });
+    </script>
+</body>
+</html>
