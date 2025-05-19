@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Customizable Clock</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            transition: background-color 0.5s, color 0.5s;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #clock-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        #clock {
+            position: relative;
+            transition: all 0.3s;
+        }
+        
+        #clock-face {
+            position: relative;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+        
+        #digital-time {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: monospace;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        #date-display {
+            position: absolute;
+            top: 38%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: monospace;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .hour-mark, .minute-mark {
+            position: absolute;
+            transform-origin: center bottom;
+            transition: background-color 0.3s;
+        }
+        
+        .center-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+        
+        .hand {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-origin: center bottom;
+            transition: background-color 0.3s;
+        }
+        
+        #second-hand {
+            transform-origin: center 85%;
+            transition: background-color 0.3s;
+        }
+        
+        #controls {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-top: 1px solid #ccc;
+            max-height: 80vh;
+            overflow-y: auto;
+            transform: translateY(100%);
+            transition: transform 0.3s;
+        }
+        
+        #controls.open {
+            transform: translateY(0);
+        }
+        
+        #toggle-controls {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 16px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 10px 10px 0 0;
+            cursor: pointer;
+            z-index: 100;
+        }
+        
+        .control-section {
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .control-section h3 {
+            margin-bottom: 8px;
+        }
+        
+        .control-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+        
+        .control-item {
+            display: flex;
+            flex-direction: column;
+            min-width: 120px;
+        }
+        
+        input, select {
+            padding: 5px;
+            border-radius: 3px;
+            border: 1px solid #ccc;
+        }
+        
+        label {
+            font-size: 12px;
+            margin-bottom: 3px;
+        }
+        
+        button {
+            padding: 8px 16px;
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #3a80d2;
+        }
+        
+        #share-url {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        
+        #preset-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        
+        .preset-btn {
+            padding: 5px 10px;
+            font-size: 12px;
+            flex-grow: 1;
+        }
+        
+        #preview-container {
+            position: relative;
+            height: 50px;
+            margin-top: 10px;
+        }
+        
+        .animation-preview {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+        }
+        
+        .preview-dot {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #333;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            display: none;
+            z-index: 1000;
+        }
+
+        .glow {
+            filter: drop-shadow(0 0 10px currentColor);
+        }
+
+        #bloom-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        @media (max-width: 600px) {
+            #controls {
+                padding: 5px;
+            }
+            
+            .control-row {
+                gap: 5px;
+            }
+            
+            .control-item {
+                min-width: 100px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="clock-container">
+        <div id="bloom-container"></div>
+        <div id="clock">
+            <div id="clock-face"></div>
+            <div id="date-display"></div>
+            <div id="digital-time"></div>
+            <div class="center-dot"></div>
+            <div id="hour-hand" class="hand"></div>
+            <div id="minute-hand" class="hand"></div>
+            <div id="second-hand" class="hand"></div>
+        </div>
+    </div>
+    
+    <button id="toggle-controls">Customize</button>
+    
+    <div id="controls">
+        <div class="control-section">
+            <h3>Presets</h3>
+            <div id="preset-buttons">
+                <button class="preset-btn" data-preset="classic">Classic</button>
+                <button class="preset-btn" data-preset="minimal">Minimal</button>
+                <button class="preset-btn" data-preset="digital">Digital</button>
+                <button class="preset-btn" data-preset="neon">Neon</button>
+                <button class="preset-btn" data-preset="cosmic">Cosmic</button>
+                <button class="preset-btn" data-preset="random">Random</button>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h3>Clock Style</h3>
+            <div class="control-row">
+                <div class="control-item">
+                    <label for="clock-size">Clock Size</label>
+                    <input type="range" id="clock-size" min="100" max="500" value="250">
+                </div>
+                <div class="control-item">
+                    <label for="clock-shape">Clock Shape</label>
+                    <select id="clock-shape">
+                        <option value="circle">Circle</option>
+                        <option value="square">Square</option>
+                        <option value="none">None</option>
+                    </select>
+                </div>
+            </div>
+            <div class="control-row">
+                <div class="control-item">
+                    <label for="face-color">Face Color</label>
+                    <input type="color" id="face-color" value="#ffffff">
+                </div>
+                <div class="control-item">
+                    <label for="face-opacity">Face Opacity</label>
+                    <input type="range" id="face-opacity" min="0" max="100" value="100">
+                </div>
+                <div class="control-item">
+                    <label for="border-width">Border Width</label>
+                    <input type="range" id="border-width" min="0" max="20" value="0">
+                </div>
+                <div class="control-item">
+                    <label for="border-color">Border Color</label>
+                    <input type="color" id="border-color" value="#000000">
+                </div>
+            </div>
+        </div>
+        
+        <div class="control-section">
+            <h3>Background</h3>
+            <div class="control-row">
+                <div class="control-item">
+                    <label for="bg-color">Background Color</label>
+                    <input type="color" id="bg-color" value="#f0f0f0">
+                </div>
+                <div class="control-item">
+                    <label for="bg-gradient">Gradient</label>
+                    <select id="bg-gradient">
+                        <option value="none">None</option>
+                        <option value="linear">Linear</option>
+                        <option value="radial">Radial</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <label for="gradient-color">Gradient Color</label>
+                    <input type="color" id="gradient-color" value="#d0d0ff">
+                </div>
+            </div>
+        </div>
+        
+        <div class="control-section">
+            <h3>Clock Marks</h3>
+            <div class="control-row">
+                <div class="control-item">
+                    <label for="hour-marks">Hour Marks</label>
+                    <select id="hour-marks">
+                        <option value="none">None</option>
+                        <option value="dots">Dots</option>
+                        <option value="lines" selected>Lines</option>
+                        <option value="numbers">Numbers</option>
+                        <option value="roman">Roman</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <label for="minute-marks">Minute Marks</label>
+                    <select id="minute-marks">
+                        <option value="none">None</option>
+                        <option value="dots">Dots</option>
+                        <option value="lines" selected>Lines</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <label for="marks-color">Marks Color</label>
+                    <input type="color" id="marks-color" value="#333333">
+                </div>
+            </div>
+        </div>
+        
+        <div class="control-section">
+            <h3>Hands</h3>
+            <div class="control-row">
+                <div class="control-item">
+                    <label for="hand-style">Hand Style</label>
+                    <select id="hand-style">
+                        <option value="simple">Simple</option>
+                        <option value="rounded">Rounded</option>
+                        <option value="pointed">Pointed</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <label for="hour-hand-color">Hour Hand</label>
+                    <input type="color" id="hour-hand-color" value="#333333">
+                </div>
+                <div class="control-item">
+                    <label for="minute-hand-color">Minute Hand</label>
+                    <input type="color" id="minute-hand-color" value="#555555">
+                </div>
+                <div class="control-item">
+                    <label for="second-hand-color">Second Hand</label>
+                    <input type="color" id="second-hand-color" value="#ff0000">
+                </div>
+            </div>
+            <div class="control-row">
+                <div class="control-item">
+                    <label for="center-dot-size">Center Dot Size</label>
+                    <input type="range" id="center-dot-size" min="0" max="20" value="8">
+                </div>
+                <div class="control-item">
+                    <label for="center-dot-color">Center Dot Color</label>
+                    <input type="color" id="center-dot-color" value="#333333">
+                </div>
+            </div>
+        </div>
+        
+        <div class="control-section">
+            <h3>Digital Display</h3>
+            <div class="control-row">
+                <div class="control-item">
+                    <label for="show-digital">Show Digital Time</label>
+                    <select id="show-digital">
+                        <option value="none">None</option>
+                        <option value="time">Time Only</option>
+                        <option value="date">Date Only</option>
+                        <option value="both">Time & Date</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <label for="time-format">Time Format</label>
+                    <select id="time-format">
+                        <option value="12">12-hour</option>
+                        <option value="24">24-hour</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <label for="digital-color">Digital Color</label>
+                    <input type="color" id="digital-color" value="#333333">
+                </div>
+                <div class="control-item">
+                    <label for="digital-size">Digital Size</label>
+                    <input type="range" id="digital-size" min="10" max="36" value="14">
+                </div>
+            </div>
+        </div>
+        
+        <div class="control-section">
+            <h3>Effects</h3>
+            <div class="control-row">
+                <div class="control-item">
+                    <label for="second-hand-movement">Second Hand</label>
+                    <select id="second-hand-movement">
+                        <option value="ticking">Ticking</option>
+                        <option value="smooth">Smooth</option>
+                        <option value="none">None</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <label for="motion-effect">Motion Effect</label>
+                    <select id="motion-effect">
+                        <option value="none">None</option>
+                        <option value="bounce">Bounce</option>
+                        <option value="elastic">Elastic</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <label for="glow-effect">Glow Effect</label>
+                    <select id="glow-effect">
+                        <option value="none">None</option>
+                        <option value="hands">Hands</option>
+                        <option value="all">All Elements</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <label for="bloom-effect">Bloom Effect</label>
+                    <input type="range" id="bloom-effect" min="0" max="100" value="0">
+                </div>
+            </div>
+            <div id="preview-container">
+                <div class="animation-preview"></div>
+            </div>
+        </div>
+        
+        <div class="control-section">
+            <h3>Share Your Clock</h3>
+            <button id="generate-url">Generate Shareable URL</button>
+            <input type="text" id="share-url" readonly placeholder="Your shareable URL will appear here">
+            <button id="copy-url">Copy URL</button>
+        </div>
+    </div>
+    
+    <div class="notification" id="notification">Copied to clipboard!</div>
+    
+    <script>
+        // Clock configuration & state
+        const config = {
+            clockSize: 250,
+            clockShape: 'circle',
+            faceColor: '#ffffff',
+            faceOpacity: 100,
+            borderWidth: 0,
+            borderColor: '#000000',
+            bgColor: '#f0f0f0',
+            bgGradient: 'none',
+            gradientColor: '#d0d0ff',
+            hourMarks: 'lines',
+            minuteMarks: 'lines',
+            marksColor: '#333333',
+            handStyle: 'simple',
+            hourHandColor: '#333333',
+            minuteHandColor: '#555555',
+            secondHandColor: '#ff0000',
+            centerDotSize: 8,
+            centerDotColor: '#333333',
+            showDigital: 'none',
+            timeFormat: '12',
+            digitalColor: '#333333',
+            digitalSize: 14,
+            secondHandMovement: 'ticking',
+            motionEffect: 'none',
+            glowEffect: 'none',
+            bloomEffect: 0
+        };
+        
+        // DOM Elements
+        const clockEl = document.getElementById('clock');
+        const clockFaceEl = document.getElementById('clock-face');
+        const hourHandEl = document.getElementById('hour-hand');
+        const minuteHandEl = document.getElementById('minute-hand');
+        const secondHandEl = document.getElementById('second-hand');
+        const centerDotEl = document.querySelector('.center-dot');
+        const digitalTimeEl = document.getElementById('digital-time');
+        const dateDisplayEl = document.getElementById('date-display');
+        const controlsEl = document.getElementById('controls');
+        const toggleControlsBtn = document.getElementById('toggle-controls');
+        const generateUrlBtn = document.getElementById('generate-url');
+        const shareUrlEl = document.getElementById('share-url');
+        const copyUrlBtn = document.getElementById('copy-url');
+        const notificationEl = document.getElementById('notification');
+        const bloomContainerEl = document.getElementById('bloom-container');
+        
+        // Constants
+        const ROMAN_NUMERALS = ['XII', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+        
+        // Toggle controls panel
+        toggleControlsBtn.addEventListener('click', () => {
+            controlsEl.classList.toggle('open');
+            toggleControlsBtn.textContent = controlsEl.classList.contains('open') ? 'Hide Controls' : 'Customize';
+        });
+        
+        // Initialize clock
+        function initClock() {
+            // Parse URL parameters
+            parseUrlParams();
+            
+            // Initial clock setup
+            updateClockAppearance();
+            createClockMarks();
+            
+            // Start the clock
+            updateTime();
+            setInterval(updateTime, 50); // More frequent updates for smooth motion
+            
+            // Setup UI event listeners
+            setupEventListeners();
+            setupPresetButtons();
+        }
+        
+        // Parse the URL parameters
+        function parseUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const k = urlParams.get('k');
+            
+            if (k) {
+                try {
+                    // Try to decode using base64 first
+                    const jsonStr = atob(k);
+                    const decodedConfig = JSON.parse(jsonStr);
+                    
+                    // Apply the decoded config
+                    Object.assign(config, decodedConfig);
+                    
+                    // Update UI controls to match config
+                    updateControlsFromConfig();
+                } catch (e) {
+                    console.error('Failed to parse URL parameter:', e);
+                    // Try older compact format
+                    try {
+                        decodeCompactConfig(k);
+                    } catch (e2) {
+                        console.error('Failed to parse compact config:', e2);
+                    }
+                }
+            }
+        }
+        
+        // Decode older compact config format
+        function decodeCompactConfig(code) {
+            // Legacy decoder for backward compatibility
+            const parts = code.split('-');
+            if (parts.length >= 10) {
+                config.clockSize = parseInt(parts[0]) || config.clockSize;
+                config.clockShape = ['circle', 'square', 'none'][parseInt(parts[1])] || config.clockShape;
+                config.faceColor = parts[2] ? `#${parts[2]}` : config.faceColor;
+                config.borderWidth = parseInt(parts[3]) || config.borderWidth;
+                config.borderColor = parts[4] ? `#${parts[4]}` : config.borderColor;
+                config.hourMarks = ['none', 'dots', 'lines', 'numbers', 'roman'][parseInt(parts[5])] || config.hourMarks;
+                config.minuteMarks = ['none', 'dots', 'lines'][parseInt(parts[6])] || config.minuteMarks;
+                config.marksColor = parts[7] ? `#${parts[7]}` : config.marksColor;
+                config.hourHandColor = parts[8] ? `#${parts[8]}` : config.hourHandColor;
+                config.minuteHandColor = parts[9] ? `#${parts[9]}` : config.minuteHandColor;
+                
+                if (parts.length > 10) {
+                    config.secondHandColor = parts[10] ? `#${parts[10]}` : config.secondHandColor;
+                }
+                if (parts.length > 11) {
+                    config.showDigital = ['none', 'time', 'date', 'both'][parseInt(parts[11])] || config.showDigital;
+                }
+                // Update UI controls to match config
+                updateControlsFromConfig();
+            }
+        }
+        
+        // Update UI controls to match config values
+        function updateControlsFromConfig() {
+            document.getElementById('clock-size').value = config.clockSize;
+            document.getElementById('clock-shape').value = config.clockShape;
+            document.getElementById('face-color').value = config.faceColor;
+            document.getElementById('face-opacity').value = config.faceOpacity;
+            document.getElementById('border-width').value = config.borderWidth;
+            document.getElementById('border-color').value = config.borderColor;
+            document.getElementById('bg-color').value = config.bgColor;
+            document.getElementById('bg-gradient').value = config.bgGradient;
+            document.getElementById('gradient-color').value = config.gradientColor;
+            document.getElementById('hour-marks').value = config.hourMarks;
+            document.getElementById('minute-marks').value = config.minuteMarks;
+            document.getElementById('marks-color').value = config.marksColor;
+            document.getElementById('hand-style').value = config.handStyle;
+            document.getElementById('hour-hand-color').value = config.hourHandColor;
+            document.getElementById('minute-hand-color').value = config.minuteHandColor;
+            document.getElementById('second-hand-color').value = config.secondHandColor;
+            document.getElementById('center-dot-size').value = config.centerDotSize;
+            document.getElementById('center-dot-color').value = config.centerDotColor;
+            document.getElementById('show-digital').value = config.showDigital;
+            document.getElementById('time-format').value = config.timeFormat;
+            document.getElementById('digital-color').value = config.digitalColor;
+            document.getElementById('digital-size').value = config.digitalSize;
+            document.getElementById('second-hand-movement').value = config.secondHandMovement;
+            document.getElementById('motion-effect').value = config.motionEffect;
+            document.getElementById('glow-effect').value = config.glowEffect;
+            document.getElementById('bloom-effect').value = config.bloomEffect;
+        }
+        
+        // Setup all event listeners for the UI controls
+        function setupEventListeners() {
+            // Clock Style
+            document.getElementById('clock-size').addEventListener('input', e => {
+                config.clockSize = parseInt(e.target.value);
+                updateClockAppearance();
+            });
+            
+            document.getElementById('clock-shape').addEventListener('change', e => {
+                config.clockShape = e.target.value;
+                updateClockAppearance();
+            });
+            
+            document.getElementById('face-color').addEventListener('input', e => {
+                config.faceColor = e.target.value;
+                updateClockAppearance();
+            });
+            
+            document.getElementById('face-opacity').addEventListener('input', e => {
+                config.faceOpacity = parseInt(e.target.value);
+                updateClockAppearance();
+            });
+            
+            document.getElementById('border-width').addEventListener('input', e => {
+                config.borderWidth = parseInt(e.target.value);
+                updateClockAppearance();
+            });
+            
+            document.getElementById('border-color').addEventListener('input', e => {
+                config.borderColor = e.target.value;
+                updateClockAppearance();
+            });
+            
+            // Background
+            document.getElementById('bg-color').addEventListener('input', e => {
+                config.bgColor = e.target.value;
+                updateClockAppearance();
+            });
+            
+            document.getElementById('bg-gradient').addEventListener('change', e => {
+                config.bgGradient = e.target.value;
+                updateClockAppearance();
+            });
+            
+            document.getElementById('gradient-color').addEventListener('input', e => {
+                config.gradientColor = e.target.value;
+                updateClockAppearance();
+            });
+            
+            // Clock Marks
+            document.getElementById('hour-marks').addEventListener('change', e => {
+                config.hourMarks = e.target.value;
+                createClockMarks();
+            });
+            
+            document.getElementById('minute-marks').addEventListener('change', e => {
+                config.minuteMarks = e.target.value;
+                createClockMarks();
+            });
+            
+            document.getElementById('marks-color').addEventListener('input', e => {
+                config.marksColor = e.target.value;
+                updateClockAppearance();
+            });
+            
+            // Hands
+            document.getElementById('hand-style').addEventListener('change', e => {
+                config.handStyle = e.target.value;
+                updateClockAppearance();
+            });
+            
+            document.getElementById('hour-hand-color').addEventListener('input', e => {
+                config.hourHandColor = e.target.value;
+                updateClockAppearance();
+            });
+            
+            document.getElementById('minute-hand-color').addEventListener('input', e => {
+                config.minuteHandColor = e.target.value;
+                updateClockAppearance();
+            });
+            
+            document.getElementById('second-hand-color').addEventListener('input', e => {
+                config.secondHandColor = e.target.value;
+                updateClockAppearance();
+            });
+            
+            document.getElementById('center-dot-size').addEventListener('input', e => {
+                config.centerDotSize = parseInt(e.target.value);
+                updateClockAppearance();
+            });
+            
+            document.getElementById('center-dot-color').addEventListener('input', e => {
+                config.centerDotColor = e.target.value;
+                updateClockAppearance();
+            });
+            
+            // Digital Display
+            document.getElementById('show-digital').addEventListener('change', e => {
+                config.showDigital = e.target.value;
+                updateClockAppearance();
+            });
+            
+            document.getElementById('time-format').addEventListener('change', e => {
+                config.timeFormat = e.target.value;
+                updateTime();
+            });
+            
+            document.getElementById('digital-color').addEventListener('input', e => {
+                config.digitalColor = e.target.value;
+                updateClockAppearance();
+            });
+            
+            document.getElementById('digital-size').addEventListener('input', e => {
+                config.digitalSize = parseInt(e.target.value);
+                updateClockAppearance();
+            });
+            
+            // Effects
+            document.getElementById('second-hand-movement').addEventListener('change', e => {
+                config.secondHandMovement = e.target.value;
+            });
+            
+            document.getElementById('motion-effect').addEventListener('change', e => {
+                config.motionEffect = e.target.value;
+            });
+            
+            document.getElementById('glow-effect').addEventListener('change', e => {
+                config.glowEffect = e.target.value;
+                updateClockAppearance();
+            });
+
+            document.getElementById('bloom-effect').addEventListener('input', e => {
+                config.bloomEffect = parseInt(e.target.value);
+                updateClockAppearance();
+            });
+            
+            // Share
+            generateUrlBtn.addEventListener('click', generateShareableUrl);
+            
+            copyUrlBtn.addEventListener('click', () => {
+                if (shareUrlEl.value) {
+                    shareUrlEl.select();
+                    document.execCommand('copy');
+                    showNotification('Copied to clipboard!');
+                } else {
+                    generateShareableUrl();
+                    setTimeout(() => {
+                        shareUrlEl.select();
+                        document.execCommand('copy');
+                        showNotification('URL generated and copied!');
+                    }, 100);
+                }
+            });
+        }
+        
+        // Setup the preset buttons
+        function setupPresetButtons() {
+            const presetButtons = document.querySelectorAll('.preset-btn');
+            
+            presetButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const preset = btn.dataset.preset;
+                    applyPreset(preset);
+                });
+            });
+        }
+        
+        // Apply a preset configuration
+        function applyPreset(preset) {
+            switch (preset) {
+                case 'classic':
+                    Object.assign(config, {
+                        clockSize: 250,
+                        clockShape: 'circle',
+                        faceColor: '#ffffff',
+                        faceOpacity: 100,
+                        borderWidth: 2,
+                        borderColor: '#000000',
+                        bgColor: '#f0f0f0',
+                        bgGradient: 'none',
+                        hourMarks: 'roman',
+                        minuteMarks: 'lines',
+                        marksColor: '#000000',
+                        handStyle: 'pointed',
+                        hourHandColor: '#000000',
+                        minuteHandColor: '#000000',
+                        secondHandColor: '#dd0000',
+                        centerDotSize: 8,
+                        centerDotColor: '#000000',
+                        showDigital: 'none',
+                        timeFormat: '12',
+                        digitalColor: '#000000',
+                        digitalSize: 14,
+                        secondHandMovement: 'ticking',
+                        motionEffect: 'none',
+                        glowEffect: 'none',
+                        bloomEffect: 0
+                    });
+                    break;
+                case 'minimal':
+                    Object.assign(config, {
+                        clockSize: 220,
+                        clockShape: 'circle',
+                        faceColor: '#ffffff',
+                        faceOpacity: 100,
+                        borderWidth: 0,
+                        borderColor: '#000000',
+                        bgColor: '#f8f8f8',
+                        bgGradient: 'none',
+                        hourMarks: 'dots',
+                        minuteMarks: 'none',
+                        marksColor: '#555555',
+                        handStyle: 'simple',
+                        hourHandColor: '#222222',
+                        minuteHandColor: '#444444',
+                        secondHandColor: '#666666',
+                        centerDotSize: 4,
+                        centerDotColor: '#222222',
+                        showDigital: 'none',
+                        timeFormat: '24',
+                        digitalColor: '#222222',
+                        digitalSize: 14,
+                        secondHandMovement: 'smooth',
+                        motionEffect: 'none',
+                        glowEffect: 'none',
+                        bloomEffect: 0
+                    });
+                    break;
+                case 'digital':
+                    Object.assign(config, {
+                        clockSize: 180,
+                        clockShape: 'none',
+                        faceColor: '#ffffff',
+                        faceOpacity: 0,
+                        borderWidth: 0,
+                        borderColor: '#000000',
+                        bgColor: '#000000',
+                        bgGradient: 'none',
+                        hourMarks: 'none',
+                        minuteMarks: 'none',
+                        marksColor: '#ffffff',
+                        handStyle: 'simple',
+                        hourHandColor: '#ffffff',
+                        minuteHandColor: '#ffffff',
+                        secondHandColor: '#ffffff',
+                        centerDotSize: 0,
+                        centerDotColor: '#ffffff',
+                        showDigital: 'both',
+                        timeFormat: '24',
+                        digitalColor: '#00ff00',
+                        digitalSize: 28,
+                        secondHandMovement: 'none',
+                        motionEffect: 'none',
+                        glowEffect: 'none',
+                        bloomEffect: 0
+                    });
+                    break;
+                case 'neon':
+                    Object.assign(config, {
+                        clockSize: 280,
+                        clockShape: 'circle',
+                        faceColor: '#000000',
+                        faceOpacity: 80,
+                        borderWidth: 2,
+                        borderColor: '#00ffff',
+                        bgColor: '#000000',
+                        bgGradient: 'radial',
+                        gradientColor: '#002222',
+                        hourMarks: 'lines',
+                        minuteMarks: 'none',
+                        marksColor: '#00ffff',
+                        handStyle: 'simple',
+                        hourHandColor: '#ff00ff',
+                        minuteHandColor: '#ffff00',
+                        secondHandColor: '#00ffff',
+                        centerDotSize: 8,
+                        centerDotColor: '#ffffff',
+                        showDigital: 'time',
+                        timeFormat: '24',
+                        digitalColor: '#00ffff',
+                        digitalSize: 20,
+                        secondHandMovement: 'smooth',
+                        motionEffect: 'none',
+                        glowEffect: 'hands',
+                        bloomEffect: 20
+                    });
+                    break;
+                case 'cosmic':
+                    Object.assign(config, {
+                        clockSize: 300,
+                        clockShape: 'circle',
+                        faceColor: '#000033',
+                        faceOpacity: 70,
+                        borderWidth: 0,
+                        borderColor: '#4444ff',
+                        bgColor: '#000011',
+                        bgGradient: 'radial',
+                        gradientColor: '#000044',
+                        hourMarks: 'dots',
+                        minuteMarks: 'none',
+                        marksColor: '#ffffff',
+                        handStyle: 'pointed',
+                        hourHandColor: '#ff6600',
+                        minuteHandColor: '#ffcc00',
+                        secondHandColor: '#ffffff',
+                        centerDotSize: 12,
+                        centerDotColor: '#ffcc00',
+                        showDigital: 'none',
+                        timeFormat: '24',
+                        digitalColor: '#ffffff',
+                        digitalSize: 16,
+                        secondHandMovement: 'smooth',
+                        motionEffect: 'elastic',
+                        glowEffect: 'all',
+                        bloomEffect: 40
+                    });
+                    break;
+                case 'random':
+                    randomizeConfig();
+                    break;
+            }
+            
+            // Update UI to match the new config
+            updateControlsFromConfig();
+            
+            // Update clock appearance
+            updateClockAppearance();
+            createClockMarks();
+        }
+        
+        // Randomize the clock configuration
+        function randomizeConfig() {
+            const randomColor = () => {
+                return '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+            };
+            
+            const randomChoice = (arr) => {
+                return arr[Math.floor(Math.random() * arr.length)];
+            };
+            
+            config.clockSize = Math.floor(Math.random() * 200) + 150;
+            config.clockShape = randomChoice(['circle', 'square', 'none']);
+            config.faceColor = randomColor();
+            config.faceOpacity = Math.floor(Math.random() * 100);
+            config.borderWidth = Math.floor(Math.random() * 10);
+            config.borderColor = randomColor();
+            config.bgColor = randomColor();
+            config.bgGradient = randomChoice(['none', 'linear', 'radial']);
+            config.gradientColor = randomColor();
+            config.hourMarks = randomChoice(['none', 'dots', 'lines', 'numbers', 'roman']);
+            config.minuteMarks = randomChoice(['none', 'dots', 'lines']);
+            config.marksColor = randomColor();
+            config.handStyle = randomChoice(['simple', 'rounded', 'pointed']);
+            config.hourHandColor = randomColor();
+            config.minuteHandColor = randomColor();
+            config.secondHandColor = randomColor();
+            config.centerDotSize = Math.floor(Math.random() * 15);
+            config.centerDotColor = randomColor();
+            config.showDigital = randomChoice(['none', 'time', 'date', 'both']);
+            config.timeFormat = randomChoice(['12', '24']);
+            config.digitalColor = randomColor();
+            config.digitalSize = Math.floor(Math.random() * 20) + 12;
+            config.secondHandMovement = randomChoice(['ticking', 'smooth', 'none']);
+            config.motionEffect = randomChoice(['none', 'bounce', 'elastic']);
+            config.glowEffect = randomChoice(['none', 'hands', 'all']);
+            config.bloomEffect = Math.floor(Math.random() * 60);
+        }
+        
+        // Generate a shareable URL
+        function generateShareableUrl() {
+            // Convert config to JSON string
+            const configJson = JSON.stringify(config);
+            
+            // Encode using base64
+            const encoded = btoa(configJson);
+            
+            // Create URL with parameter
+            const url = `${window.location.origin}${window.location.pathname}?k=${encoded}`;
+            
+            // Display URL
+            shareUrlEl.value = url;
+            shareUrlEl.select();
+        }
+        
+        // Show a notification message
+        function showNotification(message) {
+            notificationEl.textContent = message;
+            notificationEl.style.display = 'block';
+            
+            setTimeout(() => {
+                notificationEl.style.display = 'none';
+            }, 2000);
+        }
+        
+        // Update the clock appearance based on current config
+        function updateClockAppearance() {
+            // Clock size & shape
+            clockEl.style.width = `${config.clockSize}px`;
+            clockEl.style.height = `${config.clockSize}px`;
+            
+            // Clock face
+            if (config.clockShape === 'none') {
+                clockFaceEl.style.display = 'none';
+            } else {
+                clockFaceEl.style.display = 'block';
+                clockFaceEl.style.width = '100%';
+                clockFaceEl.style.height = '100%';
+                clockFaceEl.style.backgroundColor = config.faceColor;
+                clockFaceEl.style.opacity = config.faceOpacity / 100;
+                clockFaceEl.style.border = `${config.borderWidth}px solid ${config.borderColor}`;
+                clockFaceEl.style.borderRadius = config.clockShape === 'circle' ? '50%' : '0';
+            }
+            
+            // Background
+            if (config.bgGradient === 'none') {
+                document.body.style.background = config.bgColor;
+            } else if (config.bgGradient === 'linear') {
+                document.body.style.background = `linear-gradient(135deg, ${config.bgColor}, ${config.gradientColor})`;
+            } else if (config.bgGradient === 'radial') {
+                document.body.style.background = `radial-gradient(circle, ${config.bgColor}, ${config.gradientColor})`;
+            }
+            
+            // Clock marks
+            document.querySelectorAll('.hour-mark, .minute-mark').forEach(mark => {
+                mark.style.backgroundColor = config.marksColor;
+            });
+            
+            // Hand styles
+            const handWidth = config.clockSize / 25;
+            const hourHandLength = config.clockSize * 0.3;
+            const minuteHandLength = config.clockSize * 0.4;
+            const secondHandLength = config.clockSize * 0.45;
+            
+            // Apply hand styles
+            hourHandEl.style.backgroundColor = config.hourHandColor;
+            minuteHandEl.style.backgroundColor = config.minuteHandColor;
+            secondHandEl.style.backgroundColor = config.secondHandColor;
+            
+            if (config.handStyle === 'simple') {
+                hourHandEl.style.width = `${handWidth}px`;
+                hourHandEl.style.height = `${hourHandLength}px`;
+                hourHandEl.style.borderRadius = '0';
+                
+                minuteHandEl.style.width = `${handWidth * 0.8}px`;
+                minuteHandEl.style.height = `${minuteHandLength}px`;
+                minuteHandEl.style.borderRadius = '0';
+                
+                secondHandEl.style.width = `${handWidth * 0.4}px`;
+                secondHandEl.style.height = `${secondHandLength}px`;
+                secondHandEl.style.borderRadius = '0';
+            } else if (config.handStyle === 'rounded') {
+                hourHandEl.style.width = `${handWidth}px`;
+                hourHandEl.style.height = `${hourHandLength}px`;
+                hourHandEl.style.borderRadius = `${handWidth / 2}px`;
+                
+                minuteHandEl.style.width = `${handWidth * 0.8}px`;
+                minuteHandEl.style.height = `${minuteHandLength}px`;
+                minuteHandEl.style.borderRadius = `${handWidth * 0.4}px`;
+                
+                secondHandEl.style.width = `${handWidth * 0.4}px`;
+                secondHandEl.style.height = `${secondHandLength}px`;
+                secondHandEl.style.borderRadius = `${handWidth * 0.2}px`;
+            } else if (config.handStyle === 'pointed') {
+                hourHandEl.style.width = `${handWidth}px`;
+                hourHandEl.style.height = `${hourHandLength}px`;
+                hourHandEl.style.borderRadius = `0 0 ${handWidth / 2}px ${handWidth / 2}px`;
+                
+                minuteHandEl.style.width = `${handWidth * 0.8}px`;
+                minuteHandEl.style.height = `${minuteHandLength}px`;
+                minuteHandEl.style.borderRadius = `0 0 ${handWidth * 0.4}px ${handWidth * 0.4}px`;
+                
+                secondHandEl.style.width = `${handWidth * 0.4}px`;
+                secondHandEl.style.height = `${secondHandLength}px`;
+                secondHandEl.style.borderRadius = `0 0 ${handWidth * 0.2}px ${handWidth * 0.2}px`;
+            }
+            
+            // Center dot
+            if (config.centerDotSize > 0) {
+                centerDotEl.style.width = `${config.centerDotSize}px`;
+                centerDotEl.style.height = `${config.centerDotSize}px`;
+                centerDotEl.style.backgroundColor = config.centerDotColor;
+                centerDotEl.style.display = 'block';
+            } else {
+                centerDotEl.style.display = 'none';
+            }
+            
+            // Digital display
+            digitalTimeEl.style.color = config.digitalColor;
+            digitalTimeEl.style.fontSize = `${config.digitalSize}px`;
+            dateDisplayEl.style.color = config.digitalColor;
+            dateDisplayEl.style.fontSize = `${config.digitalSize * 0.8}px`;
+            
+            // Handle digital display visibility
+            if (config.showDigital === 'none') {
+                digitalTimeEl.style.display = 'none';
+                dateDisplayEl.style.display = 'none';
+            } else if (config.showDigital === 'time') {
+                digitalTimeEl.style.display = 'block';
+                dateDisplayEl.style.display = 'none';
+            } else if (config.showDigital === 'date') {
+                digitalTimeEl.style.display = 'none';
+                dateDisplayEl.style.display = 'block';
+            } else if (config.showDigital === 'both') {
+                digitalTimeEl.style.display = 'block';
+                dateDisplayEl.style.display = 'block';
+            }
+            
+            // Glow effects
+            const elements = {
+                hands: [hourHandEl, minuteHandEl, secondHandEl],
+                all: [hourHandEl, minuteHandEl, secondHandEl, centerDotEl, ...document.querySelectorAll('.hour-mark, .minute-mark')]
+            };
+            
+            // Remove all glow classes first
+            document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
+            
+            // Apply glow effect
+            if (config.glowEffect !== 'none') {
+                elements[config.glowEffect].forEach(el => {
+                    if (el) el.classList.add('glow');
+                });
+            }
+            
+            // Bloom effect
+            renderBloomEffect();
+        }
+        
+        // Create or update clock marks
+        function createClockMarks() {
+            // First, remove all existing marks
+            document.querySelectorAll('.hour-mark, .minute-mark').forEach(mark => mark.remove());
+            
+            const radius = config.clockSize / 2;
+            const hourMarkLength = radius * 0.15;
+            const minuteMarkLength = radius * 0.07;
+            
+            // Create hour marks
+            if (config.hourMarks !== 'none') {
+                for (let i = 0; i < 12; i++) {
+                    const angle = (i * 30) * (Math.PI / 180);
+                    const x = radius * 0.8 * Math.sin(angle);
+                    const y = -radius * 0.8 * Math.cos(angle);
+                    
+                    if (config.hourMarks === 'dots') {
+                        const dot = document.createElement('div');
+                        dot.className = 'hour-mark';
+                        dot.style.width = '8px';
+                        dot.style.height = '8px';
+                        dot.style.borderRadius = '50%';
+                        dot.style.backgroundColor = config.marksColor;
+                        dot.style.position = 'absolute';
+                        dot.style.top = `calc(50% - 4px + ${y}px)`;
+                        dot.style.left = `calc(50% - 4px + ${x}px)`;
+                        clockEl.appendChild(dot);
+                    } else if (config.hourMarks === 'lines') {
+                        const line = document.createElement('div');
+                        line.className = 'hour-mark';
+                        line.style.width = '4px';
+                        line.style.height = `${hourMarkLength}px`;
+                        line.style.backgroundColor = config.marksColor;
+                        line.style.position = 'absolute';
+                        line.style.transformOrigin = 'center bottom';
+                        line.style.transform = `translate(-50%, -100%) rotate(${i * 30}deg)`;
+                        line.style.top = '50%';
+                        line.style.left = '50%';
+                        clockEl.appendChild(line);
+                    } else if (config.hourMarks === 'numbers' || config.hourMarks === 'roman') {
+                        const number = document.createElement('div');
+                        number.className = 'hour-mark';
+                        number.style.position = 'absolute';
+                        number.style.fontSize = `${radius / 6}px`;
+                        number.style.color = config.marksColor;
+                        number.style.textAlign = 'center';
+                        number.style.width = '40px';
+                        number.style.height = '40px';
+                        number.style.display = 'flex';
+                        number.style.alignItems = 'center';
+                        number.style.justifyContent = 'center';
+                        
+                        // Adjust position for text
+                        const textRadius = radius * 0.75;
+                        const textX = textRadius * Math.sin(angle);
+                        const textY = -textRadius * Math.cos(angle);
+                        
+                        number.style.top = `calc(50% - 20px + ${textY}px)`;
+                        number.style.left = `calc(50% - 20px + ${textX}px)`;
+                        
+                        // Hour number content
+                        const hourNumber = i === 0 ? 12 : i;
+                        number.textContent = config.hourMarks === 'roman' ? ROMAN_NUMERALS[i] : hourNumber;
+                        
+                        clockEl.appendChild(number);
+                    }
+                }
+            }
+            
+            // Create minute marks
+            if (config.minuteMarks !== 'none') {
+                for (let i = 0; i < 60; i++) {
+                    // Skip positions where hour marks exist
+                    if (i % 5 === 0) continue;
+                    
+                    const angle = (i * 6) * (Math.PI / 180);
+                    const x = radius * 0.9 * Math.sin(angle);
+                    const y = -radius * 0.9 * Math.cos(angle);
+                    
+                    if (config.minuteMarks === 'dots') {
+                        const dot = document.createElement('div');
+                        dot.className = 'minute-mark';
+                        dot.style.width = '3px';
+                        dot.style.height = '3px';
+                        dot.style.borderRadius = '50%';
+                        dot.style.backgroundColor = config.marksColor;
+                        dot.style.position = 'absolute';
+                        dot.style.top = `calc(50% - 1.5px + ${y}px)`;
+                        dot.style.left = `calc(50% - 1.5px + ${x}px)`;
+                        clockEl.appendChild(dot);
+                    } else if (config.minuteMarks === 'lines') {
+                        const line = document.createElement('div');
+                        line.className = 'minute-mark';
+                        line.style.width = '2px';
+                        line.style.height = `${minuteMarkLength}px`;
+                        line.style.backgroundColor = config.marksColor;
+                        line.style.position = 'absolute';
+                        line.style.transformOrigin = 'center bottom';
+                        line.style.transform = `translate(-50%, -100%) rotate(${i * 6}deg)`;
+                        line.style.top = '50%';
+                        line.style.left = '50%';
+                        clockEl.appendChild(line);
+                    }
+                }
+            }
+        }
+        
+        // Render the bloom effect
+        function renderBloomEffect() {
+            bloomContainerEl.innerHTML = '';
+            
+            if (config.bloomEffect <= 0) return;
+            
+            const intensity = config.bloomEffect / 100;
+            const elements = [hourHandEl, minuteHandEl, secondHandEl, centerDotEl];
+            
+            elements.forEach(el => {
+                if (!el || el.style.display === 'none') return;
+                
+                const color = getComputedStyle(el).backgroundColor;
+                const size = Math.max(
+                    parseFloat(el.style.width) || 0,
+                    parseFloat(el.style.height) || 0
+                );
+                
+                if (size <= 0) return;
+                
+                const bloom = document.createElement('div');
+                bloom.style.position = 'absolute';
+                bloom.style.top = el.style.top || '50%';
+                bloom.style.left = el.style.left || '50%';
+                bloom.style.width = `${size * 3}px`;
+                bloom.style.height = `${size * 3}px`;
+                bloom.style.borderRadius = '50%';
+                bloom.style.backgroundColor = color;
+                bloom.style.opacity = 0.2 * intensity;
+                bloom.style.filter = `blur(${size}px)`;
+                bloom.style.transform = el.style.transform || 'translate(-50%, -50%)';
+                
+                bloomContainerEl.appendChild(bloom);
+            });
+        }
+        
+        // Update the clock time
+        function updateTime() {
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const seconds = now.getSeconds();
+            const milliseconds = now.getMilliseconds();
+            
+            // Calculate precise angles
+            const secondsWithMs = seconds + (milliseconds / 1000);
+            const minutesWithFraction = minutes + (secondsWithMs / 60);
+            const hoursWithFraction = (hours % 12) + (minutesWithFraction / 60);
+            
+            // Set rotation for hands
+            const secondAngle = config.secondHandMovement === 'smooth' ? 
+                secondsWithMs * 6 : 
+                seconds * 6;
+                
+            const minuteAngle = minutesWithFraction * 6;
+            const hourAngle = hoursWithFraction * 30;
+            
+            // Apply motion effects if any
+            let secondRotation = `rotate(${secondAngle}deg)`;
+            let minuteRotation = `rotate(${minuteAngle}deg)`;
+            let hourRotation = `rotate(${hourAngle}deg)`;
+            
+            if (config.motionEffect === 'bounce' && config.secondHandMovement !== 'none') {
+                // Apply bounce effect to second hand
+                if (milliseconds < 100) {
+                    const bounce = Math.sin(milliseconds / 10 * Math.PI) * 2;
+                    secondRotation = `rotate(${secondAngle}deg) translateY(${bounce}px)`;
+                }
+            } else if (config.motionEffect === 'elastic' && config.secondHandMovement !== 'none') {
+                // Apply elastic effect to second hand
+                if (milliseconds < 300) {
+                    const elastic = Math.sin(milliseconds / 30 * Math.PI) * (300 - milliseconds) / 100;
+                    secondRotation = `rotate(${secondAngle + elastic}deg)`;
+                }
+            }
+            
+            // Hide second hand if movement is none
+            if (config.secondHandMovement === 'none') {
+                secondHandEl.style.display = 'none';
+            } else {
+                secondHandEl.style.display = 'block';
+                secondHandEl.style.transform = secondRotation;
+            }
+            
+            minuteHandEl.style.transform = minuteRotation;
+            hourHandEl.style.transform = hourRotation;
+            
+            // Update digital time if active
+            if (config.showDigital === 'time' || config.showDigital === 'both') {
+                let displayHours = hours;
+                let ampm = '';
+                
+                if (config.timeFormat === '12') {
+                    displayHours = hours % 12;
+                    if (displayHours === 0) displayHours = 12;
+                    ampm = hours < 12 ? ' AM' : ' PM';
+                }
+                
+                digitalTimeEl.textContent = 
+                    `${displayHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}${ampm}`;
+            }
+            
+            // Update date display if active
+            if (config.showDigital === 'date' || config.showDigital === 'both') {
+                const options = { weekday: 'short', month: 'short', day: 'numeric' };
+                dateDisplayEl.textContent = now.toLocaleDateString(undefined, options);
+            }
+        }
+        
+        // Initialize the clock when page loads
+        window.addEventListener('load', initClock);
+    </script>
+</body>
+</html>
