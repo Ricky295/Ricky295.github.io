@@ -37,6 +37,14 @@
             color: #fee;
         }
         
+        #countdown-display {
+            font-size: 72px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            color: #FF6B6B;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
         #score-display {
             font-size: 24px;
             margin-bottom: 20px;
@@ -83,6 +91,16 @@
             }
         }
         
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        .pulse {
+            animation: pulse 0.5s ease-in-out;
+        }
+        
         #high-scores {
             margin-top: 30px;
             width: 100%;
@@ -112,13 +130,18 @@
             margin-bottom: 15px;
             color: #fee;
         }
+        
+        .hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
     <div id="game-container">
         <h1>Keyboard Spam Game</h1>
-        <div id="instructions">Press SPACE to start a 10-second timer, then spam any keys!</div>
+        <div id="instructions">Press SPACE to start a 3-second countdown, then spam any keys!</div>
         <div id="game-state">Ready to play</div>
+        <div id="countdown-display" class="hidden">3</div>
         <div id="timer-display">10.0</div>
         <div id="score-display">Score: 0 (CPS: 0.0)</div>
         <button id="start-btn">Start Game (or press SPACE)</button>
@@ -134,30 +157,31 @@
         const urlParams = new URLSearchParams(window.location.search);
         const initialTimer = parseFloat(urlParams.get('timer') || 10);
         let gameActive = false;
+        let countdownActive = false;
         let timer = initialTimer;
+        let countdown = 3;
         let score = 0;
         let timerInterval;
+        let countdownInterval;
         let highScores = [];
         
         // DOM elements
         const timerDisplay = document.getElementById('timer-display');
+        const countdownDisplay = document.getElementById('countdown-display');
         const scoreDisplay = document.getElementById('score-display');
         const startBtn = document.getElementById('start-btn');
         const gameState = document.getElementById('game-state');
         const highScoresList = document.getElementById('high-scores-list');
         
-        // Load high scores from local storage
+        // Load high scores from memory (localStorage not available in Claude.ai)
         function loadHighScores() {
-            const savedScores = localStorage.getItem('keyboardSpamHighScores');
-            if (savedScores) {
-                highScores = JSON.parse(savedScores);
-                updateHighScoresList();
-            }
+            // Using in-memory storage instead of localStorage
+            highScores = [];
         }
         
-        // Save high scores to local storage
+        // Save high scores to memory
         function saveHighScores() {
-            localStorage.setItem('keyboardSpamHighScores', JSON.stringify(highScores));
+            // In-memory storage only
         }
         
         // Update the high scores list in the DOM
@@ -170,27 +194,76 @@
             });
         }
         
-        // Start the game
+        // Start the countdown
+        function startCountdown() {
+            if (countdownActive || gameActive) return;
+            
+            countdownActive = true;
+            countdown = 3;
+            
+            // Hide timer, show countdown
+            timerDisplay.classList.add('hidden');
+            countdownDisplay.classList.remove('hidden');
+            
+            gameState.textContent = "Get ready...";
+            gameState.style.color = "#FFD93D";
+            startBtn.disabled = true;
+            
+            countdownDisplay.textContent = countdown;
+            countdownDisplay.classList.add('pulse');
+            
+            countdownInterval = setInterval(() => {
+                countdown--;
+                
+                if (countdown > 0) {
+                    countdownDisplay.textContent = countdown;
+                    countdownDisplay.classList.remove('pulse');
+                    setTimeout(() => countdownDisplay.classList.add('pulse'), 10);
+                } else {
+                    countdownDisplay.textContent = "GO!";
+                    countdownDisplay.style.color = "#4CAF50";
+                    countdownDisplay.classList.remove('pulse');
+                    setTimeout(() => countdownDisplay.classList.add('pulse'), 10);
+                    
+                    setTimeout(() => {
+                        clearInterval(countdownInterval);
+                        countdownActive = false;
+                        startGame();
+                    }, 1000);
+                }
+            }, 1000);
+        }
+        
+        // Start the actual game
         function startGame() {
+            // Prevent multiple game starts
             if (gameActive) return;
             
+            // Clear any existing intervals first
+            clearInterval(timerInterval);
+            clearInterval(countdownInterval);
+            
             gameActive = true;
+            countdownActive = false;
             timer = initialTimer;
             score = 0;
             
+            // Hide countdown, show timer
+            countdownDisplay.classList.add('hidden');
+            timerDisplay.classList.remove('hidden');
+            
             timerDisplay.textContent = timer.toFixed(1);
-            scoreDisplay.textContent = `Score: ${score}`;
+            scoreDisplay.textContent = `Score: ${score} (CPS: 0.0)`;
             gameState.textContent = "GO! SPAM THOSE KEYS!";
             gameState.style.color = "#FF0000";
-            startBtn.disabled = true;
             
             timerInterval = setInterval(() => {
                 timer -= 0.1;
-                timer = Math.max(0, timer);
-                timerDisplay.textContent = timer.toFixed(1);
-                
                 if (timer <= 0) {
+                    timer = 0;
                     endGame();
+                } else {
+                    timerDisplay.textContent = timer.toFixed(1);
                 }
             }, 100);
         }
@@ -201,18 +274,21 @@
             gameActive = false;
             startBtn.disabled = false;
             gameState.textContent = "Game Over!";
-            gameState.style.color = "#333";
+            gameState.style.color = "#fee";
             let CPS = (score / initialTimer).toFixed(2);
             scoreDisplay.textContent = `Score: ${score} (CPS: ${CPS})`;
             
             // Add score to high scores
-            highScores.push(CPS);
+            highScores.push(parseFloat(CPS));
             highScores.sort((a, b) => b - a);
             if (highScores.length > 10) {
                 highScores = highScores.slice(0, 10);
             }
             saveHighScores();
             updateHighScoresList();
+            
+            // Reset countdown display
+            countdownDisplay.style.color = "#FF6B6B";
         }
         
         // Create floating key bubble
@@ -237,29 +313,32 @@
             
             // Remove bubble after animation completes
             setTimeout(() => {
-                document.body.removeChild(bubble);
+                if (document.body.contains(bubble)) {
+                    document.body.removeChild(bubble);
+                }
             }, 2000);
         }
         
         // Event listeners
-        startBtn.addEventListener('click', startGame);
+        startBtn.addEventListener('click', startCountdown);
         
         document.addEventListener('keydown', (event) => {
-            // Start game with space bar
-            if (event.code === 'Space' && !gameActive) {
+            // Start countdown with space bar
+            if (event.code === 'Space' && !gameActive && !countdownActive) {
                 event.preventDefault();
-                startGame();
+                startCountdown();
                 return;
             }
             
-            // Record keypress during active game
-            if (gameActive) {
+            // Record keypress during active game only (not during countdown)
+            if (gameActive && !countdownActive) {
                 score++;
-                let CPS = score / (initialTimer - timer).toFixed(1);
+                let elapsedTime = initialTimer - timer;
+                let CPS = elapsedTime > 0 ? (score / elapsedTime).toFixed(1) : '0.0';
                 scoreDisplay.textContent = `Score: ${score} (CPS: ${CPS})`;
                 
                 // Create floating key bubble
-                createKeyBubble(event.key);
+                createKeyBubble(event.key === ' ' ? 'SPACE' : event.key.toUpperCase());
             }
         });
         
