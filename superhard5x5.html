@@ -1,425 +1,774 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Play, Pause, RotateCcw, Check, Eye, EyeOff, Hash } from 'lucide-react';
-
-const SudokuPlayer = () => {
-  const baseSudokus = [
-    "4000500014005000200030000",
-    "1000000025002100040003000", 
-    "0005034000002000540000001",
-    "0540000002000300010410000",
-    "0403020000005000200400001",
-    "0000500400400303100000020",
-    "3000000205000102040004000",
-    "0050010020020300400000003",
-    "0002400100030005000020010",
-    "5000000201000130300000040"
-  ];
-
-  const [seed, setSeed] = useState(() => Math.floor(Math.random() * 9600));
-  const [grid, setGrid] = useState(Array(25).fill(0));
-  const [initialGrid, setInitialGrid] = useState(Array(25).fill(0));
-  const [candidates, setCandidates] = useState(Array(25).fill().map(() => new Set()));
-  const [selectedCell, setSelectedCell] = useState(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [time, setTime] = useState(0);
-  const [showCandidates, setShowCandidates] = useState(true);
-  const [candidateMode, setCandidateMode] = useState(false);
-  const [isComplete, setIsComplete] = useState(false);
-
-  // Generate all permutations of [1,2,3,4,5]
-  const generatePermutations = () => {
-    const perms = [];
-    const arr = [1, 2, 3, 4, 5];
-    
-    const permute = (arr, start = 0) => {
-      if (start === arr.length - 1) {
-        perms.push([...arr]);
-        return;
-      }
-      
-      for (let i = start; i < arr.length; i++) {
-        [arr[start], arr[i]] = [arr[i], arr[start]];
-        permute(arr, start + 1);
-        [arr[start], arr[i]] = [arr[i], arr[start]];
-      }
-    };
-    
-    permute(arr);
-    return perms;
-  }
-
-  const permutations = generatePermutations();
-
-  const flipGrid = (gridStr) => {
-    const grid = [];
-    for (let i = 0; i < 5; i++) {
-      for (let j = 0; j < 5; j++) {
-        grid.push(gridStr[i * 5 + (4 - j)]);
-      }
-    }
-    return grid.join('');
-  };
-
-  const rotateGrid = (gridStr) => {
-    const grid = [];
-    for (let i = 0; i < 5; i++) {
-      for (let j = 0; j < 5; j++) {
-        grid.push(gridStr[(4 - j) * 5 + i]);
-      }
-    }
-    return grid.join('');
-  };
-
-  const applyPermutation = (gridStr, perm) => {
-    return gridStr.split('').map(char => {
-      const digit = parseInt(char);
-      if (digit === 0) return '0';
-      return perm[digit - 1].toString();
-    }).join('');
-  };
-
-  const decodeSeed = (seed) => {
-    if (seed < 0 || seed >= 9600) {
-      throw new Error("Seed must be between 0 and 9599");
-    }
-    const permIndex = Math.floor(seed / 80);
-    const r = seed % 80;
-    const rotation = Math.floor(r / 20);
-    const flip = Math.floor((r % 20) / 10);
-    const puzzleIndex = r % 10;
-    return {
-      puzzleIndex,  // 0 to 9
-      flip,         // 0 or 1
-      rotation,     // 0 to 3
-      permIndex     // 0 to 119
-    };
-  };
-
-  const generatePuzzle = (seed) => {
-    const { puzzleIndex, flip, rotation, permIndex } = decodeSeed(seed);
-
-    let puzzle = baseSudokus[puzzleIndex];
-
-    // Apply transformation
-    if (flip) {
-      puzzle = flipGrid(puzzle);
-    }
-
-    for (let i = 0; i < rotation; i++) {
-      puzzle = rotateGrid(puzzle);
-    }
-
-    // Apply permutation
-    const perm = permutations[permIndex];
-    puzzle = applyPermutation(puzzle, perm);
-
-    return puzzle.split('').map(char => parseInt(char));
-  };
-
-  const isValidMove = (grid, row, col, num) => {
-    // Check row
-    for (let c = 0; c < 5; c++) {
-      if (c !== col && grid[row * 5 + c] === num) return false;
-    }
-    
-    // Check column
-    for (let r = 0; r < 5; r++) {
-      if (r !== row && grid[r * 5 + col] === num) return false;
-    }
-    
-    return true;
-  };
-
-  const checkCompletion = (grid) => {
-    // Check if all cells are filled
-    if (grid.some(cell => cell === 0)) return false;
-    
-    // Check all rows and columns
-    for (let i = 0; i < 5; i++) {
-      const rowSet = new Set();
-      const colSet = new Set();
-      
-      for (let j = 0; j < 5; j++) {
-        rowSet.add(grid[i * 5 + j]);
-        colSet.add(grid[j * 5 + i]);
-      }
-      
-      if (rowSet.size !== 5 || colSet.size !== 5) return false;
-    }
-    
-    return true;
-  };
-
-  const updateCandidates = useCallback((newGrid) => {
-    const newCandidates = Array(25).fill().map(() => new Set());
-    
-    for (let i = 0; i < 25; i++) {
-      if (newGrid[i] === 0) {
-        const row = Math.floor(i / 5);
-        const col = i % 5;
-        
-        for (let num = 1; num <= 5; num++) {
-          if (isValidMove(newGrid, row, col, num)) {
-            newCandidates[i].add(num);
-          }
-        }
-      }
-    }
-    
-    setCandidates(newCandidates);
-  }, []);
-
-  useEffect(() => {
-    const puzzle = generatePuzzle(seed);
-    setGrid([...puzzle]);
-    setInitialGrid([...puzzle]);
-    updateCandidates(puzzle);
-    setTime(0);
-    setIsRunning(false);
-    setIsComplete(false);
-  }, [seed, updateCandidates]);
-
-  useEffect(() => {
-    let interval;
-    if (isRunning && !isComplete) {
-      interval = setInterval(() => {
-        setTime(time => time + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isRunning, isComplete]);
-
-  useEffect(() => {
-    if (checkCompletion(grid)) {
-      setIsComplete(true);
-      setIsRunning(false);
-    }
-  }, [grid]);
-
-  const handleCellClick = (index) => {
-    if (initialGrid[index] === 0) {
-      setSelectedCell(selectedCell === index ? null : index);
-      if (!isRunning && !isComplete) {
-        setIsRunning(true);
-      }
-    }
-  };
-
-  const handleNumberInput = (num) => {
-    if (selectedCell !== null && initialGrid[selectedCell] === 0) {
-      const newGrid = [...grid];
-      
-      if (candidateMode) {
-        const newCandidates = [...candidates];
-        if (newCandidates[selectedCell].has(num)) {
-          newCandidates[selectedCell].delete(num);
-        } else {
-          newCandidates[selectedCell].add(num);
-        }
-        setCandidates(newCandidates);
-      } else {
-        newGrid[selectedCell] = newGrid[selectedCell] === num ? 0 : num;
-        setGrid(newGrid);
-        updateCandidates(newGrid);
-      }
-    }
-  };
-
-  const handleKeyPress = useCallback((e) => {
-    if (e.key >= '1' && e.key <= '5') {
-      handleNumberInput(parseInt(e.key));
-    } else if (e.key === 'Backspace' || e.key === 'Delete') {
-      if (selectedCell !== null && initialGrid[selectedCell] === 0) {
-        const newGrid = [...grid];
-        newGrid[selectedCell] = 0;
-        setGrid(newGrid);
-        updateCandidates(newGrid);
-      }
-    }
-  }, [selectedCell, initialGrid, grid, updateCandidates]);
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [handleKeyPress]);
-
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const resetPuzzle = () => {
-    setGrid([...initialGrid]);
-    updateCandidates(initialGrid);
-    setTime(0);
-    setIsRunning(false);
-    setIsComplete(false);
-  };
-
-  const autoRemoveCandidates = () => {
-    const newCandidates = [...candidates];
-    let changed = false;
-
-    // Remove candidates that conflict with placed numbers
-    for (let i = 0; i < 25; i++) {
-      if (grid[i] !== 0) {
-        const row = Math.floor(i / 5);
-        const col = i % 5;
-        const num = grid[i];
-
-        // Remove from row
-        for (let c = 0; c < 5; c++) {
-          const idx = row * 5 + c;
-          if (newCandidates[idx].has(num)) {
-            newCandidates[idx].delete(num);
-            changed = true;
-          }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>5×5 Sudoku Player</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-        // Remove from column
-        for (let r = 0; r < 5; r++) {
-          const idx = r * 5 + col;
-          if (newCandidates[idx].has(num)) {
-            newCandidates[idx].delete(num);
-            changed = true;
-          }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f3f4f6;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
         }
-      }
-    }
 
-    if (changed) {
-      setCandidates(newCandidates);
-    }
-  };
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            padding: 30px;
+            max-width: 400px;
+            width: 100%;
+        }
 
-  return (
-    <div className="flex flex-col items-center p-6 bg-gray-100 min-h-screen">
-      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-        <div className="text-center mb-4">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">5×5 Sudoku</h1>
-          
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">Seed:</label>
-              <input
-                type="number"
-                min="0"
-                max="9599"
-                value={seed}
-                onChange={(e) => setSeed(Math.max(0, Math.min(9599, parseInt(e.target.value) || 0)))}
-                className="w-20 px-2 py-1 border rounded text-center"
-              />
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 15px;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .seed-input {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .seed-input label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .seed-input input {
+            width: 80px;
+            padding: 6px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            text-align: center;
+            font-family: monospace;
+        }
+
+        .timer-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .timer {
+            font-size: 18px;
+            font-family: monospace;
+            font-weight: bold;
+            color: #1f2937;
+        }
+
+        .btn {
+            padding: 8px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: #f3f4f6;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #e5e7eb;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .feature-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .feature-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .feature-btn.candidates {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .feature-btn.candidates:hover {
+            background: #bfdbfe;
+        }
+
+        .feature-btn.note-mode {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .feature-btn.note-mode.active {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .feature-btn.note-mode:hover {
+            background: #e5e7eb;
+        }
+
+        .feature-btn.note-mode.active:hover {
+            background: #bbf7d0;
+        }
+
+        .feature-btn.acr {
+            background: #f3e8ff;
+            color: #7c3aed;
+        }
+
+        .feature-btn.acr:hover {
+            background: #e9d5ff;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 2px;
+            background: #1f2937;
+            padding: 8px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .cell {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+            position: relative;
+            min-height: 50px;
+        }
+
+        .cell.initial {
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+
+        .cell.empty {
+            background: white;
+            color: #1f2937;
+        }
+
+        .cell.empty:hover {
+            background: #f9fafb;
+        }
+
+        .cell.selected {
+            box-shadow: 0 0 0 2px #3b82f6;
+        }
+
+        .cell.invalid {
+            background: #fef2f2;
+            color: #dc2626;
+        }
+
+        .candidates {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            font-size: 10px;
+            color: #6b7280;
+            line-height: 1;
+            width: 100%;
+            height: 100%;
+        }
+
+        .candidate-cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 12px;
+        }
+
+        .number-buttons {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+        }
+
+        .number-btn {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+            background: #dbeafe;
+            color: #1d4ed8;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .number-btn:hover {
+            background: #bfdbfe;
+        }
+
+        .completion {
+            margin-top: 20px;
+            padding: 15px;
+            background: #dcfce7;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .completion .title {
+            color: #166534;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+
+        .completion .time {
+            color: #16a34a;
+            font-size: 14px;
+        }
+
+        .instructions {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #6b7280;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        .icon {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">5×5 Sudoku</h1>
+            
+            <div class="controls">
+                <div class="seed-input">
+                    <label>Seed:</label>
+                    <input type="number" id="seedInput" min="0" max="9599">
+                </div>
+                
+                <div class="timer-controls">
+                    <span class="timer" id="timer">00:00</span>
+                    <button class="btn" id="playPauseBtn">
+                        <svg class="icon" viewBox="0 0 24 24">
+                            <path id="playIcon" d="M8 5v14l11-7z"/>
+                            <path id="pauseIcon" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" style="display: none;"/>
+                        </svg>
+                    </button>
+                    <button class="btn" id="resetBtn">
+                        <svg class="icon" viewBox="0 0 24 24">
+                            <path d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8"/>
+                            <path d="M21 3v5h-5"/>
+                            <path d="M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16"/>
+                            <path d="M3 21v-5h5"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
-            
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-mono">{formatTime(time)}</span>
-              <button
-                onClick={() => setIsRunning(!isRunning)}
-                className="p-1 hover:bg-gray-100 rounded"
-                disabled={isComplete}
-              >
-                {isRunning ? <Pause size={16} /> : <Play size={16} />}
-              </button>
-              <button
-                onClick={resetPuzzle}
-                className="p-1 hover:bg-gray-100 rounded"
-              >
-                <RotateCcw size={16} />
-              </button>
+
+            <div class="feature-buttons">
+                <button class="feature-btn candidates" id="candidatesBtn">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    Candidates
+                </button>
+                
+                <button class="feature-btn note-mode" id="noteModeBtn">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <line x1="4" y1="9" x2="20" y2="9"/>
+                        <line x1="4" y1="15" x2="20" y2="15"/>
+                        <line x1="10" y1="3" x2="8" y2="21"/>
+                        <line x1="16" y1="3" x2="14" y2="21"/>
+                    </svg>
+                    Note Mode
+                </button>
+                
+                <button class="feature-btn acr" id="acrBtn">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <polyline points="20,6 9,17 4,12"/>
+                    </svg>
+                    ACR
+                </button>
+                
+                <button class="feature-btn check" id="checkBtn">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path d="M9 12l2 2 4-4"/>
+                        <circle cx="12" cy="12" r="10"/>
+                    </svg>
+                    Check
+                </button>
             </div>
-          </div>
-
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <button
-              onClick={() => setShowCandidates(!showCandidates)}
-              className="flex items-center gap-1 px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded text-sm"
-            >
-              {showCandidates ? <Eye size={14} /> : <EyeOff size={14} />}
-              Candidates
-            </button>
-            
-            <button
-              onClick={() => setCandidateMode(!candidateMode)}
-              className={`flex items-center gap-1 px-2 py-1 rounded text-sm ${
-                candidateMode ? 'bg-green-100 hover:bg-green-200' : 'bg-gray-100 hover:bg-gray-200'
-              }`}
-            >
-              <Hash size={14} />
-              Note Mode
-            </button>
-            
-            <button
-              onClick={autoRemoveCandidates}
-              className="flex items-center gap-1 px-2 py-1 bg-purple-100 hover:bg-purple-200 rounded text-sm"
-            >
-              <Check size={14} />
-              ACR
-            </button>
-          </div>
         </div>
 
-        <div className="grid grid-cols-5 gap-1 mb-4 bg-gray-800 p-2 rounded">
-          {grid.map((cell, index) => {
-            const isInitial = initialGrid[index] !== 0;
-            const isSelected = selectedCell === index;
-            const row = Math.floor(index / 5);
-            const col = index % 5;
-            const isInvalid = cell !== 0 && !isValidMove(grid, row, col, cell);
+        <div class="grid" id="grid"></div>
 
-            return (
-              <div
-                key={index}
-                onClick={() => handleCellClick(index)}
-                className={`
-                  aspect-square flex items-center justify-center text-lg font-bold cursor-pointer relative
-                  ${isInitial ? 'bg-gray-200' : 'bg-white'}
-                  ${isSelected ? 'ring-2 ring-blue-500' : ''}
-                  ${isInvalid ? 'bg-red-100 text-red-600' : ''}
-                  ${!isInitial ? 'hover:bg-gray-50' : ''}
-                `}
-              >
-                {cell !== 0 ? (
-                  cell
-                ) : showCandidates && candidates[index].size > 0 ? (
-                  <div className="grid grid-cols-3 gap-0 text-xs text-gray-500 leading-none">
-                    {[1, 2, 3, 4, 5].map(num => (
-                      <div key={num} className="text-center">
-                        {candidates[index].has(num) ? num : ''}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+        <div class="number-buttons">
+            <button class="number-btn" onclick="handleNumberInput(1)">1</button>
+            <button class="number-btn" onclick="handleNumberInput(2)">2</button>
+            <button class="number-btn" onclick="handleNumberInput(3)">3</button>
+            <button class="number-btn" onclick="handleNumberInput(4)">4</button>
+            <button class="number-btn" onclick="handleNumberInput(5)">5</button>
         </div>
 
-        <div className="grid grid-cols-5 gap-2">
-          {[1, 2, 3, 4, 5].map(num => (
-            <button
-              key={num}
-              onClick={() => handleNumberInput(num)}
-              className="aspect-square flex items-center justify-center text-lg font-bold bg-blue-100 hover:bg-blue-200 rounded"
-            >
-              {num}
-            </button>
-          ))}
+        <div class="completion" id="completion" style="display: none;">
+            <div class="title">Congratulations!</div>
+            <div class="time" id="completionTime">Completed in 00:00</div>
         </div>
 
-        {isComplete && (
-          <div className="mt-4 p-3 bg-green-100 border border-green-300 rounded text-center">
-            <div className="text-green-800 font-bold">Congratulations!</div>
-            <div className="text-green-600">Completed in {formatTime(time)}</div>
-          </div>
-        )}
-
-        <div className="mt-4 text-xs text-gray-500 text-center">
-          Use number keys 1-5 to fill cells • Backspace to clear • Click cells to select
+        <div class="instructions">
+            Use number keys 1-5 to fill cells • Backspace to clear • Click cells to select
         </div>
-      </div>
     </div>
-  );
-};
 
-export default SudokuPlayer;
+    <script>
+        const baseSudokus = [
+            "4000500014005000200030000",
+            "1000000025002100040003000", 
+            "0005034000002000540000001",
+            "0540000002000300010410000",
+            "0403020000005000200400001",
+            "0000500400400303100000020",
+            "3000000205000102040004000",
+            "0050010020020300400000003",
+            "0002400100030005000020010",
+            "5000000201000130300000040"
+        ];
+
+        let seed = Math.floor(Math.random() * 9600);
+        let grid = Array(25).fill(0);
+        let initialGrid = Array(25).fill(0);
+        let candidates = Array(25).fill().map(() => new Set());
+        let selectedCell = null;
+        let isRunning = false;
+        let time = 0;
+        let timer = null;
+        let showCandidates = true;
+        let candidateMode = false;
+        let isComplete = false;
+
+        // Generate all permutations of [1,2,3,4,5]
+        function generatePermutations() {
+            const perms = [];
+            const arr = [1, 2, 3, 4, 5];
+            
+            function permute(arr, start = 0) {
+                if (start === arr.length - 1) {
+                    perms.push([...arr]);
+                    return;
+                }
+                
+                for (let i = start; i < arr.length; i++) {
+                    [arr[start], arr[i]] = [arr[i], arr[start]];
+                    permute(arr, start + 1);
+                    [arr[start], arr[i]] = [arr[i], arr[start]];
+                }
+            }
+            
+            permute(arr);
+            return perms;
+        }
+
+        const permutations = generatePermutations();
+
+        function decodeSeed(seed) {
+            if (seed < 0 || seed >= 9600) {
+                throw new Error("Seed must be between 0 and 9599");
+            }
+            const permIndex = Math.floor(seed / 80);
+            const r = seed % 80;
+            const rotation = Math.floor(r / 20);
+            const flip = Math.floor((r % 20) / 10);
+            const puzzleIndex = r % 10;
+            return {
+                puzzleIndex,  // 0 to 9
+                flip,         // 0 or 1
+                rotation,     // 0 to 3
+                permIndex     // 0 to 119
+            };
+        }
+
+        function flipGrid(gridStr) {
+            const result = [];
+            for (let i = 0; i < 5; i++) {
+                for (let j = 0; j < 5; j++) {
+                    result.push(gridStr[i * 5 + (4 - j)]);
+                }
+            }
+            return result.join('');
+        }
+
+        function rotateGrid(gridStr) {
+            const result = [];
+            for (let i = 0; i < 5; i++) {
+                for (let j = 0; j < 5; j++) {
+                    result.push(gridStr[(4 - j) * 5 + i]);
+                }
+            }
+            return result.join('');
+        }
+
+        function applyPermutation(gridStr, perm) {
+            return gridStr.split('').map(char => {
+                const digit = parseInt(char);
+                if (digit === 0) return '0';
+                return perm[digit - 1].toString();
+            }).join('');
+        }
+
+        function generatePuzzle(seed) {
+            const { puzzleIndex, flip, rotation, permIndex } = decodeSeed(seed);
+
+            let puzzle = baseSudokus[puzzleIndex];
+
+            if (flip) {
+                puzzle = flipGrid(puzzle);
+            }
+
+            for (let i = 0; i < rotation; i++) {
+                puzzle = rotateGrid(puzzle);
+            }
+
+            const perm = permutations[permIndex];
+            puzzle = applyPermutation(puzzle, perm);
+
+            return puzzle.split('').map(char => parseInt(char));
+        }
+
+        function isValidMove(grid, row, col, num) {
+            // Check row
+            for (let c = 0; c < 5; c++) {
+                if (c !== col && grid[row * 5 + c] === num) return false;
+            }
+            
+            // Check column
+            for (let r = 0; r < 5; r++) {
+                if (r !== row && grid[r * 5 + col] === num) return false;
+            }
+            
+            return true;
+        }
+
+        function checkCompletion(grid) {
+            if (grid.some(cell => cell === 0)) return false;
+            
+            for (let i = 0; i < 5; i++) {
+                const rowSet = new Set();
+                const colSet = new Set();
+                
+                for (let j = 0; j < 5; j++) {
+                    rowSet.add(grid[i * 5 + j]);
+                    colSet.add(grid[j * 5 + i]);
+                }
+                
+                if (rowSet.size !== 5 || colSet.size !== 5) return false;
+            }
+            
+            return true;
+        }
+
+        function updateCandidates(newGrid) {
+            candidates = Array(25).fill().map(() => new Set());
+            
+            for (let i = 0; i < 25; i++) {
+                if (newGrid[i] === 0) {
+                    const row = Math.floor(i / 5);
+                    const col = i % 5;
+                    
+                    for (let num = 1; num <= 5; num++) {
+                        if (isValidMove(newGrid, row, col, num)) {
+                            candidates[i].add(num);
+                        }
+                    }
+                }
+            }
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function startTimer() {
+            if (timer) clearInterval(timer);
+            timer = setInterval(() => {
+                if (isRunning && !isComplete) {
+                    time++;
+                    document.getElementById('timer').textContent = formatTime(time);
+                }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (timer) {
+                clearInterval(timer);
+                timer = null;
+            }
+        }
+
+        function loadPuzzle() {
+            const puzzle = generatePuzzle(seed);
+            grid = [...puzzle];
+            initialGrid = [...puzzle];
+            updateCandidates(puzzle);
+            time = 0;
+            isRunning = false;
+            isComplete = false;
+            selectedCell = null;
+            
+            document.getElementById('timer').textContent = formatTime(time);
+            document.getElementById('completion').style.display = 'none';
+            document.getElementById('playIcon').style.display = 'block';
+            document.getElementById('pauseIcon').style.display = 'none';
+            
+            renderGrid();
+        }
+
+        function renderGrid() {
+            const gridElement = document.getElementById('grid');
+            gridElement.innerHTML = '';
+
+            for (let i = 0; i < 25; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                
+                const isInitial = initialGrid[i] !== 0;
+                const isSelected = selectedCell === i;
+                const row = Math.floor(i / 5);
+                const col = i % 5;
+                const isInvalid = grid[i] !== 0 && !isValidMove(grid, row, col, grid[i]);
+
+                if (isInitial) {
+                    cell.classList.add('initial');
+                } else {
+                    cell.classList.add('empty');
+                }
+
+                if (isSelected) {
+                    cell.classList.add('selected');
+                }
+
+                if (isInvalid) {
+                    cell.classList.add('invalid');
+                }
+
+                if (grid[i] !== 0) {
+                    cell.textContent = grid[i];
+                } else if (showCandidates && candidates[i].size > 0) {
+                    const candidatesDiv = document.createElement('div');
+                    candidatesDiv.className = 'candidates';
+                    
+                    for (let num = 1; num <= 5; num++) {
+                        const candidateCell = document.createElement('div');
+                        candidateCell.className = 'candidate-cell';
+                        candidateCell.textContent = candidates[i].has(num) ? num : '';
+                        candidatesDiv.appendChild(candidateCell);
+                    }
+                    
+                    cell.appendChild(candidatesDiv);
+                }
+
+                cell.onclick = () => handleCellClick(i);
+                gridElement.appendChild(cell);
+            }
+        }
+
+        function handleCellClick(index) {
+            if (initialGrid[index] === 0) {
+                selectedCell = selectedCell === index ? null : index;
+                if (!isRunning && !isComplete) {
+                    isRunning = true;
+                    document.getElementById('playIcon').style.display = 'none';
+                    document.getElementById('pauseIcon').style.display = 'block';
+                    startTimer();
+                }
+                renderGrid();
+            }
+        }
+
+        function handleNumberInput(num) {
+            if (selectedCell !== null && initialGrid[selectedCell] === 0) {
+                if (candidateMode) {
+                    if (candidates[selectedCell].has(num)) {
+                        candidates[selectedCell].delete(num);
+                    } else {
+                        candidates[selectedCell].add(num);
+                    }
+                } else {
+                    grid[selectedCell] = grid[selectedCell] === num ? 0 : num;
+                    updateCandidates(grid);
+                    
+                    if (checkCompletion(grid)) {
+                        isComplete = true;
+                        isRunning = false;
+                        stopTimer();
+                        document.getElementById('completion').style.display = 'block';
+                        document.getElementById('completionTime').textContent = `Completed in ${formatTime(time)}`;
+                    }
+                }
+                
+                renderGrid();
+            }
+        }
+
+        function autoRemoveCandidates() {
+            let changed = false;
+
+            for (let i = 0; i < 25; i++) {
+                if (grid[i] !== 0) {
+                    const row = Math.floor(i / 5);
+                    const col = i % 5;
+                    const num = grid[i];
+
+                    // Remove from row
+                    for (let c = 0; c < 5; c++) {
+                        const idx = row * 5 + c;
+                        if (candidates[idx].has(num)) {
+                            candidates[idx].delete(num);
+                            changed = true;
+                        }
+                    }
+
+                    // Remove from column
+                    for (let r = 0; r < 5; r++) {
+                        const idx = r * 5 + col;
+                        if (candidates[idx].has(num)) {
+                            candidates[idx].delete(num);
+                            changed = true;
+                        }
+                    }
+                }
+            }
+
+            if (changed) {
+                renderGrid();
+            }
+        }
+
+        // Event listeners
+        document.getElementById('seedInput').addEventListener('input', (e) => {
+            const value = Math.max(0, Math.min(9599, parseInt(e.target.value) || 0));
+            seed = value;
+            e.target.value = value;
+            loadPuzzle();
+        });
+
+        document.getElementById('playPauseBtn').addEventListener('click', () => {
+            if (!isComplete) {
+                isRunning = !isRunning;
+                if (isRunning) {
+                    document.getElementById('playIcon').style.display = 'none';
+                    document.getElementById('pauseIcon').style.display = 'block';
+                    startTimer();
+                } else {
+                    document.getElementById('playIcon').style.display = 'block';
+                    document.getElementById('pauseIcon').style.display = 'none';
+                    stopTimer();
+                }
+            }
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            grid = [...initialGrid];
+            updateCandidates(initialGrid);
+            time = 0;
+            isRunning = false;
+            isComplete = false;
+            selectedCell = null;
+            
+            document.getElementById('timer').textContent = formatTime(time);
+            document.getElementById('completion').style.display = 'none';
+            document.getElementById('playIcon').style.display = 'block';
+            document.getElementById('pauseIcon').style.display = 'none';
+            stopTimer();
+            
+            renderGrid();
+        });
+
+        document.getElementById('candidatesBtn').addEventListener('click', () => {
+            showCandidates = !showCandidates;
+            renderGrid();
+        });
+
+        document.getElementById('noteModeBtn').addEventListener('click', () => {
+            candidateMode = !candidateMode;
+            const btn = document.getElementById('noteModeBtn');
+            if (candidateMode) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        document.getElementById('acrBtn').addEventListener('click', autoRemoveCandidates);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key >= '1' && e.key <= '5') {
+                handleNumberInput(parseInt(e.key));
+            } else if (e.key === 'Backspace' || e.key === 'Delete') {
+                if (selectedCell !== null && initialGrid[selectedCell] === 0) {
+                    grid[selectedCell] = 0;
+                    updateCandidates(grid);
+                    renderGrid();
+                }
+            }
+        });
+
+        // Initialize
+        document.getElementById('seedInput').value = seed;
+        loadPuzzle();
+        startTimer();
+    </script>
+</body>
+</html>
