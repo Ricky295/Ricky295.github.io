@@ -51,6 +51,13 @@
             color: #fee;
         }
         
+        #duration-display {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #FFD93D;
+            font-weight: bold;
+        }
+        
         #start-btn {
             padding: 12px 24px;
             font-size: 18px;
@@ -144,6 +151,7 @@
         <div id="countdown-display" class="hidden">3</div>
         <div id="timer-display">10.0</div>
         <div id="score-display">Score: 0 (CPS: 0.0)</div>
+        <div id="duration-display">Average Key Press: 0.0ms</div>
         <button id="start-btn">Start Game (or press SPACE)</button>
         
         <div id="high-scores">
@@ -164,14 +172,30 @@
         let timerInterval;
         let countdownInterval;
         let highScores = [];
+        let keyStats = {};
+        let keyPressStartTimes = {};
+        let keyPressDurations = [];
         
         // DOM elements
         const timerDisplay = document.getElementById('timer-display');
         const countdownDisplay = document.getElementById('countdown-display');
         const scoreDisplay = document.getElementById('score-display');
+        const durationDisplay = document.getElementById('duration-display');
         const startBtn = document.getElementById('start-btn');
         const gameState = document.getElementById('game-state');
         const highScoresList = document.getElementById('high-scores-list');
+        
+        // Calculate and update average key press duration
+        function updateAverageDuration() {
+            if (keyPressDurations.length === 0) {
+                durationDisplay.textContent = "Average Key Press: 0.0ms";
+                return;
+            }
+            
+            const totalDuration = keyPressDurations.reduce((sum, entry) => sum + entry.duration, 1);
+            const averageDuration = Math.round(totalDuration / keyPressDurations.length);
+            durationDisplay.textContent = `Average Key Press: ${averageDuration}ms`;
+        }
         
         // Load high scores from memory (localStorage not available in Claude.ai)
         function loadHighScores() {
@@ -247,6 +271,9 @@
             countdownActive = false;
             timer = initialTimer;
             score = 0;
+            keyStats = {}; // Reset key statistics
+            keyPressStartTimes = {}; // Reset key press timers
+            keyPressDurations = []; // Reset duration log
             
             // Hide countdown, show timer
             countdownDisplay.classList.add('hidden');
@@ -254,6 +281,7 @@
             
             timerDisplay.textContent = timer.toFixed(1);
             scoreDisplay.textContent = `Score: ${score} (CPS: 0.0)`;
+            durationDisplay.textContent = "Average Key Press: 0ms";
             gameState.textContent = "GO! SPAM THOSE KEYS!";
             gameState.style.color = "#FF0000";
             
@@ -277,6 +305,44 @@
             gameState.style.color = "#fee";
             let CPS = (score / initialTimer).toFixed(2);
             scoreDisplay.textContent = `Score: ${score} (CPS: ${CPS})`;
+            
+            // Update final average duration
+            updateAverageDuration();
+            
+            // Log key press durations to console
+            console.log("=== KEY PRESS DURATIONS ===");
+            if (keyPressDurations.length === 0) {
+                console.log("No key press durations recorded!");
+            } else {
+                const totalDuration = keyPressDurations.reduce((sum, entry) => sum + entry.duration, 0);
+                const averageDuration = Math.round(totalDuration / keyPressDurations.length);
+                console.log(`Average key press duration: ${averageDuration}ms`);
+                console.log(`Total key presses with duration data: ${keyPressDurations.length}`);
+                
+                keyPressDurations.forEach((entry, index) => {
+                    console.log(`Key ${entry.key} was pressed for ${entry.duration}ms.`);
+                });
+            }
+            
+            console.log("\n=== GAME STATS ===");
+            console.log(`Total Score: ${score}`);
+            console.log(`CPS: ${CPS}`);
+            console.log(`Game Duration: ${initialTimer} seconds`);
+            console.log("\n=== KEY BREAKDOWN ===");
+            
+            // Sort keys by frequency (most pressed first)
+            const sortedKeys = Object.entries(keyStats).sort((a, b) => b[1] - a[1]);
+            
+            if (sortedKeys.length > 0) {
+                sortedKeys.forEach(([key, count]) => {
+                    const percentage = ((count / score) * 100).toFixed(1);
+                    console.log(`${key}: ${count} times (${percentage}%)`);
+                });
+            } else {
+                console.log("No keys were pressed during the game.");
+            }
+            
+            console.log("==================");
             
             // Add score to high scores
             highScores.push(parseFloat(CPS));
@@ -332,13 +398,45 @@
             
             // Record keypress during active game only (not during countdown)
             if (gameActive && !countdownActive) {
-                score++;
-                let elapsedTime = initialTimer - timer;
-                let CPS = elapsedTime > 0 ? (score / elapsedTime).toFixed(1) : '0.0';
-                scoreDisplay.textContent = `Score: ${score} (CPS: ${CPS})`;
+                const keyName = event.key === ' ' ? 'SPACE' : event.key.toUpperCase();
                 
-                // Create floating key bubble
-                createKeyBubble(event.key === ' ' ? 'SPACE' : event.key.toUpperCase());
+                // Only count if this key isn't already being held down (prevent key repeat)
+                if (!keyPressStartTimes[event.code]) {
+                    score++;
+                    
+                    // Track key statistics
+                    keyStats[keyName] = (keyStats[keyName] || 0) + 1;
+                    
+                    // Start timing this key press
+                    keyPressStartTimes[event.code] = Date.now();
+                    
+                    let elapsedTime = initialTimer - timer;
+                    let CPS = elapsedTime > 0 ? (score / elapsedTime).toFixed(1) : '0.0';
+                    scoreDisplay.textContent = `Score: ${score} (CPS: ${CPS})`;
+                    
+                    // Create floating key bubble
+                    createKeyBubble(keyName);
+                }
+            }
+        });
+        
+        document.addEventListener('keyup', (event) => {
+            // Record key release during active game
+            if (gameActive && !countdownActive && keyPressStartTimes[event.code]) {
+                const keyName = event.key === ' ' ? 'SPACE' : event.key.toUpperCase();
+                const duration = Date.now() - keyPressStartTimes[event.code];
+                
+                // Log the key press duration
+                keyPressDurations.push({
+                    key: keyName,
+                    duration: duration
+                });
+                
+                // Update the average duration display in real-time
+                updateAverageDuration();
+                
+                // Clear the start time
+                delete keyPressStartTimes[event.code];
             }
         });
         
