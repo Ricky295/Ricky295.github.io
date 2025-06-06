@@ -2,371 +2,291 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>6x6 Sudoku Favicon</title>
-<link id="favicon" rel="icon" type="image/png" href="">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>6x6 Sudoku</title>
 <style>
   body {
-    font-family: monospace;
-    padding: 1rem;
+    font-family: Arial, sans-serif;
+    max-width: 400px;
+    margin: 20px auto;
+    text-align: center;
   }
-  #controls {
-    margin-bottom: 1rem;
+  table {
+    border-collapse: collapse;
+    margin: 0 auto 10px;
   }
-  #timer {
+  td {
+    border: 1px solid #333;
+    width: 40px;
+    height: 40px;
+    text-align: center;
+    vertical-align: middle;
+    font-size: 24px;
+    position: relative;
+  }
+  input {
+    width: 100%;
+    height: 100%;
+    border: none;
+    text-align: center;
+    font-size: 24px;
     font-weight: bold;
+    background-color: transparent;
+  }
+  input:focus {
+    outline: 2px solid #007bff;
+  }
+  /* Block borders for 2x3 blocks */
+  td.block-right {
+    border-right: 3px solid #000;
+  }
+  td.block-bottom {
+    border-bottom: 3px solid #000;
+  }
+  button {
+    margin: 5px;
+    padding: 8px 16px;
+    font-size: 16px;
   }
 </style>
 </head>
 <body>
 
-<div id="controls">
-  <label for="cluesRange">Clues: <span id="cluesCount">15</span></label>
-  <input id="cluesRange" type="range" min="10" max="20" value="15" />
-  <button id="generateBtn">Generate</button>
-  <button id="checkBtn">Check</button>
-  <span> Timer: <span id="timer">00:00</span></span>
-</div>
+<h1>6x6 Sudoku</h1>
 
-<div>
-  <small>Use keys 1-6 to fill cell. Shift+1-6 to toggle candidates.</small><br/>
-  <small>Arrow keys to move. Enter to check solution.</small>
-</div>
+<table id="sudoku-grid"></table>
 
-<script src="sudoku6x6.js"></script>
+<button id="generate-btn">Generate New Puzzle</button>
+<button id="solve-btn">Solve Puzzle</button>
+
 <script>
-(() => {
-  const SIZE = 6;
-  const CELL_SIZE = 5;
-  const BORDER_WIDTH = 1;
-  const FAVICON_SIZE = 32;
-
-  const canvas = document.createElement('canvas');
-  canvas.width = FAVICON_SIZE;
-  canvas.height = FAVICON_SIZE;
-  const ctx = canvas.getContext('2d');
-
-  const faviconLink = document.getElementById('favicon');
-
-  // Sudoku state
-  let puzzle = null;      // 2D array with clues and blanks (0)
-  let solution = null;    // solved board 2D array
-  let userBoard = null;   // current board with user input (2D array)
-  let candidates = null;  // array of sets per cell storing candidate digits (1-6)
-  let selectedCell = {r: 0, c: 0};
-  let cluesCount = 15;
-
-  // Timer
-  let startTime = null;
-  let timerInterval = null;
-
-  // Best times storage key
-  const STORAGE_KEY = 'favicon6x6_besttimes';
-
-  // Helpers
-  function createEmptyCandidates() {
-    const c = [];
-    for(let r=0; r<SIZE; r++){
-      c[r] = [];
-      for(let c2=0; c2<SIZE; c2++){
-        c[r][c2] = new Set();
-      }
+  // Paste your Sudoku6x6 class here, or import it if separate
+  class Sudoku6x6 {
+    constructor() {
+      this.size = 6;
+      this.blockRows = 2;
+      this.blockCols = 3;
+      this.nums = [1, 2, 3, 4, 5, 6];
     }
-    return c;
-  }
-
-  function cloneBoard(board) {
-    return board.map(row => row.slice());
-  }
-
-  function isCellGiven(r, c) {
-    return puzzle[r][c] !== 0;
-  }
-
-  // Convert board to string for displaying candidates in favicon
-  // We'll draw main digit large center, and candidates as small pixels at corners
-  // Candidates as digits 1-6 shown as single pixels arranged in 2x3 grid inside cell
-
-  // Drawing functions
-  function drawGrid() {
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, FAVICON_SIZE, FAVICON_SIZE);
-
-    // Draw cells
-    for(let r=0; r<SIZE; r++){
-      for(let c=0; c<SIZE; c++){
-        const x = c * CELL_SIZE + Math.floor(c/3); // add 1px gap after col 2
-        const y = r * CELL_SIZE + Math.floor(r/2); // add 1px gap after row 1,3
-        // Cell background
-        ctx.fillStyle = (selectedCell.r === r && selectedCell.c === c) ? '#fffbcc' : '#fff';
-        ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
-
-        // Cell border - inner borders 1px thick
-        ctx.strokeStyle = '#444';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x, y, CELL_SIZE, CELL_SIZE);
+    shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
       }
+      return array;
     }
-
-    // Draw bold outer grid borders (2px)
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 2;
-    // Horizontal thick lines after rows 1 and 3
-    [2,4].forEach(row => {
-      const y = row * CELL_SIZE + Math.floor(row/2);
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(FAVICON_SIZE, y);
-      ctx.stroke();
-    });
-    // Vertical thick lines after cols 2 and 5 (3x2 blocks)
-    [3].forEach(col => {
-      const x = col * CELL_SIZE + Math.floor(col/3);
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, FAVICON_SIZE);
-      ctx.stroke();
-    });
-  }
-
-  function drawDigit(r, c, digit, given=false) {
-    if(digit === 0) return;
-
-    const x = c * CELL_SIZE + Math.floor(c/3);
-    const y = r * CELL_SIZE + Math.floor(r/2);
-
-    ctx.fillStyle = given ? '#000' : '#333';
-    ctx.font = 'bold 4px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(digit, x + CELL_SIZE/2, y + CELL_SIZE/2 + 0.5);
-  }
-
-  function drawCandidates(r, c, candidateSet) {
-    if(candidateSet.size === 0) return;
-
-    const x = c * CELL_SIZE + Math.floor(c/3);
-    const y = r * CELL_SIZE + Math.floor(r/2);
-
-    // Arrange candidates in 2 cols x 3 rows (max 6 digits)
-    // pixel positions inside cell (relative)
-    const positions = [
-      [1,1], [3,1],
-      [1,2], [3,2],
-      [1,3], [3,3]
-    ];
-
-    ctx.fillStyle = '#999';
-    ctx.font = '3px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    [...candidateSet].sort().forEach((digit, idx) => {
-      if(idx >= 6) return;
-      const [dx, dy] = positions[idx];
-      ctx.fillText(digit, x + dx, y + dy);
-    });
-  }
-
-  function render() {
-    drawGrid();
-
-    for(let r=0; r<SIZE; r++){
-      for(let c=0; c<SIZE; c++){
-        const given = isCellGiven(r,c);
-        if(userBoard[r][c] !== 0) {
-          drawDigit(r, c, userBoard[r][c], given);
-        } else if(candidates[r][c].size > 0) {
-          drawCandidates(r, c, candidates[r][c]);
+    isSafe(board, row, col, num) {
+      for (let i = 0; i < this.size; i++) {
+        if (board[row][i] === num) return false;
+        if (board[i][col] === num) return false;
+      }
+      const startRow = row - (row % this.blockRows);
+      const startCol = col - (col % this.blockCols);
+      for (let r = 0; r < this.blockRows; r++) {
+        for (let c = 0; c < this.blockCols; c++) {
+          if (board[startRow + r][startCol + c] === num) return false;
         }
       }
+      return true;
     }
-
-    updateFavicon();
-  }
-
-  function updateFavicon() {
-    const url = canvas.toDataURL('image/png');
-    if(faviconLink) {
-      faviconLink.href = url;
-    } else {
-      const link = document.createElement('link');
-      link.id = 'favicon';
-      link.rel = 'icon';
-      link.type = 'image/png';
-      link.href = url;
-      document.head.appendChild(link);
+    solve(board, countSolutions = false, limit = 2) {
+      let solutions = 0;
+      const helper = () => {
+        for (let r = 0; r < this.size; r++) {
+          for (let c = 0; c < this.size; c++) {
+            if (board[r][c] === 0) {
+              for (let num of this.nums) {
+                if (this.isSafe(board, r, c, num)) {
+                  board[r][c] = num;
+                  if (helper()) return true;
+                  board[r][c] = 0;
+                }
+              }
+              return false;
+            }
+          }
+        }
+        solutions++;
+        if (!countSolutions) return true;
+        return solutions >= limit;
+      };
+      const result = helper();
+      if (countSolutions) return solutions;
+      return result;
     }
-  }
-
-  // Input handling
-  function selectCell(r,c) {
-    if(r<0) r=0; if(r>=SIZE) r=SIZE-1;
-    if(c<0) c=0; if(c>=SIZE) c=SIZE-1;
-    selectedCell = {r,c};
-    render();
-  }
-
-  function clearCandidatesAt(r,c) {
-    candidates[r][c].clear();
-  }
-
-  function toggleCandidate(r,c, digit) {
-    if(candidates[r][c].has(digit)) {
-      candidates[r][c].delete(digit);
-    } else {
-      candidates[r][c].add(digit);
-    }
-  }
-
-  function setCellValue(r,c,digit) {
-    if(isCellGiven(r,c)) return; // no edit givens
-    userBoard[r][c] = digit;
-    clearCandidatesAt(r,c);
-  }
-
-  function onKeyDown(e) {
-    if(document.activeElement.tagName === 'INPUT') return; // avoid typing in controls
-
-    const r = selectedCell.r;
-    const c = selectedCell.c;
-
-    if(e.key === "ArrowUp") {
-      selectCell(r-1,c);
-      e.preventDefault();
-      return;
-    }
-    if(e.key === "ArrowDown") {
-      selectCell(r+1,c);
-      e.preventDefault();
-      return;
-    }
-    if(e.key === "ArrowLeft") {
-      selectCell(r,c-1);
-      e.preventDefault();
-      return;
-    }
-    if(e.key === "ArrowRight") {
-      selectCell(r,c+1);
-      e.preventDefault();
-      return;
-    }
-
-    if(e.key >= '1' && e.key <= '6') {
-      const digit = parseInt(e.key);
-      if(e.shiftKey) {
-        // Toggle candidate
-        if(isCellGiven(r,c)) return;
-        toggleCandidate(r,c,digit);
-      } else {
-        setCellValue(r,c,digit);
-        // Move cursor right automatically
-        selectCell(r, c+1);
+    generateSudoku(clues = 15, asString = false) {
+      let board = Array.from({ length: this.size }, () =>
+        Array(this.size).fill(0)
+      );
+      this.solve(board);
+      let cells = [];
+      for (let r = 0; r < this.size; r++) {
+        for (let c = 0; c < this.size; c++) {
+          cells.push([r, c]);
+        }
       }
-      render();
-      e.preventDefault();
-      return;
+      this.shuffle(cells);
+      let cluesLeft = this.size * this.size;
+      for (let [r, c] of cells) {
+        if (cluesLeft <= clues) break;
+        let backup = board[r][c];
+        board[r][c] = 0;
+        const boardCopy = board.map(row => row.slice());
+        const solutions = this.solve(boardCopy, true, 2);
+        if (solutions !== 1) {
+          board[r][c] = backup;
+        } else {
+          cluesLeft--;
+        }
+      }
+      return asString ? this.convertToString(board) : board;
     }
-
-    if(e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
-      if(isCellGiven(r,c)) return;
-      userBoard[r][c] = 0;
-      clearCandidatesAt(r,c);
-      render();
-      e.preventDefault();
-      return;
+    convertToString(board) {
+      return board.flat().map(n => (n === 0 ? "." : n)).join("");
     }
-
-    if(e.key === 'Enter') {
-      checkSolution();
-      e.preventDefault();
-      return;
+    convertToArray(s) {
+      if (s.length !== this.size * this.size)
+        throw new Error("Input string length must be 36");
+      let board = [];
+      for (let i = 0; i < this.size; i++) {
+        let row = [];
+        for (let j = 0; j < this.size; j++) {
+          const ch = s[i * this.size + j];
+          if (ch === "." || ch === "0") row.push(0);
+          else {
+            const n = parseInt(ch, 10);
+            if (n < 1 || n > 6) throw new Error("Invalid digit in input");
+            row.push(n);
+          }
+        }
+        board.push(row);
+      }
+      return board;
+    }
+    solveFromString(s) {
+      const board = this.convertToArray(s);
+      if (this.solve(board)) return board;
+      else throw new Error("No solution found");
+    }
+    solveFromArray(board) {
+      const copy = board.map(row => row.slice());
+      if (this.solve(copy)) return copy;
+      else throw new Error("No solution found");
     }
   }
 
-  // Generate new puzzle from clues slider
-  function generateNewPuzzle() {
-    cluesCount = parseInt(document.getElementById('cluesRange').value);
-    document.getElementById('cluesCount').textContent = cluesCount;
+  const sudoku = new Sudoku6x6();
 
-    puzzle = generateSudoku(cluesCount, false);
-    solution = solveFromArray(puzzle);
+  const grid = document.getElementById("sudoku-grid");
+  let currentPuzzle = [];
 
-    userBoard = cloneBoard(puzzle);
-    candidates = createEmptyCandidates();
-    selectCell(0,0);
+  // Create grid inputs
+  function createGrid() {
+    grid.innerHTML = "";
+    for (let r = 0; r < sudoku.size; r++) {
+      const row = document.createElement("tr");
+      for (let c = 0; c < sudoku.size; c++) {
+        const cell = document.createElement("td");
+        // Add thick borders for blocks
+        if ((c + 1) % sudoku.blockCols === 0 && c !== sudoku.size - 1)
+          cell.classList.add("block-right");
+        if ((r + 1) % sudoku.blockRows === 0 && r !== sudoku.size - 1)
+          cell.classList.add("block-bottom");
 
-    startTimer();
-    render();
+        const input = document.createElement("input");
+        input.type = "text";
+        input.maxLength = 1;
+        input.dataset.row = r;
+        input.dataset.col = c;
+        input.autocomplete = "off";
+        input.pattern = "[1-6]";
+        input.inputMode = "numeric";
+
+        // Allow only numbers 1-6 on input
+        input.addEventListener("input", (e) => {
+          let val = e.target.value;
+          if (!/^[1-6]$/.test(val)) {
+            e.target.value = "";
+          }
+        });
+
+        cell.appendChild(input);
+        row.appendChild(cell);
+      }
+      grid.appendChild(row);
+    }
   }
 
-  // Timer functions
-  function startTimer() {
-    startTime = Date.now();
-    clearInterval(timerInterval);
-    timerInterval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - startTime) / 1000);
-      const minutes = String(Math.floor(elapsed/60)).padStart(2,'0');
-      const seconds = String(elapsed % 60).padStart(2,'0');
-      document.getElementById('timer').textContent = `${minutes}:${seconds}`;
-    }, 1000);
+  // Fill grid with puzzle numbers, disable inputs for clues
+  function fillGrid(puzzle) {
+    currentPuzzle = puzzle.map(row => row.slice());
+    for (let r = 0; r < sudoku.size; r++) {
+      for (let c = 0; c < sudoku.size; c++) {
+        const input = grid.rows[r].cells[c].firstChild;
+        input.value = puzzle[r][c] === 0 ? "" : puzzle[r][c];
+        input.disabled = puzzle[r][c] !== 0;
+        input.style.color = puzzle[r][c] !== 0 ? "black" : "#007bff";
+      }
+    }
   }
 
-  function stopTimer() {
-    clearInterval(timerInterval);
+  // Read user inputs into board array
+  function readGrid() {
+    let board = [];
+    for (let r = 0; r < sudoku.size; r++) {
+      let row = [];
+      for (let c = 0; c < sudoku.size; c++) {
+        const val = grid.rows[r].cells[c].firstChild.value;
+        row.push(val === "" ? 0 : parseInt(val, 10));
+      }
+      board.push(row);
+    }
+    return board;
   }
 
-  // Check if userBoard matches solution
+  // Check if user's solution is correct
   function checkSolution() {
-    for(let r=0; r<SIZE; r++){
-      for(let c=0; c<SIZE; c++){
-        if(userBoard[r][c] !== solution[r][c]) {
-          alert('Incorrect solution, keep trying!');
-          return;
+    const userBoard = readGrid();
+    try {
+      if (sudoku.solveFromArray(userBoard)) {
+        alert("Congratulations! The solution is valid.");
+      } else {
+        alert("The solution is not correct.");
+      }
+    } catch {
+      alert("The solution is not correct.");
+    }
+  }
+
+  // Solve current puzzle and fill grid with solution
+  function solvePuzzle() {
+    try {
+      const solved = sudoku.solveFromArray(currentPuzzle);
+      fillGrid(solved);
+      // Disable all inputs after solving
+      for (let r = 0; r < sudoku.size; r++) {
+        for (let c = 0; c < sudoku.size; c++) {
+          grid.rows[r].cells[c].firstChild.disabled = true;
+          grid.rows[r].cells[c].firstChild.style.color = "black";
         }
       }
-    }
-    stopTimer();
-    alert('Congratulations! You solved it!');
-
-    saveBestTime();
-  }
-
-  // Best time localStorage handling
-  function loadBestTimes() {
-    const json = localStorage.getItem(STORAGE_KEY);
-    if(!json) return {};
-    try {
-      return JSON.parse(json);
-    } catch {
-      return {};
-    }
-  }
-  function saveBestTimes(times) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(times));
-  }
-
-  function saveBestTime() {
-    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-    let times = loadBestTimes();
-    if(!times[cluesCount] || elapsed < times[cluesCount]) {
-      times[cluesCount] = elapsed;
-      saveBestTimes(times);
-      alert(`New best time for ${cluesCount} clues: ${elapsed} seconds!`);
+    } catch (e) {
+      alert("No solution found!");
     }
   }
 
-  // Init event listeners
-  document.getElementById('generateBtn').addEventListener('click', generateNewPuzzle);
-  document.getElementById('checkBtn').addEventListener('click', checkSolution);
-  document.getElementById('cluesRange').addEventListener('input', (e) => {
-    document.getElementById('cluesCount').textContent = e.target.value;
-  });
-  window.addEventListener('keydown', onKeyDown);
+  // Generate new puzzle and fill grid
+  function generatePuzzle() {
+    const puzzle = sudoku.generateSudoku(15);
+    fillGrid(puzzle);
+  }
 
-  // Initial puzzle generation
-  generateNewPuzzle();
+  document.getElementById("generate-btn").addEventListener("click", generatePuzzle);
+  document.getElementById("solve-btn").addEventListener("click", solvePuzzle);
 
-})();
+  // Initialize grid and puzzle on page load
+  createGrid();
+  generatePuzzle();
 </script>
 
 </body>
