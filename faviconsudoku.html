@@ -211,6 +211,27 @@
                 this.updateFavicon();
             }
             
+            autoRemoveCandidates(row, col, num) {
+                // Remove from same row
+                for (let i = 0; i < 6; i++) {
+                    this.candidates[row][i].delete(num);
+                }
+                
+                // Remove from same column
+                for (let i = 0; i < 6; i++) {
+                    this.candidates[i][col].delete(num);
+                }
+                
+                // Remove from same 2x3 box
+                const boxRow = Math.floor(row / 2) * 2;
+                const boxCol = Math.floor(col / 3) * 3;
+                for (let i = boxRow; i < boxRow + 2; i++) {
+                    for (let j = boxCol; j < boxCol + 3; j++) {
+                        this.candidates[i][j].delete(num);
+                    }
+                }
+            }
+            
             setupEventListeners() {
                 document.addEventListener('keydown', (e) => this.handleKeyPress(e));
                 
@@ -313,6 +334,7 @@
                         if (!this.given[this.cursorY][this.cursorX]) {
                             this.grid[this.cursorY][this.cursorX] = num;
                             this.candidates[this.cursorY][this.cursorX].clear();
+                            this.autoRemoveCandidates(this.cursorY, this.cursorX, num);
                         }
                     }
                 }
@@ -341,25 +363,29 @@
                 // Draw only region borders (1 pixel)
                 this.ctx.fillStyle = '#000000';
                 
-                // Vertical region borders (every 3 columns, but not outer edges)
-                for (let i = 1; i < 2; i++) {
-                    const x = Math.floor(i * 3 * 32 / 6);
-                    this.ctx.fillRect(x, 0, 1, 32);
-                }
+                // Vertical region border (between left and right 3-column groups)
+                this.ctx.fillRect(16, 0, 1, 32);
                 
-                // Horizontal region borders (every 2 rows, but not outer edges)
-                for (let i = 1; i < 3; i++) {
-                    const y = Math.floor(i * 2 * 32 / 6);
-                    this.ctx.fillRect(0, y, 32, 1);
-                }
+                // Horizontal region borders (after rows 2 and 4)
+                this.ctx.fillRect(0, 11, 32, 1);  // After 2nd row
+                this.ctx.fillRect(0, 22, 32, 1);  // After 4th row
                 
                 // Draw numbers and candidates
                 for (let row = 0; row < 6; row++) {
                     for (let col = 0; col < 6; col++) {
-                        const cellX = Math.floor(col * 32 / 6);
-                        const cellY = Math.floor(row * 32 / 6);
-                        const cellW = Math.floor((col + 1) * 32 / 6) - cellX;
-                        const cellH = Math.floor((row + 1) * 32 / 6) - cellY;
+                        // Calculate cell position based on new layout
+                        let cellY;
+                        if (row <= 1) {
+                            cellY = row * 5 + 1;  // rows 1-5, 6-10
+                        } else if (row <= 3) {
+                            cellY = (row - 2) * 5 + 12;  // rows 12-16, 17-21
+                        } else {
+                            cellY = (row - 4) * 5 + 23;  // rows 23-27, 28-32
+                        }
+                        
+                        const cellX = col < 3 ? col * 5 + 1 : col * 5 + 2; // Account for vertical border
+                        const cellW = 5;
+                        const cellH = 5;
                         
                         // Highlight if needed
                         if (this.highlightDigit > 0) {
@@ -369,26 +395,26 @@
                             
                             if (hasDigit || hasCandidate) {
                                 this.ctx.fillStyle = '#ffff00';
-                                this.ctx.fillRect(cellX + 1, cellY + 1, cellW - 2, cellH - 2);
+                                this.ctx.fillRect(cellX, cellY, cellW, cellH);
                             }
                         }
                         
                         // Draw cursor
                         if (row === this.cursorY && col === this.cursorX) {
                             this.ctx.fillStyle = '#0080ff';
-                            this.ctx.fillRect(cellX + 1, cellY + 1, cellW - 2, cellH - 2);
+                            this.ctx.fillRect(cellX, cellY, cellW, cellH);
                         }
                         
                         // Draw number
                         if (this.grid[row][col] > 0) {
                             this.ctx.fillStyle = this.given[row][col] ? '#000000' : '#0000ff';
-                            this.drawDigit(this.grid[row][col], cellX + 1, cellY + 1);
+                            this.drawDigit(this.grid[row][col], cellX + 1, cellY);
                         } else {
                             // Draw candidates as tiny pixels
                             this.ctx.fillStyle = '#808080';
                             for (let candidate of this.candidates[row][col]) {
-                                const px = cellX + 1 + (candidate - 1) % 3;
-                                const py = cellY + 1 + Math.floor((candidate - 1) / 3);
+                                const px = cellX + ((candidate - 1) % 3) + 1;
+                                const py = cellY + Math.floor((candidate - 1) / 3) + 1;
                                 this.ctx.fillRect(px, py, 1, 1);
                             }
                         }
