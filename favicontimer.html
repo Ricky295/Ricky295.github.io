@@ -104,31 +104,89 @@
 
     function drawDiskTimer(timeLeftMs, totalDurationMs, color) {
   const size = 32;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.canvas.width = size;
+  ctx.canvas.height = size;
 
   ctx.clearRect(0, 0, size, size);
 
-  // Solid square background
-  ctx.fillStyle = '#ccc';
+  // Background fill
+  ctx.fillStyle = '#eee';
   ctx.fillRect(0, 0, size, size);
 
   if (timeLeftMs <= 0) {
-    // Time's up: solid red square with no text
+    // Time's up: fill whole square red
     ctx.fillStyle = 'red';
     ctx.fillRect(0, 0, size, size);
   } else {
-    // Remaining percentage
-    const percent = Math.max(0, Math.min(1, timeLeftMs / totalDurationMs));
-    const filledHeight = size * percent;
+    const perimeter = 4 * (size - 4); // 2px padding inside
+    const progressLength = perimeter * (timeLeftMs / totalDurationMs);
 
-    // Fill portion representing time left
-    ctx.fillStyle = color;
-    ctx.fillRect(0, size - filledHeight, size, filledHeight);
+    // Gray border background
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(2, 2, size - 4, size - 4);
 
-    // Draw text (black, no spaces)
+    // Draw colored progress along square border clockwise
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+
+    let remaining = progressLength;
+
+    // Four edges lengths
+    const edgeLength = size - 4;
+
+    // Start at top-left corner, progress clockwise
+
+    // Top edge
+    if (remaining > 0) {
+      const drawLength = Math.min(remaining, edgeLength);
+      ctx.moveTo(2, 2);
+      ctx.lineTo(2 + drawLength, 2);
+      remaining -= drawLength;
+    }
+
+    // Right edge
+    if (remaining > 0) {
+      const drawLength = Math.min(remaining, edgeLength);
+      if (remaining === progressLength) {
+        // if top edge not drawn at all, move to start of right edge
+        ctx.moveTo(size - 2, 2);
+      } else {
+        ctx.lineTo(size - 2, 2);
+      }
+      ctx.lineTo(size - 2, 2 + drawLength);
+      remaining -= drawLength;
+    }
+
+    // Bottom edge
+    if (remaining > 0) {
+      const drawLength = Math.min(remaining, edgeLength);
+      if (remaining === progressLength) {
+        ctx.moveTo(size - 2, size - 2);
+      } else {
+        ctx.lineTo(size - 2, size - 2);
+      }
+      ctx.lineTo(size - 2 - drawLength, size - 2);
+      remaining -= drawLength;
+    }
+
+    // Left edge
+    if (remaining > 0) {
+      const drawLength = Math.min(remaining, edgeLength);
+      if (remaining === progressLength) {
+        ctx.moveTo(2, size - 2);
+      } else {
+        ctx.lineTo(2, size - 2);
+      }
+      ctx.lineTo(2, size - 2 - drawLength);
+      remaining -= drawLength;
+    }
+
+    ctx.stroke();
+
+    // Draw black text no spaces
     const text = formatTimeLeft(timeLeftMs);
     if (text) {
       ctx.fillStyle = '#000';
@@ -139,8 +197,9 @@
     }
   }
 
-  return canvas.toDataURL('image/png');
+  return ctx.canvas.toDataURL('image/png');
 }
+
 
 
     function updateTimer() {
