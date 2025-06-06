@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8" />
+  <title>Favicon Timer</title>
+  <link id="favicon" rel="icon" href="" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    label { margin-right: 10px; }
+    select, input[type="text"], input[type="color"] { margin-left: 10px; }
+    button { margin-top: 10px; padding: 5px 15px; font-size: 16px; }
+    #parse_status {
+      font-weight: bold;
+      margin-left: 10px;
+      color: green;
+    }
+    #parse_status.error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <h1>Favicon timer</h1>
+  
+  <p>
+    Time string: 
+    <input type="text" id="time_input" placeholder="e.g. 1h 23m 45s or YYYY-MM-DD HH:MM:SS" size="30" />
+    <span id="parse_status">Waiting...</span>
+  </p>
+  
+  <p>
+    Disk duration (minutes): 
+    <select id="duration_select">
+      <option value="source">source</option>
+      <option value="1">1</option>
+      <option value="5">5</option>
+      <option value="15">15</option>
+      <option value="30">30</option>
+      <option value="60">60</option>
+      <option value="90">90</option>
+      <option value="120">120</option>
+      <option value="240">240</option>
+      <option value="1440">1440</option>
+    </select>
+  </p>
+  
+  <p>
+    Disk color: 
+    <input type="color" id="disk_color" value="#0099ff" />
+  </p>
+  
+  <button id="start_button">Start Timer</button>
+  
+  <script>
+    const favicon = document.getElementById('favicon');
+    const timeInput = document.getElementById('time_input');
+    const diskColorInput = document.getElementById('disk_color');
+    const durationSelect = document.getElementById('duration_select');
+    const startButton = document.getElementById('start_button');
+    const parseStatus = document.getElementById('parse_status');
+
+    let totalDurationMinutes = 1;
+    let endTime = null;
+    let sourceDurationMs = null;
+
+    // Parse time string like "1h 23m 45s" or ISO datetime
+    function parseTimeString(str) {
+      str = str.trim();
+      if (str === '') return null;
+
+      // Try ISO date parsing first
+      let date = new Date(str);
+      if (!isNaN(date.getTime()) && date.getTime() > Date.now()) return date.getTime();
+
+      // Else parse custom format like 1h 23m 45s
+      let h = 0, m = 0, s = 0;
+      const regexH = /(\d+)\s*h/gi;
+      const regexM = /(\d+)\s*m/gi;
+      const regexS = /(\d+)\s*s/gi;
+      let match;
+      while ((match = regexH.exec(str)) !== null) h += parseInt(match[1]);
+      while ((match = regexM.exec(str)) !== null) m += parseInt(match[1]);
+      while ((match = regexS.exec(str)) !== null) s += parseInt(match[1]);
+
+      if (h === 0 && m === 0 && s === 0) return null;
+
+      return Date.now() + ((h * 3600 + m * 60 + s) * 1000);
+    }
+
+    function formatTimeLeft(ms) {
+      if (ms <= 0) return null;
+      let totalSeconds = Math.floor(ms / 1000);
+      let hours = Math.floor(totalSeconds / 3600);
+      let minutes = Math.floor((totalSeconds % 3600) / 60);
+      let seconds = totalSeconds % 60;
+
+      if (minutes > 99) return `${hours} h`;
+      if (seconds > 99) return `${minutes} m`;
+      if (seconds > 0) return `${seconds} s`;
+      return null;
+    }
+
+    function drawDiskTimer(timeLeftMs, totalDurationMs, color) {
+      const size = 32;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      ctx.clearRect(0, 0, size, size);
+
+      // Background circle (gray)
+      ctx.fillStyle = '#ccc';
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2 - 1, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (timeLeftMs <= 0) {
+        // Time's up: full red disk with no text
+        ctx.fillStyle = 'red';
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Draw remaining time disk (colored arc)
+        const percent = Math.max(0, Math.min(1, timeLeftMs / totalDurationMs));
+        const startAngle = -Math.PI / 2; // top center
+        const endAngle = startAngle + percent * 2 * Math.PI;
+
+        // Draw background arc (full circle gray)
+        ctx.fillStyle = '#eee';
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw progress arc
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(size / 2, size / 2);
+        ctx.arc(size / 2, size / 2, size / 2 - 2, startAngle, endAngle);
+        ctx.closePath();
+        ctx.fill();
+
+        // Inner circle (white) to create donut shape
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw text
+        const text = formatTimeLeft(timeLeftMs);
+        if (text) {
+          ctx.fillStyle = color;
+          ctx.font = 'bold 12px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(text, size / 2, size / 2);
+        }
+      }
+
+      return canvas.toDataURL('image/png');
+    }
+
+    function updateTimer() {
+      if (!endTime) return;
+
+      const now = Date.now();
+      let timeLeftMs = endTime - now;
+
+      let totalDurationMs = totalDurationMinutes * 60000;
+
+      // If duration select is 'source', totalDuration is difference between endTime and startTime (sourceDurationMs)
+      if (durationSelect.value === 'source' && sourceDurationMs) {
+        totalDurationMs = sourceDurationMs;
+      }
+
+      if (timeLeftMs < 0) timeLeftMs = 0;
+
+      const color = diskColorInput.value;
+      const faviconUrl = drawDiskTimer(timeLeftMs, totalDurationMs, color);
+      favicon.href = faviconUrl;
+    }
+
+    function validateInput() {
+      const timeStr = timeInput.value.trim();
+      const parsed = parseTimeString(timeStr);
+      if (!parsed) {
+        parseStatus.textContent = 'Error';
+        parseStatus.classList.add('error');
+      } else {
+        parseStatus.textContent = 'OK';
+        parseStatus.classList.remove('error');
+      }
+    }
+
+    function startTimer() {
+      const timeStr = timeInput.value.trim();
+      totalDurationMinutes = durationSelect.value === 'source' ? null : parseInt(durationSelect.value);
+
+      if (!timeStr) {
+        alert('Please enter a valid time string or date');
+        return;
+      }
+
+      const parsedEnd = parseTimeString(timeStr);
+      if (!parsedEnd) {
+        alert('Could not parse time string');
+        return;
+      }
+      if (parsedEnd < Date.now()) {
+        alert('Time must be in the future');
+        return;
+      }
+
+      endTime = parsedEnd;
+
+      // Calculate sourceDurationMs as difference between now and endTime (used if 'source' selected)
+      sourceDurationMs = endTime - Date.now();
+
+      // If 'source' selected, totalDurationMinutes is null and will be calculated from sourceDurationMs
+      if (durationSelect.value === 'source') {
+        totalDurationMinutes = sourceDurationMs / 60000;
+      }
+
+      updateTimer();
+      if (window.timerInterval) clearInterval(window.timerInterval);
+      window.timerInterval = setInterval(updateTimer, 1000);
+    }
+
+    timeInput.addEventListener('input', validateInput);
+    startButton.addEventListener('click', startTimer);
+    diskColorInput.addEventListener('change', updateTimer);
+
+    // Initialize
+    timeInput.value = '1h';
+    durationSelect.value = 'source';
+    validateInput();
+
+  </script>
+</body>
+</html>
