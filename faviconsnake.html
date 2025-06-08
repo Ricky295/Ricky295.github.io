@@ -3,161 +3,112 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Favicon Snake Game</title>
+    <title>Favicon Snake</title>
+    <link id="favicon" rel="icon" type="image/x-icon" href="">
     <style>
         body {
-            margin: 0;
-            padding: 20px;
-            background: #1a1a1a;
-            color: white;
-            font-family: 'Courier New', monospace;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-        }
-        
-        .game-container {
-            display: flex;
-            gap: 40px;
-            align-items: flex-start;
-            margin-top: 20px;
-        }
-        
-        .favicon-game {
-            border: 4px solid #333;
-            background: #000;
-            image-rendering: pixelated;
-            image-rendering: -moz-crisp-edges;
-            image-rendering: crisp-edges;
-        }
-        
-        .preview {
-            transform: scale(8);
-            transform-origin: top left;
-            margin-right: 200px;
-        }
-        
-        .actual-size {
-            border: 2px solid #666;
-        }
-        
-        .controls {
+            font-family: Arial, sans-serif;
             text-align: center;
-            margin-bottom: 20px;
+            padding: 20px;
+            background: #222;
+            color: #fff;
         }
-        
-        .score {
+        .controls {
+            margin: 20px 0;
             font-size: 18px;
-            margin-bottom: 10px;
         }
-        
+        .info {
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        .game-info {
+            display: inline-block;
+            margin: 0 20px;
+        }
         .instructions {
-            font-size: 14px;
-            opacity: 0.8;
-            max-width: 300px;
-            line-height: 1.4;
-        }
-        
-        .game-over {
-            color: #ff4444;
-            font-weight: bold;
-            margin-top: 10px;
-        }
-        
-        .label {
-            font-size: 12px;
-            opacity: 0.6;
-            margin-bottom: 5px;
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: left;
+            background: #333;
+            padding: 20px;
+            border-radius: 8px;
         }
     </style>
 </head>
 <body>
-    <h1>Favicon Snake Game</h1>
+    <h1>🐍 Favicon Snake</h1>
+    <div class="info">Look at your browser tab's favicon to play!</div>
     
     <div class="controls">
-        <div class="score">Score: <span id="score">0</span> | Level: <span id="level">5</span></div>
-        <div class="instructions">
-            Use WASD or Arrow Keys to move<br>
-            Press SPACE to restart when game over<br>
-            <small>URL params: ?level=10&showpreview=0</small>
-        </div>
-        <div id="gameOver" class="game-over" style="display: none;">
-            Game Over! Press SPACE to restart
-        </div>
+        <div class="game-info">Score: <span id="score">0</span></div>
+        <div class="game-info">Level: <span id="level">1</span></div>
+        <div class="game-info">Speed: <span id="speed">1</span> blocks/s</div>
     </div>
     
-    <div class="game-container">
-        <div>
-            <div class="label">Preview (8x scale)</div>
-            <canvas id="gameCanvas" class="favicon-game preview" width="32" height="32"></canvas>
-        </div>
+    <div class="info">
+        <strong>Controls:</strong> Arrow keys or WASD to move
+    </div>
+    
+    <div class="info" id="status">Press any arrow key to start!</div>
+    
+    <div class="instructions">
+        <h3>URL Parameters:</h3>
+        <ul>
+            <li><strong>?level=5</strong> - Start at level 5</li>
+            <li><strong>?levelgrowth=10</strong> - Points needed per level (default: 5, set to 0 to disable speed increase)</li>
+            <li><strong>Example:</strong> ?level=3&levelgrowth=15</li>
+        </ul>
         
-        <div>
-            <div class="label">Actual favicon size (32x32)</div>
-            <canvas id="faviconCanvas" class="favicon-game actual-size" width="32" height="32"></canvas>
-        </div>
+        <h3>How to Play:</h3>
+        <ul>
+            <li>Watch your browser tab's favicon - that's where the game happens!</li>
+            <li>Green pixels are the snake, red pixel is the food</li>
+            <li>Use arrow keys or WASD to control the snake</li>
+            <li>Eat food to grow and increase your score</li>
+            <li>Don't hit the walls or yourself</li>
+            <li>Speed increases with each level</li>
+        </ul>
     </div>
 
     <script>
         class FaviconSnake {
             constructor() {
-                // Parse URL parameters
-                const urlParams = new URLSearchParams(window.location.search);
-                this.level = parseInt(urlParams.get('level')) || 5;
-                this.showPreview = urlParams.get('showpreview') === '0' ? false : true;
-                
-                // Calculate delay based on level (level tiles per second)
-                this.gameDelay = 1000 / this.level;
-                
-                this.canvas = document.getElementById('gameCanvas');
+                this.canvas = document.createElement('canvas');
+                this.canvas.width = 16;
+                this.canvas.height = 16;
                 this.ctx = this.canvas.getContext('2d');
-                this.faviconCanvas = document.getElementById('faviconCanvas');
-                this.faviconCtx = this.faviconCanvas.getContext('2d');
                 
-                this.gridSize = 1; // 1 pixel per grid cell
-                this.tileCount = 32; // 32x32 grid
-                
-                this.scoreElement = document.getElementById('score');
-                this.gameOverElement = document.getElementById('gameOver');
-                this.levelElement = document.getElementById('level');
-                
-                // Display current level
-                this.levelElement.textContent = this.level;
-                
-                // Hide preview if needed
-                if (!this.showPreview) {
-                    const previewElement = document.querySelector('.game-container > div:first-child');
-                    if (previewElement) {
-                        previewElement.style.display = 'none';
-                    }
-                }
+                // Parse URL parameters
+                const params = new URLSearchParams(window.location.search);
+                this.startLevel = parseInt(params.get('level')) || 1;
+                this.levelGrowth = parseInt(params.get('levelgrowth')) ?? 5;
                 
                 this.reset();
                 this.setupControls();
-                this.gameLoop();
+                this.updateDisplay();
             }
             
             reset() {
-                this.snake = [
-                    {x: 16, y: 16}
-                ];
-                this.dx = 0;
-                this.dy = 0;
+                this.snake = [{x: 8, y: 8}];
+                this.direction = {x: 0, y: 0};
                 this.food = this.generateFood();
                 this.score = 0;
+                this.level = this.startLevel;
+                this.gameRunning = false;
                 this.gameOver = false;
-                this.gameStarted = false;
-                this.scoreElement.textContent = this.score;
-                this.gameOverElement.style.display = 'none';
+                this.lastMoveTime = 0;
+                
+                document.getElementById('status').textContent = 'Press any arrow key to start!';
+                this.updateDisplay();
+                this.draw();
             }
             
             generateFood() {
                 let food;
                 do {
                     food = {
-                        x: Math.floor(Math.random() * this.tileCount),
-                        y: Math.floor(Math.random() * this.tileCount)
+                        x: Math.floor(Math.random() * 16),
+                        y: Math.floor(Math.random() * 16)
                     };
                 } while (this.snake.some(segment => segment.x === food.x && segment.y === food.y));
                 return food;
@@ -165,52 +116,85 @@
             
             setupControls() {
                 document.addEventListener('keydown', (e) => {
-                    if (this.gameOver && e.code === 'Space') {
-                        this.reset();
+                    if (this.gameOver) {
+                        if (e.code === 'Space') {
+                            this.reset();
+                        }
                         return;
                     }
                     
-                    if (this.gameOver) return;
+                    let newDirection = null;
                     
-                    const key = e.code;
+                    switch(e.code) {
+                        case 'ArrowUp':
+                        case 'KeyW':
+                            newDirection = {x: 0, y: -1};
+                            break;
+                        case 'ArrowDown':
+                        case 'KeyS':
+                            newDirection = {x: 0, y: 1};
+                            break;
+                        case 'ArrowLeft':
+                        case 'KeyA':
+                            newDirection = {x: -1, y: 0};
+                            break;
+                        case 'ArrowRight':
+                        case 'KeyD':
+                            newDirection = {x: 1, y: 0};
+                            break;
+                    }
                     
-                    // Prevent reverse direction (only if snake is moving)
-                    if ((key === 'ArrowLeft' || key === 'KeyA') && this.dx !== 1) {
-                        this.dx = -1;
-                        this.dy = 0;
-                        this.gameStarted = true;
-                    } else if ((key === 'ArrowUp' || key === 'KeyW') && this.dy !== 1) {
-                        this.dx = 0;
-                        this.dy = -1;
-                        this.gameStarted = true;
-                    } else if ((key === 'ArrowRight' || key === 'KeyD') && this.dx !== -1) {
-                        this.dx = 1;
-                        this.dy = 0;
-                        this.gameStarted = true;
-                    } else if ((key === 'ArrowDown' || key === 'KeyS') && this.dy !== -1) {
-                        this.dx = 0;
-                        this.dy = 1;
-                        this.gameStarted = true;
+                    if (newDirection) {
+                        e.preventDefault();
+                        
+                        // Prevent reversing into self
+                        if (this.snake.length > 1 && 
+                            newDirection.x === -this.direction.x && 
+                            newDirection.y === -this.direction.y) {
+                            return;
+                        }
+                        
+                        this.direction = newDirection;
+                        
+                        if (!this.gameRunning) {
+                            this.gameRunning = true;
+                            this.lastMoveTime = performance.now();
+                            this.gameLoop();
+                            document.getElementById('status').textContent = 'Playing! Watch the favicon!';
+                        }
                     }
                 });
             }
             
-            update() {
-                if (this.gameOver || !this.gameStarted) return;
+            gameLoop() {
+                if (!this.gameRunning || this.gameOver) return;
                 
-                const head = {x: this.snake[0].x + this.dx, y: this.snake[0].y + this.dy};
+                const now = performance.now();
+                const moveInterval = 1000 / this.level; // level blocks per second
+                
+                if (now - this.lastMoveTime >= moveInterval) {
+                    this.update();
+                    this.draw();
+                    this.lastMoveTime = now;
+                }
+                
+                requestAnimationFrame(() => this.gameLoop());
+            }
+            
+            update() {
+                const head = {...this.snake[0]};
+                head.x += this.direction.x;
+                head.y += this.direction.y;
                 
                 // Check wall collision
-                if (head.x < 0 || head.x >= this.tileCount || head.y < 0 || head.y >= this.tileCount) {
-                    this.gameOver = true;
-                    this.gameOverElement.style.display = 'block';
+                if (head.x < 0 || head.x >= 16 || head.y < 0 || head.y >= 16) {
+                    this.endGame();
                     return;
                 }
                 
                 // Check self collision
                 if (this.snake.some(segment => segment.x === head.x && segment.y === head.y)) {
-                    this.gameOver = true;
-                    this.gameOverElement.style.display = 'block';
+                    this.endGame();
                     return;
                 }
                 
@@ -219,104 +203,54 @@
                 // Check food collision
                 if (head.x === this.food.x && head.y === this.food.y) {
                     this.score++;
-                    this.scoreElement.textContent = this.score;
                     this.food = this.generateFood();
+                    
+                    // Level up logic
+                    if (this.levelGrowth > 0 && this.score % this.levelGrowth === 0) {
+                        this.level++;
+                    }
+                    
+                    this.updateDisplay();
                 } else {
                     this.snake.pop();
                 }
             }
             
+            endGame() {
+                this.gameRunning = false;
+                this.gameOver = true;
+                document.getElementById('status').textContent = `Game Over! Score: ${this.score} - Press SPACE to restart`;
+            }
+            
             draw() {
-                // Clear both canvases
-                this.ctx.fillStyle = '#000000';
-                this.ctx.fillRect(0, 0, 32, 32);
-                
-                this.faviconCtx.fillStyle = '#000000';
-                this.faviconCtx.fillRect(0, 0, 32, 32);
+                // Clear canvas
+                this.ctx.fillStyle = '#000';
+                this.ctx.fillRect(0, 0, 16, 16);
                 
                 // Draw snake
-                this.ctx.fillStyle = '#00ff00';
-                this.faviconCtx.fillStyle = '#00ff00';
-                
-                this.snake.forEach((segment, index) => {
-                    const x = segment.x * this.gridSize;
-                    const y = segment.y * this.gridSize;
-                    
-                    // Head is brighter
-                    if (index === 0) {
-                        this.ctx.fillStyle = '#66ff66';
-                        this.faviconCtx.fillStyle = '#66ff66';
-                    } else {
-                        this.ctx.fillStyle = '#00ff00';
-                        this.faviconCtx.fillStyle = '#00ff00';
-                    }
-                    
-                    this.ctx.fillRect(x, y, this.gridSize, this.gridSize);
-                    this.faviconCtx.fillRect(x, y, this.gridSize, this.gridSize);
+                this.ctx.fillStyle = '#0f0';
+                this.snake.forEach(segment => {
+                    this.ctx.fillRect(segment.x, segment.y, 1, 1);
                 });
                 
                 // Draw food
-                this.ctx.fillStyle = '#ff0000';
-                this.faviconCtx.fillStyle = '#ff0000';
+                this.ctx.fillStyle = '#f00';
+                this.ctx.fillRect(this.food.x, this.food.y, 1, 1);
                 
-                const foodX = this.food.x * this.gridSize;
-                const foodY = this.food.y * this.gridSize;
-                
-                this.ctx.fillRect(foodX, foodY, this.gridSize, this.gridSize);
-                this.faviconCtx.fillRect(foodX, foodY, this.gridSize, this.gridSize);
-                
-                // Add some pixels for visual interest when game is over
-                if (this.gameOver) {
-                    this.ctx.fillStyle = '#ff4444';
-                    this.faviconCtx.fillStyle = '#ff4444';
-                    
-                    // Draw border flash
-                    for (let i = 0; i < 32; i++) {
-                        if (i % 4 < 2) {
-                            this.ctx.fillRect(i, 0, 1, 1);
-                            this.ctx.fillRect(i, 31, 1, 1);
-                            this.ctx.fillRect(0, i, 1, 1);
-                            this.ctx.fillRect(31, i, 1, 1);
-                            
-                            this.faviconCtx.fillRect(i, 0, 1, 1);
-                            this.faviconCtx.fillRect(i, 31, 1, 1);
-                            this.faviconCtx.fillRect(0, i, 1, 1);
-                            this.faviconCtx.fillRect(31, i, 1, 1);
-                        }
-                    }
-                }
-                
-                // Update favicon with the game canvas
-                this.updateFavicon();
+                // Update favicon
+                const dataURL = this.canvas.toDataURL();
+                document.getElementById('favicon').href = dataURL;
             }
             
-            updateFavicon() {
-                // Convert canvas to favicon
-                const faviconUrl = this.faviconCanvas.toDataURL('image/png');
-                
-                // Remove existing favicon
-                let existingFavicon = document.querySelector('link[rel="icon"]');
-                if (existingFavicon) {
-                    existingFavicon.remove();
-                }
-                
-                // Add new favicon
-                const favicon = document.createElement('link');
-                favicon.rel = 'icon';
-                favicon.type = 'image/png';
-                favicon.href = faviconUrl;
-                document.head.appendChild(favicon);
-            }
-            
-            gameLoop() {
-                this.update();
-                this.draw();
-                setTimeout(() => this.gameLoop(), this.gameOver ? 500 : this.gameDelay);
+            updateDisplay() {
+                document.getElementById('score').textContent = this.score;
+                document.getElementById('level').textContent = this.level;
+                document.getElementById('speed').textContent = this.level;
             }
         }
         
         // Start the game
-        new FaviconSnake();
+        const game = new FaviconSnake();
     </script>
 </body>
 </html>
