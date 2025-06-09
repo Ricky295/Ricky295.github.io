@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku Generator Example</title>
+    <script src="sudoku.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #4a5568;
+            margin-bottom: 40px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 10px;
+            border: 2px solid #e2e8f0;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        label {
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        select, input, button {
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        select:focus, input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .sudoku-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 2px;
+            background: #2d3748;
+            padding: 10px;
+            border-radius: 10px;
+            margin: 20px auto;
+            max-width: 450px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .sudoku-cell {
+            aspect-ratio: 1;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: #2d3748;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        
+        .sudoku-cell.given {
+            background: #edf2f7;
+            color: #1a202c;
+        }
+        
+        .sudoku-cell.empty {
+            background: #f7fafc;
+            color: #a0aec0;
+        }
+        
+        .sudoku-cell:nth-child(3n):not(:nth-child(9n)) {
+            border-right: 3px solid #4a5568;
+        }
+        
+        .sudoku-cell:nth-child(n+19):nth-child(-n+27),
+        .sudoku-cell:nth-child(n+46):nth-child(-n+54) {
+            border-bottom: 3px solid #4a5568;
+        }
+        
+        .info-panel {
+            background: #f8fafc;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .info-panel h3 {
+            margin-top: 0;
+            color: #4a5568;
+        }
+        
+        .hint-section {
+            background: #e6fffa;
+            border-left: 4px solid #38b2ac;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        
+        .solve-path {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #f7fafc;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        
+        .path-step {
+            background: white;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border-left: 3px solid #667eea;
+            font-family: monospace;
+        }
+        
+        .technique {
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        @media (max-width: 768px) {
+            .controls {
+                grid-template-columns: 1fr;
+            }
+            
+            .sudoku-grid {
+                max-width: 90vw;
+            }
+            
+            .sudoku-cell {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧩 Sudoku Generator Demo</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="difficulty">Difficulty Level</label>
+                <select id="difficulty">
+                    <option value="0">0.00 - Very Easy</option>
+                    <option value="0.25">0.25 - Easy</option>
+                    <option value="0.5" selected>0.50 - Medium</option>
+                    <option value="0.75">0.75 - Medium-Hard</option>
+                    <option value="1">1.00 - Hard</option>
+                    <option value="1.25">1.25 - Hard+</option>
+                    <option value="1.5">1.50 - Very Hard</option>
+                    <option value="1.75">1.75 - Expert</option>
+                    <option value="2">2.00 - Expert+</option>
+                    <option value="2.25">2.25 - Master</option>
+                    <option value="2.5">2.50 - Master+</option>
+                    <option value="2.75">2.75 - Extreme</option>
+                    <option value="3">3.00 - Extreme+</option>
+                    <option value="3.25">3.25 - Insane</option>
+                    <option value="3.5">3.50 - Insane+</option>
+                    <option value="3.75">3.75 - Nightmare</option>
+                    <option value="4">4.00 - Hell</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="seed">Seed (Optional)</label>
+                <input type="number" id="seed" placeholder="Random seed">
+            </div>
+            
+            <div class="control-group">
+                <label for="priority">Hint Priority</label>
+                <select id="priority">
+                    <option value="0">Priority 0: Hidden Box → Line → Naked → Guess</option>
+                    <option value="1">Priority 1: Naked → Hidden Box → Line → Guess</option>
+                </select>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-bottom: 20px;">
+            <button onclick="generatePuzzle()">🎲 Generate Random Puzzle</button>
+            <button onclick="generateDaily()">📅 Generate Daily Puzzle</button>
+            <button onclick="generateSimple()">🎯 Generate Simple Puzzle</button>
+        </div>
+        
+        <div id="sudoku-container">
+            <div class="sudoku-grid" id="sudoku-grid"></div>
+        </div>
+        
+        <div style="text-align: center; margin: 20px 0;">
+            <button onclick="getHint()">💡 Get Hint</button>
+            <button onclick="solvePuzzle()">✅ Solve Puzzle</button>
+            <button onclick="showSolvePath()">🛤️ Show Solve Path</button>
+            <button onclick="checkIfSimple()">🔍 Check if Simple</button>
+        </div>
+        
+        <div class="info-panel">
+            <h3>📊 Puzzle Information</h3>
+            <div id="puzzle-info">Generate a puzzle to see information here.</div>
+            
+            <div class="hint-section" id="hint-section" style="display: none;">
+                <h4>💡 Current Hint</h4>
+                <div id="hint-display"></div>
+            </div>
+            
+            <div id="solve-path-section" style="display: none;">
+                <h4>🛤️ Solution Path</h4>
+                <div class="solve-path" id="solve-path"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sudoku = new Sudoku();
+        let currentPuzzle = null;
+        let currentSolution = null;
+        
+        function generatePuzzle() {
+            const difficulty = parseFloat(document.getElementById('difficulty').value);
+            const seedInput = document.getElementById('seed').value;
+            
+            document.body.classList.add('loading');
+            
+            setTimeout(() => {
+                try {
+                    if (seedInput) {
+                        const seed = parseInt(seedInput);
+                        currentPuzzle = sudoku.generateFromSeed(difficulty, seed, "matrix");
+                    } else {
+                        currentPuzzle = sudoku.matrix(difficulty);
+                    }
+                    
+                    // Store solution
+                    currentSolution = sudoku.deepCopy(sudoku.solution);
+                    
+                    displayPuzzle(currentPuzzle);
+                    updatePuzzleInfo(`Random puzzle generated with difficulty ${difficulty}`);
+                    clearHint();
+                    clearSolvePath();
+                } catch (error) {
+                    console.error('Error generating puzzle:', error);
+                    updatePuzzleInfo('Error generating puzzle. Try a different difficulty or seed.');
+                } finally {
+                    document.body.classList.remove('loading');
+                }
+            }, 100);
+        }
+        
+        function generateDaily() {
+            const difficulty = Math.floor(parseFloat(document.getElementById('difficulty').value) * 4 / 4 * 5); // Convert to 0-5 scale
+            const today = new Date();
+            
+            document.body.classList.add('loading');
+            
+            setTimeout(() => {
+                try {
+                    currentPuzzle = sudoku.generateDailySudoku(Math.min(difficulty, 5), today, "matrix");
+                    
+                    // Generate solution
+                    const tempSudoku = new Sudoku();
+                    currentSolution = tempSudoku.solveMatrix(sudoku.deepCopy(currentPuzzle));
+                    
+                    displayPuzzle(currentPuzzle);
+                    updatePuzzleInfo(`Daily puzzle for ${today.toDateString()}`);
+                    clearHint();
+                    clearSolvePath();
+                } catch (error) {
+                    console.error('Error generating daily puzzle:', error);
+                    updatePuzzleInfo('Error generating daily puzzle.');
+                } finally {
+                    document.body.classList.remove('loading');
+                }
+            }, 100);
+        }
+        
+        function generateSimple() {
+            const difficulty = parseFloat(document.getElementById('difficulty').value);
+            
+            document.body.classList.add('loading');
+            
+            setTimeout(() => {
+                try {
+                    currentPuzzle = sudoku.generateSimple(difficulty, "matrix");
+                    
+                    // Store solution
+                    currentSolution = sudoku.deepCopy(sudoku.solution);
+                    
+                    displayPuzzle(currentPuzzle);
+                    updatePuzzleInfo(`Simple puzzle generated (solvable with singles only) - Difficulty ${difficulty}`);
+                    clearHint();
+                    clearSolvePath();
+                } catch (error) {
+                    console.error('Error generating simple puzzle:', error);
+                    updatePuzzleInfo('Error generating simple puzzle.');
+                } finally {
+                    document.body.classList.remove('loading');
+                }
+            }, 100);
+        }
+        
+        function displayPuzzle(puzzle) {
+            const grid = document.getElementById('sudoku-grid');
+            grid.innerHTML = '';
+            
+            for (let i = 0; i < 9; i++) {
+                for (let j = 0; j < 9; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'sudoku-cell';
+                    
+                    if (puzzle[i][j] === 0) {
+                        cell.textContent = '';
+                        cell.classList.add('empty');
+                    } else {
+                        cell.textContent = puzzle[i][j];
+                        cell.classList.add('given');
+                    }
+                    
+                    grid.appendChild(cell);
+                }
+            }
+        }
+        
+        function getHint() {
+            if (!currentPuzzle) {
+                alert('Please generate a puzzle first!');
+                return;
+            }
+            
+            const priority = parseInt(document.getElementById('priority').value);
+            const hint = sudoku.hint(currentPuzzle, priority);
+            
+            if (hint) {
+                const [technique, [row, col], value] = hint;
+                displayHint(technique, row, col, value);
+                
+                // Apply the hint to current puzzle
+                currentPuzzle[row][col] = value;
+                displayPuzzle(currentPuzzle);
+            } else {
+                displayHint("No hint available", null, null, null);
+            }
+        }
+        
+        function displayHint(technique, row, col, value) {
+            const hintSection = document.getElementById('hint-section');
+            const hintDisplay = document.getElementById('hint-display');
+            
+            if (row !== null && col !== null && value !== null) {
+                hintDisplay.innerHTML = `
+                    <strong>Technique:</strong> <span class="technique">${technique}</span><br>
+                    <strong>Position:</strong> Row ${row + 1}, Column ${col + 1}<br>
+                    <strong>Value:</strong> ${value}
+                `;
+            } else {
+                hintDisplay.innerHTML = `<strong>${technique}</strong>`;
+            }
+            
+            hintSection.style.display = 'block';
+        }
+        
+        function solvePuzzle() {
+            if (!currentPuzzle) {
+                alert('Please generate a puzzle first!');
+                return;
+            }
+            
+            document.body.classList.add('loading');
+            
+            setTimeout(() => {
+                try {
+                    const tempSudoku = new Sudoku();
+                    const solvedPuzzle = tempSudoku.solveMatrix(sudoku.deepCopy(currentPuzzle));
+                    
+                    if (solvedPuzzle) {
+                        currentPuzzle = solvedPuzzle;
+                        displayPuzzle(currentPuzzle);
+                        updatePuzzleInfo('Puzzle solved!');
+                        clearHint();
+                    } else {
+                        updatePuzzleInfo('Unable to solve this puzzle.');
+                    }
+                } finally {
+                    document.body.classList.remove('loading');
+                }
+            }, 100);
+        }
+        
+        function showSolvePath() {
+            if (!currentPuzzle) {
+                alert('Please generate a puzzle first!');
+                return;
+            }
+            
+            document.body.classList.add('loading');
+            
+            setTimeout(() => {
+                try {
+                    const priority = parseInt(document.getElementById('priority').value);
+                    
+                    // Use the original puzzle, not the current state
+                    const originalPuzzle = sudoku.deepCopy(currentPuzzle);
+                    const solvePath = sudoku.solvePath(originalPuzzle, priority);
+                    
+                    if (solvePath) {
+                        displaySolvePath(solvePath);
+                    } else {
+                        displaySolvePath([]);
+                    }
+                } finally {
+                    document.body.classList.remove('loading');
+                }
+            }, 100);
+        }
+        
+        function displaySolvePath(path) {
+            const section = document.getElementById('solve-path-section');
+            const pathDiv = document.getElementById('solve-path');
+            
+            if (path.length === 0) {
+                pathDiv.innerHTML = '<div class="path-step">No solution path found with current priority.</div>';
+            } else {
+                pathDiv.innerHTML = path.map((step, index) => {
+                    const [technique, [row, col], value] = step;
+                    return `
+                        <div class="path-step">
+                            <strong>Step ${index + 1}:</strong> 
+                            <span class="technique">${technique}</span> - 
+                            Place ${value} at Row ${row + 1}, Col ${col + 1}
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            section.style.display = 'block';
+        }
+        
+        function checkIfSimple() {
+            if (!currentPuzzle) {
+                alert('Please generate a puzzle first!');
+                return;
+            }
+            
+            const isSimple = sudoku.isSimple(currentPuzzle);
+            updatePuzzleInfo(`Puzzle is ${isSimple ? '' : 'NOT '}solvable with singles only.`);
+        }
+        
+        function updatePuzzleInfo(info) {
+            document.getElementById('puzzle-info').textContent = info;
+        }
+        
+        function clearHint() {
+            document.getElementById('hint-section').style.display = 'none';
+        }
+        
+        function clearSolvePath() {
+            document.getElementById('solve-path-section').style.display = 'none';
+        }
+        
+        // Generate an initial puzzle
+        window.onload = function() {
+            generatePuzzle();
+        };
+    </script>
+</body>
+</html>
