@@ -17,6 +17,11 @@
     #parse_status.error {
       color: red;
     }
+    #time_left_display {
+      font-weight: bold;
+      margin-left: 15px;
+      font-size: 18px;
+    }
   </style>
 </head>
 <body>
@@ -50,6 +55,9 @@
   </p>
   
   <button id="start_button">Start Timer</button>
+  <button id="pause_button" disabled>Pause</button>
+  <button id="reset_button" disabled>Reset</button>
+  <span id="time_left_display"></span>
   
   <script>
     const favicon = document.getElementById('favicon');
@@ -57,25 +65,31 @@
     const diskColorInput = document.getElementById('disk_color');
     const durationSelect = document.getElementById('duration_select');
     const startButton = document.getElementById('start_button');
+    const pauseButton = document.getElementById('pause_button');
+    const resetButton = document.getElementById('reset_button');
     const parseStatus = document.getElementById('parse_status');
+    const timeLeftDisplay = document.getElementById('time_left_display');
 
     let totalDurationMinutes = 1;
     let endTime = null;
     let sourceDurationMs = null;
+    let timerInterval = null;
+    let paused = false;
+    let pauseTime = null;
 
     // Parse time string like "1h 23m 45s" or ISO datetime
     function parseTimeString(str) {
       str = str.trim();
       if (str === '') return null;
 
-      // Try ISO date parsing first
+      // Try ISO date parsing first (allow date or date+time)
       let date = new Date(str);
       if (!isNaN(date.getTime()) && date.getTime() > Date.now()) return date.getTime();
 
       // Else parse custom format like 1h 23m 45s
       let h = 0, m = 0, s = 0;
       const regexH = /(\d+)\s*h/gi;
-      const regexM = /(\d+)\s*m/gi;
+      const regexM = /(\d+)\s*m(?!s)/gi; // Avoid matching 'ms' for milliseconds
       const regexS = /(\d+)\s*s/gi;
       let match;
       while ((match = regexH.exec(str)) !== null) h += parseInt(match[1]);
@@ -88,76 +102,61 @@
     }
 
     function formatTimeLeft(ms) {
-      if (ms <= 0) return null;
+      if (ms <= 0) return '0s';
       let totalSeconds = Math.floor(ms / 1000);
       let hours = Math.floor(totalSeconds / 3600);
       let minutes = Math.floor((totalSeconds % 3600) / 60);
       let seconds = totalSeconds % 60;
 
-      let totalMinutes = (hours * 60) + minutes;
-
-      if (totalMinutes > 99) return `${hours} h`;
-      if (totalSeconds > 99) return `${totalMinutes} m`;
-      if (totalSeconds > 0) return `${totalSeconds} s`;
-      return null;
+      let parts = [];
+      if (hours > 0) parts.push(hours + 'h');
+      if (minutes > 0) parts.push(minutes + 'm');
+      if (seconds > 0 || parts.length === 0) parts.push(seconds + 's');
+      return parts.join(' ');
     }
 
     function drawDiskTimer(timeLeftMs, totalDurationMs, color) {
-  const size = 32;
-  const ctx = document.createElement('canvas').getContext('2d');
-  ctx.canvas.width = size;
-  ctx.canvas.height = size;
+      const size = 32;
+      const ctx = document.createElement('canvas').getContext('2d');
+      ctx.canvas.width = size;
+      ctx.canvas.height = size;
 
-  const cx = size / 2;
-  const cy = size / 2;
-  const radius = size * 10;
+      const cx = size / 2;
+      const cy = size / 2;
+      const radius = size / 2 - 2;
 
-  ctx.clearRect(0, 0, size, size);
+      ctx.clearRect(0, 0, size, size);
 
-  if (timeLeftMs <= 0) {
-    ctx.fillStyle = 'red';
-    ctx.fillRect(0, 0, size, size);
-    return ctx.canvas.toDataURL('image/png');
-  } else {
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, size, size);
-  }
+      if (timeLeftMs <= 0) {
+        ctx.fillStyle = 'red';
+        ctx.fillRect(0, 0, size, size);
+        return ctx.canvas.toDataURL('image/png');
+      } else {
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, size, size);
+      }
 
-  // Total angle from top center, clockwise
-  const percentElapsed = timeLeftMs / totalDurationMs;
-  const endAngle = percentElapsed * 2 * Math.PI;
+      // Total angle from top center, clockwise (your intentional direction)
+      const percentElapsed = timeLeftMs / totalDurationMs;
+      const endAngle = percentElapsed * 2 * Math.PI;
 
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
 
-  const steps = 128; // higher = smoother
-  for (let i = 0; i <= steps; i++) {
-    const angle = -Math.PI / 2 + (i / steps) * endAngle;
-    const x = cx + radius * Math.cos(angle);
-    const y = cy + radius * Math.sin(angle);
-    ctx.lineTo(x, y);
-  }
+      const steps = 128; // higher = smoother
+      for (let i = 0; i <= steps; i++) {
+        const angle = -Math.PI / 2 + (i / steps) * endAngle;
+        const x = cx + radius * Math.cos(angle);
+        const y = cy + radius * Math.sin(angle);
+        ctx.lineTo(x, y);
+      }
 
-  ctx.closePath();
-  ctx.fill();
+      ctx.closePath();
+      ctx.fill();
 
-  // Draw text
-  const text = formatTimeLeft(timeLeftMs);
-  if (text) {
-    ctx.fillStyle = '#000';
-    ctx.font = 'bold 12px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text.replace(/\s/g, ''), cx, cy);
-  }
-
-  return ctx.canvas.toDataURL('image/png');
-}
-
-
-
-
+      return ctx.canvas.toDataURL('image/png');
+    }
 
     function updateTimer() {
       if (!endTime) return;
@@ -167,7 +166,6 @@
 
       let totalDurationMs = totalDurationMinutes * 60000;
 
-      // If duration select is 'source', totalDuration is difference between endTime and startTime (sourceDurationMs)
       if (durationSelect.value === 'source' && sourceDurationMs) {
         totalDurationMs = sourceDurationMs;
       }
@@ -177,6 +175,16 @@
       const color = diskColorInput.value;
       const faviconUrl = drawDiskTimer(timeLeftMs, totalDurationMs, color);
       favicon.href = faviconUrl;
+
+      // Update time left display and tooltip
+      const formatted = formatTimeLeft(timeLeftMs);
+      timeLeftDisplay.textContent = formatted;
+      favicon.title = `Time left: ${formatted}`;
+
+      // Disable pause button if time is up
+      if (timeLeftMs === 0) {
+        pauseButton.disabled = true;
+      }
     }
 
     function validateInput() {
@@ -211,23 +219,71 @@
       }
 
       endTime = parsedEnd;
+      paused = false;
+      pauseTime = null;
 
-      // Calculate sourceDurationMs as difference between now and endTime (used if 'source' selected)
       sourceDurationMs = endTime - Date.now();
 
-      // If 'source' selected, totalDurationMinutes is null and will be calculated from sourceDurationMs
       if (durationSelect.value === 'source') {
         totalDurationMinutes = sourceDurationMs / 60000;
       }
 
       updateTimer();
-      if (window.timerInterval) clearInterval(window.timerInterval);
-      window.timerInterval = setInterval(updateTimer, 1000);
+
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        if (!paused) updateTimer();
+      }, 1000);
+
+      pauseButton.textContent = 'Pause';
+      pauseButton.disabled = false;
+      resetButton.disabled = false;
+    }
+
+    function pauseResumeTimer() {
+      if (!endTime) return;
+
+      if (!paused) {
+        // Pausing
+        paused = true;
+        pauseTime = Date.now();
+        pauseButton.textContent = 'Resume';
+      } else {
+        // Resuming
+        paused = false;
+        if (pauseTime) {
+          // Shift endTime forward by pause duration
+          const pausedDuration = Date.now() - pauseTime;
+          endTime += pausedDuration;
+          pauseTime = null;
+        }
+        pauseButton.textContent = 'Pause';
+        updateTimer();
+      }
+    }
+
+    function resetTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = null;
+      endTime = null;
+      paused = false;
+      pauseTime = null;
+      favicon.href = '';
+      timeLeftDisplay.textContent = '';
+      pauseButton.disabled = true;
+      resetButton.disabled = true;
+      pauseButton.textContent = 'Pause';
+      parseStatus.textContent = 'Waiting...';
+      parseStatus.classList.remove('error');
     }
 
     timeInput.addEventListener('input', validateInput);
     startButton.addEventListener('click', startTimer);
-    diskColorInput.addEventListener('change', updateTimer);
+    pauseButton.addEventListener('click', pauseResumeTimer);
+    resetButton.addEventListener('click', resetTimer);
+    diskColorInput.addEventListener('change', () => {
+      if (endTime && !paused) updateTimer();
+    });
 
     // Initialize
     timeInput.value = '1h';
