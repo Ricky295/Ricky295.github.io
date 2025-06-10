@@ -129,7 +129,7 @@
             user-select: none;
         }
 
-        /* Fog overlay */
+        /* 100% opaque fog overlay */
         .sudoku-cell::before {
             content: '';
             position: absolute;
@@ -138,11 +138,11 @@
             right: 0;
             bottom: 0;
             background: linear-gradient(45deg, 
-                rgba(52, 73, 94, 0.95) 0%, 
-                rgba(44, 62, 80, 0.98) 25%,
-                rgba(52, 73, 94, 0.92) 50%,
-                rgba(44, 62, 80, 0.96) 75%,
-                rgba(52, 73, 94, 0.94) 100%);
+                rgba(52, 73, 94, 1) 0%, 
+                rgba(44, 62, 80, 1) 25%,
+                rgba(52, 73, 94, 1) 50%,
+                rgba(44, 62, 80, 1) 75%,
+                rgba(52, 73, 94, 1) 100%);
             border-radius: 4px;
             transition: opacity 0.3s ease;
             opacity: 1;
@@ -158,31 +158,26 @@
             right: 0;
             bottom: 0;
             background: 
-                radial-gradient(circle at 20% 30%, rgba(255,255,255,0.1) 2px, transparent 2px),
-                radial-gradient(circle at 80% 70%, rgba(255,255,255,0.08) 1px, transparent 1px),
-                radial-gradient(circle at 40% 80%, rgba(255,255,255,0.06) 1.5px, transparent 1.5px),
-                radial-gradient(circle at 70% 20%, rgba(255,255,255,0.05) 1px, transparent 1px);
+                radial-gradient(circle at 20% 30%, rgba(255,255,255,0.15) 2px, transparent 2px),
+                radial-gradient(circle at 80% 70%, rgba(255,255,255,0.12) 1px, transparent 1px),
+                radial-gradient(circle at 40% 80%, rgba(255,255,255,0.1) 1.5px, transparent 1.5px),
+                radial-gradient(circle at 70% 20%, rgba(255,255,255,0.08) 1px, transparent 1px);
             border-radius: 4px;
             opacity: 1;
             transition: opacity 0.3s ease;
             pointer-events: none;
         }
 
-        /* Reveal on hover or selection */
-        .sudoku-cell:hover::before,
-        .sudoku-cell:hover::after,
-        .sudoku-cell.selected::before,
-        .sudoku-cell.selected::after,
+        /* Only reveal when explicitly shown */
         .sudoku-cell.revealed::before,
         .sudoku-cell.revealed::after {
             opacity: 0;
         }
 
         .sudoku-cell:hover {
-            background: linear-gradient(135deg, #3498db, #2980b9);
             border-color: #3498db;
-            transform: scale(1.05);
-            box-shadow: 0 0 20px rgba(52, 152, 219, 0.5);
+            transform: scale(1.02);
+            box-shadow: 0 0 15px rgba(52, 152, 219, 0.3);
         }
 
         .sudoku-cell.selected {
@@ -209,6 +204,12 @@
         .sudoku-cell.hint {
             background: linear-gradient(135deg, #f39c12, #e67e22);
             animation: pulse 1s ease-in-out;
+        }
+
+        /* Highlight cells containing specific numbers */
+        .sudoku-cell.highlight {
+            box-shadow: 0 0 25px rgba(52, 152, 219, 0.8);
+            border-color: #3498db;
         }
 
         /* Sub-grid borders */
@@ -260,6 +261,27 @@
             font-weight: bold;
         }
 
+        .instructions {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(5px);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .instructions h3 {
+            margin-bottom: 10px;
+            color: #f39c12;
+        }
+
+        .instructions p {
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
         .message {
             margin-top: 20px;
             padding: 15px;
@@ -306,7 +328,15 @@
 <body>
     <div class="header">
         <h1>🌫️ FogDoku</h1>
-        <p>Sudoku hidden in the fog - hover to reveal the numbers!</p>
+        <p>Sudoku hidden in the fog - use Alt+Number to reveal specific numbers!</p>
+    </div>
+
+    <div class="instructions">
+        <h3>How to Play</h3>
+        <p>• Click on a cell to select it, then type 1-9 to enter numbers</p>
+        <p>• Press <strong>Alt + 1-9</strong> to reveal all positions of that number</p>
+        <p>• Use arrow keys to navigate between cells</p>
+        <p>• Press Delete/Backspace to clear a cell</p>
     </div>
 
     <div class="controls">
@@ -324,6 +354,7 @@
         <button id="newGame">New Game</button>
         <button id="getHint">Get Hint</button>
         <button id="checkSolution">Check Solution</button>
+        <button id="giveUp">Give Up</button>
     </div>
 
     <div class="game-container">
@@ -365,6 +396,7 @@
                 this.startTime = null;
                 this.timerInterval = null;
                 this.revealedCells = new Set();
+                this.gameEnded = false;
                 
                 this.initializeEventListeners();
                 this.generateNewGame();
@@ -374,25 +406,10 @@
                 document.getElementById('newGame').addEventListener('click', () => this.generateNewGame());
                 document.getElementById('getHint').addEventListener('click', () => this.getHint());
                 document.getElementById('checkSolution').addEventListener('click', () => this.checkSolution());
+                document.getElementById('giveUp').addEventListener('click', () => this.giveUp());
                 
                 // Keyboard input
                 document.addEventListener('keydown', (e) => this.handleKeyPress(e));
-                
-                // Number key listeners (1-9)
-                for (let i = 1; i <= 9; i++) {
-                    document.addEventListener('keydown', (e) => {
-                        if (e.key === i.toString() && this.selectedCell) {
-                            this.setNumber(i);
-                        }
-                    });
-                }
-                
-                // Delete/Backspace
-                document.addEventListener('keydown', (e) => {
-                    if ((e.key === 'Delete' || e.key === 'Backspace') && this.selectedCell) {
-                        this.setNumber(0);
-                    }
-                });
             }
 
             generateNewGame() {
@@ -408,6 +425,8 @@
                 this.mistakes = 0;
                 this.hintsUsed = 0;
                 this.revealedCells.clear();
+                this.highlightedNumber = null;
+                this.gameEnded = false;
                 
                 // Start timer
                 this.startTime = Date.now();
@@ -416,7 +435,7 @@
                 
                 this.renderGrid();
                 this.updateStats();
-                this.showMessage('New FogDoku puzzle generated! Hover over cells to see through the fog.', 'hint');
+                this.showMessage('New FogDoku puzzle generated! Use Alt+1-9 to reveal numbers.', 'hint');
             }
 
             renderGrid() {
@@ -431,6 +450,8 @@
                         cell.dataset.col = col;
                         
                         const value = this.userGrid[row][col];
+                        const solutionValue = this.solution[row][col];
+                        
                         if (value !== 0) {
                             cell.textContent = value;
                             if (this.puzzle[row][col] !== 0) {
@@ -442,6 +463,12 @@
                         
                         // Check if cell should be revealed
                         if (this.revealedCells.has(`${row}-${col}`)) {
+                            cell.classList.add('revealed');
+                        }
+                        
+                        // Highlight if showing specific number
+                        if (this.highlightedNumber && solutionValue === this.highlightedNumber) {
+                            cell.classList.add('highlight');
                             cell.classList.add('revealed');
                         }
                         
@@ -462,14 +489,10 @@
                 this.selectedCell = { row, col };
                 const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
                 cell.classList.add('selected');
-                
-                // Reveal this cell temporarily
-                this.revealedCells.add(`${row}-${col}`);
-                cell.classList.add('revealed');
             }
 
             setNumber(num) {
-                if (!this.selectedCell) return;
+                if (!this.selectedCell || this.gameEnded) return;
                 
                 const { row, col } = this.selectedCell;
                 
@@ -499,6 +522,22 @@
                 }
             }
 
+            revealNumber(number) {
+                if (this.gameEnded) return;
+                
+                this.highlightedNumber = number;
+                this.renderGrid();
+                this.showMessage(`Revealing all positions of number ${number}`, 'hint');
+                
+                // Clear highlight after 3 seconds
+                setTimeout(() => {
+                    if (this.highlightedNumber === number) {
+                        this.highlightedNumber = null;
+                        this.renderGrid();
+                    }
+                }, 3000);
+            }
+
             getHint() {
                 const hintResult = this.sudoku.hint(this.userGrid, 0);
                 
@@ -521,6 +560,27 @@
                 } else {
                     this.showMessage('No more hints available!', 'error');
                 }
+            }
+
+            giveUp() {
+                if (this.gameEnded) return;
+                
+                this.gameEnded = true;
+                
+                // Stop the timer
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                }
+                
+                // Reveal all cells
+                for (let row = 0; row < 9; row++) {
+                    for (let col = 0; col < 9; col++) {
+                        this.revealedCells.add(`${row}-${col}`);
+                    }
+                }
+                
+                this.renderGrid();
+                this.showMessage('Game ended. All cells revealed. Start a new game to try again!', 'error');
             }
 
             checkSolution() {
@@ -560,6 +620,8 @@
             }
 
             onPuzzleComplete() {
+                this.gameEnded = true;
+                
                 if (this.timerInterval) {
                     clearInterval(this.timerInterval);
                 }
@@ -568,7 +630,12 @@
                 this.showMessage(`🎉 Congratulations! Puzzle completed in ${timeText} with ${this.mistakes} mistakes and ${this.hintsUsed} hints!`, 'success');
                 
                 // Reveal all cells as celebration
-                this.revealAll();
+                for (let row = 0; row < 9; row++) {
+                    for (let col = 0; col < 9; col++) {
+                        this.revealedCells.add(`${row}-${col}`);
+                    }
+                }
+                this.renderGrid();
             }
 
             updateStats() {
@@ -606,11 +673,30 @@
             }
 
             handleKeyPress(e) {
-                if (!this.selectedCell) return;
+                // Alt + Number keys to reveal specific numbers
+                if (e.altKey && e.key >= '1' && e.key <= '9' && !this.gameEnded) {
+                    e.preventDefault();
+                    this.revealNumber(parseInt(e.key));
+                    return;
+                }
+                
+                // Regular number input
+                if (e.key >= '1' && e.key <= '9' && this.selectedCell && !this.gameEnded) {
+                    this.setNumber(parseInt(e.key));
+                    return;
+                }
+                
+                // Delete/Backspace
+                if ((e.key === 'Delete' || e.key === 'Backspace') && this.selectedCell && !this.gameEnded) {
+                    this.setNumber(0);
+                    return;
+                }
+                
+                // Arrow keys for navigation
+                if (!this.selectedCell || this.gameEnded) return;
                 
                 const { row, col } = this.selectedCell;
                 
-                // Arrow keys for navigation
                 switch(e.key) {
                     case 'ArrowUp':
                         e.preventDefault();
