@@ -382,11 +382,77 @@
         <div class="message" id="message"></div>
     </div>
 
-    <script src="sudoku.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sudoku/1.0.0/sudoku.min.js"></script>
     <script>
+        // Simple Sudoku class for this implementation
+        class Sudoku {
+            constructor() {
+                this.solution = null;
+            }
+
+            deepCopy(grid) {
+                return grid.map(row => [...row]);
+            }
+
+            generateSimple(difficulty = 1) {
+                // Create a complete valid grid
+                const grid = [
+                    [5,3,4,6,7,8,9,1,2],
+                    [6,7,2,1,9,5,3,4,8],
+                    [1,9,8,3,4,2,5,6,7],
+                    [8,5,9,7,6,1,4,2,3],
+                    [4,2,6,8,5,3,7,9,1],
+                    [7,1,3,9,2,4,8,5,6],
+                    [9,6,1,5,3,7,2,8,4],
+                    [2,8,7,4,1,9,6,3,5],
+                    [3,4,5,2,8,6,1,7,9]
+                ];
+
+                // Shuffle the grid to create variation
+                this.shuffleGrid(grid);
+                this.solution = this.deepCopy(grid);
+
+                // Remove numbers based on difficulty
+                const puzzle = this.deepCopy(grid);
+                const cellsToRemove = Math.floor(30 + difficulty * 15);
+                
+                for (let i = 0; i < cellsToRemove; i++) {
+                    const row = Math.floor(Math.random() * 9);
+                    const col = Math.floor(Math.random() * 9);
+                    puzzle[row][col] = 0;
+                }
+
+                return puzzle;
+            }
+
+            shuffleGrid(grid) {
+                // Simple shuffle by swapping rows within blocks
+                for (let block = 0; block < 3; block++) {
+                    for (let i = 0; i < 10; i++) {
+                        const row1 = block * 3 + Math.floor(Math.random() * 3);
+                        const row2 = block * 3 + Math.floor(Math.random() * 3);
+                        [grid[row1], grid[row2]] = [grid[row2], grid[row1]];
+                    }
+                }
+            }
+
+            hint(grid, type) {
+                // Find first empty cell that can be solved
+                for (let row = 0; row < 9; row++) {
+                    for (let col = 0; col < 9; col++) {
+                        if (grid[row][col] === 0 && this.solution) {
+                            return ["Direct", [row, col], this.solution[row][col]];
+                        }
+                    }
+                }
+                return null;
+            }
+        }
+
         class FogDoku {
             constructor() {
                 this.sudoku = new Sudoku();
+                this.originalPuzzle = null; // Store the original puzzle before solving
                 this.puzzle = null;
                 this.solution = null;
                 this.userGrid = Array(9).fill(null).map(() => Array(9).fill(0));
@@ -415,8 +481,9 @@
             generateNewGame() {
                 const difficulty = parseFloat(document.getElementById('difficulty').value);
                 
-                // Generate puzzle
+                // Generate puzzle and make a deep copy BEFORE solving
                 this.puzzle = this.sudoku.generateSimple(difficulty);
+                this.originalPuzzle = this.sudoku.deepCopy(this.puzzle); // Store original puzzle
                 this.solution = this.sudoku.deepCopy(this.sudoku.solution);
                 
                 // Reset game state
@@ -450,11 +517,11 @@
                         cell.dataset.col = col;
                         
                         const value = this.userGrid[row][col];
-                        const puzzleValue = this.puzzle[row][col];
+                        const originalValue = this.originalPuzzle[row][col]; // Use original puzzle instead of current userGrid
                         
                         if (value !== 0) {
                             cell.textContent = value;
-                            if (this.puzzle[row][col] !== 0) {
+                            if (this.originalPuzzle[row][col] !== 0) {
                                 cell.classList.add('given');
                             } else {
                                 cell.classList.add('user-input');
@@ -466,8 +533,10 @@
                             cell.classList.add('revealed');
                         }
                         
-                        // Highlight if showing specific number
-                        if (this.highlightedNumber && this.puzzleValue === this.highlightedNumber) {
+                        // Highlight if showing specific number - only highlight cells that have that number in the original puzzle OR user has correctly entered it
+                        if (this.highlightedNumber && 
+                            ((originalValue === this.highlightedNumber) || 
+                             (originalValue === 0 && value === this.highlightedNumber && value === this.solution[row][col]))) {
                             cell.classList.add('highlight');
                             cell.classList.add('revealed');
                         }
@@ -497,7 +566,7 @@
                 const { row, col } = this.selectedCell;
                 
                 // Can't modify given numbers
-                if (this.puzzle[row][col] !== 0) return;
+                if (this.originalPuzzle[row][col] !== 0) return;
                 
                 // Set the number
                 this.userGrid[row][col] = num;
