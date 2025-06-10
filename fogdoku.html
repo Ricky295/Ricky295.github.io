@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FogDoku - Sudoku in the Fog</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            background: linear-gradient(45deg, #fff, #e0e0e0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .control-group label {
+            font-weight: bold;
+            font-size: 0.9rem;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+
+        select, button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        select {
+            background: rgba(255,255,255,0.9);
+            color: #333;
+        }
+
+        button {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+            color: white;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button:hover {
+            background: linear-gradient(45deg, #ee5a52, #ff6b6b);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .game-container {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .sudoku-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 2px;
+            background: #2c3e50;
+            padding: 8px;
+            border-radius: 12px;
+            box-shadow: inset 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .sudoku-cell {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #34495e, #2c3e50);
+            border: 2px solid #34495e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            border-radius: 6px;
+            user-select: none;
+        }
+
+        /* Fog overlay */
+        .sudoku-cell::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, 
+                rgba(52, 73, 94, 0.95) 0%, 
+                rgba(44, 62, 80, 0.98) 25%,
+                rgba(52, 73, 94, 0.92) 50%,
+                rgba(44, 62, 80, 0.96) 75%,
+                rgba(52, 73, 94, 0.94) 100%);
+            border-radius: 4px;
+            transition: opacity 0.3s ease;
+            opacity: 1;
+            pointer-events: none;
+        }
+
+        /* Fog pattern */
+        .sudoku-cell::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(255,255,255,0.1) 2px, transparent 2px),
+                radial-gradient(circle at 80% 70%, rgba(255,255,255,0.08) 1px, transparent 1px),
+                radial-gradient(circle at 40% 80%, rgba(255,255,255,0.06) 1.5px, transparent 1.5px),
+                radial-gradient(circle at 70% 20%, rgba(255,255,255,0.05) 1px, transparent 1px);
+            border-radius: 4px;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        /* Reveal on hover or selection */
+        .sudoku-cell:hover::before,
+        .sudoku-cell:hover::after,
+        .sudoku-cell.selected::before,
+        .sudoku-cell.selected::after,
+        .sudoku-cell.revealed::before,
+        .sudoku-cell.revealed::after {
+            opacity: 0;
+        }
+
+        .sudoku-cell:hover {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            border-color: #3498db;
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(52, 152, 219, 0.5);
+        }
+
+        .sudoku-cell.selected {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            border-color: #e74c3c;
+            box-shadow: 0 0 20px rgba(231, 76, 60, 0.5);
+        }
+
+        .sudoku-cell.given {
+            color: #ecf0f1;
+            text-shadow: 0 0 10px rgba(236, 240, 241, 0.8);
+        }
+
+        .sudoku-cell.user-input {
+            color: #3498db;
+            text-shadow: 0 0 10px rgba(52, 152, 219, 0.8);
+        }
+
+        .sudoku-cell.error {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            animation: shake 0.5s ease-in-out;
+        }
+
+        .sudoku-cell.hint {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            animation: pulse 1s ease-in-out;
+        }
+
+        /* Sub-grid borders */
+        .sudoku-cell:nth-child(3n) {
+            border-right: 4px solid #2c3e50;
+        }
+
+        .sudoku-cell:nth-child(n+19):nth-child(-n+27),
+        .sudoku-cell:nth-child(n+46):nth-child(-n+54) {
+            border-bottom: 4px solid #2c3e50;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            background: rgba(255,255,255,0.1);
+            padding: 10px 15px;
+            border-radius: 10px;
+            text-align: center;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .message.show {
+            opacity: 1;
+        }
+
+        .message.success {
+            background: linear-gradient(45deg, #27ae60, #2ecc71);
+        }
+
+        .message.error {
+            background: linear-gradient(45deg, #e74c3c, #ec7063);
+        }
+
+        .message.hint {
+            background: linear-gradient(45deg, #f39c12, #f7dc6f);
+        }
+
+        @media (max-width: 768px) {
+            .sudoku-cell {
+                width: 35px;
+                height: 35px;
+                font-size: 1.1rem;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .game-container {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🌫️ FogDoku</h1>
+        <p>Sudoku hidden in the fog - hover to reveal the numbers!</p>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="difficulty">Difficulty</label>
+            <select id="difficulty">
+                <option value="0">Beginner (0)</option>
+                <option value="0.5">Easy (0.5)</option>
+                <option value="1" selected>Medium (1)</option>
+                <option value="1.5">Hard (1.5)</option>
+                <option value="2">Expert (2)</option>
+                <option value="2.5">Master (2.5)</option>
+            </select>
+        </div>
+        <button id="newGame">New Game</button>
+        <button id="getHint">Get Hint</button>
+        <button id="checkSolution">Check Solution</button>
+    </div>
+
+    <div class="game-container">
+        <div class="sudoku-grid" id="sudokuGrid"></div>
+        
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-label">Cells Filled</div>
+                <div class="stat-value" id="cellsFilled">0/81</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Mistakes</div>
+                <div class="stat-value" id="mistakes">0</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Hints Used</div>
+                <div class="stat-value" id="hintsUsed">0</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Time</div>
+                <div class="stat-value" id="timer">00:00</div>
+            </div>
+        </div>
+
+        <div class="message" id="message"></div>
+    </div>
+
+    <script src="sudoku.js"></script>
+    <script>
+        class FogDoku {
+            constructor() {
+                this.sudoku = new Sudoku();
+                this.puzzle = null;
+                this.solution = null;
+                this.userGrid = Array(9).fill(null).map(() => Array(9).fill(0));
+                this.selectedCell = null;
+                this.mistakes = 0;
+                this.hintsUsed = 0;
+                this.startTime = null;
+                this.timerInterval = null;
+                this.revealedCells = new Set();
+                
+                this.initializeEventListeners();
+                this.generateNewGame();
+            }
+
+            initializeEventListeners() {
+                document.getElementById('newGame').addEventListener('click', () => this.generateNewGame());
+                document.getElementById('getHint').addEventListener('click', () => this.getHint());
+                document.getElementById('revealAll').addEventListener('click', () => this.revealAll());
+                document.getElementById('checkSolution').addEventListener('click', () => this.checkSolution());
+                
+                // Keyboard input
+                document.addEventListener('keydown', (e) => this.handleKeyPress(e));
+                
+                // Number key listeners (1-9)
+                for (let i = 1; i <= 9; i++) {
+                    document.addEventListener('keydown', (e) => {
+                        if (e.key === i.toString() && this.selectedCell) {
+                            this.setNumber(i);
+                        }
+                    });
+                }
+                
+                // Delete/Backspace
+                document.addEventListener('keydown', (e) => {
+                    if ((e.key === 'Delete' || e.key === 'Backspace') && this.selectedCell) {
+                        this.setNumber(0);
+                    }
+                });
+            }
+
+            generateNewGame() {
+                const difficulty = parseFloat(document.getElementById('difficulty').value);
+                
+                // Generate puzzle
+                this.puzzle = this.sudoku.generateSimple(difficulty);
+                this.solution = this.sudoku.deepCopy(this.sudoku.solution);
+                
+                // Reset game state
+                this.userGrid = this.sudoku.deepCopy(this.puzzle);
+                this.selectedCell = null;
+                this.mistakes = 0;
+                this.hintsUsed = 0;
+                this.revealedCells.clear();
+                
+                // Start timer
+                this.startTime = Date.now();
+                if (this.timerInterval) clearInterval(this.timerInterval);
+                this.timerInterval = setInterval(() => this.updateTimer(), 1000);
+                
+                this.renderGrid();
+                this.updateStats();
+                this.showMessage('New FogDoku puzzle generated! Hover over cells to see through the fog.', 'hint');
+            }
+
+            renderGrid() {
+                const grid = document.getElementById('sudokuGrid');
+                grid.innerHTML = '';
+                
+                for (let row = 0; row < 9; row++) {
+                    for (let col = 0; col < 9; col++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'sudoku-cell';
+                        cell.dataset.row = row;
+                        cell.dataset.col = col;
+                        
+                        const value = this.userGrid[row][col];
+                        if (value !== 0) {
+                            cell.textContent = value;
+                            if (this.puzzle[row][col] !== 0) {
+                                cell.classList.add('given');
+                            } else {
+                                cell.classList.add('user-input');
+                            }
+                        }
+                        
+                        // Check if cell should be revealed
+                        if (this.revealedCells.has(`${row}-${col}`)) {
+                            cell.classList.add('revealed');
+                        }
+                        
+                        cell.addEventListener('click', () => this.selectCell(row, col));
+                        
+                        grid.appendChild(cell);
+                    }
+                }
+            }
+
+            selectCell(row, col) {
+                // Clear previous selection
+                document.querySelectorAll('.sudoku-cell').forEach(cell => {
+                    cell.classList.remove('selected');
+                });
+                
+                // Select new cell
+                this.selectedCell = { row, col };
+                const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                cell.classList.add('selected');
+                
+                // Reveal this cell temporarily
+                this.revealedCells.add(`${row}-${col}`);
+                cell.classList.add('revealed');
+            }
+
+            setNumber(num) {
+                if (!this.selectedCell) return;
+                
+                const { row, col } = this.selectedCell;
+                
+                // Can't modify given numbers
+                if (this.puzzle[row][col] !== 0) return;
+                
+                // Set the number
+                this.userGrid[row][col] = num;
+                
+                // Check if it's correct
+                if (num !== 0 && num !== this.solution[row][col]) {
+                    this.mistakes++;
+                    this.showMessage('Incorrect number! Try again.', 'error');
+                    
+                    // Visual feedback
+                    const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                    cell.classList.add('error');
+                    setTimeout(() => cell.classList.remove('error'), 500);
+                }
+                
+                this.renderGrid();
+                this.updateStats();
+                
+                // Check if puzzle is complete
+                if (this.isPuzzleComplete()) {
+                    this.onPuzzleComplete();
+                }
+            }
+
+            getHint() {
+                const hintResult = this.sudoku.hint(this.userGrid, 0);
+                
+                if (hintResult) {
+                    const [technique, [row, col], value] = hintResult;
+                    
+                    // Reveal the hint cell
+                    this.revealedCells.add(`${row}-${col}`);
+                    
+                    // Highlight the cell
+                    const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                    cell.classList.add('hint');
+                    setTimeout(() => cell.classList.remove('hint'), 2000);
+                    
+                    this.hintsUsed++;
+                    this.updateStats();
+                    this.renderGrid();
+                    
+                    this.showMessage(`Hint: Use ${technique} at row ${row + 1}, col ${col + 1} = ${value}`, 'hint');
+                } else {
+                    this.showMessage('No more hints available!', 'error');
+                }
+            }
+
+            checkSolution() {
+                let correct = 0;
+                let total = 0;
+                
+                for (let row = 0; row < 9; row++) {
+                    for (let col = 0; col < 9; col++) {
+                        if (this.userGrid[row][col] !== 0) {
+                            total++;
+                            if (this.userGrid[row][col] === this.solution[row][col]) {
+                                correct++;
+                            }
+                        }
+                    }
+                }
+                
+                if (total === 0) {
+                    this.showMessage('No numbers entered yet!', 'error');
+                } else if (correct === total) {
+                    this.showMessage(`Perfect! ${correct}/${total} correct so far.`, 'success');
+                } else {
+                    this.showMessage(`${correct}/${total} correct. Keep going!`, 'hint');
+                }
+            }
+
+            isPuzzleComplete() {
+                for (let row = 0; row < 9; row++) {
+                    for (let col = 0; col < 9; col++) {
+                        if (this.userGrid[row][col] === 0 || 
+                            this.userGrid[row][col] !== this.solution[row][col]) {
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+
+            onPuzzleComplete() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                }
+                
+                const timeText = document.getElementById('timer').textContent;
+                this.showMessage(`🎉 Congratulations! Puzzle completed in ${timeText} with ${this.mistakes} mistakes and ${this.hintsUsed} hints!`, 'success');
+                
+                // Reveal all cells as celebration
+                this.revealAll();
+            }
+
+            updateStats() {
+                let filled = 0;
+                for (let row = 0; row < 9; row++) {
+                    for (let col = 0; col < 9; col++) {
+                        if (this.userGrid[row][col] !== 0) filled++;
+                    }
+                }
+                
+                document.getElementById('cellsFilled').textContent = `${filled}/81`;
+                document.getElementById('mistakes').textContent = this.mistakes;
+                document.getElementById('hintsUsed').textContent = this.hintsUsed;
+            }
+
+            updateTimer() {
+                if (!this.startTime) return;
+                
+                const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                
+                document.getElementById('timer').textContent = 
+                    `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            showMessage(text, type) {
+                const message = document.getElementById('message');
+                message.textContent = text;
+                message.className = `message ${type} show`;
+                
+                setTimeout(() => {
+                    message.classList.remove('show');
+                }, 3000);
+            }
+
+            handleKeyPress(e) {
+                if (!this.selectedCell) return;
+                
+                const { row, col } = this.selectedCell;
+                
+                // Arrow keys for navigation
+                switch(e.key) {
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        this.selectCell(Math.max(0, row - 1), col);
+                        break;
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        this.selectCell(Math.min(8, row + 1), col);
+                        break;
+                    case 'ArrowLeft':
+                        e.preventDefault();
+                        this.selectCell(row, Math.max(0, col - 1));
+                        break;
+                    case 'ArrowRight':
+                        e.preventDefault();
+                        this.selectCell(row, Math.min(8, col + 1));
+                        break;
+                }
+            }
+        }
+
+        // Initialize the game when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new FogDoku();
+        });
+    </script>
+</body>
+</html>
