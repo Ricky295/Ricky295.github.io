@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sudoku Multiplayer Game</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 20px; }
+  table { border-collapse: collapse; margin-bottom: 10px; }
+  td {
+    border: 1px solid #333;
+    width: 30px;
+    height: 30px;
+    text-align: center;
+    font-size: 20px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .bold-border-bottom { border-bottom: 3px solid #000; }
+  .bold-border-right { border-right: 3px solid #000; }
+  #moveInput { width: 200px; }
+  #log {
+    white-space: pre-line;
+    height: 120px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    padding: 5px;
+    margin-top: 10px;
+    background: #f9f9f9;
+  }
+</style>
+</head>
+<body>
+
+<h1>Sudoku Multiplayer Game</h1>
+<table id="sudokuGrid"></table>
+
+<p>
+  Enter move (format: digit at (row, col), e.g. <code>3 at (6, 8)</code>) or click a cell to place a digit.
+</p>
+<input type="text" id="moveInput" placeholder="e.g. 3 at (6, 8)" />
+<button id="submitMoveBtn">Submit Move</button>
+
+<p><strong>Current Player:</strong> <span id="currentPlayer">1</span></p>
+<div id="log"></div>
+
+<script>
+const SIZE = 9;
+let board = Array(SIZE).fill(null).map(() => Array(SIZE).fill(null));
+let currentPlayer = 1;
+const grid = document.getElementById('sudokuGrid');
+const currentPlayerSpan = document.getElementById('currentPlayer');
+const moveInput = document.getElementById('moveInput');
+const submitMoveBtn = document.getElementById('submitMoveBtn');
+const logDiv = document.getElementById('log');
+
+function createGrid() {
+  grid.innerHTML = '';
+  for (let r = 0; r < SIZE; r++) {
+    const tr = document.createElement('tr');
+    for (let c = 0; c < SIZE; c++) {
+      const td = document.createElement('td');
+      td.id = `cell-${r}-${c}`;
+      // Bold borders for 3x3 blocks
+      if ((r + 1) % 3 === 0 && r !== SIZE - 1) td.classList.add('bold-border-bottom');
+      if ((c + 1) % 3 === 0 && c !== SIZE - 1) td.classList.add('bold-border-right');
+      td.addEventListener('click', () => {
+        if (board[r][c] !== null) {
+          alert('Cell already filled!');
+          return;
+        }
+        const digit = prompt(`Player ${currentPlayer}, enter a digit (1-9) to place at (${r+1}, ${c+1}):`);
+        if (digit === null) return; // cancelled
+        if (!/^[1-9]$/.test(digit)) {
+          alert('Invalid digit. Please enter 1-9.');
+          return;
+        }
+        applyMove(parseInt(digit, 10), r, c);
+      });
+      tr.appendChild(td);
+    }
+    grid.appendChild(tr);
+  }
+}
+
+function renderBoard() {
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      const cell = document.getElementById(`cell-${r}-${c}`);
+      cell.textContent = board[r][c] === null ? '' : board[r][c];
+    }
+  }
+  currentPlayerSpan.textContent = currentPlayer;
+}
+
+function log(message) {
+  logDiv.textContent += message + '\n';
+  logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+// Sudoku rules check functions
+
+function isValidPlacement(r, c, val) {
+  for (let i = 0; i < SIZE; i++) {
+    if (board[r][i] === val) return false; // row
+    if (board[i][c] === val) return false; // col
+  }
+  const boxRowStart = Math.floor(r / 3) * 3;
+  const boxColStart = Math.floor(c / 3) * 3;
+  for (let rr = boxRowStart; rr < boxRowStart + 3; rr++) {
+    for (let cc = boxColStart; cc < boxColStart + 3; cc++) {
+      if (board[rr][cc] === val) return false;
+    }
+  }
+  return true;
+}
+
+// Solver (basic backtracking to check if puzzle still solvable)
+function findEmpty() {
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      if (board[r][c] === null) return [r, c];
+    }
+  }
+  return null;
+}
+
+function solver() {
+  const empty = findEmpty();
+  if (!empty) return true;
+  const [r, c] = empty;
+  for (let val = 1; val <= 9; val++) {
+    if (isValidPlacement(r, c, val)) {
+      board[r][c] = val;
+      if (solver()) {
+        board[r][c] = null;
+        return true;
+      }
+      board[r][c] = null;
+    }
+  }
+  return false;
+}
+
+// Try placing a move and check if puzzle still solvable
+function tryMove(r, c, val) {
+  if (board[r][c] !== null) return { valid: false, reason: 'Cell already filled' };
+  if (!isValidPlacement(r, c, val)) return { valid: false, reason: 'Placement breaks Sudoku rules' };
+  board[r][c] = val;
+  const solvable = solver();
+  board[r][c] = null;
+  if (!solvable) return { valid: false, reason: 'No solution after move' };
+  return { valid: true };
+}
+
+// Parse input like "3 at (6, 8)"
+function parseMove(text) {
+  const regex = /^(\d)\s*at\s*\(\s*(\d)\s*,\s*(\d)\s*\)$/i;
+  const match = text.trim().match(regex);
+  if (!match) return null;
+  const val = parseInt(match[1], 10);
+  const r = parseInt(match[2], 10) - 1;
+  const c = parseInt(match[3], 10) - 1;
+  if (val < 1 || val > 9 || r < 0 || r >= SIZE || c < 0 || c >= SIZE) return null;
+  return { val, r, c };
+}
+
+function applyMove(val, r, c) {
+  const result = tryMove(r, c, val);
+  if (!result.valid) {
+    log(`Invalid move by Player ${currentPlayer}: ${result.reason}`);
+    alert(`Invalid move: ${result.reason}\nPlayer ${currentPlayer === 1 ? 2 : 1} wins!`);
+    // Disable further moves by removing event listeners or disabling input/buttons
+    submitMoveBtn.disabled = true;
+    moveInput.disabled = true;
+    // Optionally remove click listeners from grid cells
+    for (let rr = 0; rr < SIZE; rr++) {
+      for (let cc = 0; cc < SIZE; cc++) {
+        const cell = document.getElementById(`cell-${rr}-${cc}`);
+        cell.style.pointerEvents = 'none';
+      }
+    }
+    return false;
+  }
+  board[r][c] = val;
+  log(`Player ${currentPlayer} placed ${val} at (${r + 1}, ${c + 1})`);
+  currentPlayer = currentPlayer === 1 ? 2 : 1;
+  renderBoard();
+  return true;
+}
+
+// Initialize
+createGrid();
+renderBoard();
+log('Game started. Player 1 begins.');
+
+</script>
+</body>
+</html>
