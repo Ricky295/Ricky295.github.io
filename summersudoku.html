@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,10 +7,9 @@
     <title>Sudoku Generator with Custom Regions</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Apply Inter font and basic page styling */
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f0f4f8; /* Light blue-gray background */
+            background-color: #f0f4f8;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -17,58 +17,51 @@
             padding: 20px;
             box-sizing: border-box;
         }
-        /* Main application container styling */
         #app-container {
             background-color: #ffffff;
-            border-radius: 1rem; /* Rounded corners for the container */
+            border-radius: 1rem;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
             padding: 2rem;
-            max-width: 900px; /* Max width for larger screens */
-            width: 100%; /* Full width on smaller screens */
+            max-width: 900px;
+            width: 100%;
             display: flex;
             flex-direction: column;
             align-items: center;
         }
-        /* Sudoku grid specific styling */
         #sudoku-grid {
             display: grid;
             grid-template-columns: repeat(9, 1fr);
             grid-template-rows: repeat(9, 1fr);
-            width: clamp(280px, 80vw, 540px); /* Responsive width: min 280px, max 540px, fluid 80vw */
-            aspect-ratio: 1 / 1; /* Keep the grid perfectly square */
-            border: 3px solid #3b82f6; /* Blue outer border */
-            border-radius: 0.5rem; /* Slightly rounded corners for the grid */
-            overflow: hidden; /* Ensure cell borders don't spill outside rounded corners */
+            width: clamp(280px, 80vw, 540px);
+            aspect-ratio: 1 / 1;
+            border: 3px solid #3b82f6;
+            border-radius: 0.5rem;
+            overflow: hidden;
         }
-        /* Styling for individual Sudoku cells */
         .cell {
             width: 100%;
             height: 100%;
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: clamp(1rem, 4vw, 1.8rem); /* Responsive font size */
+            font-size: clamp(1rem, 4vw, 1.8rem);
             font-weight: bold;
-            border: 1px solid #d1d5db; /* Light gray cell borders */
-            box-sizing: border-box; /* Include padding and border in the element's total width and height */
-            color: #374151; /* Dark gray text color for empty/user-filled cells */
-            position: relative; /* Needed for absolute positioning of candidates */
+            border: 1px solid #d1d5db;
+            box-sizing: border-box;
+            color: #374151;
+            position: relative;
         }
-        /* Style for numbers that are part of the original puzzle (given clues) */
         .cell.given {
-            color: #1f2937; /* Even darker text for given numbers */
+            color: #1f2937;
         }
+        
+        /* Region borders - dynamically applied */
+        .border-region { border-width: 2px; border-color: #000; }
+        .border-t-region { border-top-width: 2px; border-top-color: #000; }
+        .border-r-region { border-right-width: 2px; border-right-color: #000; }
+        .border-b-region { border-bottom-width: 2px; border-bottom-color: #000; }
+        .border-l-region { border-left-width: 2px; border-left-color: #000; }
 
-        /* Outer thick border for the entire grid */
-        /* Note: Custom region borders are not dynamically drawn via CSS due to their irregular shapes.
-           The regions are differentiated by background colors. */
-        .cell:nth-child(9n+1) { border-left: 3px solid #3b82f6; } /* Leftmost cells */
-        .cell:nth-child(9n) { border-right: 3px solid #3b82f6; } /* Rightmost cells */
-        .cell:nth-child(n + 1):nth-child(-n + 9) { border-top: 3px solid #3b82f6; } /* Topmost row */
-        .cell:nth-child(n + 73):nth-child(-n + 81) { border-bottom: 3px solid #3b82f6; } /* Bottommost row */
-
-
-        /* Input field styling for user-filled cells */
         .cell input {
             width: 100%;
             height: 100%;
@@ -78,86 +71,78 @@
             border: none;
             background-color: transparent;
             outline: none;
-            color: #2563eb; /* Blue text for user input */
-            -moz-appearance: textfield; /* Hide default number input arrows for Firefox */
+            color: #2563eb;
+            -moz-appearance: textfield;
         }
-        /* Hide number input arrows for Webkit browsers (Chrome, Safari) */
         .cell input::-webkit-outer-spin-button,
         .cell input::-webkit-inner-spin-button {
             -webkit-appearance: none;
             margin: 0;
         }
 
-        /* Styling for the candidates container */
         .candidates-container {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 2px;
+            left: 2px;
+            right: 2px;
+            bottom: 2px;
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             grid-template-rows: repeat(3, 1fr);
-            font-size: clamp(0.6rem, 1.5vw, 0.8rem); /* Smaller font for candidates */
-            color: #6b7280; /* Gray color for candidates */
-            align-items: center;
-            justify-items: center;
-            opacity: 0.8;
-            pointer-events: none; /* Allow clicks to pass through to the input field */
+            font-size: clamp(0.5rem, 1.2vw, 0.7rem);
+            color: #6b7280;
+            pointer-events: none;
         }
         .candidate {
-            padding: 1px; /* Small padding around each candidate number */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 500;
         }
 
-        /* Controls section styling (buttons) */
         .controls {
             margin-top: 1.5rem;
             display: flex;
-            flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
-            gap: 1rem; /* Space between buttons */
-            justify-content: center; /* Center buttons horizontally */
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
         }
-        /* Button common styling */
         .button {
             padding: 0.75rem 1.5rem;
             border-radius: 0.5rem;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s ease-in-out; /* Smooth transition for hover effects */
+            transition: all 0.2s ease-in-out;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            background: linear-gradient(to bottom right, #3b82f6, #2563eb); /* Blue gradient background */
+            background: linear-gradient(to bottom right, #3b82f6, #2563eb);
             color: white;
             border: none;
         }
-        /* Button hover effects */
         .button:hover {
-            transform: translateY(-2px); /* Lift button slightly */
+            transform: translateY(-2px);
             box-shadow: 0 6px 10px -2px rgba(0, 0, 0, 0.15), 0 3px 6px -2px rgba(0, 0, 0, 0.08);
-            background: linear-gradient(to bottom right, #2563eb, #1d4ed8); /* Darker blue gradient */
+            background: linear-gradient(to bottom right, #2563eb, #1d4ed8);
         }
-        /* Button active (click) effects */
         .button:active {
-            transform: translateY(0); /* Return to original position */
+            transform: translateY(0);
             box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
         }
 
-        /* Message box styling for user feedback */
         #message-box {
             margin-top: 1.5rem;
             padding: 1rem;
             border-radius: 0.5rem;
-            background-color: #eff6ff; /* Light blue background */
-            color: #1e40af; /* Darker blue text */
-            border: 1px solid #bfdbfe; /* Blue border */
-            display: none; /* Hidden by default, shown via JS */
+            background-color: #eff6ff;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+            display: none;
             text-align: center;
             width: 100%;
             max-width: 540px;
         }
-        /* Loading spinner animation */
         .loading-spinner {
-            border: 4px solid #f3f3f3; /* Light grey */
-            border-top: 4px solid #3498db; /* Blue */
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
             border-radius: 50%;
             width: 20px;
             height: 20px;
@@ -175,8 +160,7 @@
 <body>
     <div id="app-container">
         <h1 class="text-3xl font-extrabold text-gray-800 mb-6">Sudoku Generator</h1>
-        <div id="sudoku-grid">
-            </div>
+        <div id="sudoku-grid"></div>
         <div class="controls">
             <button id="generate-easy" class="button">Generate Easy</button>
             <button id="generate-medium" class="button">Generate Medium</button>
@@ -189,14 +173,14 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const SUDOKU_SIZE = 9; // Standard Sudoku grid size
-            let currentPuzzle = Array(SUDOKU_SIZE).fill(0).map(() => Array(SUDOKU_SIZE).fill(0)); // The puzzle currently displayed
-            let solutionGrid = Array(SUDOKU_SIZE).fill(0).map(() => Array(SUDOKU_SIZE).fill(0)); // Stores the solved version of the current puzzle
-            let customRegions = []; // A 9x9 array where each cell [r][c] stores its region ID
-            let regionColors = {}; // Maps region ID to a Tailwind CSS background color class
-            let showCandidatesEnabled = false; // State to track if candidates should be shown
+            const SUDOKU_SIZE = 9;
+            let currentPuzzle = Array(SUDOKU_SIZE).fill(0).map(() => Array(SUDOKU_SIZE).fill(0));
+            let solutionGrid = Array(SUDOKU_SIZE).fill(0).map(() => Array(SUDOKU_SIZE).fill(0));
+            let customRegions = [];
+            let regionColors = {0: 'bg-yellow-300', 1: 'bg-blue-800', 2: 'bg-blue-700', 3: 'bg-blue-600', 4: 'bg-blue-500', 5: 'bg-blue-400', 6: 'bg-blue-300', 7: 'bg-blue-200', 8: 'bg-blue-100'};
+            let showCandidatesEnabled = false;
+            let userCandidates = {}; // Store user-modified candidates
 
-            // Pre-defined base solution grid (from user's input)
             const baseSolution = [
                 [7,4,3,5,1,2,9,6,8],
                 [6,5,4,3,8,7,2,1,9],
@@ -209,7 +193,6 @@
                 [4,3,8,6,7,9,1,2,5]
             ];
 
-            // Get references to DOM elements
             const sudokuGridElement = document.getElementById('sudoku-grid');
             const messageBox = document.getElementById('message-box');
             const generateEasyBtn = document.getElementById('generate-easy');
@@ -218,55 +201,45 @@
             const solvePuzzleBtn = document.getElementById('solve-puzzle');
             const toggleCandidatesBtn = document.getElementById('toggle-candidates');
 
-            /**
-             * Initializes the custom regions map and their corresponding colors based on the provided image.
-             */
             function initializeCustomRegionsAndColors() {
-                // Define the custom regions directly from the image. Each number represents a region ID (0-8).
-                // Mapping from image numbers to 0-indexed region IDs:
-                // 1 -> 0 (Yellow region)
-                // 2 -> 1
-                // 3 -> 2
-                // 4 -> 3
-                // 5 -> 4
-                // 6 -> 5
-                // 7 -> 6
-                // 8 -> 7
-                // 9 -> 8
                 customRegions = [
-                    [8, 8, 8, 8, 8, 8, 8, 7, 7], // Row 0
-                    [8, 6, 6, 6, 6, 6, 7, 7, 7], // Row 1
-                    [8, 6, 5, 5, 5, 7, 7, 7, 7], // Row 2
-                    [6, 6, 5, 4, 5, 5, 5, 5, 5], // Row 3
-                    [6, 4, 4, 4, 3, 3, 3, 3, 3], // Row 4
-                    [4, 4, 3, 3, 3, 2, 3, 1, 1], // Row 5
-                    [4, 2, 2, 2, 2, 2, 1, 1, 0], // Row 6
-                    [4, 2, 1, 1, 1, 1, 1, 0, 0], // Row 7
-                    [4, 2, 2, 0, 0, 0, 0, 0, 0]  // Row 8
+                    [8, 8, 8, 8, 8, 8, 8, 7, 7],
+                    [8, 6, 6, 6, 6, 6, 7, 7, 7],
+                    [8, 6, 5, 5, 5, 7, 7, 7, 7],
+                    [6, 6, 5, 4, 5, 5, 5, 5, 5],
+                    [6, 4, 4, 4, 3, 3, 3, 3, 3],
+                    [4, 4, 3, 3, 3, 2, 3, 1, 1],
+                    [4, 2, 2, 2, 2, 2, 1, 1, 0],
+                    [4, 2, 1, 1, 1, 1, 1, 0, 0],
+                    [4, 2, 2, 0, 0, 0, 0, 0, 0]
                 ];
 
-                // Define distinct Tailwind color classes for each of the 9 regions, matching the image.
                 regionColors = {
-                    0: 'bg-yellow-300',   // Mapped from original ID 1 (Yellow region)
-                    1: 'bg-blue-800',     // Mapped from original ID 2
-                    2: 'bg-blue-700',     // Mapped from original ID 3
-                    3: 'bg-blue-600',     // Mapped from original ID 4
-                    4: 'bg-blue-500',     // Mapped from original ID 5
-                    5: 'bg-blue-400',     // Mapped from original ID 6
-                    6: 'bg-blue-300',     // Mapped from original ID 7
-                    7: 'bg-blue-200',     // Mapped from original ID 8
-                    8: 'bg-blue-100'      // Mapped from original ID 9
+                    0: 'bg-yellow-300',
+                    1: 'bg-blue-800',
+                    2: 'bg-blue-700',
+                    3: 'bg-blue-600',
+                    4: 'bg-blue-500',
+                    5: 'bg-blue-400',
+                    6: 'bg-blue-300',
+                    7: 'bg-blue-200',
+                    8: 'bg-blue-100'
                 };
             }
 
-            /**
-             * Shuffles the numbers in a solved Sudoku grid based on a random permutation.
-             * This creates new unique puzzles from a base solution.
-             * @param {Array<Array<number>>} grid - The solved Sudoku grid to shuffle.
-             * @returns {Array<Array<number>>} A new grid with numbers shuffled according to a permutation.
-             */
+            function getRegionBorders(r, c) {
+                const borders = [];
+                const currentRegion = customRegions[r][c];
+                
+                if (r === 0 || customRegions[r-1][c] !== currentRegion) borders.push('border-t-region');
+                if (c === 8 || customRegions[r][c+1] !== currentRegion) borders.push('border-r-region');
+                if (r === 8 || customRegions[r+1][c] !== currentRegion) borders.push('border-b-region');
+                if (c === 0 || customRegions[r][c-1] !== currentRegion) borders.push('border-l-region');
+                
+                return borders;
+            }
+
             function shuffleSolution(grid) {
-                // Create a random permutation of numbers 1-9
                 const originalNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
                 const shuffledNumbers = [...originalNumbers].sort(() => Math.random() - 0.5);
                 const permutationMap = new Map();
@@ -285,357 +258,292 @@
                 return newGrid;
             }
 
-            // --- Sudoku Core Logic ---
-
-            /**
-             * Checks if placing a number `num` at `(row, col)` is valid according to Sudoku rules.
-             * Rules checked: Row, Column, and Custom Region.
-             * @param {Array<Array<number>>} grid - The current Sudoku grid.
-             * @param {number} row - The row index (0-8).
-             * @param {number} col - The column index (0-8).
-             * @param {number} num - The number to check (1-9).
-             * @param {Array<Array<number>>} regionsMap - A 9x9 map indicating the region ID for each cell.
-             * @returns {boolean} True if the number is valid, false otherwise.
-             */
             function isValid(grid, row, col, num, regionsMap) {
-                // 1. Check Row Constraint: Ensure 'num' is not already in the current row
                 for (let x = 0; x < SUDOKU_SIZE; x++) {
                     if (grid[row][x] === num) return false;
                 }
-
-                // 2. Check Column Constraint: Ensure 'num' is not already in the current column
                 for (let x = 0; x < SUDOKU_SIZE; x++) {
                     if (grid[x][col] === num) return false;
                 }
-
-                // 3. Check Custom Region Constraint: Ensure 'num' is not already in the custom region
-                //    that cell (row, col) belongs to.
                 const currentRegionId = regionsMap[row][col];
-                for (let r_check = 0; r_check < SUDOKU_SIZE; r_check++) {
-                    for (let c_check = 0; c_check < SUDOKU_SIZE; c_check++) {
-                        // If the cell (r_check, c_check) is in the same custom region AND
-                        // it's not the cell we are currently trying to place 'num' in AND
-                        // it already contains 'num', then it's an invalid placement.
-                        if (regionsMap[r_check][c_check] === currentRegionId &&
-                            !(r_check === row && c_check === col) && // Exclude the current cell itself
-                            grid[r_check][c_check] === num) {
+                for (let r = 0; r < SUDOKU_SIZE; r++) {
+                    for (let c = 0; c < SUDOKU_SIZE; c++) {
+                        if (regionsMap[r][c] === currentRegionId &&
+                            !(r === row && c === col) && 
+                            grid[r][c] === num) {
                             return false;
                         }
                     }
                 }
-
-                return true; // If all checks pass, the number is valid
+                return true;
             }
 
-            /**
-             * Gets all possible valid candidates for a given empty cell.
-             * @param {Array<Array<number>>} grid - The current Sudoku grid.
-             * @param {number} r - The row index.
-             * @param {number} c - The column index.
-             * @param {Array<Array<number>>} regionsMap - The custom regions map.
-             * @returns {Array<number>} An array of valid candidate numbers for the cell.
-             */
             function getCandidates(grid, r, c, regionsMap) {
                 const candidates = [];
                 for (let num = 1; num <= SUDOKU_SIZE; num++) {
-                    // Temporarily set the cell to 0 before checking isValid
-                    // This ensures isValid checks for conflicts with *other* cells, not the one we are considering placing 'num' in.
                     const originalValue = grid[r][c];
                     grid[r][c] = 0; 
                     if (isValid(grid, r, c, num, regionsMap)) {
                         candidates.push(num);
                     }
-                    grid[r][c] = originalValue; // Restore the original value
+                    grid[r][c] = originalValue;
                 }
                 return candidates;
             }
 
-            /**
-             * Solves a given Sudoku puzzle using a backtracking algorithm,
-             * enhanced with Naked Single deduction for faster solving.
-             * @param {Array<Array<number>>} grid - The puzzle grid to solve (will be modified in place).
-             * @param {Array<Array<number>>} regionsMap - The custom regions map.
-             * @returns {boolean} True if a solution is found, false otherwise.
-             */
             function solveSudoku(grid, regionsMap) {
-                // Deduction Phase: Apply Naked Singles until no more progress is made
-                let madeProgressInDeduction = true;
-                while (madeProgressInDeduction) {
-                    madeProgressInDeduction = false;
+                let madeProgress = true;
+                while (madeProgress) {
+                    madeProgress = false;
                     for (let r = 0; r < SUDOKU_SIZE; r++) {
                         for (let c = 0; c < SUDOKU_SIZE; c++) {
-                            if (grid[r][c] === 0) { // If cell is empty
+                            if (grid[r][c] === 0) {
                                 const candidates = getCandidates(grid, r, c, regionsMap);
-                                if (candidates.length === 0) {
-                                    return false; // Conflict: no possible number for this cell
-                                }
-                                if (candidates.length === 1) { // Naked Single found
+                                if (candidates.length === 0) return false;
+                                if (candidates.length === 1) {
                                     grid[r][c] = candidates[0];
-                                    madeProgressInDeduction = true; // Mark progress to re-evaluate
+                                    madeProgress = true;
                                 }
                             }
                         }
                     }
                 }
 
-                // Backtracking Phase: If deduction didn't solve it completely
                 for (let r = 0; r < SUDOKU_SIZE; r++) {
                     for (let c = 0; c < SUDOKU_SIZE; c++) {
-                        if (grid[r][c] === 0) { // Find the next empty cell
-                            // Get candidates for the current empty cell (re-calculate after deduction)
+                        if (grid[r][c] === 0) {
                             const candidates = getCandidates(grid, r, c, regionsMap);
                             for (let num of candidates) {
-                                grid[r][c] = num; // Try placing a candidate
-                                if (solveSudoku(grid, regionsMap)) { // Recursively try to solve
-                                    return true; // If successful, propagate true
-                                } else {
-                                    grid[r][c] = 0; // If recursive call fails, backtrack: undo placement
-                                }
+                                grid[r][c] = num;
+                                if (solveSudoku(grid, regionsMap)) return true;
+                                grid[r][c] = 0;
                             }
-                            return false; // No number works for this cell, this path is invalid
+                            return false;
                         }
                     }
                 }
-                return true; // All cells are filled, grid is complete
+                return true;
             }
 
-            /**
-             * Counts the number of unique solutions for a given Sudoku puzzle.
-             * Crucial for ensuring that generated puzzles have only one valid solution.
-             * @param {Array<Array<number>>} puzzle - The Sudoku puzzle to check (read-only).
-             * @param {Array<Array<number>>} regionsMap - The custom regions map.
-             * @returns {number} The number of unique solutions found (0, 1, or >1).
-             */
             function countSolutions(puzzle, regionsMap) {
                 let solutionsFound = 0;
-                // Create a deep copy of the puzzle to avoid modifying the original
                 let tempGrid = puzzle.map(row => [...row]);
 
-                /**
-                 * Recursive helper function to find and count solutions.
-                 * Stops searching after finding more than one solution for efficiency.
-                 */
                 function solveAndCount(grid) {
-                    if (solutionsFound > 1) return; // Optimization: Stop if more than one solution is already found
+                    if (solutionsFound > 1) return;
 
-                    // --- Deduction Phase (apply Naked Singles until no more progress is made) ---
-                    let madeProgressInDeduction = true;
-                    while (madeProgressInDeduction) {
-                        madeProgressInDeduction = false;
-                        for (let r_deduce = 0; r_deduce < SUDOKU_SIZE; r_deduce++) {
-                            for (let c_deduce = 0; c_deduce < SUDOKU_SIZE; c_deduce++) {
-                                if (grid[r_deduce][c_deduce] === 0) {
-                                    const candidates = getCandidates(grid, r_deduce, c_deduce, regionsMap);
-                                    if (candidates.length === 0) {
-                                        return; // Conflict detected, no solution on this path
-                                    }
+                    let madeProgress = true;
+                    while (madeProgress) {
+                        madeProgress = false;
+                        for (let r = 0; r < SUDOKU_SIZE; r++) {
+                            for (let c = 0; c < SUDOKU_SIZE; c++) {
+                                if (grid[r][c] === 0) {
+                                    const candidates = getCandidates(grid, r, c, regionsMap);
+                                    if (candidates.length === 0) return;
                                     if (candidates.length === 1) {
-                                        grid[r_deduce][c_deduce] = candidates[0];
-                                        madeProgressInDeduction = true;
+                                        grid[r][c] = candidates[0];
+                                        madeProgress = true;
                                     }
                                 }
                             }
                         }
                     }
-                    // End Deduction Phase
 
-                    // Backtracking Phase: If not fully solved by deduction
                     for (let r = 0; r < SUDOKU_SIZE; r++) {
                         for (let c = 0; c < SUDOKU_SIZE; c++) {
-                            if (grid[r][c] === 0) { // Find the next empty cell
+                            if (grid[r][c] === 0) {
                                 const candidates = getCandidates(grid, r, c, regionsMap);
                                 for (let num of candidates) {
-                                    if (solutionsFound > 1) return; // Optimization: stop if multiple found
+                                    if (solutionsFound > 1) return;
                                     grid[r][c] = num;
-                                    solveAndCount(grid); // Recursive call
-                                    grid[r][c] = 0; // Backtrack
+                                    solveAndCount(grid);
+                                    grid[r][c] = 0;
                                 }
-                                return; // No number works for this cell, this branch leads to no solution
+                                return;
                             }
                         }
                     }
-                    solutionsFound++; // If execution reaches here, a solution has been found
+                    solutionsFound++;
                 }
 
-                solveAndCount(tempGrid); // Start the counting process
+                solveAndCount(tempGrid);
                 return solutionsFound;
             }
 
-            /**
-             * Generates a Sudoku puzzle with a unique solution and specified difficulty.
-             * Difficulty is approximated by the number of clues left in the puzzle.
-             * @param {string} difficulty - 'easy', 'medium', or 'hard'.
-             */
             function generatePuzzle(difficulty) {
                 showMessage("Generating puzzle... <span class='loading-spinner'></span>", 'info');
-                clearGrid(); // Clear the current grid display
+                clearGrid();
                 
-                // Step 1: Start with a shuffled version of the base solution
                 solutionGrid = shuffleSolution(baseSolution);
-                
-                currentPuzzle = solutionGrid.map(row => [...row]); // Start with the full grid as the puzzle to modify
+                currentPuzzle = solutionGrid.map(row => [...row]);
+                userCandidates = {};
 
-                // Step 2: Determine the target number of clues (given numbers) based on difficulty
-                // These are approximate values and can be tuned. Fewer clues generally mean harder puzzles.
-                let minCluesTarget; // Minimum number of clues to aim for
-                let maxRemovedAttempts; // Max number of cells to try removing
+                let minCluesTarget, maxRemovedAttempts;
                 if (difficulty === 'easy') {
-                    minCluesTarget = 45; // Keep around 45 clues
-                    maxRemovedAttempts = 50; // Max 50 cells removed to speed up (fewer removals mean easier)
+                    minCluesTarget = 45;
+                    maxRemovedAttempts = 50;
                 } else if (difficulty === 'medium') {
-                    minCluesTarget = 35; // Keep around 35 clues
-                    maxRemovedAttempts = 60; // Max 60 cells removed
+                    minCluesTarget = 35;
+                    maxRemovedAttempts = 60;
                 } else if (difficulty === 'hard') {
-                    minCluesTarget = 25; // Keep around 25 clues
-                    maxRemovedAttempts = 70; // Max 70 cells removed
+                    minCluesTarget = 25;
+                    maxRemovedAttempts = 70;
                 }
 
-                // Create a shuffled list of cell coordinates to randomize removal order
                 let cellsToRemove = [];
                 for (let r = 0; r < SUDOKU_SIZE; r++) {
                     for (let c = 0; c < SUDOKU_SIZE; c++) {
                         cellsToRemove.push({ r, c });
                     }
                 }
-                cellsToRemove.sort(() => Math.random() - 0.5); // Randomize the order
+                cellsToRemove.sort(() => Math.random() - 0.5);
 
                 let removedCount = 0;
                 for (let i = 0; i < cellsToRemove.length && removedCount < maxRemovedAttempts; i++) {
                     const { r, c } = cellsToRemove[i];
                     const originalValue = currentPuzzle[r][c];
 
-                    if (originalValue === 0) continue; // Skip if cell is already empty
+                    if (originalValue === 0) continue;
 
-                    currentPuzzle[r][c] = 0; // Temporarily remove the number
+                    currentPuzzle[r][c] = 0;
 
-                    // Check if the puzzle still has a unique solution after removal
                     const solutions = countSolutions(currentPuzzle, customRegions);
 
                     if (solutions !== 1) {
-                        currentPuzzle[r][c] = originalValue; // Revert the removal if not unique
+                        currentPuzzle[r][c] = originalValue;
                     } else {
-                        removedCount++; // Successfully removed a number, maintaining uniqueness
+                        removedCount++;
                     }
                 }
 
-                // Final check to ensure the generated puzzle has a unique solution
                 if (countSolutions(currentPuzzle, customRegions) === 1) {
-                    renderGrid(currentPuzzle, true); // Render the generated puzzle with input fields
+                    renderGrid(currentPuzzle, true);
                     showMessage(`Generated a ${difficulty} puzzle with a unique solution!`, 'success');
                 } else {
-                    showMessage("Could not generate a unique solution with specified difficulty. Please try again or choose a different difficulty.", 'info');
-                    renderGrid(currentPuzzle, true); // Still show the last state of the puzzle
+                    showMessage("Could not generate a unique solution. Please try again.", 'info');
+                    renderGrid(currentPuzzle, true);
                 }
             }
 
-            // --- UI Rendering & Interaction ---
-
-            /**
-             * Renders the Sudoku grid to the HTML DOM.
-             * @param {Array<Array<number>>} grid - The 2D array representing the Sudoku grid.
-             * @param {boolean} isPuzzle - True if rendering a puzzle (empty cells are input fields), false for a solved grid (all numbers displayed).
-             */
             function renderGrid(grid, isPuzzle) {
-                sudokuGridElement.innerHTML = ''; // Clear any existing cells
-                // Iterate through each row and column to create cells
+                sudokuGridElement.innerHTML = '';
                 for (let r = 0; r < SUDOKU_SIZE; r++) {
                     for (let c = 0; c < SUDOKU_SIZE; c++) {
                         const cell = document.createElement('div');
                         cell.classList.add('cell');
-                        // Apply the background color based on its custom region ID
                         cell.classList.add(regionColors[customRegions[r][c]]);
+                        
+                        // Add region borders
+                        const borders = getRegionBorders(r, c);
+                        borders.forEach(border => cell.classList.add(border));
 
                         const value = grid[r][c];
-                        if (value !== 0) { // If the cell has a number (not empty)
-                            cell.textContent = value; // Display the number
-                            cell.classList.add('given'); // Mark as a given clue (not editable)
-                        } else if (isPuzzle) { // If rendering a puzzle and the cell is empty
+                        if (value !== 0) {
+                            cell.textContent = value;
+                            cell.classList.add('given');
+                        } else if (isPuzzle) {
                             const input = document.createElement('input');
-                            input.type = 'number'; // Allow only numbers
+                            input.type = 'number';
                             input.min = '1';
                             input.max = '9';
-                            input.maxLength = '1'; // Visually limit to 1 character
+                            input.maxLength = '1';
                             input.classList.add('user-input');
-                            // Store row and column as data attributes for easy access in event handler
                             input.dataset.row = r;
                             input.dataset.col = c;
-                            input.addEventListener('input', handleCellInput); // Add event listener for user input
+                            input.addEventListener('input', handleCellInput);
                             
-                            // Set the input's value from currentPuzzle if it was already filled by user
                             if (currentPuzzle[r][c] !== 0) {
                                 input.value = currentPuzzle[r][c];
-                                // Re-apply validation styling if any
-                                const tempGridForValidation = currentPuzzle.map(rowArr => [...rowArr]);
-                                tempGridForValidation[r][c] = 0; // Clear cell itself for validation
-                                if (isValid(tempGridForValidation, r, c, parseInt(input.value), customRegions)) {
+                                const tempGrid = currentPuzzle.map(row => [...row]);
+                                tempGrid[r][c] = 0;
+                                if (isValid(tempGrid, r, c, parseInt(input.value), customRegions)) {
                                     input.classList.add('text-green-600');
                                 } else {
                                     input.classList.add('text-red-600');
                                 }
                             }
                             
-                            cell.appendChild(input); // Append the input field to the cell
+                            cell.appendChild(input);
 
                             if (showCandidatesEnabled) {
                                 const candidatesContainer = document.createElement('div');
                                 candidatesContainer.classList.add('candidates-container');
-                                const candidates = getCandidates(currentPuzzle, r, c, customRegions);
-                                if (candidates.length > 0) {
-                                    for (let num = 1; num <= 9; num++) {
-                                        const candidateSpan = document.createElement('span');
-                                        candidateSpan.classList.add('candidate');
-                                        candidateSpan.textContent = candidates.includes(num) ? num : '';
-                                        candidatesContainer.appendChild(candidateSpan);
-                                    }
+                                
+                                const cellKey = `${r}-${c}`;
+                                let candidates;
+                                
+                                if (userCandidates[cellKey]) {
+                                    candidates = userCandidates[cellKey];
+                                } else {
+                                    candidates = getCandidates(currentPuzzle, r, c, customRegions);
+                                }
+                                
+                                for (let num = 1; num <= 9; num++) {
+                                    const candidateSpan = document.createElement('span');
+                                    candidateSpan.classList.add('candidate');
+                                    candidateSpan.textContent = candidates.includes(num) ? num : '';
+                                    candidateSpan.addEventListener('click', (e) => {
+                                        e.stopPropagation();
+                                        toggleCandidate(r, c, num);
+                                    });
+                                    candidateSpan.style.cursor = 'pointer';
+                                    candidateSpan.style.pointerEvents = 'auto';
+                                    candidatesContainer.appendChild(candidateSpan);
                                 }
                                 cell.appendChild(candidatesContainer);
                             }
                         }
-                        sudokuGridElement.appendChild(cell); // Add the cell to the grid container
+                        sudokuGridElement.appendChild(cell);
                     }
                 }
             }
 
-            /**
-             * Handles user input in a Sudoku cell. Validates the input and updates the puzzle state.
-             * Highlights valid/invalid user inputs.
-             * @param {Event} event - The input event triggered by user typing.
-             */
+            function toggleCandidate(r, c, num) {
+                const cellKey = `${r}-${c}`;
+                if (!userCandidates[cellKey]) {
+                    userCandidates[cellKey] = getCandidates(currentPuzzle, r, c, customRegions);
+                }
+                
+                const candidates = userCandidates[cellKey];
+                const index = candidates.indexOf(num);
+                if (index > -1) {
+                    candidates.splice(index, 1);
+                } else {
+                    candidates.push(num);
+                    candidates.sort();
+                }
+                
+                renderGrid(currentPuzzle, true);
+            }
+
             function handleCellInput(event) {
                 const input = event.target;
                 const row = parseInt(input.dataset.row);
                 const col = parseInt(input.dataset.col);
                 let value = input.value.trim();
 
-                // If input is empty, reset cell value and styling
                 if (value === '') {
                     currentPuzzle[row][col] = 0;
                     input.classList.remove('text-green-600', 'text-red-600');
                 } else {
                     const num = parseInt(value);
-                    // Validate if input is a number between 1 and 9
                     if (isNaN(num) || num < 1 || num > 9) {
-                        input.value = ''; // Clear invalid input from the field
-                        currentPuzzle[row][col] = 0; // Set to empty in internal grid
+                        input.value = '';
+                        currentPuzzle[row][col] = 0;
                         input.classList.remove('text-green-600', 'text-red-600');
                     } else {
-                        // Temporarily clear the current cell in a copy of the grid for validation.
-                        // This prevents the `isValid` check from considering the number in the current cell
-                        // as a conflict with itself.
-                        const tempGridForValidation = currentPuzzle.map(rowArr => [...rowArr]);
-                        tempGridForValidation[row][col] = 0;
+                        const tempGrid = currentPuzzle.map(row => [...row]);
+                        tempGrid[row][col] = 0;
 
-                        // Check if the entered number is valid in its row, column, and custom region
-                        if (isValid(tempGridForValidation, row, col, num, customRegions)) {
-                            currentPuzzle[row][col] = num; // Update internal grid
-                            input.classList.remove('text-red-600'); // Remove red highlight if previously invalid
-                            input.classList.add('text-green-600'); // Add green highlight for valid input
+                        if (isValid(tempGrid, row, col, num, customRegions)) {
+                            currentPuzzle[row][col] = num;
+                            input.classList.remove('text-red-600');
+                            input.classList.add('text-green-600');
                         } else {
-                            currentPuzzle[row][col] = num; // Still store the number for display, but mark as invalid
-                            input.classList.remove('text-green-600'); // Remove green highlight
-                            input.classList.add('text-red-600'); // Add red highlight for invalid input
+                            currentPuzzle[row][col] = num;
+                            input.classList.remove('text-green-600');
+                            input.classList.add('text-red-600');
                         }
-                        // Ensure only one digit is kept if user types multiple quickly
                         if (value.length > 1) {
                             input.value = value.charAt(0);
                             currentPuzzle[row][col] = parseInt(input.value.charAt(0));
@@ -643,24 +551,14 @@
                     }
                 }
                 
-                // Re-render the grid to update candidate displays if enabled
-                // This is important because changing one cell affects candidates in others.
                 renderGrid(currentPuzzle, true);
             }
 
-
-            /**
-             * Displays a message to the user in the message box.
-             * @param {string} msg - The message content (can include HTML for spinner).
-             * @param {string} type - 'info', 'success', or 'error' to apply appropriate styling.
-             */
             function showMessage(msg, type) {
-                messageBox.innerHTML = msg; // Set message content
-                // Remove previous styling classes
+                messageBox.innerHTML = msg;
                 messageBox.classList.remove('bg-red-100', 'text-red-700', 'border-red-400',
                                            'bg-green-100', 'text-green-700', 'border-green-400',
                                            'bg-blue-100', 'text-blue-700', 'border-blue-400');
-                // Apply styling based on message type
                 if (type === 'error') {
                     messageBox.classList.add('bg-red-100', 'text-red-700', 'border-red-400');
                 } else if (type === 'success') {
@@ -668,69 +566,59 @@
                 } else if (type === 'info') {
                     messageBox.classList.add('bg-blue-100', 'text-blue-700', 'border-blue-400');
                 }
-                messageBox.style.display = 'block'; // Make the message box visible
+                messageBox.style.display = 'block';
             }
 
-            /**
-             * Clears the Sudoku grid display and hides the message box.
-             */
             function clearGrid() {
                 sudokuGridElement.innerHTML = '';
                 messageBox.style.display = 'none';
             }
 
-            // --- Event Listeners for Buttons ---
             generateEasyBtn.addEventListener('click', () => generatePuzzle('easy'));
             generateMediumBtn.addEventListener('click', () => generatePuzzle('medium'));
             generateHardBtn.addEventListener('click', () => generatePuzzle('hard'));
 
             solvePuzzleBtn.addEventListener('click', () => {
                 showMessage("Solving puzzle... <span class='loading-spinner'></span>", 'info');
-                // Create a deep copy of the current puzzle (including user inputs) to solve
                 let puzzleToSolve = currentPuzzle.map(row => [...row]);
                 
-                // First, pre-validate the current user-filled puzzle for immediate conflicts.
-                // This checks if the user's current input itself has any conflicts before attempting to solve.
                 let hasInitialConflicts = false;
                 for (let r = 0; r < SUDOKU_SIZE; r++) {
                     for (let c = 0; c < SUDOKU_SIZE; c++) {
                         if (puzzleToSolve[r][c] !== 0) {
                             const val = puzzleToSolve[r][c];
-                            // Temporarily set cell to 0 to check if 'val' conflicts with other cells (not itself)
                             puzzleToSolve[r][c] = 0;
                             if (!isValid(puzzleToSolve, r, c, val, customRegions)) {
                                 hasInitialConflicts = true;
                                 break;
                             }
-                            puzzleToSolve[r][c] = val; // Restore value
+                            puzzleToSolve[r][c] = val;
                         }
                     }
                     if (hasInitialConflicts) break;
                 }
 
                 if (hasInitialConflicts) {
-                    showMessage("Your current puzzle input has conflicts. Cannot solve. Please correct your input or generate a new puzzle.", 'error');
+                    showMessage("Your puzzle has conflicts. Please correct your input.", 'error');
                     return;
                 }
 
-                // Attempt to solve the puzzle
                 if (!solveSudoku(puzzleToSolve, customRegions)) {
-                    showMessage("This puzzle has no solution or your input made it unsolvable. Try generating a new one!", 'error');
+                    showMessage("This puzzle has no solution.", 'error');
                 } else {
-                    renderGrid(puzzleToSolve, false); // Render the fully solved grid (no input fields)
+                    renderGrid(puzzleToSolve, false);
                     showMessage("Puzzle solved!", 'success');
                 }
             });
 
             toggleCandidatesBtn.addEventListener('click', () => {
-                showCandidatesEnabled = !showCandidatesEnabled; // Toggle the state
+                showCandidatesEnabled = !showCandidatesEnabled;
                 toggleCandidatesBtn.textContent = showCandidatesEnabled ? 'Hide Candidates' : 'Show Candidates';
-                renderGrid(currentPuzzle, true); // Re-render the grid to show/hide candidates
+                renderGrid(currentPuzzle, true);
             });
 
-            // --- Initial Setup on Page Load ---
-            initializeCustomRegionsAndColors(); // Define regions and colors
-            renderGrid(currentPuzzle, true); // Render an empty grid initially with input fields
+            initializeCustomRegionsAndColors();
+            renderGrid(currentPuzzle, true);
             showMessage("Click 'Generate' to create a Sudoku puzzle!", 'info');
         });
     </script>
