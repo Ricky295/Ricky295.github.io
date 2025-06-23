@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>QR Code Sudoku Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: auto;
+      padding: 20px;
+    }
+
+    .puzzle-entry {
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+
+    .puzzle-entry-header {
+      font-weight: bold;
+    }
+
+    .meta {
+      margin: 5px 0;
+    }
+
+    progress {
+      width: 100%;
+    }
+
+    #qrcode {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>QR Code Sudoku Generator</h1>
+
+  <button onclick="addPuzzle('9x9')">Add 9x9</button>
+  <button onclick="addPuzzle('6x6')">Add 6x6</button>
+  <button onclick="generateQRCode()">Export</button>
+
+  <p>
+    <progress id="free" max="2900" value="0"></progress>
+    <span id="byteInfo">0 bytes used (0%). 2900 bytes remaining.</span>
+  </p>
+
+  <div id="puzzleList"></div>
+
+  <div id="qrcode"></div>
+
+  <!-- Mock sudoku generators (replace with actual libraries) -->
+  <script>
+    class Sudoku {
+      string(difficulty = 0.5) {
+        return '9x9-' + difficulty.toFixed(2) + '-' + Math.random().toString(36).substring(2, 15);
+      }
+    }
+
+    class Sudoku6x6 {
+      generateSudoku(clues = 15, asString = true) {
+        return '6x6-' + clues + '-' + Math.random().toString(36).substring(2, 12);
+      }
+    }
+  </script>
+
+  <!-- QR Code library -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+  <script>
+    const sudoku = new Sudoku();
+    const sudoku6 = new Sudoku6x6();
+
+    let puzzles = [];
+
+    function addPuzzle(type) {
+      const isImported = confirm("Is this an imported puzzle? Click OK for Imported, Cancel for Generated.");
+
+      if (isImported) {
+        const importData = prompt("Paste the puzzle string:");
+        if (!importData) return;
+
+        puzzles.push({
+          type: type,
+          source: 'Imported',
+          data: importData
+        });
+
+      } else {
+        let puzzle, difficulty = 0.5, clues = 15;
+
+        if (type === '9x9') {
+          difficulty = parseFloat(prompt("Difficulty (0–4):", "0.5")) || 0.5;
+          puzzle = sudoku.string(difficulty);
+          puzzles.push({
+            type: '9x9',
+            source: 'Generated',
+            data: puzzle,
+            difficulty: difficulty
+          });
+        } else if (type === '6x6') {
+          clues = parseInt(prompt("Clue count:", "15")) || 15;
+          puzzle = sudoku6.generateSudoku(clues, true);
+          puzzles.push({
+            type: '6x6',
+            source: 'Generated',
+            data: puzzle,
+            clues: clues
+          });
+        }
+      }
+
+      updatePuzzleList();
+    }
+
+    function removePuzzle(index) {
+      puzzles.splice(index, 1);
+      updatePuzzleList();
+    }
+
+    function updatePuzzleList() {
+      const listDiv = document.getElementById("puzzleList");
+      listDiv.innerHTML = '';
+
+      puzzles.forEach((puzzle, index) => {
+        const { type, data, source, difficulty, clues } = puzzle;
+
+        const div = document.createElement("div");
+        div.className = "puzzle-entry";
+
+        let metaText = `Size: ${type} `;
+        metaText += `<label><input type="radio" disabled ${source === 'Generated' ? 'checked' : ''}> Generated</label> `;
+        metaText += `<label><input type="radio" disabled ${source === 'Imported' ? 'checked' : ''}> Imported</label>`;
+
+        if (source === 'Generated' && type === '9x9') {
+          metaText += `<br>Difficulty: ${difficulty}`;
+        } else if (source === 'Generated' && type === '6x6') {
+          metaText += `<br>Clue count: ${clues}`;
+        } else if (source === 'Imported') {
+          metaText += `<br>Import: ${data.substring(0, 20)}...`;
+        }
+
+        div.innerHTML = `
+          <div class="puzzle-entry-header">#${index + 1}</div>
+          <div class="meta">${metaText}</div>
+          <button onclick="removePuzzle(${index})">Remove</button>
+        `;
+        listDiv.appendChild(div);
+      });
+
+      updateProgressBar();
+    }
+
+    function updateProgressBar() {
+      const combined = puzzles.map(p => p.data).join("|");
+      const used = combined.length;
+      const max = 2954;
+      const remaining = max - used;
+      const percent = ((used / max) * 100).toFixed(2);
+
+      const bar = document.getElementById("free");
+      bar.value = used;
+
+      document.getElementById("byteInfo").innerText =
+        `${used} bytes used (${percent}%). ${remaining} bytes remaining.`;
+    }
+
+    function generateQRCode() {
+      const combined = puzzles.map(p => p.data).join("|");
+      document.getElementById("qrcode").innerHTML = "";
+      new QRCode(document.getElementById("qrcode"), {
+        text: combined,
+        width: 256,
+        height: 256,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.L
+      });
+    }
+  </script>
+</body>
+</html>
