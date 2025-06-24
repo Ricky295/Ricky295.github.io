@@ -154,7 +154,6 @@ try {
 } catch (e) {
   console.error(e.message);
 }
-*/
 
 // Solve from array
 try {
@@ -164,3 +163,5 @@ try {
 } catch (e) {
   console.error(e.message);
 }
+
+*/
