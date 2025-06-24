@@ -126,7 +126,7 @@ class Sudoku6x6 {
     else throw new Error("No solution found");
   }
 }
-
+/*
 // Usage example:
 
 const sudoku = new Sudoku6x6();
@@ -154,6 +154,7 @@ try {
 } catch (e) {
   console.error(e.message);
 }
+*/
 
 // Solve from array
 try {
