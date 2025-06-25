@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Dumb Camera QR App - All Resolutions</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 20px; }
+  video, canvas { border: 1px solid #ccc; display: block; margin-bottom: 10px; }
+  #qr { margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<h2>Dumb Camera QR App - All Resolutions</h2>
+
+<video id="video" autoplay playsinline width="320" height="240"></video>
+
+<label for="resolution">Choose resolution & bit depth:</label>
+<select id="resolution">
+  <option value="128x128_1">128 x 128 (1-bit)</option>
+  <option value="256x64_1">256 x 64 (1-bit)</option>
+  <option value="128x64_2">128 x 64 (2-bit)</option>
+  <option value="96x64_2">96 x 64 (2-bit)</option>
+  <option value="64x64_2">64 x 64 (2-bit)</option>
+  <option value="32x64_2">32 x 64 (2-bit)</option>
+  <option value="90x60_3">90 x 60 (3-bit)</option>
+  <option value="64x64_3">64 x 64 (3-bit)</option>
+  <option value="32x64_3">32 x 64 (3-bit)</option>
+  <option value="32x32_3">32 x 32 (3-bit)</option>
+  <option value="60x40_6">60 x 40 (6-bit)</option>
+  <option value="48x48_6">48 x 48 (6-bit)</option>
+  <option value="32x32_6">32 x 32 (6-bit)</option>
+  <option value="24x32_6">24 x 32 (6-bit)</option>
+  <option value="16x32_6">16 x 32 (6-bit)</option>
+</select>
+
+<button id="capture">Capture & Generate QR</button>
+
+<canvas id="canvas" style="display:none;"></canvas>
+
+<div id="qr"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<script>
+const alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+-';
+
+// Helper: encode array of 6-bit numbers to string
+function encode6bit(data) {
+  return data.map(b => alphabet[b]).join('');
+}
+
+// Quantization functions:
+function convertTo1BitGray(pixels) {
+  const out = [];
+  for(let i=0; i<pixels.length; i+=4) {
+    let gray = (pixels[i] + pixels[i+1] + pixels[i+2]) / 3;
+    out.push(gray < 128 ? 0 : 1);
+  }
+  return out;
+}
+
+function convertTo2BitGray(pixels) {
+  const out = [];
+  for(let i=0; i<pixels.length; i+=4) {
+    let gray = (pixels[i] + pixels[i+1] + pixels[i+2]) / 3;
+    let val = Math.floor(gray / 256 * 4);
+    if (val > 3) val = 3;
+    out.push(val);
+  }
+  return out;
+}
+
+function convertTo3BitGray(pixels) {
+  const out = [];
+  for(let i=0; i<pixels.length; i+=4) {
+    let gray = (pixels[i] + pixels[i+1] + pixels[i+2]) / 3;
+    let val = Math.floor(gray / 256 * 8);
+    if (val > 7) val = 7;
+    out.push(val);
+  }
+  return out;
+}
+
+function convertTo6BitGray(pixels) {
+  const out = [];
+  for(let i=0; i<pixels.length; i+=4) {
+    let gray = (pixels[i] + pixels[i+1] + pixels[i+2]) / 3;
+    let val = Math.floor(gray / 256 * 64);
+    if (val > 63) val = 63;
+    out.push(val);
+  }
+  return out;
+}
+
+// Packing functions (pack pixels into 6-bit chunks):
+// 1-bit: pack 6 pixels into 6 bits each, so 6 pixels = 6 bits? No, 6 pixels @1 bit = 6 bits total = 1 character.
+// So pack 6 pixels of 1 bit each into 1 6-bit char
+function pack1bitTo6bit(pixels) {
+  const packed = [];
+  for(let i=0; i<pixels.length; i+=6) {
+    let val = 0;
+    for(let j=0; j<6; j++) {
+      val |= ((pixels[i+j] || 0) & 1) << j;
+    }
+    packed.push(val);
+  }
+  return packed;
+}
+
+// 2-bit: pack 3 pixels per 6-bit char
+function pack2bitTo6bit(pixels) {
+  const packed = [];
+  for(let i=0; i<pixels.length; i+=3) {
+    let a = pixels[i] || 0;
+    let b = pixels[i+1] || 0;
+    let c = pixels[i+2] || 0;
+    packed.push(a | (b << 2) | (c << 4));
+  }
+  return packed;
+}
+
+// 3-bit: pack 2 pixels per 6-bit char
+function pack3bitTo6bit(pixels) {
+  const packed = [];
+  for(let i=0; i<pixels.length; i+=2) {
+    let a = pixels[i] || 0;
+    let b = pixels[i+1] || 0;
+    packed.push(a | (b << 3));
+  }
+  return packed;
+}
+
+// 6-bit: each pixel is one 6-bit char
+function pack6bitTo6bit(pixels) {
+  return pixels;
+}
+
+// Downscale image data using canvas
+function downscale(ctx, width, height) {
+  const tmp = document.createElement('canvas');
+  tmp.width = width;
+  tmp.height = height;
+  const tmpCtx = tmp.getContext('2d');
+  tmpCtx.drawImage(ctx.canvas, 0, 0, tmp.width, tmp.height);
+  return tmpCtx.getImageData(0, 0, tmp.width, tmp.height);
+}
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const captureBtn = document.getElementById('capture');
+const resolutionSelect = document.getElementById('resolution');
+const qrDiv = document.getElementById('qr');
+
+navigator.mediaDevices.getUserMedia({ video: true })
+  .then(stream => { video.srcObject = stream; })
+  .catch(err => alert('Error accessing webcam: ' + err));
+
+captureBtn.onclick = async () => {
+  let [res, bitDepth] = resolutionSelect.value.split('_');
+  const [w, h] = res.split('x').map(Number);
+  const bits = Number(bitDepth);
+
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+
+  // Draw current video frame scaled down to chosen resolution
+  ctx.drawImage(video, 0, 0, w, h);
+
+  // Get image pixels
+  const imageData = ctx.getImageData(0, 0, w, h);
+
+  // Convert pixels based on bit depth
+  let quantPixels;
+  switch(bits) {
+    case 1: quantPixels = convertTo1BitGray(imageData.data); break;
+    case 2: quantPixels = convertTo2BitGray(imageData.data); break;
+    case 3: quantPixels = convertTo3BitGray(imageData.data); break;
+    case 6: quantPixels = convertTo6BitGray(imageData.data); break;
+    default: alert('Unsupported bit depth'); return;
+  }
+
+  // Pack pixels
+  let packed;
+  switch(bits) {
+    case 1: packed = pack1bitTo6bit(quantPixels); break;
+    case 2: packed = pack2bitTo6bit(quantPixels); break;
+    case 3: packed = pack3bitTo6bit(quantPixels); break;
+    case 6: packed = pack6bitTo6bit(quantPixels); break;
+  }
+
+  // Encode packed data
+  const encoded = encode6bit(packed);
+
+  // Prefix with resolution and bit depth for decoding (format: R{width}x{height}_{bits};)
+  const prefix = `R${w}x${h}_${bits};`;
+
+  const qrData = prefix + encoded;
+
+  // Clear previous QR
+  qrDiv.innerHTML = '';
+
+  // Generate QR code
+  QRCode.toCanvas(qrData, { errorCorrectionLevel: 'M', scale: 4 }, function (err, canvasQR) {
+    if (err) return alert(err);
+    qrDiv.appendChild(canvasQR);
+  });
+};
+</script>
+</body>
+</html>
