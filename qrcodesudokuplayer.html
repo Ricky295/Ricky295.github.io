@@ -375,7 +375,7 @@
     // Sample puzzles for testing
     const samplePuzzles = [
       '000260701680070090190004500820100040004602900050003028009300074040050036703018000', // 9x9
-      '4.3..1.1.4.....2.5..5....6.1..2.4..3' // 6x6
+      '4.3..1|.1.4..|...2.5|..5...|.6.1..|2.4..3' // 6x6
     ];
 
     function loadSamplePuzzles() {
@@ -459,35 +459,51 @@
       const dropZone = document.getElementById('dropZone');
       const imageInput = document.getElementById('imageInput');
       
+      if (!dropZone || !imageInput) {
+        // Try again after a short delay if elements aren't ready
+        setTimeout(setupImageUpload, 100);
+        return;
+      }
+      
       // Drag and drop events
       dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         dropZone.classList.add('dragover');
       });
       
-      dropZone.addEventListener('dragleave', () => {
+      dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         dropZone.classList.remove('dragover');
       });
       
       dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         dropZone.classList.remove('dragover');
         
+        console.log('File dropped!'); // Debug log
         const files = e.dataTransfer.files;
         if (files.length > 0) {
+          console.log('Processing file:', files[0].name); // Debug log
           processImageFile(files[0]);
         }
       });
       
       // File input change
       imageInput.addEventListener('change', (e) => {
+        console.log('File selected!'); // Debug log
         if (e.target.files.length > 0) {
+          console.log('Processing file:', e.target.files[0].name); // Debug log
           processImageFile(e.target.files[0]);
         }
       });
     }
 
     function processImageFile(file) {
+      console.log('Processing image file:', file.name, file.type); // Debug log
+      
       if (!file.type.startsWith('image/')) {
         alert('Please select an image file');
         return;
@@ -495,16 +511,27 @@
       
       const reader = new FileReader();
       reader.onload = (e) => {
+        console.log('File loaded, creating image...'); // Debug log
         const img = new Image();
         img.onload = () => {
+          console.log('Image loaded, scanning for QR...'); // Debug log
           scanImageForQR(img);
         };
+        img.onerror = () => {
+          console.error('Failed to load image');
+          alert('Failed to load the image. Please try a different file.');
+        };
         img.src = e.target.result;
+      };
+      reader.onerror = () => {
+        console.error('Failed to read file');
+        alert('Failed to read the file. Please try again.');
       };
       reader.readAsDataURL(file);
     }
 
     function scanImageForQR(img) {
+      console.log('Scanning image for QR code...'); // Debug log
       const canvas = document.getElementById('imageCanvas');
       const context = canvas.getContext('2d');
       
@@ -517,14 +544,33 @@
       
       // Get image data and scan for QR code
       const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      console.log('Image data obtained, running jsQR...'); // Debug log
+      
+      const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: "dontInvert",
+      });
       
       if (code) {
+        console.log('QR code found:', code.data); // Debug log
         processPuzzleData(code.data);
         document.getElementById('imageUploadSection').classList.add('hidden');
         alert('QR code successfully scanned from image!');
       } else {
-        alert('No QR code found in the image. Please try a clearer image.');
+        console.log('No QR code found in image'); // Debug log
+        
+        // Try with inversion
+        const codeInverted = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: "attemptBoth",
+        });
+        
+        if (codeInverted) {
+          console.log('QR code found with inversion:', codeInverted.data); // Debug log
+          processPuzzleData(codeInverted.data);
+          document.getElementById('imageUploadSection').classList.add('hidden');
+          alert('QR code successfully scanned from image!');
+        } else {
+          alert('No QR code found in the image. Please try a clearer image or make sure it contains a valid QR code.');
+        }
       }
     }
 
