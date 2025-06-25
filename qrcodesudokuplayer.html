@@ -154,6 +154,23 @@
       transition: all 0.2s ease;
     }
 
+    /* Thick borders for 9x9 boxes */
+    .sudoku-9x9 .sudoku-cell:nth-child(3n) {
+      border-right: 3px solid #333;
+    }
+    .sudoku-9x9 .sudoku-cell:nth-child(n+19):nth-child(-n+27),
+    .sudoku-9x9 .sudoku-cell:nth-child(n+46):nth-child(-n+54) {
+      border-bottom: 3px solid #333;
+    }
+
+    /* Thick borders for 6x6 boxes */
+    .sudoku-6x6 .sudoku-cell:nth-child(2n) {
+      border-right: 3px solid #333;
+    }
+    .sudoku-6x6 .sudoku-cell:nth-child(n+13):nth-child(-n+18) {
+      border-bottom: 3px solid #333;
+    }
+
     .sudoku-cell:hover {
       background: #f0f8ff;
     }
@@ -358,7 +375,7 @@
     // Sample puzzles for testing
     const samplePuzzles = [
       '000260701680070090190004500820100040004602900050003028009300074040050036703018000', // 9x9
-      '4.3..1|.1.4..|...2.5|..5...|.6.1..|2.4..3' // 6x6
+      '4.3..1.1.4.....2.5..5....6.1..2.4..3' // 6x6
     ];
 
     function loadSamplePuzzles() {
@@ -435,6 +452,80 @@
       }
       
       scan();
+    }
+
+    // Image upload and drag/drop functionality
+    function setupImageUpload() {
+      const dropZone = document.getElementById('dropZone');
+      const imageInput = document.getElementById('imageInput');
+      
+      // Drag and drop events
+      dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+      });
+      
+      dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+      });
+      
+      dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+          processImageFile(files[0]);
+        }
+      });
+      
+      // File input change
+      imageInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          processImageFile(e.target.files[0]);
+        }
+      });
+    }
+
+    function processImageFile(file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          scanImageForQR(img);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function scanImageForQR(img) {
+      const canvas = document.getElementById('imageCanvas');
+      const context = canvas.getContext('2d');
+      
+      // Set canvas size to image size
+      canvas.width = img.width;
+      canvas.height = img.height;
+      
+      // Draw image on canvas
+      context.drawImage(img, 0, 0);
+      
+      // Get image data and scan for QR code
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      
+      if (code) {
+        processPuzzleData(code.data);
+        document.getElementById('imageUploadSection').classList.add('hidden');
+        alert('QR code successfully scanned from image!');
+      } else {
+        alert('No QR code found in the image. Please try a clearer image.');
+      }
     }
 
     function processPuzzleData(data) {
