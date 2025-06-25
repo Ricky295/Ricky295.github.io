@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Dumb Camera QR Scanner & Decoder</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 20px; }
+  video, canvas { border: 1px solid #ccc; display: block; margin-bottom: 10px; }
+  #outputCanvas { margin-top: 20px; }
+  #result { margin-top: 10px; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h2>Dumb Camera QR Scanner & Decoder</h2>
+
+<video id="video" autoplay playsinline width="320" height="240"></video>
+<button id="startScan">Start Camera Scan</button>
+<button id="stopScan" disabled>Stop Scan</button>
+
+<br><br>
+
+<label for="uploadImage">Or upload a QR code image:</label>
+<input type="file" id="uploadImage" accept="image/*" />
+
+<div id="result">Scan result will appear here...</div>
+
+<canvas id="canvas" style="display:none;"></canvas>
+<canvas id="outputCanvas"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
+
+<script>
+const alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+-';
+
+// Decode 6-bit encoded string to array of 6-bit numbers
+function decode6bit(str) {
+  const arr = [];
+  for(let i=0; i<str.length; i++) {
+    const val = alphabet.indexOf(str[i]);
+    if(val === -1) throw new Error('Invalid character in encoded data: ' + str[i]);
+    arr.push(val);
+  }
+  return arr;
+}
+
+// Unpack 6-bit chunks back to pixels for each bit depth
+function unpack6bitTo1bit(data) {
+  const pixels = [];
+  for(let val of data) {
+    for(let i=0; i<6; i++) {
+      pixels.push((val >> i) & 1);
+    }
+  }
+  return pixels;
+}
+function unpack6bitTo2bit(data) {
+  const pixels = [];
+  for(let val of data) {
+    pixels.push(val & 0b11);
+    pixels.push((val >> 2) & 0b11);
+    pixels.push((val >> 4) & 0b11);
+  }
+  return pixels;
+}
+function unpack6bitTo3bit(data) {
+  const pixels = [];
+  for(let val of data) {
+    pixels.push(val & 0b111);
+    pixels.push((val >> 3) & 0b111);
+  }
+  return pixels;
+}
+function unpack6bitTo6bit(data) {
+  return data.slice();
+}
+
+// Decode & draw image from QR data string
+function decodeAndDraw(qrData) {
+  // Parse prefix: R{width}x{height}_{bits};
+  const prefixMatch = qrData.match(/^R(\d+)x(\d+)_(\d+);/);
+  if(!prefixMatch) {
+    alert('Invalid prefix format in QR data!');
+    return;
+  }
+  const width = parseInt(prefixMatch[1], 10);
+  const height = parseInt(prefixMatch[2], 10);
+  const bits = parseInt(prefixMatch[3], 10);
+  const dataStr = qrData.slice(prefixMatch[0].length);
+
+  let decoded6bit;
+  try {
+    decoded6bit = decode6bit(dataStr);
+  } catch(e) {
+    alert('Error decoding base64-like data: ' + e.message);
+    return;
+  }
+
+  let pixels;
+  switch(bits) {
+    case 1: pixels = unpack6bitTo1bit(decoded6bit); break;
+    case 2: pixels = unpack6bitTo2bit(decoded6bit); break;
+    case 3: pixels = unpack6bitTo3bit(decoded6bit); break;
+    case 6: pixels = unpack6bitTo6bit(decoded6bit); break;
+    default:
+      alert('Unsupported bit depth');
+      return;
+  }
+
+  pixels = pixels.slice(0, width * height);
+
+  const canvas = document.getElementById('outputCanvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.createImageData(width, height);
+
+  for(let i=0; i<pixels.length; i++) {
+    let gray;
+    const val = pixels[i];
+    switch(bits) {
+      case 1: gray = val ? 255 : 0; break;
+      case 2: gray = val * 85; break;
+      case 3: gray = val * 36; break;
+      case 6: gray = val * 4; break;
+    }
+    imgData.data[i*4] = gray;
+    imgData.data[i*4 + 1] = gray;
+    imgData.data[i*4 + 2] = gray;
+    imgData.data[i*4 + 3] = 255;
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+  document.getElementById('result').textContent = `Decoded image: ${width} x ${height}, ${bits}-bit grayscale.`;
+}
+
+// QR scanning from webcam setup
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let scanning = false;
+let scanInterval;
+const resultDiv = document.getElementById('result');
+
+async function startCameraScan() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = stream;
+    scanning = true;
+    document.getElementById('startScan').disabled = true;
+    document.getElementById('stopScan').disabled = false;
+    scanInterval = setInterval(scanFrame, 200);
+  } catch(e) {
+    alert('Error accessing camera: ' + e);
+  }
+}
+
+function stopCameraScan() {
+  scanning = false;
+  document.getElementById('startScan').disabled = false;
+  document.getElementById('stopScan').disabled = true;
+  clearInterval(scanInterval);
+  if(video.srcObject) {
+    video.srcObject.getTracks().forEach(track => track.stop());
+    video.srcObject = null;
+  }
+}
+
+function scanFrame() {
+  if(video.readyState !== video.HAVE_ENOUGH_DATA) return;
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const code = jsQR(imageData.data, imageData.width, imageData.height);
+  if(code) {
+    stopCameraScan();
+    try {
+      decodeAndDraw(code.data);
+    } catch(e) {
+      alert('Failed to decode QR data: ' + e.message);
+    }
+  }
+}
+
+// Image upload QR decode
+document.getElementById('uploadImage').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = () => {
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    if(code) {
+      try {
+        decodeAndDraw(code.data);
+      } catch(e) {
+        alert('Failed to decode QR data: ' + e.message);
+      }
+    } else {
+      alert('No QR code found in image.');
+    }
+  };
+  img.src = url;
+});
+
+// Buttons
+document.getElementById('startScan').onclick = startCameraScan;
+document.getElementById('stopScan').onclick = stopCameraScan;
+</script>
+
+</body>
+</html>
