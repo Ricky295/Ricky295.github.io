@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>4-Clue Blitz</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:20px;background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;color:#333}
+.container{background:rgba(255,255,255,.95);padding:30px;border-radius:20px;box-shadow:0 20px 40px rgba(0,0,0,.1);backdrop-filter:blur(10px)}
+h2{text-align:center;color:#4a5568;margin-bottom:25px;font-size:2em;font-weight:300}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:20px}
+.stat{background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:15px;border-radius:12px;text-align:center;box-shadow:0 4px 15px rgba(102,126,234,.3)}
+.stat div:first-child{font-size:.9em;opacity:.9;margin-bottom:5px}
+.stat div:last-child{font-size:1.4em;font-weight:600}
+#progress{width:100%;height:12px;margin-bottom:20px;border-radius:10px;background:#e2e8f0;appearance:none}
+#progress::-webkit-progress-bar{background:#e2e8f0;border-radius:10px}
+#progress::-webkit-progress-value{background:linear-gradient(90deg,#667eea,#764ba2);border-radius:10px}
+#status{background:#f7fafc;padding:15px;border-radius:10px;margin-bottom:20px;border-left:4px solid #667eea;font-size:.95em}
+#grid{display:grid;grid-template-columns:repeat(4,50px);grid-template-rows:repeat(4,50px);gap:3px;margin:20px auto;padding:15px;background:white;border-radius:15px;box-shadow:0 8px 25px rgba(0,0,0,.15);justify-content:center}
+.cell{border:2px solid #cbd5e0;font-size:1.4em;text-align:center;line-height:46px;user-select:none;border-radius:8px;transition:all .2s;background:white;width:46px;height:46px;font-weight:600}
+.cell:hover{border-color:#667eea;transform:scale(1.05)}
+.cell:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.2);transform:scale(1.05)}
+.cell:nth-child(2),.cell:nth-child(6),.cell:nth-child(10),.cell:nth-child(14){border-right:4px solid #4a5568}
+.cell:nth-child(-n+8):nth-child(n+5),.cell:nth-child(n+9):nth-child(-n+16){border-bottom:4px solid #4a5568}
+.cell[readonly]{background:linear-gradient(135deg,#edf2f7,#e2e8f0);color:#2d3748;font-weight:700}
+.solved{background:linear-gradient(135deg,#48bb78,#38a169)!important;color:white!important;animation:pulse .5s}
+@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.1)}100%{transform:scale(1)}}
+#controls{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:20px 0}
+button{background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;padding:12px 20px;border-radius:25px;cursor:pointer;font-weight:600;transition:all .3s;box-shadow:0 4px 15px rgba(102,126,234,.3)}
+button:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px rgba(102,126,234,.4)}
+button:disabled{background:#a0aec0;cursor:not-allowed;box-shadow:none}
+#importInput{width:100%;margin-top:10px;padding:12px;border:2px solid #e2e8f0;border-radius:10px;font-family:monospace;font-size:.9em;transition:border-color .2s}
+#importInput:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.1)}
+#leaderboard{margin-top:30px;background:#f7fafc;padding:20px;border-radius:15px;border:1px solid #e2e8f0}
+#leaderboard h3{color:#4a5568;margin-bottom:15px;text-align:center}
+.lb-section{margin-bottom:20px}
+.lb-section:last-child{margin-bottom:0}
+.lb-section strong{color:#2d3748;display:block;margin-bottom:10px}
+#fastestList,#slowestList{background:white;border-radius:8px;padding:10px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+#fastestList li,#slowestList li{padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:.9em}
+#fastestList li:last-child,#slowestList li:last-child{border-bottom:none}
+.completion{text-align:center;background:linear-gradient(135deg,#48bb78,#38a169);color:white;padding:20px;border-radius:15px;margin:20px 0;font-size:1.1em;font-weight:600;animation:slideIn .5s}
+@keyframes slideIn{from{transform:translateY(-20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.pause-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:1000}
+.pause-msg{background:white;padding:40px;border-radius:20px;text-align:center;font-size:1.5em;color:#4a5568;box-shadow:0 20px 40px rgba(0,0,0,.3)}
+</style>
+</head>
+<body>
+<div class="container">
+<h2>4-Clue Blitz</h2>
+<div class="stats">
+<div class="stat"><div>Current Time</div><div id="timer">0s</div></div>
+<div class="stat"><div>Total Time</div><div id="totalTimer">0s</div></div>
+<div class="stat"><div>Progress</div><div id="puzzleCount">0/0</div></div>
+<div class="stat"><div>Completed</div><div id="completedCount">0</div></div>
+</div>
+<progress id="progress" max="100" value="0"></progress>
+<div id="status"></div>
+<div id="grid"></div>
+<div id="controls">
+<button id="pauseBtn" disabled>Pause</button>
+<button id="saveBtn" disabled>Save Progress</button>
+<button id="exportBtn" disabled>Export Progress</button>
+<button id="importBtn">Import Progress</button>
+<input type="text" id="importInput" placeholder="Paste export data here">
+</div>
+<div id="leaderboard">
+<h3>🏆 Leaderboard</h3>
+<div class="lb-section">
+<strong>🚀 Fastest Solves:</strong>
+<ol id="fastestList"></ol>
+</div>
+<div class="lb-section">
+<strong>🐌 Slowest Solves:</strong>
+<ol id="slowestList"></ol>
+</div>
+</div>
+</div>
+<script>
+(async()=>{
+const els={
+progress:document.getElementById('progress'),
+status:document.getElementById('status'),
+grid:document.getElementById('grid'),
+timer:document.getElementById('timer'),
+totalTimer:document.getElementById('totalTimer'),
+puzzleCount:document.getElementById('puzzleCount'),
+completedCount:document.getElementById('completedCount'),
+pauseBtn:document.getElementById('pauseBtn'),
+saveBtn:document.getElementById('saveBtn'),
+exportBtn:document.getElementById('exportBtn'),
+importBtn:document.getElementById('importBtn'),
+importInput:document.getElementById('importInput'),
+fastestList:document.getElementById('fastestList'),
+slowestList:document.getElementById('slowestList')
+};
+
+let state={
+allSolutions:[],
+allMasks:[],
+uniquePuzzles:[],
+puzzleSolutions:[],
+currentPuzzleIndex:0,
+completedPuzzles:0,
+totalElapsedTime:0,
+timerStart:0,
+totalTimerStart:0,
+elapsedPause:0,
+paused:false,
+pauseTime:0,
+fastestSolves:[],
+slowestSolves:[],
+timerInterval:null,
+totalTimerInterval:null
+};
+
+const fmt=s=>s<60?Math.floor(s)+'s':s<3600?Math.floor(s/60)+'m '+Math.floor(s%60)+'s':Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m '+Math.floor(s%60)+'s';
+const fmtPrecise=s=>s.toFixed(2)+'s';
+const bits=n=>{let c=0;while(n)c+=n&1,n>>=1;return c};
+
+function isValid(g,r,c,v){
+for(let i=0;i<4;i++)if(g[r][i]===v||g[i][c]===v)return false;
+const br=2*Math.floor(r/2),bc=2*Math.floor(c/2);
+for(let rr=br;rr<br+2;rr++)for(let cc=bc;cc<bc+2;cc++)if(g[rr][cc]===v)return false;
+return true;
+}
+
+function genSolutions(g=null,r=0,c=0,sols=[]){
+if(!g)g=Array.from({length:4},()=>Array(4).fill(0));
+if(r===4){sols.push(g.map(row=>row.slice()));return}
+if(g[r][c]!==0){
+if(c===3)genSolutions(g,r+1,0,sols);
+else genSolutions(g,r,c+1,sols);
+return;
+}
+for(let v=1;v<=4;v++){
+if(isValid(g,r,c,v)){
+g[r][c]=v;
+if(c===3)genSolutions(g,r+1,0,sols);
+else genSolutions(g,r,c+1,sols);
+g[r][c]=0;
+}
+}
+return sols;
+}
+
+function isUnique(m,clues,sols){
+let cnt=0;
+for(const sol of sols){
+let match=true;
+for(let i=0;i<16;i++){
+if((m&(1<<i))&&sol[Math.floor(i/4)][i%4]!==clues[i]){
+match=false;break;
+}
+}
+if(match&&++cnt>1)return false;
+}
+return cnt===1;
+}
+
+function render(puzzle){
+els.grid.innerHTML='';
+for(let i=0;i<16;i++){
+let cell=document.createElement('input');
+cell.className='cell';
+cell.type='text';
+cell.maxLength=1;
+cell.pattern='[1-4]';
+cell.autocomplete='off';
+cell.spellcheck=false;
+cell.inputMode='numeric';
+cell.value=puzzle[i]||'';
+if(puzzle[i]){
+cell.readOnly=true;
+cell.style.fontWeight='bold';
+}
+cell.dataset.idx=i;
+els.grid.appendChild(cell);
+}
+}
+
+function checkSolved(userGrid){
+const sol=state.puzzleSolutions[state.currentPuzzleIndex];
+for(let i=0;i<16;i++){
+let v=userGrid[i].value;
+if(v===''||Number(v)!==sol[i])return false;
+}
+return true;
+}
+
+function startTimer(){
+if(state.timerInterval)clearInterval(state.timerInterval);
+state.timerStart=Date.now()-state.elapsedPause;
+state.timerInterval=setInterval(()=>{
+if(!state.paused){
+state.elapsedPause=Date.now()-state.timerStart;
+els.timer.textContent=fmt(state.elapsedPause/1000);
+}
+},100);
+}
+
+function startTotalTimer(){
+if(state.totalTimerInterval)clearInterval(state.totalTimerInterval);
+state.totalTimerStart=Date.now()-state.totalElapsedTime;
+state.totalTimerInterval=setInterval(()=>{
+if(!state.paused){
+state.totalElapsedTime=Date.now()-state.totalTimerStart;
+els.totalTimer.textContent=fmt(state.totalElapsedTime/1000);
+}
+},100);
+}
+
+function stopTimer(){
+if(state.timerInterval)clearInterval(state.timerInterval);
+}
+
+function stopTotalTimer(){
+if(state.totalTimerInterval)clearInterval(state.totalTimerInterval);
+}
+
+function resetTimer(){
+stopTimer();
+state.elapsedPause=0;
+els.timer.textContent='0s';
+}
+
+function loadPuzzle(idx){
+if(idx<0||idx>=state.uniquePuzzles.length)return;
+state.currentPuzzleIndex=idx;
+render(state.uniquePuzzles[idx]);
+els.puzzleCount.textContent=`${idx+1}/${state.uniquePuzzles.length}`;
+els.completedCount.textContent=state.completedPuzzles.toString();
+resetTimer();
+startTimer();
+if(idx===0)startTotalTimer();
+els.pauseBtn.disabled=false;
+els.saveBtn.disabled=false;
+els.exportBtn.disabled=false;
+setupInputs();
+}
+
+function setupInputs(){
+els.grid.querySelectorAll('input.cell').forEach(inp=>{
+inp.addEventListener('input',()=>{
+if(!/[1-4]/.test(inp.value))inp.value='';
+const userGrid=Array.from(els.grid.querySelectorAll('input.cell'));
+if(checkSolved(userGrid)){
+userGrid.forEach(c=>c.classList.add('solved'));
+stopTimer();
+state.completedPuzzles++;
+saveSolveTime(state.elapsedPause/1000);
+setTimeout(()=>{
+if(state.currentPuzzleIndex+1<state.uniquePuzzles.length){
+loadPuzzle(state.currentPuzzleIndex+1);
+}else{
+stopTotalTimer();
+showCompletion();
+}
+},1500);
+}
+});
+});
+}
+
+function showCompletion(){
+const msg=document.createElement('div');
+msg.className='completion';
+msg.innerHTML=`🎉 Congratulations! You've completed all ${state.uniquePuzzles.length} puzzles! 🎉<br>Total time: ${fmtPrecise(state.totalElapsedTime/1000)}`;
+document.querySelector('.container').insertBefore(msg,els.grid);
+}
+
+function saveSolveTime(time){
+state.fastestSolves.push({puzzleIndex:state.currentPuzzleIndex,time});
+state.slowestSolves.push({puzzleIndex:state.currentPuzzleIndex,time});
+state.fastestSolves.sort((a,b)=>a.time-b.time);
+state.slowestSolves.sort((a,b)=>b.time-a.time);
+if(state.fastestSolves.length>5)state.fastestSolves.pop();
+if(state.slowestSolves.length>5)state.slowestSolves.pop();
+updateLeaderboard();
+}
+
+function updateLeaderboard(){
+els.fastestList.innerHTML='';
+els.slowestList.innerHTML='';
+if(!state.fastestSolves.length){
+els.fastestList.innerHTML='<li style="color:#a0aec0">No solves yet</li>';
+}else{
+state.fastestSolves.forEach(e=>{
+let li=document.createElement('li');
+li.textContent=`Puzzle ${e.puzzleIndex+1}: ${fmtPrecise(e.time)}`;
+els.fastestList.appendChild(li);
+});
+}
+if(!state.slowestSolves.length){
+els.slowestList.innerHTML='<li style="color:#a0aec0">No solves yet</li>';
+}else{
+state.slowestSolves.forEach(e=>{
+let li=document.createElement('li');
+li.textContent=`Puzzle ${e.puzzleIndex+1}: ${fmtPrecise(e.time)}`;
+els.slowestList.appendChild(li);
+});
+}
+}
+
+function saveProgress(){
+const progress={
+currentPuzzleIndex:state.currentPuzzleIndex,
+completedPuzzles:state.completedPuzzles,
+totalElapsedTime:state.totalElapsedTime,
+fastestSolves:state.fastestSolves,
+slowestSolves:state.slowestSolves
+};
+try{
+localStorage.setItem('sudokuProgress',JSON.stringify(progress));
+alert('Progress saved!');
+}catch(e){
+alert('Failed to save progress');
+}
+}
+
+function loadProgress(){
+try{
+const saved=localStorage.getItem('sudokuProgress');
+if(saved){
+const progress=JSON.parse(saved);
+if(progress.currentPuzzleIndex!==undefined)state.currentPuzzleIndex=progress.currentPuzzleIndex;
+if(progress.completedPuzzles!==undefined)state.completedPuzzles=progress.completedPuzzles;
+if(progress.totalElapsedTime!==undefined)state.totalElapsedTime=progress.totalElapsedTime;
+if(progress.fastestSolves)state.fastestSolves=progress.fastestSolves;
+if(progress.slowestSolves)state.slowestSolves=progress.slowestSolves;
+}
+}catch(e){}
+}
+
+function exportProgress(){
+try{
+const saved=localStorage.getItem('sudokuProgress');
+if(!saved){
+alert('No saved progress to export!');
+return;
+}
+els.importInput.value=btoa(saved);
+alert('Progress exported! Copy the text below to save.');
+}catch(e){
+alert('Failed to export progress');
+}
+}
+
+function importProgress(){
+const val=els.importInput.value.trim();
+if(!val)return alert('Paste export data first!');
+try{
+const decoded=atob(val);
+localStorage.setItem('sudokuProgress',decoded);
+loadProgress();
+loadPuzzle(state.currentPuzzleIndex);
+alert('Progress imported!');
+}catch(e){
+alert('Invalid import data!');
+}
+}
+
+function togglePause(){
+if(state.paused){
+// Resume
+state.paused=false;
+els.pauseBtn.textContent='Pause';
+const pauseDuration=Date.now()-state.pauseTime;
+state.timerStart+=pauseDuration;
+state.totalTimerStart+=pauseDuration;
+hidePauseOverlay();
+startTimer();
+startTotalTimer();
+}else{
+// Pause
+state.paused=true;
+els.pauseBtn.textContent='Resume';
+state.pauseTime=Date.now();
+stopTimer();
+stopTotalTimer();
+showPauseOverlay();
+}
+}
+
+function showPauseOverlay(){
+const overlay=document.createElement('div');
+overlay.className='pause-overlay';
+overlay.id='pauseOverlay';
+overlay.innerHTML='<div class="pause-msg">⏸️ Game Paused<br><small>Click Resume to continue</small></div>';
+document.body.appendChild(overlay);
+}
+
+function hidePauseOverlay(){
+const overlay=document.getElementById('pauseOverlay');
+if(overlay)overlay.remove();
+}
+
+// Event listeners
+els.pauseBtn.onclick=togglePause;
+els.saveBtn.onclick=saveProgress;
+els.exportBtn.onclick=exportProgress;
+els.importBtn.onclick=importProgress;
+
+// Handle visibility change for better pause behavior
+document.addEventListener('visibilitychange',()=>{
+if(document.hidden&&!state.paused&&state.timerInterval){
+togglePause();
+}
+});
+
+// Handle escape key for pause
+document.addEventListener('keydown',e=>{
+if(e.key==='Escape'&&!els.pauseBtn.disabled){
+togglePause();
+}
+});
+
+async function generateAll(){
+els.status.textContent='Generating all 4x4 Sudoku solutions...';
+state.allSolutions=genSolutions();
+els.status.textContent=`Generated ${state.allSolutions.length} solutions. Generating 4-clue masks...`;
+await new Promise(r=>setTimeout(r,100));
+
+state.allMasks=[];
+for(let m=0;m<(1<<16);m++)if(bits(m)===4)state.allMasks.push(m);
+els.status.textContent=`Generated ${state.allMasks.length} 4-clue masks. Finding unique puzzles...`;
+
+state.uniquePuzzles=[];
+state.puzzleSolutions=[];
+const total=state.allSolutions.length*state.allMasks.length;
+let done=0;
+const batchSize=50000;
+
+for(let s=0;s<state.allSolutions.length;s++){
+const flatSol=state.allSolutions[s].flat();
+for(let mi=0;mi<state.allMasks.length;mi+=batchSize){
+const end=Math.min(mi+batchSize,state.allMasks.length);
+for(let m=mi;m<end;m++){
+const mask=state.allMasks[m];
+let puzzle=[];
+for(let i=0;i<16;i++)puzzle[i]=(mask&(1<<i))?flatSol[i]:0;
+if(isUnique(mask,puzzle,state.allSolutions)){
+state.uniquePuzzles.push(puzzle);
+state.puzzleSolutions.push(flatSol);
+}
+}
+done+=(end-mi);
+els.progress.value=(done/total)*100;
+els.status.textContent=`Processed ${done.toLocaleString()}/${total.toLocaleString()} combinations. Found ${state.uniquePuzzles.length} unique puzzles.`;
+await new Promise(r=>setTimeout(r,1));
+}
+}
+els.status.innerHTML=`🎯 Ready! Found <strong>${state.uniquePuzzles.length}</strong> unique 4-clue puzzles. Let's solve them all!`;
+loadPuzzle(0);
+}
+
+loadProgress();
+updateLeaderboard();
+await generateAll();
+})();
+</script>
+</body>
+</html>
