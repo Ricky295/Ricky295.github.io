@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nothing Timer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+
+        .timer-container {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .digit {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(7, 1fr);
+            gap: 3px;
+            width: 80px;
+            height: 120px;
+        }
+
+        .colon {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 15px;
+            height: 120px;
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            background: #333;
+            border-radius: 2px;
+            transition: all 0.2s ease;
+        }
+
+        .dot.active {
+            background: #fff;
+            box-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 30px #fff;
+        }
+
+        .colon-dot {
+            width: 8px;
+            height: 8px;
+            background: #fff;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #fff;
+            animation: pulse 1s infinite;
+        }
+
+        .colon-dot.paused {
+            animation: none;
+            opacity: 0.3;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .shortcuts {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #666;
+            font-size: 11px;
+            text-align: right;
+            line-height: 1.4;
+        }
+
+        .status {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #666;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .alarm-indicator {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #ff6b6b;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .alarm-indicator.active {
+            opacity: 1;
+        }
+
+        .flash {
+            animation: flash 0.5s ease-in-out 3;
+        }
+
+        @keyframes flash {
+            0%, 100% { background: #000; }
+            50% { background: #ff3333; }
+        }
+    </style>
+</head>
+<body>
+    <div class="shortcuts">
+        0-9: Enter time<br>
+        SPACE: Start/Pause<br>
+        R / ESC: Reset<br>
+        A: Toggle alarm<br>
+        C: Clear
+    </div>
+
+    <div class="alarm-indicator" id="alarm-indicator">
+        🔔 ALARM ON
+    </div>
+
+    <div class="timer-container">
+        <div class="digit" id="min-tens"></div>
+        <div class="digit" id="min-ones"></div>
+        <div class="colon">
+            <div class="colon-dot" id="colon-top"></div>
+            <div class="colon-dot" id="colon-bottom"></div>
+        </div>
+        <div class="digit" id="sec-tens"></div>
+        <div class="digit" id="sec-ones"></div>
+    </div>
+
+    <div class="status" id="status">
+        Type numbers to set timer, SPACE to start
+    </div>
+
+    <script>
+        // Dot matrix patterns for digits 0-9
+        const digitPatterns = {
+            0: [
+                1,1,1,1,1,
+                1,0,0,0,1,
+                1,0,0,0,1,
+                1,0,0,0,1,
+                1,0,0,0,1,
+                1,0,0,0,1,
+                1,1,1,1,1
+            ],
+            1: [
+                0,0,1,0,0,
+                0,1,1,0,0,
+                0,0,1,0,0,
+                0,0,1,0,0,
+                0,0,1,0,0,
+                0,0,1,0,0,
+                0,1,1,1,0
+            ],
+            2: [
+                1,1,1,1,1,
+                0,0,0,0,1,
+                0,0,0,0,1,
+                1,1,1,1,1,
+                1,0,0,0,0,
+                1,0,0,0,0,
+                1,1,1,1,1
+            ],
+            3: [
+                1,1,1,1,1,
+                0,0,0,0,1,
+                0,0,0,0,1,
+                1,1,1,1,1,
+                0,0,0,0,1,
+                0,0,0,0,1,
+                1,1,1,1,1
+            ],
+            4: [
+                1,0,0,0,1,
+                1,0,0,0,1,
+                1,0,0,0,1,
+                1,1,1,1,1,
+                0,0,0,0,1,
+                0,0,0,0,1,
+                0,0,0,0,1
+            ],
+            5: [
+                1,1,1,1,1,
+                1,0,0,0,0,
+                1,0,0,0,0,
+                1,1,1,1,1,
+                0,0,0,0,1,
+                0,0,0,0,1,
+                1,1,1,1,1
+            ],
+            6: [
+                1,1,1,1,1,
+                1,0,0,0,0,
+                1,0,0,0,0,
+                1,1,1,1,1,
+                1,0,0,0,1,
+                1,0,0,0,1,
+                1,1,1,1,1
+            ],
+            7: [
+                1,1,1,1,1,
+                0,0,0,0,1,
+                0,0,0,0,1,
+                0,0,0,0,1,
+                0,0,0,0,1,
+                0,0,0,0,1,
+                0,0,0,0,1
+            ],
+            8: [
+                1,1,1,1,1,
+                1,0,0,0,1,
+                1,0,0,0,1,
+                1,1,1,1,1,
+                1,0,0,0,1,
+                1,0,0,0,1,
+                1,1,1,1,1
+            ],
+            9: [
+                1,1,1,1,1,
+                1,0,0,0,1,
+                1,0,0,0,1,
+                1,1,1,1,1,
+                0,0,0,0,1,
+                0,0,0,0,1,
+                1,1,1,1,1
+            ]
+        };
+
+        let displayDigits = [0, 5, 0, 0]; // [min-tens, min-ones, sec-tens, sec-ones] - default 5:00
+        let totalSeconds = 300; // 5 minutes default
+        let targetTimestamp = null;
+        let timerInterval = null;
+        let isRunning = false;
+        let alarmEnabled = false;
+
+        // Initialize display
+        function initDisplay() {
+            const displays = ['min-tens', 'min-ones', 'sec-tens', 'sec-ones'];
+            displays.forEach(id => {
+                const display = document.getElementById(id);
+                for (let i = 0; i < 35; i++) {
+                    const dot = document.createElement('div');
+                    dot.className = 'dot';
+                    display.appendChild(dot);
+                }
+            });
+        }
+
+        // Update a single digit display
+        function updateDigit(displayId, digit) {
+            const display = document.getElementById(displayId);
+            const dots = display.querySelectorAll('.dot');
+            const pattern = digitPatterns[digit];
+            
+            dots.forEach((dot, index) => {
+                if (pattern[index] === 1) {
+                    dot.classList.add('active');
+                } else {
+                    dot.classList.remove('active');
+                }
+            });
+        }
+
+        // Update the entire timer display
+        function updateDisplay() {
+            let minutes, seconds;
+            
+            if (targetTimestamp) {
+                const now = Math.floor(Date.now() / 1000);
+                totalSeconds = Math.max(0, targetTimestamp - now);
+                minutes = Math.floor(totalSeconds / 60);
+                seconds = totalSeconds % 60;
+            } else {
+                minutes = Math.floor(totalSeconds / 60);
+                seconds = totalSeconds % 60;
+            }
+            
+            const minTens = Math.floor(minutes / 10);
+            const minOnes = minutes % 10;
+            const secTens = Math.floor(seconds / 10);
+            const secOnes = seconds % 10;
+            
+            displayDigits = [minTens, minOnes, secTens, secOnes];
+            
+            updateDigit('min-tens', minTens);
+            updateDigit('min-ones', minOnes);
+            updateDigit('sec-tens', secTens);
+            updateDigit('sec-ones', secOnes);
+            
+            // Update colon animation
+            const colonDots = document.querySelectorAll('.colon-dot');
+            if (isRunning) {
+                colonDots.forEach(dot => dot.classList.remove('paused'));
+            } else {
+                colonDots.forEach(dot => dot.classList.add('paused'));
+            }
+        }
+
+        // Update URL parameters
+        function updateURL() {
+            if (targetTimestamp) {
+                const url = new URL(window.location);
+                url.searchParams.set('t', targetTimestamp);
+                url.searchParams.delete('m');
+                url.searchParams.delete('s');
+                window.history.replaceState({}, '', url);
+            } else {
+                const minutes = displayDigits[0] * 10 + displayDigits[1];
+                const seconds = displayDigits[2] * 10 + displayDigits[3];
+                
+                const url = new URL(window.location);
+                url.searchParams.delete('t');
+                
+                if (minutes > 0 || seconds > 0) {
+                    if (minutes > 0) url.searchParams.set('m', minutes);
+                    else url.searchParams.delete('m');
+                    
+                    if (seconds > 0) url.searchParams.set('s', seconds);
+                    else url.searchParams.delete('s');
+                } else {
+                    url.searchParams.delete('m');
+                    url.searchParams.delete('s');
+                }
+                
+                window.history.replaceState({}, '', url);
+            }
+        }
+
+        // Insert digit (shift existing digits left)
+        function insertDigit(digit) {
+            if (isRunning) return;
+            
+            // Shift digits left and insert new digit at right
+            displayDigits = [displayDigits[1], displayDigits[2], displayDigits[3], digit];
+            
+            // Update total seconds
+            const minutes = displayDigits[0] * 10 + displayDigits[1];
+            const seconds = displayDigits[2] * 10 + displayDigits[3];
+            totalSeconds = Math.min(minutes * 60 + seconds, 3599); // Cap at 59:59
+            
+            updateDisplay();
+            updateStatus();
+            updateURL();
+        }
+
+        // Clear display
+        function clearDisplay() {
+            if (isRunning) return;
+            displayDigits = [0, 0, 0, 0];
+            totalSeconds = 0;
+            targetTimestamp = null;
+            updateDisplay();
+            updateStatus();
+            updateURL();
+        }
+
+        // Update status message
+        function updateStatus() {
+            const status = document.getElementById('status');
+            if (targetTimestamp) {
+                const targetDate = new Date(targetTimestamp * 1000);
+                status.textContent = `Countdown to ${targetDate.toLocaleTimeString()}`;
+            } else if (isRunning) {
+                status.textContent = 'Timer running... SPACE to pause';
+            } else if (totalSeconds > 0) {
+                status.textContent = 'SPACE to start, numbers to edit';
+            } else {
+                status.textContent = 'Type numbers to set timer, SPACE to start';
+            }
+        }
+
+        // Timer functions
+        function startTimer() {
+            if ((totalSeconds > 0 || targetTimestamp) && !isRunning) {
+                isRunning = true;
+                timerInterval = setInterval(() => {
+                    if (targetTimestamp) {
+                        const now = Math.floor(Date.now() / 1000);
+                        if (now >= targetTimestamp) {
+                            totalSeconds = 0;
+                            targetTimestamp = null;
+                            stopTimer();
+                            triggerAlarm();
+                        }
+                    } else {
+                        totalSeconds--;
+                        if (totalSeconds <= 0) {
+                            stopTimer();
+                            triggerAlarm();
+                        }
+                    }
+                    updateDisplay();
+                    updateStatus();
+                }, 1000);
+                updateStatus();
+            }
+        }
+
+        function pauseTimer() {
+            isRunning = false;
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            updateDisplay();
+            updateStatus();
+        }
+
+        function resetTimer() {
+            pauseTimer();
+            totalSeconds = 300; // Reset to 5:00 default
+            targetTimestamp = null;
+            displayDigits = [0, 5, 0, 0];
+            updateDisplay();
+            updateStatus();
+            updateURL();
+        }
+
+        function toggleAlarm() {
+            alarmEnabled = !alarmEnabled;
+            const indicator = document.getElementById('alarm-indicator');
+            if (alarmEnabled) {
+                indicator.classList.add('active');
+            } else {
+                indicator.classList.remove('active');
+            }
+        }
+
+        function triggerAlarm() {
+            if (alarmEnabled) {
+                // Visual alarm
+                document.body.classList.add('flash');
+                setTimeout(() => {
+                    document.body.classList.remove('flash');
+                }, 1500);
+                
+                // Audio alarm (browser-generated)
+                try {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    for (let i = 0; i < 3; i++) {
+                        setTimeout(() => {
+                            const oscillator = audioContext.createOscillator();
+                            const gainNode = audioContext.createGain();
+                            oscillator.connect(gainNode);
+                            gainNode.connect(audioContext.destination);
+                            oscillator.frequency.value = 800;
+                            oscillator.type = 'sine';
+                            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                            oscillator.start(audioContext.currentTime);
+                            oscillator.stop(audioContext.currentTime + 0.5);
+                        }, i * 600);
+                    }
+                } catch (e) {
+                    console.log('Audio not supported');
+                }
+            }
+        }
+
+        // Parse URL parameters
+        function parseURLParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // Check for timestamp parameter
+            const timestamp = parseInt(urlParams.get('t'));
+            if (timestamp) {
+                targetTimestamp = timestamp;
+                const now = Math.floor(Date.now() / 1000);
+                totalSeconds = Math.max(0, timestamp - now);
+                updateDisplay();
+                updateStatus();
+                return;
+            }
+            
+            // Check for traditional m/s parameters
+            const minutes = parseInt(urlParams.get('m')) || 0;
+            const seconds = parseInt(urlParams.get('s')) || 0;
+            
+            if (minutes > 0 || seconds > 0) {
+                totalSeconds = Math.min(minutes * 60 + seconds, 3599);
+                const mins = Math.floor(totalSeconds / 60);
+                const secs = totalSeconds % 60;
+                displayDigits = [
+                    Math.floor(mins / 10),
+                    mins % 10,
+                    Math.floor(secs / 10),
+                    secs % 10
+                ];
+                updateDisplay();
+                updateStatus();
+            }
+        }
+
+        // Keyboard controls
+        function handleKeyPress(event) {
+            // Prevent default for all our handled keys
+            const handledKeys = ['Space', 'KeyR', 'Escape', 'KeyA', 'KeyC', 'Digit0', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9'];
+            if (handledKeys.includes(event.code)) {
+                event.preventDefault();
+            }
+            
+            switch(event.code) {
+                case 'Space':
+                    if (isRunning) {
+                        pauseTimer();
+                    } else {
+                        startTimer();
+                    }
+                    break;
+                case 'KeyR':
+                case 'Escape':
+                    resetTimer();
+                    break;
+                case 'KeyA':
+                    toggleAlarm();
+                    break;
+                case 'KeyC':
+                    clearDisplay();
+                    break;
+                case 'Digit0':
+                case 'Digit1':
+                case 'Digit2':
+                case 'Digit3':
+                case 'Digit4':
+                case 'Digit5':
+                case 'Digit6':
+                case 'Digit7':
+                case 'Digit8':
+                case 'Digit9':
+                    const digit = parseInt(event.code.slice(-1));
+                    insertDigit(digit);
+                    break;
+            }
+        }
+
+        // Event listeners
+        document.addEventListener('keydown', handleKeyPress);
+
+        // Initialize
+        initDisplay();
+        parseURLParams();
+        // Only set default if no URL params were found
+        if (totalSeconds === 300 && displayDigits.every((d, i) => d === [0, 5, 0, 0][i])) {
+            updateDisplay();
+        }
+        updateStatus();
+    </script>
+</body>
+</html>
