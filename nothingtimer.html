@@ -266,14 +266,23 @@
         // Update a single digit display
         function updateDigit(displayId, digit) {
             const display = document.getElementById(displayId);
+            if (!display) return;
+            
             const dots = display.querySelectorAll('.dot');
             const pattern = digitPatterns[digit];
             
+            if (!pattern || dots.length !== 35) {
+                console.error(`Invalid digit ${digit} or wrong number of dots (${dots.length})`);
+                return;
+            }
+            
             dots.forEach((dot, index) => {
-                if (pattern[index] === 1) {
-                    dot.classList.add('active');
-                } else {
-                    dot.classList.remove('active');
+                if (index < pattern.length) {
+                    if (pattern[index] === 1) {
+                        dot.classList.add('active');
+                    } else {
+                        dot.classList.remove('active');
+                    }
                 }
             });
         }
@@ -285,12 +294,14 @@
             if (targetTimestamp) {
                 const now = Math.floor(Date.now() / 1000);
                 totalSeconds = Math.max(0, targetTimestamp - now);
-                minutes = Math.floor(totalSeconds / 60);
-                seconds = totalSeconds % 60;
-            } else {
-                minutes = Math.floor(totalSeconds / 60);
-                seconds = totalSeconds % 60;
             }
+            
+            minutes = Math.floor(totalSeconds / 60);
+            seconds = totalSeconds % 60;
+            
+            // Ensure values are within valid ranges
+            minutes = Math.max(0, Math.min(59, minutes));
+            seconds = Math.max(0, Math.min(59, seconds));
             
             const minTens = Math.floor(minutes / 10);
             const minOnes = minutes % 10;
@@ -299,10 +310,11 @@
             
             displayDigits = [minTens, minOnes, secTens, secOnes];
             
-            updateDigit('min-tens', minTens);
-            updateDigit('min-ones', minOnes);
-            updateDigit('sec-tens', secTens);
-            updateDigit('sec-ones', secOnes);
+            // Validate digits before updating display
+            if (minTens >= 0 && minTens <= 9) updateDigit('min-tens', minTens);
+            if (minOnes >= 0 && minOnes <= 9) updateDigit('min-ones', minOnes);
+            if (secTens >= 0 && secTens <= 9) updateDigit('sec-tens', secTens);
+            if (secOnes >= 0 && secOnes <= 9) updateDigit('sec-ones', secOnes);
             
             // Update colon animation
             const colonDots = document.querySelectorAll('.colon-dot');
@@ -487,11 +499,11 @@
             
             // Check for time-of-day parameter (HHMMSS format)
             const timeParam = urlParams.get('t');
-            if (timeParam) {
+            if (timeParam && timeParam.length > 0) {
                 const timeStr = timeParam.padStart(6, '0'); // Ensure 6 digits
-                const hours = parseInt(timeStr.substring(0, 2));
-                const minutes = parseInt(timeStr.substring(2, 4));
-                const seconds = parseInt(timeStr.substring(4, 6));
+                const hours = parseInt(timeStr.substring(0, 2)) || 0;
+                const minutes = parseInt(timeStr.substring(2, 4)) || 0;
+                const seconds = parseInt(timeStr.substring(4, 6)) || 0;
                 
                 if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59 && seconds >= 0 && seconds <= 59) {
                     const now = new Date();
@@ -516,8 +528,10 @@
             }
             
             // Check for traditional m/s parameters
-            const minutes = parseInt(urlParams.get('m')) || 0;
-            const seconds = parseInt(urlParams.get('s')) || 0;
+            const minutesParam = urlParams.get('m');
+            const secondsParam = urlParams.get('s');
+            const minutes = minutesParam ? parseInt(minutesParam) : 0;
+            const seconds = secondsParam ? parseInt(secondsParam) : 0;
             
             if (minutes > 0 || seconds > 0) {
                 totalSeconds = Math.min(minutes * 60 + seconds, 3599);
