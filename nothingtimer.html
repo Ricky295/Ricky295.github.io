@@ -316,8 +316,14 @@
         // Update URL parameters
         function updateURL() {
             if (targetTimestamp) {
+                const targetDate = new Date(targetTimestamp * 1000);
+                const hours = targetDate.getHours().toString().padStart(2, '0');
+                const minutes = targetDate.getMinutes().toString().padStart(2, '0');
+                const seconds = targetDate.getSeconds().toString().padStart(2, '0');
+                const timeParam = hours + minutes + seconds;
+                
                 const url = new URL(window.location);
-                url.searchParams.set('t', targetTimestamp);
+                url.searchParams.set('t', timeParam);
                 url.searchParams.delete('m');
                 url.searchParams.delete('s');
                 window.history.replaceState({}, '', url);
@@ -376,7 +382,8 @@
             const status = document.getElementById('status');
             if (targetTimestamp) {
                 const targetDate = new Date(targetTimestamp * 1000);
-                status.textContent = `Countdown to ${targetDate.toLocaleTimeString()}`;
+                const timeStr = targetDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+                status.textContent = `Countdown to ${timeStr}`;
             } else if (isRunning) {
                 status.textContent = 'Timer running... SPACE to pause';
             } else if (totalSeconds > 0) {
@@ -478,15 +485,34 @@
         function parseURLParams() {
             const urlParams = new URLSearchParams(window.location.search);
             
-            // Check for timestamp parameter
-            const timestamp = parseInt(urlParams.get('t'));
-            if (timestamp) {
-                targetTimestamp = timestamp;
-                const now = Math.floor(Date.now() / 1000);
-                totalSeconds = Math.max(0, timestamp - now);
-                updateDisplay();
-                updateStatus();
-                return;
+            // Check for time-of-day parameter (HHMMSS format)
+            const timeParam = urlParams.get('t');
+            if (timeParam) {
+                const timeStr = timeParam.padStart(6, '0'); // Ensure 6 digits
+                const hours = parseInt(timeStr.substring(0, 2));
+                const minutes = parseInt(timeStr.substring(2, 4));
+                const seconds = parseInt(timeStr.substring(4, 6));
+                
+                if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59 && seconds >= 0 && seconds <= 59) {
+                    const now = new Date();
+                    const target = new Date();
+                    target.setHours(hours, minutes, seconds, 0);
+                    
+                    // If target time is in the past today, assume it's tomorrow
+                    if (target <= now) {
+                        target.setDate(target.getDate() + 1);
+                    }
+                    
+                    targetTimestamp = Math.floor(target.getTime() / 1000);
+                    const nowSeconds = Math.floor(now.getTime() / 1000);
+                    totalSeconds = Math.max(0, targetTimestamp - nowSeconds);
+                    updateDisplay();
+                    updateStatus();
+                    
+                    // Auto-start countdown to specific time
+                    setTimeout(() => startTimer(), 100);
+                    return;
+                }
             }
             
             // Check for traditional m/s parameters
