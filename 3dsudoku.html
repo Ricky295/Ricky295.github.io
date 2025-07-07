@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>5x5x5 Cubic Sudoku</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Courier New', monospace; background: #1a1a1a; color: #fff; overflow-x: auto; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .controls { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: all 0.3s; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn:hover { opacity: 0.8; transform: translateY(-1px); }
+        .timer { font-size: 18px; font-weight: bold; color: #ffd700; }
+        .difficulty-slider { display: flex; align-items: center; gap: 10px; }
+        .difficulty-slider label { color: #ffd700; font-weight: bold; }
+        .slider { width: 150px; height: 6px; border-radius: 3px; background: #333; outline: none; }
+        .slider::-webkit-slider-thumb { appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #007bff; cursor: pointer; }
+        .slider::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #007bff; cursor: pointer; border: none; }
+        .board-container { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+        .layer { border: 3px solid #444; margin: 5px; background: #2a2a2a; border-radius: 8px; padding: 10px; }
+        .layer-title { text-align: center; margin-bottom: 10px; color: #ffd700; font-weight: bold; }
+        .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; }
+        .cell { 
+            width: 40px; height: 40px; border: 1px solid #666; background: #333; 
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 16px; font-weight: bold; position: relative;
+            transition: all 0.2s;
+        }
+        .cell:hover { background: #444; }
+        .cell.selected { background: #007bff !important; }
+        .cell.given { background: #4a4a4a; color: #ffd700; }
+        .cell.error { background: #dc3545 !important; }
+        .cell.completed { background: #28a745 !important; }
+        .candidates { font-size: 8px; position: absolute; top: 2px; left: 2px; color: #888; }
+        .number-pad { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin: 20px auto; max-width: 300px; }
+        .num-btn { width: 40px; height: 40px; border: 1px solid #666; background: #333; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; border-radius: 4px; }
+        .num-btn:hover { background: #444; }
+        .stats { display: flex; justify-content: center; gap: 20px; margin-top: 20px; }
+        .stat { text-align: center; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); }
+        .modal-content { background: #2a2a2a; margin: 15% auto; padding: 20px; border-radius: 8px; width: 300px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>5x5x5 Cubic Sudoku</h1>
+            <div class="timer">Time: <span id="timer">00:00</span></div>
+        </div>
+        
+        <div class="controls">
+            <button class="btn btn-primary" onclick="newGame()">New Game</button>
+            <button class="btn btn-secondary" onclick="toggleCandidates()">Toggle Candidates</button>
+            <button class="btn btn-success" onclick="hint()">Hint</button>
+            <button class="btn btn-danger" onclick="resetGame()">Reset</button>
+            <div class="difficulty-slider">
+                <label for="clues">Clues: <span id="clues-value">32</span></label>
+                <input type="range" id="clues" min="10" max="100" value="32" class="slider">
+            </div>
+        </div>
+        
+        <div class="board-container" id="board-container"></div>
+        
+        <div class="number-pad">
+            <div class="num-btn" onclick="selectNumber(1)">1</div>
+            <div class="num-btn" onclick="selectNumber(2)">2</div>
+            <div class="num-btn" onclick="selectNumber(3)">3</div>
+            <div class="num-btn" onclick="selectNumber(4)">4</div>
+            <div class="num-btn" onclick="selectNumber(5)">5</div>
+            <div class="num-btn" onclick="selectNumber(0)">✕</div>
+        </div>
+        
+        <div class="stats">
+            <div class="stat">
+                <div>Filled</div>
+                <div id="filled">0/125</div>
+            </div>
+            <div class="stat">
+                <div>Hints Used</div>
+                <div id="hints">0</div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="winModal" class="modal">
+        <div class="modal-content">
+            <h2>Congratulations!</h2>
+            <p>You solved the puzzle!</p>
+            <p>Time: <span id="finalTime"></span></p>
+            <button class="btn btn-primary" onclick="closeModal()">New Game</button>
+        </div>
+    </div>
+
+    <script>
+        const SIZE = 5;
+        const VALUES = [1, 2, 3, 4, 5];
+        
+        let board = [];
+        let solution = [];
+        let selectedCell = null;
+        let startTime = null;
+        let timerInterval = null;
+        let showCandidates = false;
+        let hintsUsed = 0;
+        let gameWon = false;
+        
+        // Initialize empty board
+        function createBoard() {
+            return Array(SIZE).fill().map(() => 
+                Array(SIZE).fill().map(() => 
+                    Array(SIZE).fill(0)
+                )
+            );
+        }
+        
+        // Get coordinates that share constraints with (x,y,z)
+        function getRelatedCoords(x, y, z) {
+            const coords = new Set();
+            for (let i = 0; i < SIZE; i++) {
+                coords.add(`${x},${y},${i}`); // same z-line
+                coords.add(`${x},${i},${z}`); // same y-line  
+                coords.add(`${i},${y},${z}`); // same x-line
+            }
+            coords.delete(`${x},${y},${z}`);
+            return Array.from(coords).map(s => s.split(',').map(Number));
+        }
+        
+        // Check if placing val at (x,y,z) is valid
+        function isValidMove(board, x, y, z, val) {
+            const related = getRelatedCoords(x, y, z);
+            for (const [rx, ry, rz] of related) {
+                if (board[rz][ry][rx] === val) return false;
+            }
+            return true;
+        }
+        
+        // Simple backtracking solver with randomization
+        function solve(board) {
+            const emptyCells = [];
+            for (let z = 0; z < SIZE; z++) {
+                for (let y = 0; y < SIZE; y++) {
+                    for (let x = 0; x < SIZE; x++) {
+                        if (board[z][y][x] === 0) {
+                            emptyCells.push([x, y, z]);
+                        }
+                    }
+                }
+            }
+            
+            if (emptyCells.length === 0) return true;
+            
+            // Try first empty cell
+            const [x, y, z] = emptyCells[0];
+            const values = [...VALUES];
+            shuffleArray(values);
+            
+            for (const val of values) {
+                if (isValidMove(board, x, y, z, val)) {
+                    board[z][y][x] = val;
+                    if (solve(board)) return true;
+                    board[z][y][x] = 0;
+                }
+            }
+            return false;
+        }
+        
+        // Generate random complete solution
+        function generateSolution() {
+            const board = createBoard();
+            solve(board);
+            return board;
+        }
+        
+        // Generate puzzle by removing cells from solution
+        function generatePuzzle(targetClues) {
+            const sol = generateSolution();
+            const puzzle = sol.map(layer => layer.map(row => [...row]));
+            
+            const allCells = [];
+            for (let z = 0; z < SIZE; z++) {
+                for (let y = 0; y < SIZE; y++) {
+                    for (let x = 0; x < SIZE; x++) {
+                        allCells.push([x, y, z]);
+                    }
+                }
+            }
+            shuffleArray(allCells);
+            
+            let currentClues = SIZE * SIZE * SIZE;
+            
+            while (currentClues > targetClues && allCells.length > 0) {
+                const [x, y, z] = allCells.pop();
+                puzzle[z][y][x] = 0;
+                currentClues--;
+            }
+            
+            return { puzzle, solution: sol };
+        }
+        
+        // Utility function to shuffle array
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+        
+        // Get candidates for a cell
+        function getCandidates(board, x, y, z) {
+            if (board[z][y][x] !== 0) return [];
+            const candidates = [];
+            for (const val of VALUES) {
+                if (isValidMove(board, x, y, z, val)) {
+                    candidates.push(val);
+                }
+            }
+            return candidates;
+        }
+        
+        // Create visual board
+        function createVisualBoard() {
+            const container = document.getElementById('board-container');
+            container.innerHTML = '';
+            
+            for (let z = 0; z < SIZE; z++) {
+                const layerDiv = document.createElement('div');
+                layerDiv.className = 'layer';
+                layerDiv.innerHTML = `<div class="layer-title">Layer ${z + 1}</div>`;
+                
+                const gridDiv = document.createElement('div');
+                gridDiv.className = 'grid';
+                
+                for (let y = 0; y < SIZE; y++) {
+                    for (let x = 0; x < SIZE; x++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'cell';
+                        cell.dataset.x = x;
+                        cell.dataset.y = y;
+                        cell.dataset.z = z;
+                        cell.onclick = () => selectCell(x, y, z);
+                        gridDiv.appendChild(cell);
+                    }
+                }
+                
+                layerDiv.appendChild(gridDiv);
+                container.appendChild(layerDiv);
+            }
+        }
+        
+        // Update visual board
+        function updateBoard() {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                const x = parseInt(cell.dataset.x);
+                const y = parseInt(cell.dataset.y);
+                const z = parseInt(cell.dataset.z);
+                const val = board[z][y][x];
+                
+                cell.className = 'cell';
+                cell.innerHTML = '';
+                
+                if (val !== 0) {
+                    cell.textContent = val;
+                    if (solution[z][y][x] === val) {
+                        cell.classList.add('completed');
+                    } else {
+                        cell.classList.add('error');
+                    }
+                } else {
+                    if (showCandidates) {
+                        const candidates = getCandidates(board, x, y, z);
+                        if (candidates.length > 0) {
+                            cell.innerHTML = `<div class="candidates">${candidates.join('')}</div>`;
+                        }
+                    }
+                }
+                
+                if (selectedCell && selectedCell.x === x && selectedCell.y === y && selectedCell.z === z) {
+                    cell.classList.add('selected');
+                }
+            });
+            
+            updateStats();
+            checkWin();
+        }
+        
+        // Select cell
+        function selectCell(x, y, z) {
+            selectedCell = { x, y, z };
+            updateBoard();
+        }
+        
+        // Select number from pad
+        function selectNumber(num) {
+            if (!selectedCell || gameWon) return;
+            
+            const { x, y, z } = selectedCell;
+            board[z][y][x] = num;
+            updateBoard();
+        }
+        
+        // New game
+        function newGame() {
+            const clues = parseInt(document.getElementById('clues').value);
+            const { puzzle, solution: sol } = generatePuzzle(clues);
+            
+            board = puzzle;
+            solution = sol;
+            selectedCell = null;
+            hintsUsed = 0;
+            gameWon = false;
+            
+            startTimer();
+            updateBoard();
+        }
+        
+        // Toggle candidates
+        function toggleCandidates() {
+            showCandidates = !showCandidates;
+            updateBoard();
+        }
+        
+        // Hint
+        function hint() {
+            if (!selectedCell || gameWon) return;
+            
+            const { x, y, z } = selectedCell;
+            if (board[z][y][x] === 0) {
+                board[z][y][x] = solution[z][y][x];
+                hintsUsed++;
+                updateBoard();
+            }
+        }
+        
+        // Reset game
+        function resetGame() {
+            // Reset to initial puzzle state
+            for (let z = 0; z < SIZE; z++) {
+                for (let y = 0; y < SIZE; y++) {
+                    for (let x = 0; x < SIZE; x++) {
+                        if (board[z][y][x] !== solution[z][y][x]) {
+                            board[z][y][x] = 0;
+                        }
+                    }
+                }
+            }
+            selectedCell = null;
+            updateBoard();
+        }
+        
+        // Timer functions
+        function startTimer() {
+            startTime = Date.now();
+            clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+        
+        function updateTimer() {
+            if (!startTime) return;
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('timer').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        // Update stats
+        function updateStats() {
+            let filled = 0;
+            for (let z = 0; z < SIZE; z++) {
+                for (let y = 0; y < SIZE; y++) {
+                    for (let x = 0; x < SIZE; x++) {
+                        if (board[z][y][x] !== 0) filled++;
+                    }
+                }
+            }
+            document.getElementById('filled').textContent = `${filled}/${SIZE * SIZE * SIZE}`;
+            document.getElementById('hints').textContent = hintsUsed;
+        }
+        
+        // Check win condition
+        function checkWin() {
+            for (let z = 0; z < SIZE; z++) {
+                for (let y = 0; y < SIZE; y++) {
+                    for (let x = 0; x < SIZE; x++) {
+                        if (board[z][y][x] !== solution[z][y][x]) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            
+            // Won!
+            gameWon = true;
+            clearInterval(timerInterval);
+            document.getElementById('finalTime').textContent = 
+                document.getElementById('timer').textContent;
+            document.getElementById('winModal').style.display = 'block';
+        }
+        
+        // Close modal
+        function closeModal() {
+            document.getElementById('winModal').style.display = 'none';
+            newGame();
+        }
+        
+        // Keyboard support
+        document.addEventListener('keydown', (e) => {
+            if (e.key >= '1' && e.key <= '5') {
+                selectNumber(parseInt(e.key));
+            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                selectNumber(0);
+            }
+        });
+        
+        // Slider update
+        document.getElementById('clues').addEventListener('input', function() {
+            document.getElementById('clues-value').textContent = this.value;
+        });
+        
+        // Initialize game
+        window.addEventListener('load', function() {
+            createVisualBoard();
+            newGame();
+        });
+    </script>
+</body>
+</html>
