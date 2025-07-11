@@ -8,6 +8,7 @@
   video, canvas { border: 1px solid #ccc; display: block; margin-bottom: 10px; }
   #outputCanvas { margin-top: 20px; }
   #result { margin-top: 10px; font-weight: bold; }
+  label { margin-right: 5px; }
 </style>
 </head>
 <body>
@@ -24,6 +25,9 @@
 <input type="file" id="uploadImage" accept="image/*" />
 
 <div id="result">Scan result will appear here...</div>
+
+<label for="upscaleFactor">Upscale Factor:</label>
+<input type="number" id="upscaleFactor" value="1" min="1" max="100" style="width:50px" />
 
 <canvas id="canvas" style="display:none;"></canvas>
 <canvas id="outputCanvas"></canvas>
@@ -75,7 +79,7 @@ function unpack6bitTo6bit(data) {
   return data.slice();
 }
 
-// Decode & draw image from QR data string
+// Decode & draw image from QR data string with upscale
 function decodeAndDraw(qrData) {
   // Parse prefix: R{width}x{height}_{bits};
   const prefixMatch = qrData.match(/^R(\d+)x(\d+)_(\d+);/);
@@ -87,6 +91,11 @@ function decodeAndDraw(qrData) {
   const height = parseInt(prefixMatch[2], 10);
   const bits = parseInt(prefixMatch[3], 10);
   const dataStr = qrData.slice(prefixMatch[0].length);
+
+  // Get upscale factor from input
+  const upscaleInput = document.getElementById('upscaleFactor');
+  let upscale = parseInt(upscaleInput.value, 10);
+  if (isNaN(upscale) || upscale < 1) upscale = 1;
 
   let decoded6bit;
   try {
@@ -110,28 +119,35 @@ function decodeAndDraw(qrData) {
   pixels = pixels.slice(0, width * height);
 
   const canvas = document.getElementById('outputCanvas');
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = width * upscale;
+  canvas.height = height * upscale;
   const ctx = canvas.getContext('2d');
-  const imgData = ctx.createImageData(width, height);
+  const imgData = ctx.createImageData(canvas.width, canvas.height);
 
-  for(let i=0; i<pixels.length; i++) {
-    let gray;
-    const val = pixels[i];
-    switch(bits) {
-      case 1: gray = val ? 255 : 0; break;
-      case 2: gray = val * 85; break;
-      case 3: gray = val * 36; break;
-      case 6: gray = val * 4; break;
+  for(let y=0; y < height; y++) {
+    for(let x=0; x < width; x++) {
+      const val = pixels[y * width + x];
+      let gray;
+      switch(bits) {
+        case 1: gray = val ? 255 : 0; break;
+        case 2: gray = val * 85; break;
+        case 3: gray = val * 36; break;
+        case 6: gray = val * 4; break;
+      }
+      for(let dy=0; dy < upscale; dy++) {
+        for(let dx=0; dx < upscale; dx++) {
+          const px = (y * upscale + dy) * canvas.width + (x * upscale + dx);
+          imgData.data[px * 4] = gray;
+          imgData.data[px * 4 + 1] = gray;
+          imgData.data[px * 4 + 2] = gray;
+          imgData.data[px * 4 + 3] = 255;
+        }
+      }
     }
-    imgData.data[i*4] = gray;
-    imgData.data[i*4 + 1] = gray;
-    imgData.data[i*4 + 2] = gray;
-    imgData.data[i*4 + 3] = 255;
   }
 
   ctx.putImageData(imgData, 0, 0);
-  document.getElementById('result').textContent = `Decoded image: ${width} x ${height}, ${bits}-bit grayscale.`;
+  document.getElementById('result').textContent = `Decoded image: ${width} x ${height}, upscaled ${upscale}x, ${bits}-bit grayscale.`;
 }
 
 // QR scanning from webcam setup
