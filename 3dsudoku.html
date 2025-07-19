@@ -128,6 +128,7 @@
         let b=[],sol=[],cand={},sel=null,start=null,timer=null,candMode=true,hints=0,won=false,keyMin=false,drag=false,dragOff={x:0,y:0};
         
         function makeBoard(){return Array(S).fill().map(()=>Array(S).fill().map(()=>Array(S).fill(0)))}
+        function copyBoard(board){return board.map(l=>l.map(r=>[...r]))}
         function getRelated(x,y,z){
             const c=new Set();
             for(let i=0;i<S;i++){
@@ -154,16 +155,46 @@
             }
             return false;
         }
+        function countSolutions(board,maxSols=2){
+            let solCount=0;
+            function solveCount(b){
+                if(solCount>=maxSols)return;
+                const empty=[];
+                for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++)if(b[z][y][x]===0)empty.push([x,y,z]);
+                if(!empty.length){solCount++;return}
+                const[x,y,z]=empty[0];
+                for(const val of V){
+                    if(isValid(b,x,y,z,val)){
+                        b[z][y][x]=val;
+                        solveCount(b);
+                        if(solCount>=maxSols){b[z][y][x]=0;return}
+                        b[z][y][x]=0;
+                    }
+                }
+            }
+            solveCount(copyBoard(board));
+            return solCount;
+        }
         function genSol(){const board=makeBoard();solve(board);return board}
-        function genPuzzle(clues){
-            const s=genSol(),p=s.map(l=>l.map(r=>[...r])),all=[];
+        function genPuzzle(targetClues){
+            const s=genSol(),p=copyBoard(s),all=[];
             for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++)all.push([x,y,z]);
             shuffle(all);
-            let curr=S*S*S;
-            while(curr>clues&&all.length>0){
-                const[x,y,z]=all.pop();
-                p[z][y][x]=0;curr--;
+            
+            // Remove cells while maintaining uniqueness
+            let removed=0;
+            for(const[x,y,z] of all){
+                if(S*S*S-removed<=targetClues)break;
+                const orig=p[z][y][x];
+                p[z][y][x]=0;
+                if(countSolutions(p)===1){
+                    removed++;
+                }else{
+                    p[z][y][x]=orig;
+                }
+
             }
+            
             return{puzzle:p,solution:s};
         }
         function shuffle(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]}}
@@ -311,7 +342,6 @@
                 if(b[z][y][x]===0)toggleCand(x,y,z,num);
             }else{
                 b[z][y][x]=num;clearCand(x,y,z);
-                // Only auto-remove candidates if the number is correct
                 if(num === sol[z][y][x]){
                     autoRemove(x,y,z,num);
                 }
