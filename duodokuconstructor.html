@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="duodokusolver.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sufufu Puzzle Constructor</title>
+  <link rel="stylesheet" href="googletitle.css">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 15px;
+      color: #eeeeee;
+      background-color: #1a1a1a;
+    }
+
+    table {
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+
+    td {
+      text-align: center;
+      border: 1px solid #eeeeee;
+    }
+
+    .cell-div {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #1a1a1a;
+      cursor: pointer;
+      position: relative;
+      color: #0066cc;
+      font-weight: bold;
+    }
+
+    .selected-cell {
+      outline: 2px solid #0066cc;
+    }
+
+    .redundant {
+      background-color: #ffff99 !important;
+      color: #000 !important;
+      border-radius: 50%;
+    }
+
+    td:nth-child(4n) {
+      border-right: 3px solid #eeeeee;
+    }
+
+    td:nth-child(1) {
+      border-left: 3px solid #eeeeee;
+    }
+
+    tr:nth-child(2n) td {
+      border-bottom: 3px solid #eeeeee;
+    }
+
+    tr:nth-child(1) td {
+      border-top: 3px solid #eeeeee;
+    }
+
+    .main-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .puzzle-area {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .numpad-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 200px;
+    }
+
+    .numpad {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+
+    .numpad-button {
+      background-color: #f2f2f2;
+      border: 1px solid #ccc;
+      color: #1a1a1a;
+      border-radius: 3px;
+      padding: 12px 0;
+      font-size: 18px;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .numpad-button:active {
+      background-color: #d9d9d9;
+    }
+
+    .numpad-clear {
+      background-color: #ffcccc;
+      grid-column: span 2;
+      margin-top: 5px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin: 20px 0;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      border: 1px solid #ccc;
+      background-color: #f2f2f2;
+      color: #1a1a1a;
+      border-radius: 3px;
+      min-width: 120px;
+    }
+
+    .btn:hover {
+      background-color: #e6e6e6;
+    }
+
+    .stats {
+      text-align: center;
+      margin: 20px 0;
+      padding: 15px;
+      background-color: #2a2a2a;
+      border-radius: 5px;
+      border: 1px solid #444;
+    }
+
+    .stats h3 {
+      margin: 0 0 10px 0;
+      color: #fff;
+    }
+
+    .stats div {
+      margin: 5px 0;
+      font-size: 16px;
+    }
+
+    .solutions-count {
+      font-size: 20px;
+      font-weight: bold;
+      color: #0066cc;
+    }
+
+    .candidates {
+      font-size: 12px;
+      background-color: #333;
+      padding: 10px;
+      border-radius: 3px;
+      margin-top: 10px;
+      text-align: left;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .export-section {
+      margin: 20px 0;
+      padding: 15px;
+      background-color: #2a2a2a;
+      border-radius: 5px;
+      text-align: center;
+    }
+
+    .export-url {
+      background-color: #333;
+      padding: 8px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 12px;
+      margin: 10px 0;
+      word-break: break-all;
+      border: 1px solid #555;
+    }
+
+    @media (max-width: 768px) {
+      .puzzle-area {
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      .numpad-container {
+        width: 100%;
+        max-width: 250px;
+      }
+
+      .controls {
+        justify-content: center;
+      }
+      
+      .btn {
+        min-width: 100px;
+        margin: 2px;
+      }
+    }
+  </style>
+</head>
+<body>
+<h1 class="gradient-title">Sufufu Constructor</h1>
+<div style="text-align: right; margin-top: -30px; margin-bottom: 10px; padding-right: 10px;">
+  <span title="Create puzzles using digits 1–4 exactly twice per row, column, and 2×4 box. No same digits may touch orthogonally." 
+        style="cursor: help; font-size: 22px; font-weight: bold; user-select: none;">ℹ️</span>
+</div>
+
+<div class="main-container">
+  <div class="puzzle-area">
+    <div>
+      <table id="puzzleTable"></table>
+    </div>
+    
+    <div class="numpad-container">
+      <div class="numpad">
+        <div class="numpad-button" data-value="1">1</div>
+        <div class="numpad-button" data-value="2">2</div>
+        <div class="numpad-button" data-value="3">3</div>
+        <div class="numpad-button" data-value="4">4</div>
+      </div>
+      <div class="numpad-clear numpad-button">Clear</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="analyzeBtn">Analyze</button>
+    <button class="btn" id="clearAllBtn">Clear All</button>
+    <button class="btn" id="fillCompleteBtn">Fill Complete</button>
+    <button class="btn" id="findRedundantBtn">Find Redundant</button>
+    <button class="btn" id="copyStringBtn">Copy String</button>
+    <button class="btn" id="exportPlayBtn">Export to Play</button>
+  </div>
+
+  <div class="stats" id="statsSection">
+    <h3>Puzzle Analysis</h3>
+    <div>Solutions: <span class="solutions-count" id="solutionCount">-</span></div>
+    <div>Givens: <span id="givenCount">0</span></div>
+    <div id="candidatesSection" class="candidates" style="display: none;"></div>
+  </div>
+
+  <div class="export-section">
+    <h3>Export Options</h3>
+    <div>Puzzle String: <span id="puzzleString">0000000000000000000000000000000000000000000000000000000000000000</span></div>
+    <div class="export-url" id="playUrl" style="display: none;"></div>
+  </div>
+</div>
+
+<script>
+  let selectedCell = null;
+  let grid = Array(8).fill().map(() => Array(8).fill(0));
+  let solver = new DuoDoKuSolver();
+  let solutions = [];
+  let redundantCells = [];
+
+  function init() {
+    renderGrid();
+    setupEventListeners();
+    updateStats();
+  }
+
+  function renderGrid() {
+    const table = document.getElementById('puzzleTable');
+    const cellSize = '50px';
+    let html = '';
+
+    for (let row = 0; row < 8; row++) {
+      html += '<tr>';
+      for (let col = 0; col < 8; col++) {
+        const value = grid[row][col] || '';
+        html += `
+          <td>
+            <div class="cell-div" 
+                 data-row="${row}" 
+                 data-col="${col}" 
+                 style="width: ${cellSize}; height: ${cellSize}; font-size: 25px;">
+              ${value}
+            </div>
+          </td>`;
+      }
+      html += '</tr>';
+    }
+    
+    table.innerHTML = html;
+    setupCellListeners();
+  }
+
+  function setupCellListeners() {
+    document.querySelectorAll('.cell-div').forEach(cell => {
+      cell.addEventListener('click', function(e) {
+        if (selectedCell) selectedCell.classList.remove('selected-cell');
+        selectedCell = this;
+        selectedCell.classList.add('selected-cell');
+        e.stopPropagation();
+      });
+    });
+  }
+
+  function setupEventListeners() {
+    // Numpad
+    document.querySelectorAll('.numpad-button').forEach(btn => {
+      btn.addEventListener('click', function() {
+        if (this.textContent === 'Clear') {
+          if (selectedCell) setCellValue(selectedCell, 0);
+        } else if (selectedCell) {
+          setCellValue(selectedCell, parseInt(this.dataset.value));
+        }
+      });
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', function(e) {
+      if (!selectedCell) return;
+      
+      if (e.key >= '1' && e.key <= '4') {
+        setCellValue(selectedCell, parseInt(e.key));
+        e.preventDefault();
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        setCellValue(selectedCell, 0);
+        e.preventDefault();
+      } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        navigateCell(e.key);
+        e.preventDefault();
+      }
+    });
+
+    // Buttons
+    document.getElementById('analyzeBtn').addEventListener('click', analyzePuzzle);
+    document.getElementById('clearAllBtn').addEventListener('click', clearAll);
+    document.getElementById('fillCompleteBtn').addEventListener('click', fillComplete);
+    document.getElementById('findRedundantBtn').addEventListener('click', findRedundant);
+    document.getElementById('copyStringBtn').addEventListener('click', copyString);
+    document.getElementById('exportPlayBtn').addEventListener('click', exportToPlay);
+
+    // Click outside to deselect
+    document.addEventListener('click', function(e) {
+      if (selectedCell && !e.target.closest('.cell-div') && !e.target.closest('.numpad-container')) {
+        selectedCell.classList.remove('selected-cell');
+        selectedCell = null;
+      }
+    });
+  }
+
+  function setCellValue(cell, value) {
+    const row = parseInt(cell.dataset.row);
+    const col = parseInt(cell.dataset.col);
+    
+    grid[row][col] = value;
+    cell.textContent = value || '';
+    cell.classList.remove('redundant');
+    
+    updateStats();
+    updatePuzzleString();
+  }
+
+  function navigateCell(direction) {
+    if (!selectedCell) return;
+    
+    const row = parseInt(selectedCell.dataset.row);
+    const col = parseInt(selectedCell.dataset.col);
+    let newRow = row, newCol = col;
+    
+    switch (direction) {
+      case 'ArrowUp': newRow = Math.max(0, row - 1); break;
+      case 'ArrowDown': newRow = Math.min(7, row + 1); break;
+      case 'ArrowLeft': newCol = Math.max(0, col - 1); break;
+      case 'ArrowRight': newCol = Math.min(7, col + 1); break;
+    }
+    
+    const newCell = document.querySelector(`[data-row="${newRow}"][data-col="${newCol}"]`);
+    if (newCell) {
+      selectedCell.classList.remove('selected-cell');
+      selectedCell = newCell;
+      selectedCell.classList.add('selected-cell');
+    }
+  }
+
+  function analyzePuzzle() {
+    solver.enterPuzzle(grid.map(row => [...row]));
+    solutions = solver.solutions;
+    
+    updateStats();
+    showCandidates();
+  }
+
+  function updateStats() {
+    const givens = grid.flat().filter(cell => cell !== 0).length;
+    document.getElementById('givenCount').textContent = givens;
+    
+    if (solutions.length > 0) {
+      document.getElementById('solutionCount').textContent = solutions.length;
+      document.getElementById('solutionCount').style.color = solutions.length === 1 ? '#00cc00' : '#ff6600';
+    } else {
+      document.getElementById('solutionCount').textContent = '-';
+      document.getElementById('solutionCount').style.color = '#0066cc';
+    }
+  }
+
+  function showCandidates() {
+    const section = document.getElementById('candidatesSection');
+    if (solver.candidateHistory && solver.candidateHistory.length > 0) {
+      let html = '<strong>Solving steps:</strong><br>';
+      solver.candidateHistory.slice(0, 20).forEach((step, i) => {
+        html += `${i + 1}. R${step.row + 1}C${step.col + 1} = ${step.value}<br>`;
+      });
+      if (solver.candidateHistory.length > 20) {
+        html += `... and ${solver.candidateHistory.length - 20} more steps`;
+      }
+      section.innerHTML = html;
+      section.style.display = 'block';
+    } else {
+      section.style.display = 'none';
+    }
+  }
+
+  function clearAll() {
+    grid = Array(8).fill().map(() => Array(8).fill(0));
+    solutions = [];
+    redundantCells = [];
+    renderGrid();
+    updateStats();
+    updatePuzzleString();
+    document.getElementById('candidatesSection').style.display = 'none';
+  }
+
+  function fillComplete() {
+    solver.enterPuzzle(Array(8).fill().map(() => Array(8).fill(0)));
+    if (solver.solutions.length > 0) {
+      grid = solver.solutions[0].map(row => [...row]);
+      renderGrid();
+      updateStats();
+      updatePuzzleString();
+    }
+  }
+
+  function findRedundant() {
+    if (solutions.length !== 1) {
+      alert('Need exactly one solution to find redundant clues');
+      return;
+    }
+
+    redundantCells = [];
+    const originalGrid = grid.map(row => [...row]);
+    
+    // Test each given cell
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        if (originalGrid[row][col] !== 0) {
+          // Temporarily remove this clue
+          const testGrid = originalGrid.map(r => [...r]);
+          testGrid[row][col] = 0;
+          
+          solver.enterPuzzle(testGrid);
+          if (solver.solutions.length === 1) {
+            redundantCells.push({row, col});
+          }
+        }
+      }
+    }
+
+    // Highlight redundant cells
+    document.querySelectorAll('.cell-div').forEach(cell => {
+      cell.classList.remove('redundant');
+      const row = parseInt(cell.dataset.row);
+      const col = parseInt(cell.dataset.col);
+      
+      if (redundantCells.some(rc => rc.row === row && rc.col === col)) {
+        cell.classList.add('redundant');
+      }
+    });
+
+    alert(`Found ${redundantCells.length} redundant clues (highlighted in yellow)`);
+  }
+
+  function updatePuzzleString() {
+    const str = grid.flat().join('');
+    document.getElementById('puzzleString').textContent = str;
+    
+    const playUrl = `duodokuplay.html?puzzle=${str}`;
+    document.getElementById('playUrl').textContent = playUrl;
+    document.getElementById('playUrl').style.display = 'block';
+  }
+
+  function copyString() {
+    const str = grid.flat().join('');
+    navigator.clipboard.writeText(str).then(() => {
+      alert('Puzzle string copied to clipboard!');
+    });
+  }
+
+  function exportToPlay() {
+    const str = grid.flat().join('');
+    window.open(`duodokuplay.html?puzzle=${str}`, '_blank');
+  }
+
+  init();
+</script>
+</body>
+</html>
