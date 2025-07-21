@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sudoku - E-Ink Edition</title>
+    <title>E-ink Sudoku</title>
     <style>
-        /* E-Ink optimized styles */
+        /* E-ink optimized styles - minimal, high contrast, no animations */
         * {
             margin: 0;
             padding: 0;
@@ -14,684 +14,506 @@
 
         body {
             font-family: 'Courier New', monospace;
-            background-color: #ffffff;
-            color: #000000;
+            background: white;
+            color: black;
             line-height: 1.4;
             padding: 10px;
+            max-width: 100vw;
+            overflow-x: hidden;
+        }
+
+        .container {
             max-width: 600px;
             margin: 0 auto;
         }
 
-        .header {
+        h1 {
             text-align: center;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #000000;
-            padding-bottom: 10px;
-        }
-
-        .header h1 {
+            margin-bottom: 15px;
             font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        .header p {
-            font-size: 12px;
-            color: #333333;
+            border-bottom: 2px solid black;
+            padding-bottom: 5px;
         }
 
         .controls {
-            margin-bottom: 20px;
-            padding: 15px;
-            border: 2px solid #000000;
-            background-color: #f8f8f8;
+            margin-bottom: 15px;
+            text-align: center;
         }
 
         .control-group {
-            margin-bottom: 15px;
+            margin: 8px 0;
         }
 
-        .control-group:last-child {
-            margin-bottom: 0;
-        }
-
-        .control-group label {
-            display: block;
+        label {
+            display: inline-block;
+            width: 100px;
+            text-align: left;
             font-weight: bold;
-            margin-bottom: 5px;
-            font-size: 14px;
         }
 
-        .control-row {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        select, button, input[type="number"] {
-            padding: 8px 12px;
-            font-size: 14px;
+        select, button {
             font-family: 'Courier New', monospace;
-            border: 2px solid #000000;
-            background-color: #ffffff;
-            color: #000000;
-            cursor: pointer;
+            font-size: 14px;
+            padding: 5px 8px;
+            margin: 0 5px;
+            border: 2px solid black;
+            background: white;
+            color: black;
         }
 
         button {
-            background-color: #ffffff;
-            font-weight: bold;
+            cursor: pointer;
             min-width: 80px;
         }
 
-        button:hover {
-            background-color: #f0f0f0;
-        }
-
         button:active {
-            background-color: #e0e0e0;
+            background: black;
+            color: white;
         }
 
-        button:disabled {
-            background-color: #f8f8f8;
-            color: #888888;
-            cursor: not-allowed;
-        }
-
+        /* Sudoku grid - perfectly square cells */
         .sudoku-container {
             display: flex;
             justify-content: center;
-            margin-bottom: 20px;
+            margin: 20px 0;
         }
 
         .sudoku-grid {
             display: grid;
             grid-template-columns: repeat(9, 1fr);
             gap: 1px;
-            border: 3px solid #000000;
-            background-color: #000000;
-            width: 400px;
-            height: 400px;
+            border: 3px solid black;
+            background: black;
+            width: min(90vw, 450px);
+            aspect-ratio: 1;
         }
 
         .sudoku-cell {
-            background-color: #ffffff;
+            background: white;
             border: none;
-            font-size: 18px;
-            font-weight: bold;
             font-family: 'Courier New', monospace;
+            font-size: min(3.5vw, 20px);
+            font-weight: bold;
             text-align: center;
-            color: #000000;
+            color: black;
             outline: none;
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .sudoku-cell:focus {
-            background-color: #f0f0f0;
-        }
-
-        .sudoku-cell.given {
-            background-color: #e8e8e8;
-            color: #000000;
-        }
-
-        .sudoku-cell.error {
-            background-color: #d0d0d0;
-        }
-
-        .sudoku-cell.hint {
-            background-color: #f0f0f0;
-            color: #000000;
-        }
-
-        /* 3x3 box borders */
-        .sudoku-cell:nth-child(3n) {
-            border-right: 2px solid #000000;
+        /* Thicker borders for 3x3 boxes */
+        .sudoku-cell:nth-child(3n):not(:nth-child(9n)) {
+            border-right: 2px solid black;
         }
 
         .sudoku-cell:nth-child(n+19):nth-child(-n+27),
         .sudoku-cell:nth-child(n+46):nth-child(-n+54) {
-            border-bottom: 2px solid #000000;
+            border-bottom: 2px solid black;
         }
 
-        .info-panel {
-            margin-top: 20px;
-            padding: 15px;
-            border: 2px solid #000000;
-            background-color: #f8f8f8;
+        .sudoku-cell.given {
+            background: #f0f0f0;
+            font-weight: bold;
         }
 
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
+        .sudoku-cell.error {
+            background: #e0e0e0;
+        }
+
+        .sudoku-cell:focus {
+            background: #d0d0d0;
+        }
+
+        .info {
+            text-align: center;
+            margin: 15px 0;
             font-size: 14px;
-        }
-
-        .info-row:last-child {
-            margin-bottom: 0;
         }
 
         .hint-display {
-            margin-top: 15px;
+            margin: 15px 0;
             padding: 10px;
-            border: 1px solid #000000;
-            background-color: #ffffff;
-            font-size: 13px;
-            min-height: 40px;
+            border: 2px solid black;
+            background: #f8f8f8;
+            font-family: 'Courier New', monospace;
+            min-height: 50px;
         }
 
-        .progress-bar {
-            width: 100%;
-            height: 20px;
-            border: 2px solid #000000;
-            background-color: #ffffff;
-            margin-top: 10px;
+        .hint-display h3 {
+            margin-bottom: 8px;
         }
 
-        .progress-fill {
-            height: 100%;
-            background-color: #000000;
-            transition: none;
+        /* Mobile optimization */
+        @media (max-width: 480px) {
+            body {
+                padding: 5px;
+            }
+            
+            h1 {
+                font-size: 20px;
+            }
+            
+            .controls {
+                margin-bottom: 10px;
+            }
+            
+            label {
+                width: 80px;
+                font-size: 12px;
+            }
+            
+            select, button {
+                font-size: 12px;
+                padding: 4px 6px;
+            }
         }
 
-        .download-link {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 10px 15px;
-            background-color: #ffffff;
-            color: #000000;
-            text-decoration: none;
-            border: 2px solid #000000;
-            font-weight: bold;
-            font-size: 14px;
-        }
-
-        .download-link:hover {
-            background-color: #f0f0f0;
-        }
-
-        .status-message {
-            margin-top: 15px;
-            padding: 10px;
-            border: 1px solid #000000;
-            background-color: #ffffff;
-            font-size: 13px;
-            text-align: center;
-        }
-
-        /* Responsive design for smaller screens */
-        @media (max-width: 500px) {
+        /* Print styles */
+        @media print {
+            .controls, .hint-display {
+                display: none;
+            }
+            
+            body {
+                padding: 0;
+            }
+            
             .sudoku-grid {
-                width: 350px;
-                height: 350px;
-            }
-            
-            .sudoku-cell {
-                font-size: 16px;
-            }
-            
-            .control-row {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .control-row > * {
-                margin-bottom: 5px;
+                width: 400px;
             }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>SUDOKU</h1>
-        <p>E-Ink Optimized Edition</p>
-    </div>
-
-    <div class="controls">
-        <div class="control-group">
-            <label>New Puzzle:</label>
-            <div class="control-row">
+    <div class="container">
+        <h1>E-ink Sudoku</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Difficulty:</label>
                 <select id="difficulty">
-                    <option value="0">Very Easy</option>
-                    <option value="1">Easy</option>
-                    <option value="2" selected>Medium</option>
-                    <option value="3">Hard</option>
-                    <option value="4">Very Hard</option>
+                    <option value="0">Beginner (0)</option>
+                    <option value="0.5">Easy (0.5)</option>
+                    <option value="1">Medium (1)</option>
+                    <option value="1.5">Hard (1.5)</option>
+                    <option value="2" selected>Expert (2)</option>
+                    <option value="2.5">Master (2.5)</option>
+                    <option value="3">Extreme (3)</option>
                 </select>
-                <button id="generatePuzzle">Generate</button>
-                <button id="dailyPuzzle">Daily Puzzle</button>
+            </div>
+            
+            <div class="control-group">
+                <button onclick="generateNew()">New Puzzle</button>
+                <button onclick="generateDaily()">Today's Daily</button>
+                <button onclick="clearPuzzle()">Clear</button>
+                <button onclick="solvePuzzle()">Solve</button>
+            </div>
+            
+            <div class="control-group">
+                <button onclick="getHint()">Get Hint</button>
+                <button onclick="checkSolution()">Check</button>
+                <button onclick="showSolvePath()">Solution Path</button>
             </div>
         </div>
 
-        <div class="control-group">
-            <label>Seed (Optional):</label>
-            <div class="control-row">
-                <input type="number" id="seedInput" placeholder="Enter seed number">
-                <button id="generateFromSeed">Generate from Seed</button>
-            </div>
+        <div class="sudoku-container">
+            <div class="sudoku-grid" id="sudokuGrid"></div>
         </div>
 
-        <div class="control-group">
-            <label>Game Actions:</label>
-            <div class="control-row">
-                <button id="getHint">Get Hint</button>
-                <button id="checkSolution">Check</button>
-                <button id="solve">Solve</button>
-                <button id="clearBoard">Clear</button>
-            </div>
+        <div class="info" id="info">
+            Click "New Puzzle" to start playing
+        </div>
+
+        <div class="hint-display" id="hintDisplay" style="display: none;">
+            <h3>Hint:</h3>
+            <div id="hintText"></div>
         </div>
     </div>
-
-    <div class="sudoku-container">
-        <div class="sudoku-grid" id="sudokuGrid"></div>
-    </div>
-
-    <div class="info-panel">
-        <div class="info-row">
-            <span>Difficulty:</span>
-            <span id="difficultyDisplay">Medium</span>
-        </div>
-        <div class="info-row">
-            <span>Cells Filled:</span>
-            <span id="progressText">0/81</span>
-        </div>
-        <div class="info-row">
-            <span>Completion:</span>
-            <span id="completionPercent">0%</span>
-        </div>
-        <div class="progress-bar">
-            <div class="progress-fill" id="progressFill"></div>
-        </div>
-        <div class="hint-display" id="hintDisplay">Click "Get Hint" for solving assistance</div>
-    </div>
-
-    <div class="status-message" id="statusMessage">Ready to play!</div>
 
     <script src="sudoku.js"></script>
     <script>
-        class SudokuApp {
-            constructor() {
-                this.sudoku = new Sudoku();
-                this.currentPuzzle = null;
-                this.originalPuzzle = null;
-                this.currentDifficulty = 2;
-                this.selectedCell = null;
-                
-                this.initializeGrid();
-                this.bindEvents();
-                this.generateNewPuzzle();
-            }
+        let sudoku = new Sudoku();
+        let currentPuzzle = null;
+        let originalPuzzle = null;
+        let solutionSteps = [];
+        let currentStepIndex = 0;
 
-            initializeGrid() {
-                const grid = document.getElementById('sudokuGrid');
-                grid.innerHTML = '';
+        // Initialize the grid
+        function initializeGrid() {
+            const grid = document.getElementById('sudokuGrid');
+            grid.innerHTML = '';
+            
+            for (let i = 0; i < 81; i++) {
+                const cell = document.createElement('input');
+                cell.type = 'text';
+                cell.className = 'sudoku-cell';
+                cell.maxLength = 1;
+                cell.setAttribute('data-index', i);
                 
-                for (let i = 0; i < 81; i++) {
-                    const cell = document.createElement('input');
-                    cell.type = 'text';
-                    cell.className = 'sudoku-cell';
-                    cell.maxLength = '1';
-                    cell.dataset.index = i;
+                // Input validation - only allow numbers 1-9
+                cell.addEventListener('input', function(e) {
+                    let value = e.target.value;
+                    if (value && (!/^[1-9]$/.test(value))) {
+                        e.target.value = '';
+                        return;
+                    }
                     
-                    cell.addEventListener('input', (e) => this.handleInput(e));
-                    cell.addEventListener('focus', (e) => this.handleFocus(e));
-                    cell.addEventListener('keydown', (e) => this.handleKeydown(e));
+                    if (currentPuzzle) {
+                        const index = parseInt(e.target.getAttribute('data-index'));
+                        const row = Math.floor(index / 9);
+                        const col = index % 9;
+                        currentPuzzle[row][col] = value ? parseInt(value) : 0;
+                    }
                     
-                    grid.appendChild(cell);
-                }
-            }
-
-            bindEvents() {
-                document.getElementById('generatePuzzle').addEventListener('click', () => this.generateNewPuzzle());
-                document.getElementById('dailyPuzzle').addEventListener('click', () => this.generateDailyPuzzle());
-                document.getElementById('generateFromSeed').addEventListener('click', () => this.generateFromSeed());
-                document.getElementById('getHint').addEventListener('click', () => this.getHint());
-                document.getElementById('checkSolution').addEventListener('click', () => this.checkSolution());
-                document.getElementById('solve').addEventListener('click', () => this.solvePuzzle());
-                document.getElementById('clearBoard').addEventListener('click', () => this.clearBoard());
-                document.getElementById('difficulty').addEventListener('change', (e) => {
-                    this.currentDifficulty = parseInt(e.target.value);
-                    this.updateDifficultyDisplay();
+                    validateCell(e.target);
                 });
-            }
-
-            handleInput(e) {
-                const cell = e.target;
-                const value = e.target.value;
                 
-                if (value === '' || (value >= '1' && value <= '9')) {
-                    const index = parseInt(cell.dataset.index);
-                    const row = Math.floor(index / 9);
-                    const col = index % 9;
+                // Navigate with arrow keys
+                cell.addEventListener('keydown', function(e) {
+                    const index = parseInt(e.target.getAttribute('data-index'));
+                    let newIndex = index;
                     
-                    if (this.currentPuzzle) {
-                        this.currentPuzzle[row][col] = value === '' ? 0 : parseInt(value);
-                        this.updateProgress();
-                        this.clearErrors();
-                    }
-                } else {
-                    e.target.value = '';
-                }
-            }
-
-            handleFocus(e) {
-                this.selectedCell = e.target;
-                this.clearHints();
-            }
-
-            handleKeydown(e) {
-                if (e.key === 'Backspace' || e.key === 'Delete') {
-                    e.target.value = '';
-                    this.handleInput(e);
-                } else if (e.key >= '1' && e.key <= '9') {
-                    e.target.value = e.key;
-                    this.handleInput(e);
-                } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || 
-                          e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                    this.handleArrowKey(e);
-                }
-            }
-
-            handleArrowKey(e) {
-                e.preventDefault();
-                const currentIndex = parseInt(e.target.dataset.index);
-                let newIndex = currentIndex;
-                
-                switch (e.key) {
-                    case 'ArrowUp':
-                        newIndex = currentIndex - 9;
-                        break;
-                    case 'ArrowDown':
-                        newIndex = currentIndex + 9;
-                        break;
-                    case 'ArrowLeft':
-                        newIndex = currentIndex - 1;
-                        break;
-                    case 'ArrowRight':
-                        newIndex = currentIndex + 1;
-                        break;
-                }
-                
-                if (newIndex >= 0 && newIndex < 81) {
-                    const cells = document.querySelectorAll('.sudoku-cell');
-                    cells[newIndex].focus();
-                }
-            }
-
-            generateNewPuzzle() {
-                this.showStatus('Generating puzzle...');
-                
-                setTimeout(() => {
-                    try {
-                        this.currentPuzzle = this.sudoku.matrix(this.currentDifficulty);
-                        this.originalPuzzle = JSON.parse(JSON.stringify(this.currentPuzzle));
-                        this.displayPuzzle();
-                        this.updateProgress();
-                        this.showStatus('New puzzle generated!');
-                    } catch (error) {
-                        this.showStatus('Error generating puzzle. Please try again.');
-                        console.error('Error generating puzzle:', error);
-                    }
-                }, 100);
-            }
-
-            generateDailyPuzzle() {
-                this.showStatus('Generating daily puzzle...');
-                
-                setTimeout(() => {
-                    try {
-                        const today = new Date();
-                        this.currentPuzzle = this.sudoku.generateDailySudoku(this.currentDifficulty, today, "Matrix");
-                        this.originalPuzzle = JSON.parse(JSON.stringify(this.currentPuzzle));
-                        this.displayPuzzle();
-                        this.updateProgress();
-                        this.showStatus(`Daily puzzle for ${today.toDateString()} generated!`);
-                    } catch (error) {
-                        this.showStatus('Error generating daily puzzle. Please try again.');
-                        console.error('Error generating daily puzzle:', error);
-                    }
-                }, 100);
-            }
-
-            generateFromSeed() {
-                const seedInput = document.getElementById('seedInput');
-                const seed = parseInt(seedInput.value);
-                
-                if (isNaN(seed)) {
-                    this.showStatus('Please enter a valid seed number.');
-                    return;
-                }
-                
-                this.showStatus('Generating puzzle from seed...');
-                
-                setTimeout(() => {
-                    try {
-                        this.currentPuzzle = this.sudoku.generateFromSeed(this.currentDifficulty, seed, "Matrix");
-                        this.originalPuzzle = JSON.parse(JSON.stringify(this.currentPuzzle));
-                        this.displayPuzzle();
-                        this.updateProgress();
-                        this.showStatus(`Puzzle generated from seed: ${seed}`);
-                    } catch (error) {
-                        this.showStatus('Error generating puzzle from seed. Please try again.');
-                        console.error('Error generating puzzle from seed:', error);
-                    }
-                }, 100);
-            }
-
-            displayPuzzle() {
-                const cells = document.querySelectorAll('.sudoku-cell');
-                
-                cells.forEach((cell, index) => {
-                    const row = Math.floor(index / 9);
-                    const col = index % 9;
-                    const value = this.currentPuzzle[row][col];
-                    
-                    cell.value = value === 0 ? '' : value.toString();
-                    cell.classList.remove('given', 'error', 'hint');
-                    
-                    if (value !== 0) {
-                        cell.classList.add('given');
-                        cell.readOnly = true;
-                    } else {
-                        cell.readOnly = false;
-                    }
-                });
-            }
-
-            getHint() {
-                if (!this.currentPuzzle) {
-                    this.showStatus('Please generate a puzzle first.');
-                    return;
-                }
-                
-                try {
-                    const hint = this.sudoku.hint(this.currentPuzzle, 0);
-                    if (hint) {
-                        const [technique, [row, col], value] = hint;
-                        const hintDisplay = document.getElementById('hintDisplay');
-                        hintDisplay.textContent = `${technique}: Place ${value} at row ${row + 1}, column ${col + 1}`;
-                        
-                        // Highlight the cell
-                        const cellIndex = row * 9 + col;
-                        const cells = document.querySelectorAll('.sudoku-cell');
-                        cells[cellIndex].classList.add('hint');
-                        
-                        this.showStatus('Hint provided! Check the hint panel.');
-                    } else {
-                        document.getElementById('hintDisplay').textContent = 'No hint available - puzzle may be complete or unsolvable.';
-                        this.showStatus('No hint available.');
-                    }
-                } catch (error) {
-                    this.showStatus('Error getting hint. Please try again.');
-                    console.error('Error getting hint:', error);
-                }
-            }
-
-            checkSolution() {
-                if (!this.currentPuzzle) {
-                    this.showStatus('Please generate a puzzle first.');
-                    return;
-                }
-                
-                // Check if puzzle is complete
-                const isComplete = this.currentPuzzle.every(row => row.every(cell => cell !== 0));
-                
-                if (!isComplete) {
-                    this.showStatus('Puzzle is not complete yet.');
-                    return;
-                }
-                
-                // Check if solution is valid
-                const isValid = this.isValidSolution(this.currentPuzzle);
-                
-                if (isValid) {
-                    this.showStatus('Congratulations! Puzzle solved correctly!');
-                    document.getElementById('hintDisplay').textContent = 'Puzzle completed successfully!';
-                } else {
-                    this.showStatus('Solution contains errors. Please check your entries.');
-                    this.highlightErrors();
-                }
-            }
-
-            isValidSolution(puzzle) {
-                // Check rows
-                for (let row = 0; row < 9; row++) {
-                    const seen = new Set();
-                    for (let col = 0; col < 9; col++) {
-                        const value = puzzle[row][col];
-                        if (value < 1 || value > 9 || seen.has(value)) {
-                            return false;
-                        }
-                        seen.add(value);
-                    }
-                }
-                
-                // Check columns
-                for (let col = 0; col < 9; col++) {
-                    const seen = new Set();
-                    for (let row = 0; row < 9; row++) {
-                        const value = puzzle[row][col];
-                        if (seen.has(value)) {
-                            return false;
-                        }
-                        seen.add(value);
-                    }
-                }
-                
-                // Check 3x3 boxes
-                for (let boxRow = 0; boxRow < 3; boxRow++) {
-                    for (let boxCol = 0; boxCol < 3; boxCol++) {
-                        const seen = new Set();
-                        for (let row = boxRow * 3; row < boxRow * 3 + 3; row++) {
-                            for (let col = boxCol * 3; col < boxCol * 3 + 3; col++) {
-                                const value = puzzle[row][col];
-                                if (seen.has(value)) {
-                                    return false;
-                                }
-                                seen.add(value);
+                    switch(e.key) {
+                        case 'ArrowUp':
+                            if (index >= 9) newIndex = index - 9;
+                            e.preventDefault();
+                            break;
+                        case 'ArrowDown':
+                            if (index < 72) newIndex = index + 9;
+                            e.preventDefault();
+                            break;
+                        case 'ArrowLeft':
+                            if (index % 9 !== 0) newIndex = index - 1;
+                            e.preventDefault();
+                            break;
+                        case 'ArrowRight':
+                            if (index % 9 !== 8) newIndex = index + 1;
+                            e.preventDefault();
+                            break;
+                        case 'Backspace':
+                        case 'Delete':
+                            e.target.value = '';
+                            if (currentPuzzle) {
+                                const row = Math.floor(index / 9);
+                                const col = index % 9;
+                                currentPuzzle[row][col] = 0;
                             }
-                        }
+                            validateCell(e.target);
+                            e.preventDefault();
+                            break;
                     }
-                }
-                
-                return true;
-            }
-
-            highlightErrors() {
-                // This is a simplified error highlighting - in a full implementation,
-                // you would check each cell against Sudoku rules
-                const cells = document.querySelectorAll('.sudoku-cell');
-                cells.forEach(cell => {
-                    if (cell.value && !cell.classList.contains('given')) {
-                        cell.classList.add('error');
+                    
+                    if (newIndex !== index) {
+                        const cells = document.querySelectorAll('.sudoku-cell');
+                        cells[newIndex].focus();
                     }
                 });
-            }
-
-            solvePuzzle() {
-                if (!this.currentPuzzle) {
-                    this.showStatus('Please generate a puzzle first.');
-                    return;
-                }
                 
-                this.showStatus('Solving puzzle...');
-                
-                setTimeout(() => {
-                    try {
-                        const solved = this.sudoku.solveMatrix(JSON.parse(JSON.stringify(this.currentPuzzle)));
-                        if (solved) {
-                            this.currentPuzzle = solved;
-                            this.displayPuzzle();
-                            this.updateProgress();
-                            this.showStatus('Puzzle solved!');
-                        } else {
-                            this.showStatus('Unable to solve this puzzle.');
-                        }
-                    } catch (error) {
-                        this.showStatus('Error solving puzzle. Please try again.');
-                        console.error('Error solving puzzle:', error);
-                    }
-                }, 100);
-            }
-
-            clearBoard() {
-                if (!this.originalPuzzle) {
-                    this.showStatus('No puzzle to clear.');
-                    return;
-                }
-                
-                this.currentPuzzle = JSON.parse(JSON.stringify(this.originalPuzzle));
-                this.displayPuzzle();
-                this.updateProgress();
-                this.clearErrors();
-                this.clearHints();
-                document.getElementById('hintDisplay').textContent = 'Click "Get Hint" for solving assistance';
-                this.showStatus('Board cleared to original state.');
-            }
-
-            clearErrors() {
-                const cells = document.querySelectorAll('.sudoku-cell');
-                cells.forEach(cell => cell.classList.remove('error'));
-            }
-
-            clearHints() {
-                const cells = document.querySelectorAll('.sudoku-cell');
-                cells.forEach(cell => cell.classList.remove('hint'));
-            }
-
-            updateProgress() {
-                if (!this.currentPuzzle) return;
-                
-                let filledCells = 0;
-                for (let row = 0; row < 9; row++) {
-                    for (let col = 0; col < 9; col++) {
-                        if (this.currentPuzzle[row][col] !== 0) {
-                            filledCells++;
-                        }
-                    }
-                }
-                
-                const percentage = Math.round((filledCells / 81) * 100);
-                
-                document.getElementById('progressText').textContent = `${filledCells}/81`;
-                document.getElementById('completionPercent').textContent = `${percentage}%`;
-                document.getElementById('progressFill').style.width = `${percentage}%`;
-            }
-
-            updateDifficultyDisplay() {
-                const difficulties = ['Very Easy', 'Easy', 'Medium', 'Hard', 'Very Hard'];
-                document.getElementById('difficultyDisplay').textContent = difficulties[this.currentDifficulty];
-            }
-
-            showStatus(message) {
-                document.getElementById('statusMessage').textContent = message;
+                grid.appendChild(cell);
             }
         }
 
-        // Initialize the app when the page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            new SudokuApp();
+        function displayPuzzle(puzzle) {
+            const cells = document.querySelectorAll('.sudoku-cell');
+            
+            for (let i = 0; i < 81; i++) {
+                const row = Math.floor(i / 9);
+                const col = i % 9;
+                const value = puzzle[row][col];
+                const cell = cells[i];
+                
+                if (value !== 0) {
+                    cell.value = value.toString();
+                    cell.className = 'sudoku-cell given';
+                    cell.readOnly = true;
+                } else {
+                    cell.value = '';
+                    cell.className = 'sudoku-cell';
+                    cell.readOnly = false;
+                }
+            }
+        }
+
+        function validateCell(cell) {
+            const index = parseInt(cell.getAttribute('data-index'));
+            const row = Math.floor(index / 9);
+            const col = index % 9;
+            const value = cell.value;
+            
+            if (!value || !currentPuzzle) {
+                cell.classList.remove('error');
+                return;
+            }
+            
+            const num = parseInt(value);
+            let isValid = true;
+            
+            // Check row
+            for (let c = 0; c < 9; c++) {
+                if (c !== col && currentPuzzle[row][c] === num) {
+                    isValid = false;
+                    break;
+                }
+            }
+            
+            // Check column
+            if (isValid) {
+                for (let r = 0; r < 9; r++) {
+                    if (r !== row && currentPuzzle[r][col] === num) {
+                        isValid = false;
+                        break;
+                    }
+                }
+            }
+            
+            // Check 3x3 box
+            if (isValid) {
+                const boxRow = 3 * Math.floor(row / 3);
+                const boxCol = 3 * Math.floor(col / 3);
+                for (let r = boxRow; r < boxRow + 3; r++) {
+                    for (let c = boxCol; c < boxCol + 3; c++) {
+                        if ((r !== row || c !== col) && currentPuzzle[r][c] === num) {
+                            isValid = false;
+                            break;
+                        }
+                    }
+                    if (!isValid) break;
+                }
+            }
+            
+            if (isValid) {
+                cell.classList.remove('error');
+            } else {
+                cell.classList.add('error');
+            }
+        }
+
+        function generateNew() {
+            const difficulty = parseFloat(document.getElementById('difficulty').value);
+            currentPuzzle = sudoku.matrix(difficulty);
+            originalPuzzle = sudoku.deepCopy(currentPuzzle);
+            displayPuzzle(currentPuzzle);
+            document.getElementById('info').textContent = `New ${getDifficultyName(difficulty)} puzzle generated`;
+            hideHint();
+        }
+
+        function generateDaily() {
+            const difficulty = parseInt(document.getElementById('difficulty').value.split('.')[0]) || 2;
+            currentPuzzle = sudoku.generateDailySudoku(difficulty, new Date(), "Matrix");
+            originalPuzzle = sudoku.deepCopy(currentPuzzle);
+            displayPuzzle(currentPuzzle);
+            document.getElementById('info').textContent = `Today's daily puzzle loaded (Level ${difficulty})`;
+            hideHint();
+        }
+
+        function clearPuzzle() {
+            if (!originalPuzzle) return;
+            currentPuzzle = sudoku.deepCopy(originalPuzzle);
+            displayPuzzle(currentPuzzle);
+            document.getElementById('info').textContent = 'Puzzle cleared to original state';
+            hideHint();
+        }
+
+        function solvePuzzle() {
+            if (!currentPuzzle) return;
+            const solved = sudoku.solveMatrix(sudoku.deepCopy(currentPuzzle));
+            if (solved) {
+                currentPuzzle = solved;
+                displayPuzzle(currentPuzzle);
+                document.getElementById('info').textContent = 'Puzzle solved!';
+            } else {
+                document.getElementById('info').textContent = 'Unable to solve this puzzle';
+            }
+            hideHint();
+        }
+
+        function getHint() {
+            if (!currentPuzzle) return;
+            
+            const hint = sudoku.hint(currentPuzzle, 0);
+            if (hint) {
+                const [technique, [row, col], value] = hint;
+                showHint(`${technique}: Place ${value} in row ${row + 1}, column ${col + 1}`);
+                
+                // Highlight the cell
+                const index = row * 9 + col;
+                const cells = document.querySelectorAll('.sudoku-cell');
+                cells[index].focus();
+            } else {
+                showHint('No hint available - puzzle may be complete or unsolvable');
+            }
+        }
+
+        function checkSolution() {
+            if (!currentPuzzle) return;
+            
+            // Check if puzzle is complete
+            let complete = true;
+            let errors = 0;
+            
+            const cells = document.querySelectorAll('.sudoku-cell');
+            cells.forEach(cell => {
+                if (!cell.value) {
+                    complete = false;
+                } else if (cell.classList.contains('error')) {
+                    errors++;
+                }
+                validateCell(cell);
+            });
+            
+            if (errors > 0) {
+                document.getElementById('info').textContent = `${errors} error(s) found - check highlighted cells`;
+            } else if (complete) {
+                document.getElementById('info').textContent = 'Congratulations! Puzzle solved correctly!';
+            } else {
+                document.getElementById('info').textContent = 'No errors found - keep going!';
+            }
+        }
+
+        function showSolvePath() {
+            if (!originalPuzzle) return;
+            
+            const path = sudoku.solvePath(originalPuzzle, 0);
+            if (path) {
+                let pathText = `Solution has ${path.length} steps:\n\n`;
+                path.forEach((step, i) => {
+                    const [technique, [row, col], value] = step;
+                    pathText += `${i + 1}. ${technique}: Place ${value} at (${row + 1},${col + 1})\n`;
+                });
+                showHint(pathText);
+            } else {
+                showHint('Unable to generate solution path for this puzzle');
+            }
+        }
+
+        function showHint(text) {
+            document.getElementById('hintText').textContent = text;
+            document.getElementById('hintDisplay').style.display = 'block';
+        }
+
+        function hideHint() {
+            document.getElementById('hintDisplay').style.display = 'none';
+        }
+
+        function getDifficultyName(level) {
+            const names = {
+                0: 'Beginner',
+                0.5: 'Easy',
+                1: 'Medium',
+                1.5: 'Hard',
+                2: 'Expert',
+                2.5: 'Master',
+                3: 'Extreme'
+            };
+            return names[level] || 'Custom';
+        }
+
+        // Initialize the app
+        window.addEventListener('load', function() {
+            initializeGrid();
+            document.getElementById('info').textContent = 'Sudoku app loaded. Click "New Puzzle" to start.';
         });
     </script>
 </body>
