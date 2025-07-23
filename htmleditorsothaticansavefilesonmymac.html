@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ultimate Sudoku Solver</title>
+<style>
+  /* Reset and base */
+  body {
+    margin: 0; 
+    background: #1e1e2f; 
+    color: #eee; 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    min-height: 100vh;
+    user-select: none;
+  }
+  h1 {
+    margin: 20px 0 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-shadow: 0 0 8px #7f8cff88;
+  }
+  #sudoku {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    grid-template-rows: repeat(9, 1fr);
+    gap: 1px;
+    background: #44466a;
+    border: 4px solid #7f8cff;
+    box-shadow: 0 0 15px #7f8cff66;
+    width: 450px;
+    height: 450px;
+    margin-bottom: 15px;
+  }
+  .cell {
+    position: relative;
+    background: #2a2a40;
+    border: 1px solid #44466a;
+    font-size: 1.5rem;
+    text-align: center;
+    line-height: 1.5;
+    cursor: pointer;
+    color: #ddd;
+    transition: background-color 0.3s, color 0.3s;
+  }
+  .cell:focus {
+    outline: none;
+    background: #3b3bb7;
+    color: #fff;
+    box-shadow: 0 0 8px #7f8cff;
+    z-index: 2;
+  }
+  /* Bold borders for 3x3 boxes */
+  .cell:nth-child(3n) {
+    border-right: 3px solid #7f8cff;
+  }
+  .cell:nth-child(n+19):nth-child(-n+27),
+  .cell:nth-child(n+46):nth-child(-n+54) {
+    border-bottom: 3px solid #7f8cff;
+  }
+  /* Pencil marks */
+  .pencil {
+    position: absolute;
+    font-size: 0.6rem;
+    color: #7f8cffbb;
+    top: 2px;
+    left: 2px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    pointer-events: none;
+    user-select: none;
+  }
+  .pencil span {
+    text-align: center;
+    line-height: 1;
+    opacity: 0.5;
+  }
+  /* Controls */
+  #controls {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+  }
+  button {
+    background: #3b3bb7;
+    border: none;
+    color: white;
+    padding: 10px 15px;
+    font-weight: 700;
+    border-radius: 5px;
+    cursor: pointer;
+    box-shadow: 0 0 6px #7f8cffbb;
+    transition: background-color 0.3s;
+  }
+  button:hover:not(:disabled) {
+    background: #5656ee;
+  }
+  button:disabled {
+    background: #555599;
+    cursor: not-allowed;
+  }
+  /* Conflict highlight */
+  .conflict {
+    background: #ff4c4c !important;
+    color: white !important;
+  }
+  /* Dark mode toggle */
+  #darkmodeToggle {
+    margin-top: 10px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: #7f8cffaa;
+    user-select: none;
+  }
+  #darkmodeToggle:hover {
+    color: #7f8cff;
+  }
+  /* Timer */
+  #timer {
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+    color: #7f8cff;
+    letter-spacing: 1.5px;
+  }
+  /* Responsive */
+  @media (max-width: 500px) {
+    #sudoku {
+      width: 90vw;
+      height: 90vw;
+    }
+  }
+</style>
+</head>
+<body>
+
+<h1>ULTIMATE SUDOKU</h1>
+
+<div id="timer">Time: 00:00</div>
+
+<div id="sudoku" tabindex="0" aria-label="Sudoku grid" role="grid" aria-readonly="false"></div>
+
+<div id="controls">
+  <button id="solveBtn">Solve</button>
+  <button id="clearBtn">Clear</button>
+  <button id="undoBtn" disabled>Undo</button>
+  <button id="redoBtn" disabled>Redo</button>
+  <button id="hintBtn">Hint</button>
+</div>
+
+<div id="darkmodeToggle" title="Toggle dark mode">🌓 Toggle Dark Mode</div>
+
+<script>
+(() => {
+  const SIZE = 9;
+  const BOX_SIZE = 3;
+
+  // State
+  let board = Array(SIZE*SIZE).fill('');
+  let pencilMarks = Array(SIZE*SIZE).fill(null).map(() => new Set());
+  let undoStack = [];
+  let redoStack = [];
+  let timerInterval;
+  let startTime = null;
+
+  const sudokuEl = document.getElementById('sudoku');
+  const timerEl = document.getElementById('timer');
+  const solveBtn = document.getElementById('solveBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const undoBtn = document.getElementById('undoBtn');
+  const redoBtn = document.getElementById('redoBtn');
+  const hintBtn = document.getElementById('hintBtn');
+  const darkmodeToggle = document.getElementById('darkmodeToggle');
+
+  // Utilities
+  const idx = (r, c) => r * SIZE + c;
+  const rowColBox = (i) => {
+    const r = Math.floor(i / SIZE);
+    const c = i % SIZE;
+    const box = Math.floor(r / BOX_SIZE) * BOX_SIZE + Math.floor(c / BOX_SIZE);
+    return {r,c,box};
+  };
+
+  // Build grid
+  for (let i=0; i < SIZE*SIZE; i++) {
+    const cell = document.createElement('input');
+    cell.type = 'text';
+    cell.maxLength = 1;
+    cell.classList.add('cell');
+    cell.autocomplete = 'off';
+    cell.inputMode = 'numeric';
+    cell.setAttribute('aria-label', `Cell ${Math.floor(i/SIZE)+1},${(i%SIZE)+1}`);
+    cell.dataset.index = i;
+
+    // Pencil marks container
+    const pencil = document.createElement('div');
+    pencil.className = 'pencil';
+    for(let n=1; n<=9; n++) {
+      const span = document.createElement('span');
+      span.textContent = n;
+      pencil.appendChild(span);
+    }
+    cell.appendChild(pencil);
+
+    sudokuEl.appendChild(cell);
+  }
+
+  // Rendering pencil marks on a cell
+  function renderPencils(i) {
+    const cell = sudokuEl.children[i];
+    const pencilDiv = cell.querySelector('.pencil');
+    pencilDiv.style.display = pencilMarks[i].size ? 'grid' : 'none';
+
+    // Show only pencil marks in set
+    for (let n=1; n<=9; n++) {
+      pencilDiv.children[n-1].style.opacity = pencilMarks[i].has(n) ? '0.6' : '0';
+    }
+  }
+
+  // Validate board & highlight conflicts
+  function validateBoard() {
+    // Clear previous conflicts
+    for(let i=0; i < SIZE*SIZE; i++) {
+      sudokuEl.children[i].classList.remove('conflict');
+    }
+
+    // Check rows, cols, boxes for duplicates
+    const rows = Array(SIZE).fill(0).map(() => new Map());
+    const cols = Array(SIZE).fill(0).map(() => new Map());
+    const boxes = Array(SIZE).fill(0).map(() => new Map());
+
+    for(let i=0; i < SIZE*SIZE; i++) {
+      const val = board[i];
+      if (!val) continue;
+      const {r,c,box} = rowColBox(i);
+
+      // If duplicate in row
+      if(rows[r].has(val)) {
+        sudokuEl.children[i].classList.add('conflict');
+        sudokuEl.children[rows[r].get(val)].classList.add('conflict');
+      } else {
+        rows[r].set(val, i);
+      }
+      // Column duplicate
+      if(cols[c].has(val)) {
+        sudokuEl.children[i].classList.add('conflict');
+        sudokuEl.children[cols[c].get(val)].classList.add('conflict');
+      } else {
+        cols[c].set(val, i);
+      }
+      // Box duplicate
+      if(boxes[box].has(val)) {
+        sudokuEl.children[i].classList.add('conflict');
+        sudokuEl.children[boxes[box].get(val)].classList.add('conflict');
+      } else {
+        boxes[box].set(val, i);
+      }
+    }
+  }
+
+  // Save state for undo
+  function saveState() {
+    undoStack.push({
+      board: [...board],
+      pencilMarks: pencilMarks.map(s => new Set(s))
+    });
+    if (undoStack.length > 100) undoStack.shift();
+    undoBtn.disabled = false;
+    redoStack.length = 0;
+    redoBtn.disabled = true;
+  }
+
+  // Render entire board and pencils
+  function renderBoard() {
+    for(let i=0; i < SIZE*SIZE; i++) {
+      const cell = sudokuEl.children[i];
+      cell.value = board[i];
+      renderPencils(i);
+    }
+    validateBoard();
+  }
+
+  // Backtracking solver
+  function solveSudoku(b) {
+    for(let i=0; i < SIZE*SIZE; i++) {
+      if(!b[i]) {
+        for(let n=1; n<=9; n++) {
+          b[i] = n.toString();
+          if(!hasConflict(b, i)) {
+            if(solveSudoku(b)) return true;
+          }
+          b[i] = '';
+        }
+        return false;
+      }
+    }
+    return true;
+  }
+  // Check conflicts for one cell
+  function hasConflict(b, i) {
+    const val = b[i];
+    if (!val) return false;
+    const {r,c,box} = rowColBox(i);
+    for(let j=0; j < SIZE; j++) {
+      if(j !== c && b[r*SIZE+j] === val) return true;
+      if(j !== r && b[j*SIZE+c] === val) return true;
+    }
+    const br = Math.floor(r/BOX_SIZE)*BOX_SIZE;
+    const bc = Math.floor(c/BOX_SIZE)*BOX_SIZE;
+    for(let rr=br; rr<br+BOX_SIZE; rr++) {
+      for(let cc=bc; cc<bc+BOX_SIZE; cc++) {
+        let idx2 = rr*SIZE+cc;
+        if(idx2 !== i && b[idx2] === val) return true;
+      }
+    }
+    return false;
+  }
+
+  // Clear board
+  function clearBoard() {
+    saveState();
+    board.fill('');
+    pencilMarks = Array(SIZE*SIZE).fill(null).map(() => new Set());
+    renderBoard();
+    resetTimer();
+  }
+
+  // Undo/Redo
+  function undo() {
+    if (undoStack.length === 0) return;
+    redoStack.push({
+      board: [...board],
+      pencilMarks: pencilMarks.map(s => new Set(s))
+    });
+    const last = undoStack.pop();
+    board = last.board;
+    pencilMarks = last.pencilMarks;
+    renderBoard();
+    undoBtn.disabled = undoStack.length === 0;
+    redoBtn.disabled = false;
+  }
+  function redo() {
+    if (redoStack.length === 0) return;
+    undoStack.push({
+      board: [...board],
+      pencilMarks: pencilMarks.map(s => new Set(s))
+    });
+    const next = redoStack.pop();
+    board = next.board;
+    pencilMarks = next.pencilMarks;
+    renderBoard();
+    redoBtn.disabled = redoStack.length === 0;
+    undoBtn.disabled = false;
+  }
+
+  // Timer
+  function startTimer() {
+    if(startTime !== null) return;
+    startTime = Date.now();
+    timerInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const mins = Math.floor(elapsed/60000).toString().padStart(2,'0');
+      const secs = Math.floor((elapsed%60000)/1000).toString().padStart(2,'0');
+      timerEl.textContent = `Time: ${mins}:${secs}`;
+    }, 500);
+  }
+  function resetTimer() {
+    clearInterval(timerInterval);
+    startTime = null;
+    timerEl.textContent = "Time: 00:00";
+  }
+
+  // Hint (simple) - find one empty cell with a valid number
+  function hint() {
+    for(let i=0; i < SIZE*SIZE; i++) {
+      if(!board[i]) {
+        for(let n=1; n<=9; n++) {
+          board[i] = n.toString();
+          if(!hasConflict(board, i)) {
+            alert(`Hint: Cell [${Math.floor(i/SIZE)+1},${(i%SIZE)+1}] can be ${n}`);
+            board[i] = '';
+            return;
+          }
+        }
+      }
+    }
+    alert("No hints available or board is full.");
+  }
+
+  // Keyboard input & pencil mode toggle (press 'P' to toggle)
+  let pencilMode = false;
+  function togglePencilMode() {
+    pencilMode = !pencilMode;
+    darkmodeToggle.textContent = pencilMode ? '✏️ Pencil Mode ON (P to toggle)' : '🌓 Toggle Dark Mode';
+  }
+
+  // Cell input event handler
+  function onCellInput(e) {
+    const cell = e.target;
+    const i = +cell.dataset.index;
+    const val = cell.value;
+
+    if(val === '') {
+      saveState();
+      board[i] = '';
+      pencilMarks[i].clear();
+      renderPencils(i);
+      validateBoard();
+      return;
+    }
+
+    if(!/^[1-9]$/.test(val)) {
+      cell.value = board[i];
+      return;
+    }
+
+    saveState();
+
+    if(pencilMode) {
+      // toggle pencil mark
+      const num = parseInt(val,10);
+      if(pencilMarks[i].has(num)) {
+        pencilMarks[i].delete(num);
+      } else {
+        pencilMarks[i].add(num);
+      }
+      // Clear main number if pencil marks exist
+      board[i] = '';
+      cell.value = '';
+      renderPencils(i);
+    } else {
+      board[i] = val;
+      pencilMarks[i].clear();
+      renderPencils(i);
+    }
+    validateBoard();
+    startTimer();
+  }
+
+  // Event listeners setup
+  for(let i=0; i < SIZE*SIZE; i++) {
+    const cell = sudokuEl.children[i];
+    cell.addEventListener('input', onCellInput);
+    cell.addEventListener('keydown', e => {
+      // Allow arrow keys navigation
+      if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        let r = Math.floor(i / SIZE);
+        let c = i % SIZE;
+        if(e.key === 'ArrowUp') r = (r + SIZE - 1) % SIZE;
+        if(e.key === 'ArrowDown') r = (r + 1) % SIZE;
+        if(e.key === 'ArrowLeft') c = (c + SIZE - 1) % SIZE;
+        if(e.key === 'ArrowRight') c = (c + 1) % SIZE;
+        sudokuEl.children[r*SIZE + c].focus();
+      }
+      if(e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        togglePencilMode();
+      }
+    });
+  }
+
+  solveBtn.addEventListener('click', () => {
+    const copy = [...board];
+    if(solveSudoku(copy)) {
+      saveState();
+      board = copy;
+      pencilMarks = Array(SIZE*SIZE).fill(null).map(() => new Set());
+      renderBoard();
+      alert("Solved!");
+      resetTimer();
+    } else {
+      alert("No solution found.");
+    }
+  });
+
+  clearBtn.addEventListener('click', () => {
+    if(confirm("Clear the board?")) {
+      clearBoard();
+    }
+  });
+
+  undoBtn.addEventListener('click', undo);
+  redoBtn.addEventListener('click', redo);
+  hintBtn.addEventListener('click', hint);
+
+  darkmodeToggle.addEventListener('click', () => {
+    document.body.classList.toggle('darkmode');
+    if(document.body.classList.contains('darkmode')) {
+      document.body.style.background = '#eee';
+      document.body.style.color = '#222';
+      sudokuEl.style.background = '#bbb';
+      for(let i=0; i<SIZE*SIZE; i++) {
+        sudokuEl.children[i].style.background = '#fff';
+        sudokuEl.children[i].style.color = '#222';
+      }
+    } else {
+      document.body.style.background = '#1e1e2f';
+      document.body.style.color = '#eee';
+      sudokuEl.style.background = '#44466a';
+      for(let i=0; i<SIZE*SIZE; i++) {
+        sudokuEl.children[i].style.background = '#2a2a40';
+        sudokuEl.children[i].style.color = '#ddd';
+      }
+    }
+  });
+
+  // Initialize empty board and render
+  clearBoard();
+})();
+</script>
+
+</body>
+</html>
