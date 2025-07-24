@@ -1,3 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="duodokusolver.js"></script>
+  <script src="duodokudifficulties.js"></script> <!-- *** NEW *** -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sufufu Puzzle Viewer</title>
+  <link rel="stylesheet" href="googletitle.css">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 15px;
+      color: #eeeeee;
+      background-color: #1a1a1a;
+    }
+    table {
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    td {
+      text-align: center;
+      border: 1px solid #eeeeee;
+    }
+    .editable {
+      color: blue;
+    }
+    .cell-div {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #1a1a1a;
+      cursor: pointer;
+      position: relative;
+    }
+    .candidates {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      width: 100%;
+      height: 100%;
+      font-size: 40%;
+    }
+    .candidate {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: #666;
+    }
+    .candidate.active {
+      color: #0066cc;
+      font-weight: bold;
+    }
+    td:nth-child(4n) {
+      border-right: 3px solid #eeeeee;
+    }
+    td:nth-child(1) {
+      border-left: 3px solid #eeeeee;
+    }
+    tr:nth-child(2n) td {
+      border-bottom: 3px solid #eeeeee;
+    }
+    tr:nth-child(1) td {
+      border-top: 3px solid #eeeeee;
+    }
+    .button-container {
+      text-align: center;
+      margin-top: 20px;
+    }
+    button {
+      display: inline-block;
+      margin: 10px 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      width: 200px;
+    }
+    #feedback {
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+      margin: 15px 0;
+    }
+    #rules {
+      text-align: center;
+    }
+    .mode-selector {
+      margin: 10px 0;
+    }
+    .selected-cell {
+      outline: 2px solid #0066cc;
+    }
+    .controls-info {
+      max-width: 600px;
+      padding: 10px;
+      background-color: #f8f8f8;
+      border-radius: 5px;
+      margin-bottom: 20px;
+    }
+    .controls-info kbd {
+      background-color: #eee;
+      border-radius: 3px;
+      border: 1px solid #b4b4b4;
+      box-shadow: 0 1px 1px rgba(0, 0, 0, .2);
+      color: #333;
+      display: inline-block;
+      font-size: 0.9em;
+      font-family: monospace;
+      padding: 2px 5px;
+      margin: 0 3px;
+    }
+    /* Main Layout */
+    .puzzle-container {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 20px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    .puzzle-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    /* Virtual Numpad Styles */
+    .numpad-column {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    .numpad-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 20px 0;
+      width: 200px;
+    }
+    .numpad {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      width: 100%;
+    }
+    .numpad-button {
+      background-color: #f2f2f2;
+      border: 1px solid #ccc;
+      color: #1a1a1a;
+      border-radius: 5px;
+      padding: 15px 0;
+      font-size: 20px;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.2s;
+    }
+    .numpad-button:active {
+      background-color: #d9d9d9;
+    }
+    .numpad-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+      margin-top: 10px;
+    }
+    .numpad-action {
+      background-color: #e6e6e6;
+      border: 1px solid #ccc;
+      color: #1a1a1a;
+      border-radius: 5px;
+      padding: 12px 0;
+      font-size: 16px;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .numpad-clear {
+      background-color: #ffcccc;
+    }
+    .numpad-mode {
+      background-color: #ccffcc;
+    }
+    /* New style for digit highlighting */
+    .digit-highlight {
+      background-color: #ffffcc !important;
+      color: #1a1a1a;
+    }
+    /* New style for candidate highlighting */
+    .candidate-highlight {
+      color: #ff6600 !important;
+      font-weight: bold;
+    }
+    @media (max-width: 768px) {
+      .puzzle-container {
+        flex-direction: column;
+        align-items: center;
+      }
+      .numpad-column {
+        width: 100%;
+        max-width: 400px;
+      }
+      .numpad-container {
+        width: 100%;
+        max-width: 300px;
+        margin: 10px auto;
+      }
+      .button-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      button {
+        width: calc(50% - 20px);
+        margin: 10px 5px;
+      }
+    }
+  </style>
+</head>
+<body>
+<h1 class="gradient-title">Sufufu Puzzle</h1>
+<div style="text-align: right; margin-top: -30px; margin-bottom: 10px; padding-right: 10px;">
+  <span title="Use digits 1–4 exactly twice per row, column, and 2×4 box. No same digits may touch orthogonally."
+        style="cursor: help; font-size: 22px; font-weight: bold; user-select: none;">ℹ️</span>
+</div>
+
+  <div id="timer" style="text-align: center; font-size: 18px; font-weight: bold; margin-top: 10px;">
+    Time: 0:00
+  </div>
+
+  <!-- *** NEW SECTION FOR DIFFICULTY AND HINT *** -->
+  <div id="difficulty-hint-section" style="text-align: center; margin: 10px 0;"> <!-- Centered above -->
+    <div id="difficulty-display" style="font-weight: bold; margin-bottom: 5px;">Analyzing difficulty...</div>
+    <button id="hintButton">Get Hint</button>
+    <div id="hint-display" style="margin-top: 5px; min-height: 1.2em;"></div>
+  </div>
+  <!-- ********************************************* -->
+
+  <div class="puzzle-container">
+    <!-- Left column with puzzle -->
+    <div class="puzzle-column">
+      <table id="puzzleTable"></table>
+      <div class="mode-selector">
+        <label>
+          <input type="radio" name="input-mode" value="normal" checked> Normal Mode
+        </label>
+        <label>
+          <input type="radio" name="input-mode" value="candidate"> Candidate Mode
+        </label>
+        <label>
+          <input type="checkbox" id="auto-candidates" checked> Auto Candidate Removal
+        </label>
+      </div>
+    </div>
+    <!-- Right column with numpad -->
+    <div class="numpad-column">
+      <!-- Virtual Numpad for Mobile -->
+      <div class="numpad-container">
+        <div class="numpad">
+          <div class="numpad-button" data-value="1">1</div>
+          <div class="numpad-button" data-value="2">2</div>
+          <div class="numpad-button" data-value="3">3</div>
+          <div class="numpad-button" data-value="4">4</div>
+        </div>
+        <div class="numpad-actions">
+          <div class="numpad-action numpad-clear" id="numpad-clear">Clear</div>
+          <div class="numpad-action numpad-mode" id="numpad-mode">Normal Mode</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="button-container">
+    <button id="checkButton">Check Solution</button>
+    <button id="resetHighlights">Reset Highlights</button>
+    <button id="clearCandidates">Clear All Candidates</button>
+    <button id="print">Print this puzzle</button>
+    <button id="backToMain">Back to Main</button>
+  </div>
+  <div id="feedback"></div>
   <script>
     // Cache DOM elements and initialize state variables
     const urlParams = new URLSearchParams(window.location.search);
@@ -48,7 +329,8 @@
                 Array(8).fill(null).map(() => [])
             );
             // Initialize candidates for the copy
-            const gen = new DuoDoKuGenerator(); // Assuming globally available
+            // *** IMPORTANT: Assuming DuoDoKuGenerator is globally available ***
+            const gen = new DuoDoKuGenerator();
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
                     if (puzzleCopyForAnalysis[r][c] === 0) {
@@ -87,7 +369,8 @@
             const candidateSetsForHint = Array(8).fill(null).map(() =>
                 Array(8).fill(null).map(() => [])
             );
-            const gen = new DuoDoKuGenerator(); // Assuming globally available
+            // *** IMPORTANT: Assuming DuoDoKuGenerator is globally available ***
+            const gen = new DuoDoKuGenerator();
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
                     if (grid[r][c] === 0) { // Use current user grid
@@ -673,3 +956,5 @@
     // Start everything
     init();
   </script>
+</body>
+</html>
