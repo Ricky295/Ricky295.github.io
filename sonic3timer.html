@@ -26,6 +26,25 @@
     <div id="sonic-timer">
         <canvas id="gameCanvas" width="320" height="224"></canvas>
     </div>
+    <p><strong>How to embed in your project:</strong></p>
+    <pre><code>&lt;iframe src="timer.html?scale=4&autostart=true&score=1000&rings=25" 
+        width="1280" height="896" frameborder="0"&gt;&lt;/iframe&gt;</code></pre>
+    <p>Attributes:</p>
+<ul>
+    <li>scale: Number from 1 to 8. Refers to how big.</li>
+    <li>score: Any integer greater or equal than 0. It is the starting score.</li>
+    <li>rings: Same thing as score.</li>
+    <li>autostart: Starts or stops automatically.</li>
+    <li>time: Decides how much time to set the timer to, in seconds.</li>
+</ul>
+    <p>JS syntax:</p>
+<ul>
+    <li>window.sonicTimer.start() - Start the timer</li>
+    <li>window.sonicTimer.pause() - Pause the timer</li>
+    <li>window.sonicTimer.reset() - Reset timer to 0:00</li>
+    <li>window.sonicTimer.setScore(value) - Set score value</li>
+    <li>window.sonicTimer.setRings(value) - Set rings value</li>
+</ul>
 
     <script>
         (function() {
@@ -41,6 +60,7 @@
             
             let startTime = Date.now();
             let elapsedTime = parseInt(params.get('time')) * 1000 || 0;
+            let isCountdown = elapsedTime > 0;
             let timerInterval = null;
             let isRunning = false;
 
@@ -104,43 +124,72 @@
                 ctx.fillStyle = '#000000';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                // HUD elements
-                drawText('SCORE', 16, 16, '#FFD700');
-                drawText(score.toString().padStart(7, '0'), 16, 32, '#00FF00');
-                drawText('TIME', 16, 56, '#FFD700');
-                drawText(formatTime(elapsedTime), 16, 72, '#00FF00');
-                drawText('RINGS', 16, 96, '#FFD700');
-                drawText(rings.toString().padStart(3, '0'), 16, 112, '#00FF00');
-
-                // Big timer
-                const bigTime = formatTime(elapsedTime);
-                const centerX = (canvas.width - (bigTime.length * 16)) / 2;
-                for (let i = 0; i < bigTime.length; i++) {
-                    const char = bigTime[i];
-                    const charData = fontData[char];
-                    if (charData) {
-                        ctx.fillStyle = '#00FF00';
-                        for (let row = 0; row < 8; row++) {
-                            for (let col = 0; col < 8; col++) {
-                                if (charData[row] & (1 << (7 - col))) {
-                                    ctx.fillRect(centerX + (i * 16) + col * 2, 150 + row * 2, 2, 2);
-                                }
-                            }
-                        }
+                // Add subtle background pattern for beauty
+                ctx.fillStyle = '#001100';
+                for (let x = 0; x < canvas.width; x += 32) {
+                    for (let y = 0; y < canvas.height; y += 32) {
+                        ctx.fillRect(x, y, 1, 1);
+                        ctx.fillRect(x + 16, y + 16, 1, 1);
                     }
                 }
 
-                // Border
-                ctx.fillStyle = '#404040';
-                ctx.fillRect(0, 0, canvas.width, 8);
-                ctx.fillRect(0, 0, 8, canvas.height);
+                // HUD elements - vertical layout with enhanced styling
+                drawText('SCORE', 16, 16, '#FFD700');
+                drawText(score.toString().padStart(7, '0'), 16, 32, '#00FF00');
+                
+                // TIME with countdown color change
+                let timeColor = '#00FF00';
+                if (isCountdown && elapsedTime <= 10000) { // Last 10 seconds
+                    timeColor = elapsedTime <= 3000 ? '#FF0000' : '#FF8800'; // Red/Orange warning
+                }
+                drawText('TIME', 16, 56, '#FFD700');
+                drawText(formatTime(elapsedTime), 16, 72, timeColor);
+                
+                drawText('RINGS', 16, 96, '#FFD700');
+                drawText(rings.toString().padStart(3, '0'), 16, 112, '#00FF00');
+
+                // Enhanced border with corner decorations
+                ctx.fillStyle = '#00AA00';
+                ctx.fillRect(0, 0, canvas.width, 2);
+                ctx.fillRect(0, canvas.height - 2, canvas.width, 2);
+                ctx.fillRect(0, 0, 2, canvas.height);
+                ctx.fillRect(canvas.width - 2, 0, 2, canvas.height);
+                
+                // Corner decorations
+                ctx.fillStyle = '#FFD700';
+                ctx.fillRect(2, 2, 4, 4);
+                ctx.fillRect(canvas.width - 6, 2, 4, 4);
+                ctx.fillRect(2, canvas.height - 6, 4, 4);
+                ctx.fillRect(canvas.width - 6, canvas.height - 6, 4, 4);
+                
+                // Subtle glow effect around text
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+                ctx.fillRect(14, 14, 200, 20);
+                ctx.fillRect(14, 54, 120, 20);
+                ctx.fillRect(14, 94, 140, 20);
             }
 
             function startTimer() {
                 if (!isRunning) {
-                    startTime = Date.now() - elapsedTime;
+                    startTime = Date.now();
                     timerInterval = setInterval(() => {
-                        elapsedTime = Date.now() - startTime;
+                        const now = Date.now();
+                        const deltaTime = now - startTime;
+                        startTime = now;
+                        
+                        if (isCountdown) {
+                            // Countdown mode: decrease time
+                            elapsedTime -= deltaTime;
+                            if (elapsedTime <= 0) {
+                                elapsedTime = 0;
+                                clearInterval(timerInterval);
+                                isRunning = false;
+                                // Timer finished - could add callback here
+                            }
+                        } else {
+                            // Stopwatch mode: increase time
+                            elapsedTime += deltaTime;
+                        }
                         draw();
                     }, 16);
                     isRunning = true;
