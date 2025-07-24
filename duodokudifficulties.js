@@ -27,7 +27,7 @@ function cG(b, j) {
 }
 
 // --- Main Class ---
-class DuoDoKuTechniques {
+class duodokudifficulties {
     constructor() {
         this.smartHint = false;
         this.hintString = "";
