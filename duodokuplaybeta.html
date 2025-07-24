@@ -1,422 +1,149 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <!-- MODIFIED FOR HINTS: Ensure duodokudifficulties.js is loaded, which should also define DuoDoKuGenerator -->
-  <script src="duodokudifficulties.js"></script>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sufufu Puzzle Viewer</title>
-  <link rel="stylesheet" href="googletitle.css">
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 15px;
-      color: #eeeeee;
-      background-color: #1a1a1a;
-    }
-    table {
-      border-collapse: collapse;
-      margin: 20px 0;
-    }
-    td {
-      text-align: center;
-      border: 1px solid #eeeeee;
-    }
-    .editable {
-      color: blue;
-    }
-    .cell-div {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      background-color: #1a1a1a;
-      cursor: pointer;
-      position: relative;
-    }
-    .candidates {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      grid-template-rows: repeat(2, 1fr);
-      width: 100%;
-      height: 100%;
-      font-size: 40%;
-    }
-    .candidate {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      color: #666;
-    }
-    .candidate.active {
-      color: #0066cc;
-      font-weight: bold;
-    }
-    td:nth-child(4n) {
-      border-right: 3px solid #eeeeee;
-    }
-    td:nth-child(1) {
-      border-left: 3px solid #eeeeee;
-    }
-    tr:nth-child(2n) td {
-      border-bottom: 3px solid #eeeeee;
-    }
-    tr:nth-child(1) td {
-      border-top: 3px solid #eeeeee;
-    }
-    .button-container {
-      text-align: center;
-      margin-top: 20px;
-    }
-    button {
-      display: inline-block;
-      margin: 10px 10px;
-      padding: 10px 20px;
-      font-size: 16px;
-      cursor: pointer;
-      width: 200px;
-    }
-    #feedback {
-      text-align: center;
-      font-size: 18px;
-      font-weight: bold;
-      margin: 15px 0;
-    }
-    #rules {
-      text-align: center;
-    }
-    .mode-selector {
-      margin: 10px 0;
-    }
-    .selected-cell {
-      outline: 2px solid #0066cc;
-    }
-    .controls-info {
-      max-width: 600px;
-      padding: 10px;
-      background-color: #f8f8f8;
-      border-radius: 5px;
-      margin-bottom: 20px;
-    }
-    .controls-info kbd {
-      background-color: #eee;
-      border-radius: 3px;
-      border: 1px solid #b4b4b4;
-      box-shadow: 0 1px 1px rgba(0, 0, 0, .2);
-      color: #333;
-      display: inline-block;
-      font-size: 0.9em;
-      font-family: monospace;
-      padding: 2px 5px;
-      margin: 0 3px;
-    }
-    /* Main Layout */
-    .puzzle-container {
-      display: flex;
-      flex-direction: row;
-      align-items: flex-start;
-      gap: 20px;
-      justify-content: center;
-      margin-top: 20px;
-    }
-    .puzzle-column {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    /* Virtual Numpad Styles */
-    .numpad-column {
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-    }
-    .numpad-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin: 20px 0;
-      width: 200px;
-    }
-    .numpad {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-      width: 100%;
-    }
-    .numpad-button {
-      background-color: #f2f2f2;
-      border: 1px solid #ccc;
-      color: #1a1a1a;
-      border-radius: 5px;
-      padding: 15px 0;
-      font-size: 20px;
-      text-align: center;
-      cursor: pointer;
-      user-select: none;
-      transition: background-color 0.2s;
-    }
-    .numpad-button:active {
-      background-color: #d9d9d9;
-    }
-    .numpad-actions {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      width: 100%;
-      margin-top: 10px;
-    }
-    .numpad-action {
-      background-color: #e6e6e6;
-      border: 1px solid #ccc;
-      color: #1a1a1a;
-      border-radius: 5px;
-      padding: 12px 0;
-      font-size: 16px;
-      text-align: center;
-      cursor: pointer;
-      user-select: none;
-    }
-    .numpad-clear {
-      background-color: #ffcccc;
-    }
-    .numpad-mode {
-      background-color: #ccffcc;
-    }
-    /* New style for digit highlighting */
-    .digit-highlight {
-      background-color: #ffffcc !important;
-      color: #1a1a1a;
-    }
-    /* New style for candidate highlighting */
-    .candidate-highlight {
-      color: #ff6600 !important;
-      font-weight: bold;
-    }
-
-    /* ADDED FOR HINTS: Styles for hint display and button */
-    #hint-container {
-      width: 100%; /* Take full width of parent */
-      text-align: left; /* Align content to the left */
-        margin-bottom: 10px; /* Space below the hint area */
-    }
-    #hint-display {
-        display: inline-block; /* Allow button to be on the same line */
-        margin-right: 10px; /* Space between hint and button */
-        font-weight: bold;
-        color: #00cc66; /* Green color for hints */
-    }
-    #get-hint-button {
-        display: inline-block; /* Align with hint text */
-        padding: 5px 10px;
-        font-size: 14px;
-        cursor: pointer;
-        background-color: #4a4a4a;
-        color: #eeeeee;
-        border: 1px solid #777;
-        border-radius: 4px;
-    }
-    #get-hint-button:hover {
-        background-color: #5a5a5a;
-    }
-    #get-hint-button:disabled {
-        background-color: #333;
-        color: #888;
-        cursor: not-allowed;
-    }
-
-
-    @media (max-width: 768px) {
-      .puzzle-container {
-        flex-direction: column;
-        align-items: center;
-      }
-      .numpad-column {
-        width: 100%;
-        max-width: 400px;
-      }
-      .numpad-container {
-        width: 100%;
-        max-width: 300px;
-        margin: 10px auto;
-      }
-      .button-container {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-      }
-      button {
-        width: calc(50% - 20px);
-        margin: 10px 5px;
-      }
-    }
-  </style>
-</head>
-<body>
-<h1 class="gradient-title">Sufufu Puzzle</h1>
-<div style="text-align: right; margin-top: -30px; margin-bottom: 10px; padding-right: 10px;">
-  <span title="Use digits 1–4 exactly twice per row, column, and 2×4 box. No same digits may touch orthogonally."
-        style="cursor: help; font-size: 22px; font-weight: bold; user-select: none;">ℹ️</span>
-</div>
-  <div id="timer" style="text-align: center; font-size: 18px; font-weight: bold; margin-top: 10px;">
-    Time: 0:00
-  </div>
-  <div class="puzzle-container">
-    <!-- Left column with puzzle -->
-    <div class="puzzle-column">
-       <!-- ADDED FOR HINTS: Hint display and button container -->
-       <div id="hint-container">
-            <span id="hint-display">Click 'Get Hint' for assistance.</span>
-            <button id="get-hint-button">Get Hint</button>
-       </div>
-      <table id="puzzleTable"></table>
-      <div class="mode-selector">
-        <label>
-          <input type="radio" name="input-mode" value="normal" checked> Normal Mode
-        </label>
-        <label>
-          <input type="radio" name="input-mode" value="candidate"> Candidate Mode
-        </label>
-        <label>
-          <input type="checkbox" id="auto-candidates" checked> Auto Candidate Removal
-        </label>
-      </div>
-    </div>
-    <!-- Right column with numpad -->
-    <div class="numpad-column">
-      <!-- Virtual Numpad for Mobile -->
-      <div class="numpad-container">
-        <div class="numpad">
-          <div class="numpad-button" data-value="1">1</div>
-          <div class="numpad-button" data-value="2">2</div>
-          <div class="numpad-button" data-value="3">3</div>
-          <div class="numpad-button" data-value="4">4</div>
-        </div>
-        <div class="numpad-actions">
-          <div class="numpad-action numpad-clear" id="numpad-clear">Clear</div>
-          <div class="numpad-action numpad-mode" id="numpad-mode">Normal Mode</div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="button-container">
-    <button id="checkButton">Check Solution</button>
-    <button id="resetHighlights">Reset Highlights</button>
-    <button id="clearCandidates">Clear All Candidates</button>
-    <button id="print">Print this puzzle</button>
-    <button id="backToMain">Back to Main</button>
-  </div>
-  <div id="feedback"></div>
   <script>
     // Cache DOM elements and initialize state variables
     const urlParams = new URLSearchParams(window.location.search);
     const tableElement = document.getElementById('puzzleTable');
     const timerElement = document.getElementById('timer');
     const feedbackElement = document.getElementById('feedback');
-    // ADDED FOR HINTS: Cache hint elements
+    // *** NEW ***
+    const difficultyDisplayElement = document.getElementById('difficulty-display');
     const hintDisplayElement = document.getElementById('hint-display');
-    const getHintButtonElement = document.getElementById('get-hint-button');
+    // ***********
     let selectedCell = null;
-    let grid = [];
+    let grid = []; // This holds the current user state
     let currentHighlightedDigit = null;
     let startTime = Date.now();
     let timerInterval;
 
-    // --- ADDED FOR HINTS: Helper function to initialize candidate sets ---
-    function initializeCandidates(puzzleGrid) {
-        const ps = Array(8).fill(null).map(() => Array(8).fill(null).map(() => []));
-        const gen = new DuoDoKuGenerator(); // Assuming this is globally available
+    // *** NEW FUNCTION: Analyze Difficulty ***
+    function analyzeDifficulty() {
+        try {
+            const puzzleString = getPuzzleFromURL();
+            const puzzleArray = convertToArray(puzzleString);
+            if (puzzleArray.length === 0) {
+                 difficultyDisplayElement.textContent = 'Error loading puzzle.';
+                 return;
+            }
 
-        for (let r = 0; r < 8; r++) {
-            for (let c = 0; c < 8; c++) {
-                if (puzzleGrid[r][c] === 0) {
-                    for (let candidate = 1; candidate <= 4; candidate++) {
-                        // isNotDuplicated needs to check against the current puzzleGrid state
-                        if (gen.isNotDuplicated(r, c, candidate, puzzleGrid)) {
-                            ps[r][c].push(candidate);
+            // Use the techniques-based solver for difficulty analysis
+            const solver = new DuoDoKuSolver();
+            solver.enterPuzzle(puzzleArray); // This should internally solve and set difficulty
+
+            // The difficulty is determined during solve. We can infer it from the process or
+            // if the solver stored it, we access it. Based on the Kotlin code,
+            // the `solve` method returns the difficulty.
+            // However, our JS `enterPuzzle` calls `solve` and stores the result in `solutions`.
+            // Let's modify `DuoDoKuSolver` slightly to also store the difficulty found.
+            // For now, assuming `enterPuzzle` or the process makes it solvable by techniques,
+            // we'll call `solve` again on a copy to get the difficulty without side effects.
+            // A cleaner way is if `DuoDoKuSolver` had a separate `getDifficulty(puzzle)` method.
+
+            // Let's assume we modify `DuoDoKuSolver` to have a method like this:
+            // (This requires a small change in duodokudifficulties.js - see note below)
+            // const difficulty = solver.getDifficulty(puzzleArray);
+
+            // OR, we re-run solve on a copy:
+            const puzzleCopyForAnalysis = puzzleArray.map(row => [...row]);
+            // We also need candidate sets for the copy
+            const candidateSetsForAnalysis = Array(8).fill(null).map(() =>
+                Array(8).fill(null).map(() => [])
+            );
+            // Initialize candidates for the copy
+            const gen = new DuoDoKuGenerator(); // Assuming globally available
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (puzzleCopyForAnalysis[r][c] === 0) {
+                        for (let candidate = 1; candidate <= 4; candidate++) {
+                            if (gen.isNotDuplicated(r, c, candidate, puzzleCopyForAnalysis)) {
+                                candidateSetsForAnalysis[r][c].push(candidate);
+                            }
                         }
                     }
                 }
-                // If cell is filled, candidate set remains empty []
             }
+
+            const difficulty = solver.solve(puzzleCopyForAnalysis, candidateSetsForAnalysis);
+
+            difficultyDisplayElement.textContent = `Difficulty: ${difficulty}`;
+            difficultyDisplayElement.style.color = ''; // Reset color
+            if (difficulty === 'EASY') difficultyDisplayElement.style.color = 'green';
+            else if (difficulty === 'MEDIUM') difficultyDisplayElement.style.color = 'blue';
+            else if (difficulty === 'HARD') difficultyDisplayElement.style.color = 'orange';
+            else if (difficulty === 'UNFAIR') difficultyDisplayElement.style.color = 'red';
+
+        } catch (error) {
+             console.error("Error analyzing difficulty:", error);
+             difficultyDisplayElement.textContent = 'Error analyzing difficulty.';
+             difficultyDisplayElement.style.color = 'red';
         }
-        return ps;
     }
-        // --- ADDED FOR HINTS: Function to get a hint ---
+    // **************************************
+
+    // *** NEW FUNCTION: Get Hint ***
     function getHint() {
-        // 0. Clear previous hint
-        hintDisplayElement.textContent = "Generating hint...";
-        hintDisplayElement.style.color = "#00cc66";
-
-        // 1. Basic sanity check - is the solver class available?
-        if (typeof DuoDoKuSolver === 'undefined') {
-            console.error("Hint Error: DuoDoKuSolver class is not defined. Check if duodokudifficulties.js is loaded correctly.");
-            hintDisplayElement.textContent = "Hint Error: Solver logic not found!";
-            hintDisplayElement.style.color = "red";
-            return;
-        }
-
-        // 2. Check if the generator dependency is available
-        if (typeof DuoDoKuGenerator === 'undefined' || typeof DuoDoKuGenerator.prototype.isNotDuplicated !== 'function') {
-             console.error("Hint Error: DuoDoKuGenerator or its isNotDuplicated method is not defined. Check if the generator script is loaded correctly.");
-             hintDisplayElement.textContent = "Hint Error: Generator dependency missing!";
-             hintDisplayElement.style.color = "red";
-             return;
-        }
-
         try {
-            // 3. Get the current puzzle state from the grid variable
-            // Deep copy is important to avoid modifying the original grid during solving attempts for hints
-            const currentPuzzleState = grid.map(row => [...row]);
-            console.log("Current Puzzle State for Hint:", currentPuzzleState); // Debug log
+            hintDisplayElement.textContent = ''; // Clear previous hint
 
-            // 4. Initialize candidates based on the current state
-            const currentCandidates = initializeCandidates(currentPuzzleState);
-            console.log("Initialized Candidates for Hint:", currentCandidates); // Debug log
+            // We need to create candidate sets based on the CURRENT grid state
+            const candidateSetsForHint = Array(8).fill(null).map(() =>
+                Array(8).fill(null).map(() => [])
+            );
+            const gen = new DuoDoKuGenerator(); // Assuming globally available
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (grid[r][c] === 0) { // Use current user grid
+                        for (let candidate = 1; candidate <= 4; candidate++) {
+                            if (gen.isNotDuplicated(r, c, candidate, grid)) { // Check against current grid
+                                candidateSetsForHint[r][c].push(candidate);
+                            }
+                        }
+                    }
+                }
+            }
 
-            // 5. Create a solver instance
-            const solver = new DuoDoKuSolver(); // This should work now if the class is loaded
+            // Create a copy of the current grid state for the solver to work on
+            const gridCopyForHint = grid.map(row => [...row]);
 
-            // 6. Enable smart hint mode
+            const solver = new DuoDoKuSolver();
             solver.smartHint = true;
-            solver.hintString = ""; // Clear previous hint
+            const stepFound = solver.getStep(gridCopyForHint, candidateSetsForHint);
 
-            // 7. Call getStep (which uses techniques) to find the next logical step
-            console.log("Calling solver.getStep..."); // Debug log
-            const stepFound = solver.getStep(currentPuzzleState, currentCandidates);
-            console.log("getStep returned:", stepFound, "Hint String:", solver.hintString); // Debug log
-
-            // 8. Display the hint
             if (stepFound && solver.hintString) {
                 hintDisplayElement.textContent = solver.hintString;
-                hintDisplayElement.style.color = "#00cc66"; // Green
+                hintDisplayElement.style.color = 'blue'; // Or any hint color
             } else if (!stepFound) {
-                 hintDisplayElement.textContent = "No logical step found. You might need to guess or the puzzle might be incorrect/partial.";
-                 hintDisplayElement.style.color = "#ff9900"; // Orange
+                 // Check if puzzle is complete first
+                 let isComplete = true;
+                 outerCheck: for (let r = 0; r < 8; r++) {
+                     for (let c = 0; c < 8; c++) {
+                         if (gridCopyForHint[r][c] === 0) {
+                              isComplete = false;
+                              break outerCheck;
+                          }
+                     }
+                 }
+                 if (isComplete) {
+                      hintDisplayElement.textContent = 'Puzzle solved!';
+                      hintDisplayElement.style.color = 'green';
+                 } else {
+                      hintDisplayElement.textContent = 'No simple hint available (or puzzle might be incorrect).';
+                      hintDisplayElement.style.color = 'orange';
+                 }
             } else {
-                 // Step found but no hint string? Unexpected.
-                 hintDisplayElement.textContent = "Hint logic completed, but no description available.";
-                 hintDisplayElement.style.color = "#ff9900"; // Orange
-                 console.warn("getStep returned true, but hintString is empty or falsey:", solver.hintString);
+                hintDisplayElement.textContent = 'Hint generation error.';
+                hintDisplayElement.style.color = 'red';
             }
         } catch (error) {
-            console.error("Error getting hint:", error);
-            // Improved error message to the user
-            if (error.message && error.message.includes("isNotDuplicated")) {
-                 hintDisplayElement.textContent = "Hint Error: Generator dependency issue (isNotDuplicated).";
-            } else if (error.message && error.message.includes("getStep")) {
-                 hintDisplayElement.textContent = "Hint Error: Problem within solving techniques.";
-            } else {
-                 hintDisplayElement.textContent = "Error generating hint. See console for details.";
-            }
-            hintDisplayElement.style.color = "red";
+             console.error("Error getting hint:", error);
+             hintDisplayElement.textContent = 'Error generating hint.';
+             hintDisplayElement.style.color = 'red';
         }
     }
-
+    // *****************************
 
     function backToMain() {
       window.location.href = 'duodokumain.html';
     }
+
     // Initialize the puzzle
     function init() {
       renderPuzzle();
@@ -426,6 +153,9 @@
       document.getElementById('clearCandidates').addEventListener('click', clearAllCandidates);
       document.getElementById('print').addEventListener('click', printPuzzle);
       document.getElementById('backToMain').addEventListener('click', backToMain);
+      // *** NEW ***
+      document.getElementById('hintButton').addEventListener('click', getHint);
+      // ***********
       // Add keyboard support
       document.addEventListener('keydown', handleKeyboardInput);
       // Deselect when clicking elsewhere
@@ -438,14 +168,16 @@
       // Start the timer
       timerInterval = setInterval(updateTimer, 1000);
 
-      // ADDED FOR HINTS: Add event listener for the Get Hint button
-      if (getHintButtonElement) {
-          getHintButtonElement.addEventListener('click', getHint);
-      }
+      // *** NEW: Analyze difficulty after initialization ***
+      // Use setTimeout to ensure DOM is fully ready if needed, though init() is called at the end
+       setTimeout(analyzeDifficulty, 100); // Slight delay to ensure everything is rendered
+      // **************************************************
     }
+
     function getPuzzleFromURL() {
       return urlParams.get('puzzle') || '0023101401403400302040210140300312002401341003021204200343121304';
     }
+
     function convertToArray(puzzleString) {
       let array = [];
       if (puzzleString.length !== 64) {
@@ -457,6 +189,7 @@
       }
       return array;
     }
+
     function renderPuzzle() {
       const puzzleString = getPuzzleFromURL();
       const zoom = parseInt(urlParams.get('zoom')) || 50;
@@ -496,6 +229,7 @@
       setupCellListeners();
       setupNumpadListeners();
     }
+
     function setupCellListeners() {
       const cells = document.querySelectorAll('.cell-div');
       cells.forEach(cell => {
@@ -537,6 +271,7 @@
         });
       });
     }
+
     function highlightDigit(digit) {
       // Remove any existing highlights first
       clearDigitHighlights();
@@ -565,6 +300,7 @@
         }
       }
     }
+
     function clearDigitHighlights() {
       const cells = document.querySelectorAll('.cell-div');
       cells.forEach(cell => {
@@ -577,6 +313,7 @@
       });
       currentHighlightedDigit = null;
     }
+
     function setupNumpadListeners() {
       // Numpad number buttons
       const numpadButtons = document.querySelectorAll('.numpad-button');
@@ -642,6 +379,7 @@
         });
       });
     }
+
     function handleKeyboardInput(event) {
       if (!selectedCell || !selectedCell.classList.contains('editable')) return;
       const mode = document.querySelector('input[name="input-mode"]:checked').value;
@@ -692,6 +430,7 @@
         event.preventDefault();
       }
     }
+
     function navigateWithArrowKeys(key) {
       if (!selectedCell) return;
       const currentRow = parseInt(selectedCell.dataset.row);
@@ -720,24 +459,22 @@
         selectedCell.classList.add('selected-cell');
       } else {
         // Skip over non-editable cells
-        // Simplified navigation logic for skipping non-editable cells
-        const directions = { 'ArrowUp': [-1, 0], 'ArrowDown': [1, 0], 'ArrowLeft': [0, -1], 'ArrowRight': [0, 1] };
-        const [dr, dc] = directions[key];
-        let nextRow = newRow + dr;
-        let nextCol = newCol + dc;
-        while (nextRow >= 0 && nextRow < 8 && nextCol >= 0 && nextCol < 8) {
-            const nextCell = tableElement.rows[nextRow].cells[nextCol].querySelector('.cell-div');
-            if (nextCell.classList.contains('editable')) {
-                selectedCell.classList.remove('selected-cell');
-                selectedCell = nextCell;
-                selectedCell.classList.add('selected-cell');
-                break;
-            }
-            nextRow += dr;
-            nextCol += dc;
+        if (key === 'ArrowUp' && newRow > 0) {
+          newRow--;
+          navigateWithArrowKeys(key);
+        } else if (key === 'ArrowDown' && newRow < 7) {
+          newRow++;
+          navigateWithArrowKeys(key);
+        } else if (key === 'ArrowLeft' && newCol > 0) {
+          newCol--;
+          navigateWithArrowKeys(key);
+        } else if (key === 'ArrowRight' && newCol < 7) {
+          newCol++;
+          navigateWithArrowKeys(key);
         }
       }
     }
+
     function setCellValue(cell, value) {
       // Update the text content
       cell.childNodes[0].nodeValue = value;
@@ -748,6 +485,7 @@
         clearCellCandidates(cell);
       }
     }
+
     function toggleCandidate(cell, value) {
       // Clear the main value if present
       if (cell.childNodes[0]?.nodeValue?.trim()) {
@@ -768,6 +506,7 @@
         candidate.classList.add('active');
       }
     }
+
     function clearCellCandidates(cell) {
       const candidatesDiv = cell.querySelector('.candidates');
       const candidates = candidatesDiv.querySelectorAll('.candidate');
@@ -776,19 +515,15 @@
         candidate.classList.remove('active');
       });
     }
+
     function checkPuzzle() {
-      const solver = new DuoDoKuSolver();
+      const solver = new DuoDoKuSolver(); // Uses brute-force solver
       const userSolution = grid;
       const puzzleString = getPuzzleFromURL();
       const puzzleArray = convertToArray(puzzleString);
       if (puzzleArray.length === 0) return;
-      solver.enterPuzzle(puzzleArray);
+      solver.enterPuzzle(puzzleArray); // Uses brute-force solver's enterPuzzle
       const correctSolution = solver.solutions[0];
-      if (!correctSolution) {
-           feedbackElement.textContent = 'Error: Could not solve the puzzle to check.';
-           feedbackElement.style.color = 'orange';
-           return;
-      }
       let left = 0;
       let incorrect = 0;
       for (let r = 0; r < 8; r++) {
@@ -823,6 +558,7 @@
       // Clear digit highlights when checking
       clearDigitHighlights();
     }
+
     function resetHighlights() {
       for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
@@ -833,7 +569,11 @@
       feedbackElement.textContent = '';
       // Also clear digit highlights
       clearDigitHighlights();
+       // *** NEW: Clear hint display ***
+       hintDisplayElement.textContent = '';
+       // *****************************
     }
+
     function clearAllCandidates() {
       const cells = document.querySelectorAll('.cell-div.editable');
       cells.forEach(cell => {
@@ -842,19 +582,26 @@
         candidatesDiv.style.display = 'none';
       });
       feedbackElement.textContent = 'All candidates cleared.';
+       // *** NEW: Clear hint display ***
+       hintDisplayElement.textContent = '';
+       // *****************************
     }
+
     function printPuzzle() {
       const puzzleString = getPuzzleFromURL();
       window.location.href = `https://ricky295.github.io/duodokuprint.html?puzzle=${puzzleString}&zoom=84`;
     }
+
     // Helper function to count occurrences of a digit in a row
     function countInRow(row, digit) {
       return grid[row].filter(cell => cell === digit).length;
     }
+
     // Helper function to count occurrences of a digit in a column
     function countInCol(col, digit) {
       return grid.map(row => row[col]).filter(cell => cell === digit).length;
     }
+
     // Helper function to count occurrences of a digit in a 2x4 box
     function countInBox(row, col, digit) {
       const boxRow = Math.floor(row / 2) * 2;
@@ -867,6 +614,7 @@
       }
       return count;
     }
+
     // Check if a digit would be adjacent to the same digit
     function hasAdjacentSameDigit(row, col, digit) {
       const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]]; // up, down, left, right
@@ -879,6 +627,7 @@
       }
       return false;
     }
+
     // Remove invalid candidates
     function removeInvalidCandidates() {
       // For each empty cell, check which candidates should be removed
@@ -912,6 +661,7 @@
       }
       feedbackElement.textContent = 'Invalid candidates removed.';
     }
+
     function updateTimer() {
       const now = Date.now();
       const elapsed = Math.floor((now - startTime) / 1000); // in seconds
@@ -919,8 +669,7 @@
       const seconds = elapsed % 60;
       timerElement.textContent = `Time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
+
     // Start everything
     init();
   </script>
-</body>
-</html>
