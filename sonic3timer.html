@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sonic 3 Timer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: transparent; overflow: hidden; }
+        
+        #sonic-timer {
+            width: fit-content;
+            height: fit-content;
+            display: inline-block;
+        }
+        
+        canvas {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="sonic-timer">
+        <canvas id="gameCanvas" width="320" height="224"></canvas>
+    </div>
+
+    <script>
+        (function() {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Get URL params for embedding
+            const params = new URLSearchParams(window.location.search);
+            let scale = parseInt(params.get('scale')) || 2;
+            let score = parseInt(params.get('score')) || 0;
+            let rings = parseInt(params.get('rings')) || 0;
+            let autostart = params.get('autostart') !== 'false';
+            
+            let startTime = Date.now();
+            let elapsedTime = parseInt(params.get('time')) * 1000 || 0;
+            let timerInterval = null;
+            let isRunning = false;
+
+            // Set canvas size based on scale
+            canvas.style.width = (320 * scale) + 'px';
+            canvas.style.height = (224 * scale) + 'px';
+
+            // Sonic 3 font data
+            const fontData = {
+                '0': [0b00111100,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b00111100],
+                '1': [0b00011000,0b00111000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b01111110],
+                '2': [0b00111100,0b01100110,0b00000110,0b00001100,0b00011000,0b00110000,0b01100000,0b01111110],
+                '3': [0b00111100,0b01100110,0b00000110,0b00011100,0b00000110,0b00000110,0b01100110,0b00111100],
+                '4': [0b00001100,0b00011100,0b00111100,0b01101100,0b01111110,0b00001100,0b00001100,0b00001100],
+                '5': [0b01111110,0b01100000,0b01100000,0b01111100,0b00000110,0b00000110,0b01100110,0b00111100],
+                '6': [0b00111100,0b01100110,0b01100000,0b01111100,0b01100110,0b01100110,0b01100110,0b00111100],
+                '7': [0b01111110,0b00000110,0b00001100,0b00011000,0b00110000,0b00110000,0b00110000,0b00110000],
+                '8': [0b00111100,0b01100110,0b01100110,0b00111100,0b01100110,0b01100110,0b01100110,0b00111100],
+                '9': [0b00111100,0b01100110,0b01100110,0b01100110,0b00111110,0b00000110,0b01100110,0b00111100],
+                ':': [0b00000000,0b00000000,0b00011000,0b00011000,0b00000000,0b00011000,0b00011000,0b00000000],
+                'S': [0b00111100,0b01100110,0b01100000,0b00111100,0b00000110,0b00000110,0b01100110,0b00111100],
+                'C': [0b00111100,0b01100110,0b01100000,0b01100000,0b01100000,0b01100000,0b01100110,0b00111100],
+                'O': [0b00111100,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b00111100],
+                'R': [0b01111100,0b01100110,0b01100110,0b01111100,0b01111000,0b01101100,0b01100110,0b01100011],
+                'E': [0b01111110,0b01100000,0b01100000,0b01111100,0b01100000,0b01100000,0b01100000,0b01111110],
+                'T': [0b01111110,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000],
+                'I': [0b01111110,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b01111110],
+                'M': [0b01100011,0b01110111,0b01111111,0b01101011,0b01100011,0b01100011,0b01100011,0b01100011],
+                'N': [0b01100011,0b01110011,0b01111011,0b01101111,0b01100111,0b01100011,0b01100011,0b01100011],
+                'G': [0b00111100,0b01100110,0b01100000,0b01101110,0b01100110,0b01100110,0b01100110,0b00111100],
+                ' ': [0b00000000,0b00000000,0b00000000,0b00000000,0b00000000,0b00000000,0b00000000,0b00000000]
+            };
+
+            function drawChar(char, x, y, color = '#FFFFFF') {
+                if (!fontData[char]) return;
+                const charData = fontData[char];
+                ctx.fillStyle = color;
+                for (let row = 0; row < 8; row++) {
+                    for (let col = 0; col < 8; col++) {
+                        if (charData[row] & (1 << (7 - col))) {
+                            ctx.fillRect(x + col, y + row, 1, 1);
+                        }
+                    }
+                }
+            }
+
+            function drawText(text, x, y, color = '#FFFFFF') {
+                for (let i = 0; i < text.length; i++) {
+                    drawChar(text[i], x + (i * 8), y, color);
+                }
+            }
+
+            function formatTime(ms) {
+                const totalSec = Math.floor(ms / 1000);
+                const min = Math.floor(totalSec / 60);
+                const sec = totalSec % 60;
+                return `${min}:${sec.toString().padStart(2, '0')}`;
+            }
+
+            function draw() {
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // HUD elements
+                drawText('SCORE', 16, 16, '#FFD700');
+                drawText(score.toString().padStart(7, '0'), 16, 32, '#00FF00');
+                drawText('TIME', 16, 56, '#FFD700');
+                drawText(formatTime(elapsedTime), 16, 72, '#00FF00');
+                drawText('RINGS', 16, 96, '#FFD700');
+                drawText(rings.toString().padStart(3, '0'), 16, 112, '#00FF00');
+
+                // Big timer
+                const bigTime = formatTime(elapsedTime);
+                const centerX = (canvas.width - (bigTime.length * 16)) / 2;
+                for (let i = 0; i < bigTime.length; i++) {
+                    const char = bigTime[i];
+                    const charData = fontData[char];
+                    if (charData) {
+                        ctx.fillStyle = '#00FF00';
+                        for (let row = 0; row < 8; row++) {
+                            for (let col = 0; col < 8; col++) {
+                                if (charData[row] & (1 << (7 - col))) {
+                                    ctx.fillRect(centerX + (i * 16) + col * 2, 150 + row * 2, 2, 2);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Border
+                ctx.fillStyle = '#404040';
+                ctx.fillRect(0, 0, canvas.width, 8);
+                ctx.fillRect(0, 0, 8, canvas.height);
+            }
+
+            function startTimer() {
+                if (!isRunning) {
+                    startTime = Date.now() - elapsedTime;
+                    timerInterval = setInterval(() => {
+                        elapsedTime = Date.now() - startTime;
+                        draw();
+                    }, 16);
+                    isRunning = true;
+                }
+            }
+
+            // Global functions for external control
+            window.sonicTimer = {
+                start: startTimer,
+                pause: () => {
+                    if (isRunning) {
+                        clearInterval(timerInterval);
+                        isRunning = false;
+                    }
+                },
+                reset: () => {
+                    clearInterval(timerInterval);
+                    isRunning = false;
+                    elapsedTime = 0;
+                    draw();
+                },
+                setScore: (val) => { score = val; if (!isRunning) draw(); },
+                setRings: (val) => { rings = val; if (!isRunning) draw(); }
+            };
+
+            // Initialize
+            draw();
+            if (autostart) {
+                setTimeout(startTimer, 100);
+            }
+        })();
+    </script>
+</body>
+</html>
