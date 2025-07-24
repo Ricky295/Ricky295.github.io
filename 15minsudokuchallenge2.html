@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&display=swap" rel="stylesheet">
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku Challenge</title>
+    <style>
+	/* Remove the default disabled gray style */
+        input:disabled {
+            color: black;             /* Change the text color to black */
+            background-color: white;  /* Set the background color if needed */
+            border: 1px solid #ccc;   /* Adjust border color */
+            opacity: 1;               /* Ensure it's fully opaque */
+        }
+	input:not(:disabled) {
+            color: blue; /* Change text color to blue */
+        }
+        body {
+              font-family: "Caveat", cursive;
+  font-optical-sizing: auto;
+  font-weight: 500;
+  font-style: normal;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #fff;
+            flex-direction: column;
+background-image:
+linear-gradient(90deg, transparent 79px, #abced4 79px, #abced4 81px, transparent 81px),
+linear-gradient(#eee .1em, transparent .1em);
+background-size: 100% 1.2em;
+        }
+        
+        /* Sonic Timer Styles */
+        #sonic-timer {
+            width: fit-content;
+            height: fit-content;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+        
+        #sonic-canvas {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            display: block;
+            border: 2px solid #333;
+            border-radius: 8px;
+        }
+        
+        .timer {
+            font-size: 40px;
+            margin-bottom: 20px;
+        }
+        #stats {
+            font-size: 32px;
+            margin-bottom: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        td {
+            width: 40px;
+            height: 40px;
+            text-align: center;
+            border: 1px solid #ccc;
+        }
+        tr:nth-child(3n + 1) td {
+            border-top: 2px solid black;
+        }
+        td:nth-child(3n) {
+            border-right: 2px solid black;
+        }
+        input {
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            font-size: 20px;
+            border: none;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        /* Progress bar styles */
+        .progress-bar-container {
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            height: 20px;
+            margin-bottom: 20px;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0;
+            background-color: #76c7c0;
+            border-radius: 5px;
+            transition: width 1s linear;
+        }
+        input.error {
+    background-color: #ffcccc; /* Light red background for errors */
+}
+
+    </style>
+</head>
+<body>
+    <div>
+        <!-- Sonic 3 Timer -->
+        <div id="sonic-timer">
+            <canvas id="sonic-canvas" width="320" height="224"></canvas>
+        </div>
+        
+        <div class="timer" id="timer">Time remaining: 15:00</div>
+        <div id="stats">Score: 0 - Completed: 0</div>
+        <div class="progress-bar-container">
+            <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <table id="sudoku-grid"></table>
+        <button onclick="validateSudoku()">Validate Sudoku</button>
+        <button onclick="giveHint()">Hint</button>
+        <button id="pauseButton" onclick="togglePause()">Pause</button> <!-- Pause button -->
+    </div>
+	<script src="legacysudokusolver.js"></script>
+    <script>
+        // Sonic Timer Integration
+        const sonicCanvas = document.getElementById('sonic-canvas');
+        const sonicCtx = sonicCanvas.getContext('2d');
+        
+        let sonicScale = 3;
+        let sonicTimerRunning = false;
+        let sonicTimerInterval = null;
+        let sonicStartTime = Date.now();
+        
+        // Set canvas size based on scale
+        sonicCanvas.style.width = (320 * sonicScale) + 'px';
+        sonicCanvas.style.height = (224 * sonicScale) + 'px';
+
+        // Sonic 3 font data
+        const fontData = {
+            '0': [0b00111100,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b00111100],
+            '1': [0b00011000,0b00111000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b01111110],
+            '2': [0b00111100,0b01100110,0b00000110,0b00001100,0b00011000,0b00110000,0b01100000,0b01111110],
+            '3': [0b00111100,0b01100110,0b00000110,0b00011100,0b00000110,0b00000110,0b01100110,0b00111100],
+            '4': [0b00001100,0b00011100,0b00111100,0b01101100,0b01111110,0b00001100,0b00001100,0b00001100],
+            '5': [0b01111110,0b01100000,0b01100000,0b01111100,0b00000110,0b00000110,0b01100110,0b00111100],
+            '6': [0b00111100,0b01100110,0b01100000,0b01111100,0b01100110,0b01100110,0b01100110,0b00111100],
+            '7': [0b01111110,0b00000110,0b00001100,0b00011000,0b00110000,0b00110000,0b00110000,0b00110000],
+            '8': [0b00111100,0b01100110,0b01100110,0b00111100,0b01100110,0b01100110,0b01100110,0b00111100],
+            '9': [0b00111100,0b01100110,0b01100110,0b01100110,0b00111110,0b00000110,0b01100110,0b00111100],
+            ':': [0b00000000,0b00000000,0b00011000,0b00011000,0b00000000,0b00011000,0b00011000,0b00000000],
+            'S': [0b00111100,0b01100110,0b01100000,0b00111100,0b00000110,0b00000110,0b01100110,0b00111100],
+            'C': [0b00111100,0b01100110,0b01100000,0b01100000,0b01100000,0b01100000,0b01100110,0b00111100],
+            'O': [0b00111100,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b00111100],
+            'R': [0b01111100,0b01100110,0b01100110,0b01111100,0b01111000,0b01101100,0b01100110,0b01100011],
+            'E': [0b01111110,0b01100000,0b01100000,0b01111100,0b01100000,0b01100000,0b01100000,0b01111110],
+            'T': [0b01111110,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000],
+            'I': [0b01111110,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b01111110],
+            'M': [0b01100011,0b01110111,0b01111111,0b01101011,0b01100011,0b01100011,0b01100011,0b01100011],
+            'N': [0b01100011,0b01110011,0b01111011,0b01101111,0b01100111,0b01100011,0b01100011,0b01100011],
+            'G': [0b00111100,0b01100110,0b01100000,0b01101110,0b01100110,0b01100110,0b01100110,0b00111100],
+            ' ': [0b00000000,0b00000000,0b00000000,0b00000000,0b00000000,0b00000000,0b00000000,0b00000000]
+        };
+
+        function drawChar(char, x, y, color = '#FFFFFF') {
+            if (!fontData[char]) return;
+            const charData = fontData[char];
+            sonicCtx.fillStyle = color;
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    if (charData[row] & (1 << (7 - col))) {
+                        sonicCtx.fillRect(x + col, y + row, 1, 1);
+                    }
+                }
+            }
+        }
+
+        function drawText(text, x, y, color = '#FFFFFF') {
+            for (let i = 0; i < text.length; i++) {
+                drawChar(text[i], x + (i * 8), y, color);
+            }
+        }
+
+        function formatTime(ms) {
+            const totalSec = Math.floor(ms / 1000);
+            const min = Math.floor(totalSec / 60);
+            const sec = totalSec % 60;
+            return `${min}:${sec.toString().padStart(2, '0')}`;
+        }
+
+        function drawSonicTimer() {
+            sonicCtx.fillStyle = '#000000';
+            sonicCtx.fillRect(0, 0, sonicCanvas.width, sonicCanvas.height);
+
+            // Add subtle background pattern for beauty
+            sonicCtx.fillStyle = '#001100';
+            for (let x = 0; x < sonicCanvas.width; x += 32) {
+                for (let y = 0; y < sonicCanvas.height; y += 32) {
+                    sonicCtx.fillRect(x, y, 1, 1);
+                    sonicCtx.fillRect(x + 16, y + 16, 1, 1);
+                }
+            }
+
+            // Calculate remaining time in milliseconds for countdown
+            const remainingMs = timeRemaining * 1000;
+            
+            // HUD elements - vertical layout with enhanced styling
+            drawText('SCORE', 16, 16, '#FFD700');
+            drawText(score.toString().padStart(7, '0'), 16, 32, '#00FF00');
+            
+            // TIME with countdown color change
+            let timeColor = '#00FF00';
+            if (remainingMs <= 10000) { // Last 10 seconds
+                timeColor = remainingMs <= 3000 ? '#FF0000' : '#FF8800'; // Red/Orange warning
+            }
+            drawText('TIME', 16, 56, '#FFD700');
+            drawText(formatTime(remainingMs), 16, 72, timeColor);
+            
+            drawText('RINGS', 16, 96, '#FFD700');
+            drawText(sudokuscompleted.toString().padStart(3, '0'), 16, 112, '#00FF00');
+
+            // Enhanced border with corner decorations
+            sonicCtx.fillStyle = '#00AA00';
+            sonicCtx.fillRect(0, 0, sonicCanvas.width, 2);
+            sonicCtx.fillRect(0, sonicCanvas.height - 2, sonicCanvas.width, 2);
+            sonicCtx.fillRect(0, 0, 2, sonicCanvas.height);
+            sonicCtx.fillRect(sonicCanvas.width - 2, 0, 2, sonicCanvas.height);
+            
+            // Corner decorations
+            sonicCtx.fillStyle = '#FFD700';
+            sonicCtx.fillRect(2, 2, 4, 4);
+            sonicCtx.fillRect(sonicCanvas.width - 6, 2, 4, 4);
+            sonicCtx.fillRect(2, sonicCanvas.height - 6, 4, 4);
+            sonicCtx.fillRect(sonicCanvas.width - 6, sonicCanvas.height - 6, 4, 4);
+            
+            // Subtle glow effect around text
+            sonicCtx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+            sonicCtx.fillRect(14, 14, 200, 20);
+            sonicCtx.fillRect(14, 54, 120, 20);
+            sonicCtx.fillRect(14, 94, 140, 20);
+        }
+
+        function startSonicTimer() {
+            if (!sonicTimerRunning) {
+                sonicTimerRunning = true;
+                sonicTimerInterval = setInterval(() => {
+                    if (!paused) {
+                        drawSonicTimer();
+                    }
+                }, 16); // ~60fps
+            }
+        }
+
+        function stopSonicTimer() {
+            if (sonicTimerRunning) {
+                clearInterval(sonicTimerInterval);
+                sonicTimerRunning = false;
+            }
+        }
+
+        // Original Sudoku Game Code
+        let solution;
+        let givens = 50; //CHANGE THIS TO 50 IN FINAL VERSION OK
+        let score = 0;
+        let lastcompletedtimestamp = 900;
+        let sudokuscompleted = 0;
+        let timeRemaining = 900; // Initial time in seconds
+		let paused = false;
+        const baseSolution = [
+            [5, 3, 4, 6, 7, 8, 9, 1, 2],
+            [6, 7, 2, 1, 9, 5, 3, 4, 8],
+            [1, 9, 8, 3, 4, 2, 5, 6, 7],
+            [8, 5, 9, 7, 6, 1, 4, 2, 3],
+            [4, 2, 6, 8, 5, 3, 7, 9, 1],
+            [7, 1, 3, 9, 2, 4, 8, 5, 6],
+            [9, 6, 1, 5, 3, 7, 2, 8, 4],
+            [2, 8, 7, 4, 1, 9, 6, 3, 5],
+            [3, 4, 5, 2, 8, 6, 1, 7, 9]
+        ];
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function swapNumbers(base) {
+            const baseNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+            const shuffledNumbers = shuffleArray([...baseNumbers]);
+            return base.map(row => row.map(cell => shuffledNumbers[cell - 1]));
+        }
+
+        function rotateGrid(grid) {
+            const newGrid = [];
+            for (let col = 0; col < 9; col++) {
+                newGrid[col] = [];
+                for (let row = 8; row >= 0; row--) {
+                    newGrid[col].push(grid[row][col]);
+                }
+            }
+            return newGrid;
+        }
+
+        function flipGrid(grid) {
+            return grid.map(row => row.reverse());
+        }
+
+        function createPuzzle(base) {
+    let oldBase = base.map(arr => [...arr]); // Clone the base to preserve the original
+    let newBase = base.map(arr => [...arr]);
+    let numbersToRemove = 81 - givens;
+
+    while (numbersToRemove > 0) {
+        const row = Math.floor(Math.random() * 9);
+        const col = Math.floor(Math.random() * 9);
+        if (newBase[row][col] !== 0) {
+            newBase[row][col] = 0;
+            numbersToRemove--;
+        }
+    }
+
+    let puzzleString = "";
+    for (let i = 0; i < 9; i++) {
+        for (let j = 0; j < 9; j++) {
+            puzzleString += newBase[i][j] === 0 ? "." : newBase[i][j];
+        }
+    }
+
+    // Ensure the puzzle has a unique solution
+    if (createSolver(puzzleString).findSolutions(2).length === 2) {
+        return createPuzzle(oldBase); // Retry with the original base if not unique
+    } else {
+        return newBase; // Return the valid puzzle
+    }
+}
+
+
+        function generateSudokuPuzzle() {
+            solution = baseSolution;
+            solution = swapNumbers(solution);
+            if (Math.random() > 0.5) solution = rotateGrid(solution);
+            if (Math.random() > 0.5) solution = flipGrid(solution);
+            let grid = createPuzzle(solution);
+            return grid;
+        }
+
+        function displayPuzzle(puzzle) {
+            const grid = document.getElementById('sudoku-grid');
+            if (!grid) {
+                console.log("Grid element not found!");
+                return;
+            }
+
+            grid.innerHTML = ''; // Clear the existing grid
+
+            for (let row = 0; row < 9; row++) {
+                const tr = document.createElement('tr');
+                for (let col = 0; col < 9; col++) {
+                    const td = document.createElement('td');
+                    const input = document.createElement('input');
+                    input.value = puzzle[row][col] === 0 ? '' : puzzle[row][col];
+                    input.disabled = puzzle[row][col] !== 0;
+                    td.appendChild(input);
+                    tr.appendChild(td);
+                }
+                grid.appendChild(tr);
+            }
+        }
+
+        let currentSolution;
+
+        function startGame() {
+            const puzzle = generateSudokuPuzzle();
+            currentSolution = puzzle.map(row => [...row]);
+            displayPuzzle(puzzle);
+            if (lastcompletedtimestamp == 900) {
+                startTimer();
+                startSonicTimer(); // Start the Sonic timer display
+            }
+        }
+
+        let timerInterval;
+        
+        function startTimer() {
+            timeRemaining = 900; // Reset to 15 minutes in seconds
+            document.getElementById('timer').innerText = `Time remaining: 15:00`;
+
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (paused) return; // If paused, do not update time
+
+                timeRemaining--;
+                const minutes = Math.floor(timeRemaining / 60);
+                const seconds = timeRemaining % 60;
+                document.getElementById('timer').innerText = `Time remaining: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+		    hue = timeRemaining / 900 * 175;
+		    document.getElementById('progress-bar').style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
+
+                // Update progress bar
+                const progress = (timeRemaining / 9); // Should be 100% when timeRemaining is 900
+                document.getElementById('progress-bar').style.width = `${progress}%`;
+
+                let digitsleft = 0;
+
+                // Stop the timer when time runs out
+                if (timeRemaining <= 0) {
+                    const inputs = [...document.querySelectorAll('#sudoku-grid input')];
+                    const userSolution = [];
+                    for (let i = 0; i < 9; i++) userSolution.push([]);
+                    inputs.forEach((input, index) => {
+                        const row = Math.floor(index / 9);
+                        const col = index % 9;
+                        userSolution[row][col] = parseInt(input.value) || 0;
+                    });
+
+                    // Check for remaining incorrect digits
+                    for (let row = 0; row < 9; row++) {
+                        for (let col = 0; col < 9; col++) {
+                            if (userSolution[row][col] !== currentSolution[row][col]) {
+                                digitsleft++;
+                            }
+                        }
+                    }
+                    score += Math.round((1e6 / lastcompletedtimestamp) * (digitsleft / 31));
+                    clearInterval(timerInterval);
+                    stopSonicTimer(); // Stop the Sonic timer
+                    alert(`Out of time! Score: ${score}`);
+        document.getElementById('stats').innerText = `Score: ${String(score)} - Completed: ${String(sudokuscompleted)}`;
+		
+                }
+            }, 1000);
+        }
+
+function togglePause() {
+            paused = !paused;
+            if (paused) {
+                document.getElementById('pauseButton').innerText = 'Resume'; // Change button text to Resume
+            } else {
+                document.getElementById('pauseButton').innerText = 'Pause'; // Change button text to Pause
+            }
+        }
+
+
+        function validateSudoku() {
+    const inputs = [...document.querySelectorAll('#sudoku-grid input')];
+    const userSolution = [];
+    let errorFound = false;
+    inputs.forEach((input, index) => {
+        const row = Math.floor(index / 9);
+        const col = index % 9;
+        userSolution[row] = userSolution[row] || [];
+        userSolution[row][col] = parseInt(input.value) || 0;
+    });
+
+    // First, reset any previous error highlights
+    inputs.forEach(input => {
+        input.style.backgroundColor = ''; // Remove any error highlighting
+    });
+
+    // Check for errors
+    for (let row = 0; row < 9; row++) {
+        for (let col = 0; col < 9; col++) {
+            if (userSolution[row][col] !== solution[row][col]) {
+                const index = row * 9 + col;
+                inputs[index].style.backgroundColor = '#ffcccc'; // Highlight error with a red background
+                errorFound = true;
+            }
+        }
+    }
+
+    // If there are errors, alert the user
+    if (errorFound) {
+        alert('There are errors in your puzzle!');
+        return;
+    }
+
+    const emptyCells = inputs.filter(input => !input.value).length;
+    if (emptyCells === 0) {
+        alert('Congratulations! You completed the puzzle!');
+        score += Math.round(1e6 / (lastcompletedtimestamp - timeRemaining));
+        sudokuscompleted++;
+        lastcompletedtimestamp = timeRemaining;
+        document.getElementById('stats').innerText = `Score: ${String(score)} - Completed: ${String(sudokuscompleted)}`;
+        startGame();
+    }
+}
+
+
+        function giveHint() {
+    const emptyCells = [...document.querySelectorAll('#sudoku-grid input')]
+        .filter(input => !input.value);
+
+    if (emptyCells.length > 0) {
+        const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+        const td = randomCell.parentElement;
+        const row = td.parentElement.rowIndex;  // Get the row index from the parent 'tr'
+        const col = td.cellIndex;  // Get the column index from the 'td' itself
+        
+        randomCell.value = solution[row][col];  // Fill the hint in the empty cell
+	timeRemaining -= 20; //HERE!!! LOOK OVER THERE! LOOK! 20 SECONDS EXTRA FOR HINT! THIS PREVENTS HINT ABUSE!!!
+    }
+}
+
+
+        document.addEventListener('DOMContentLoaded', (event) => {
+    // Initialize Sonic timer display
+    drawSonicTimer();
+    startGame();
+});
+
+        // Expose global API for external control (optional)
+        window.sonicTimer = {
+            updateScore: (val) => { score = val; if (!paused) drawSonicTimer(); },
+            updateRings: (val) => { sudokuscompleted = val; if (!paused) drawSonicTimer(); }
+        };
+    </script>
+</body>
+</html>
