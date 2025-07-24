@@ -342,40 +342,73 @@
         }
         return ps;
     }
-
-    // --- ADDED FOR HINTS: Function to get a hint ---
+        // --- ADDED FOR HINTS: Function to get a hint ---
     function getHint() {
+        // 0. Clear previous hint
+        hintDisplayElement.textContent = "Generating hint...";
+        hintDisplayElement.style.color = "#00cc66";
+
+        // 1. Basic sanity check - is the solver class available?
+        if (typeof DuoDoKuSolver === 'undefined') {
+            console.error("Hint Error: DuoDoKuSolver class is not defined. Check if duodokudifficulties.js is loaded correctly.");
+            hintDisplayElement.textContent = "Hint Error: Solver logic not found!";
+            hintDisplayElement.style.color = "red";
+            return;
+        }
+
+        // 2. Check if the generator dependency is available
+        if (typeof DuoDoKuGenerator === 'undefined' || typeof DuoDoKuGenerator.prototype.isNotDuplicated !== 'function') {
+             console.error("Hint Error: DuoDoKuGenerator or its isNotDuplicated method is not defined. Check if the generator script is loaded correctly.");
+             hintDisplayElement.textContent = "Hint Error: Generator dependency missing!";
+             hintDisplayElement.style.color = "red";
+             return;
+        }
+
         try {
-            // 1. Get the current puzzle state from the grid variable
-            const currentPuzzleState = grid.map(row => [...row]); // Deep copy
+            // 3. Get the current puzzle state from the grid variable
+            // Deep copy is important to avoid modifying the original grid during solving attempts for hints
+            const currentPuzzleState = grid.map(row => [...row]);
+            console.log("Current Puzzle State for Hint:", currentPuzzleState); // Debug log
 
-            // 2. Initialize candidates based on the current state
+            // 4. Initialize candidates based on the current state
             const currentCandidates = initializeCandidates(currentPuzzleState);
+            console.log("Initialized Candidates for Hint:", currentCandidates); // Debug log
 
-            // 3. Create a solver instance
-            const solver = new DuoDoKuSolver(); // Assuming this class is globally available
+            // 5. Create a solver instance
+            const solver = new DuoDoKuSolver(); // This should work now if the class is loaded
 
-            // 4. Enable smart hint mode
+            // 6. Enable smart hint mode
             solver.smartHint = true;
             solver.hintString = ""; // Clear previous hint
 
-            // 5. Call getStep (which uses techniques) to find the next logical step
+            // 7. Call getStep (which uses techniques) to find the next logical step
+            console.log("Calling solver.getStep..."); // Debug log
             const stepFound = solver.getStep(currentPuzzleState, currentCandidates);
+            console.log("getStep returned:", stepFound, "Hint String:", solver.hintString); // Debug log
 
-            // 6. Display the hint
+            // 8. Display the hint
             if (stepFound && solver.hintString) {
                 hintDisplayElement.textContent = solver.hintString;
                 hintDisplayElement.style.color = "#00cc66"; // Green
             } else if (!stepFound) {
-                 hintDisplayElement.textContent = "No logical step found. You might need to guess or the puzzle might be incorrect.";
+                 hintDisplayElement.textContent = "No logical step found. You might need to guess or the puzzle might be incorrect/partial.";
                  hintDisplayElement.style.color = "#ff9900"; // Orange
             } else {
-                 hintDisplayElement.textContent = "Hint generation failed.";
-                 hintDisplayElement.style.color = "red";
+                 // Step found but no hint string? Unexpected.
+                 hintDisplayElement.textContent = "Hint logic completed, but no description available.";
+                 hintDisplayElement.style.color = "#ff9900"; // Orange
+                 console.warn("getStep returned true, but hintString is empty or falsey:", solver.hintString);
             }
         } catch (error) {
             console.error("Error getting hint:", error);
-            hintDisplayElement.textContent = "Error generating hint.";
+            // Improved error message to the user
+            if (error.message && error.message.includes("isNotDuplicated")) {
+                 hintDisplayElement.textContent = "Hint Error: Generator dependency issue (isNotDuplicated).";
+            } else if (error.message && error.message.includes("getStep")) {
+                 hintDisplayElement.textContent = "Hint Error: Problem within solving techniques.";
+            } else {
+                 hintDisplayElement.textContent = "Error generating hint. See console for details.";
+            }
             hintDisplayElement.style.color = "red";
         }
     }
