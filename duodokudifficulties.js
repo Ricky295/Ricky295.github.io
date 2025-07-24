@@ -1,9 +1,9 @@
 // Difficulty levels represented as an object
 const Difficulty = {
-    EASY: 'EASY',
-    MEDIUM: 'MEDIUM',
-    HARD: 'HARD',
-    UNFAIR: 'UNFAIR'
+    EASY: 1,
+    MEDIUM: 2, 
+    HARD: 3,
+    UNFAIR: 4
 };
 
 // --- Helper Functions for Block Access ---
