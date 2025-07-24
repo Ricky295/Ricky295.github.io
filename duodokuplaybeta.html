@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <script src="duodokusolver.js"></script>
-  <script src="duodokudifficulties.js"></script> <!-- *** NEW *** -->
+  <script src="duodokudifficulties.js"></script> <!-- *** Include the techniques solver *** -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sufufu Puzzle Viewer</title>
@@ -231,7 +231,7 @@
   </div>
 
   <!-- *** NEW SECTION FOR DIFFICULTY AND HINT *** -->
-  <div id="difficulty-hint-section" style="text-align: center; margin: 10px 0;"> <!-- Centered above -->
+  <div id="difficulty-hint-section" style="text-align: center; margin: 10px 0;">
     <div id="difficulty-display" style="font-weight: bold; margin-bottom: 5px;">Analyzing difficulty...</div>
     <button id="hintButton">Get Hint</button>
     <div id="hint-display" style="margin-top: 5px; min-height: 1.2em;"></div>
@@ -288,6 +288,7 @@
     // *** NEW ***
     const difficultyDisplayElement = document.getElementById('difficulty-display');
     const hintDisplayElement = document.getElementById('hint-display');
+    const hintButton = document.getElementById('hintButton');
     // ***********
     let selectedCell = null;
     let grid = []; // This holds the current user state
@@ -306,30 +307,25 @@
             }
 
             // Use the techniques-based solver for difficulty analysis
-            const rater = new duodokudifficulties();
-            rater.enterPuzzle(puzzleArray); // This should internally solve and set difficulty
+            const rater = new duodokudifficulties(); // *** Use the correct class name ***
+            rater.enterPuzzle(puzzleArray);
 
-            // The difficulty is determined during solve. We can infer it from the process or
-            // if the solver stored it, we access it. Based on the Kotlin code,
-            // the `solve` method returns the difficulty.
-            // However, our JS `enterPuzzle` calls `solve` and stores the result in `solutions`.
-            // Let's modify `DuoDoKuSolver` slightly to also store the difficulty found.
-            // For now, assuming `enterPuzzle` or the process makes it solvable by techniques,
-            // we'll call `solve` again on a copy to get the difficulty without side effects.
-            // A cleaner way is if `DuoDoKuSolver` had a separate `getDifficulty(puzzle)` method.
-
-            // Let's assume we modify `DuoDoKuSolver` to have a method like this:
-            // (This requires a small change in duodokudifficulties.js - see note below)
-            // const difficulty = solver.getDifficulty(puzzleArray);
-
-            // OR, we re-run solve on a copy:
+            // The duodokudifficulties.solve method should determine the difficulty.
+            // We need to access the determined difficulty.
+            // Assuming the enterPuzzle or solve process stores the result in a way we can access it.
+            // Based on the Kotlin code, solve() returns Difficulty enum.
+            // Our JS conversion might store it differently. Let's assume it modifies the puzzle
+            // and we can infer difficulty, or it stores it.
+            // Let's re-run solve on a copy to get the difficulty without side effects.
             const puzzleCopyForAnalysis = puzzleArray.map(row => [...row]);
-            // We also need candidate sets for the copy
             const candidateSetsForAnalysis = Array(8).fill(null).map(() =>
                 Array(8).fill(null).map(() => [])
             );
-            // Initialize candidates for the copy
             // *** IMPORTANT: Assuming DuoDoKuGenerator is globally available ***
+            // This is required by the duodokudifficulties.js logic (refreshCandidates etc.)
+            if (typeof DuoDoKuGenerator === 'undefined') {
+                 throw new Error('DuoDoKuGenerator is not defined. It is required by duodokudifficulties.js.');
+            }
             const gen = new DuoDoKuGenerator();
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
@@ -348,7 +344,7 @@
             difficultyDisplayElement.textContent = `Difficulty: ${difficulty}`;
             difficultyDisplayElement.style.color = ''; // Reset color
             if (difficulty === 'EASY') difficultyDisplayElement.style.color = 'green';
-            else if (difficulty === 'MEDIUM') difficultyDisplayElement.style.color = 'yellow';
+            else if (difficulty === 'MEDIUM') difficultyDisplayElement.style.color = 'blue';
             else if (difficulty === 'HARD') difficultyDisplayElement.style.color = 'orange';
             else if (difficulty === 'UNFAIR') difficultyDisplayElement.style.color = 'red';
 
@@ -370,6 +366,9 @@
                 Array(8).fill(null).map(() => [])
             );
             // *** IMPORTANT: Assuming DuoDoKuGenerator is globally available ***
+            if (typeof DuoDoKuGenerator === 'undefined') {
+                 throw new Error('DuoDoKuGenerator is not defined. It is required by duodokudifficulties.js.');
+            }
             const gen = new DuoDoKuGenerator();
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
@@ -386,13 +385,13 @@
             // Create a copy of the current grid state for the solver to work on
             const gridCopyForHint = grid.map(row => [...row]);
 
-            const solver = new DuoDoKuSolver();
-            solver.smartHint = true;
-            const stepFound = solver.getStep(gridCopyForHint, candidateSetsForHint);
+            const rater = new duodokudifficulties(); // *** Use the correct class name ***
+            rater.smartHint = true;
+            const stepFound = rater.getStep(gridCopyForHint, candidateSetsForHint);
 
-            if (stepFound && solver.hintString) {
-                hintDisplayElement.textContent = solver.hintString;
-                hintDisplayElement.style.color = 'blue'; // Or any hint color
+            if (stepFound && rater.hintString) {
+                hintDisplayElement.textContent = rater.hintString;
+                hintDisplayElement.style.color = 'blue';
             } else if (!stepFound) {
                  // Check if puzzle is complete first
                  let isComplete = true;
@@ -437,8 +436,11 @@
       document.getElementById('print').addEventListener('click', printPuzzle);
       document.getElementById('backToMain').addEventListener('click', backToMain);
       // *** NEW ***
-      document.getElementById('hintButton').addEventListener('click', getHint);
+      if (hintButton) { // Check if the button exists in the DOM
+          hintButton.addEventListener('click', getHint);
+      }
       // ***********
+
       // Add keyboard support
       document.addEventListener('keydown', handleKeyboardInput);
       // Deselect when clicking elsewhere
@@ -452,7 +454,6 @@
       timerInterval = setInterval(updateTimer, 1000);
 
       // *** NEW: Analyze difficulty after initialization ***
-      // Use setTimeout to ensure DOM is fully ready if needed, though init() is called at the end
        setTimeout(analyzeDifficulty, 100); // Slight delay to ensure everything is rendered
       // **************************************************
     }
@@ -853,7 +854,7 @@
       // Also clear digit highlights
       clearDigitHighlights();
        // *** NEW: Clear hint display ***
-       hintDisplayElement.textContent = '';
+       if (hintDisplayElement) hintDisplayElement.textContent = '';
        // *****************************
     }
 
@@ -866,7 +867,7 @@
       });
       feedbackElement.textContent = 'All candidates cleared.';
        // *** NEW: Clear hint display ***
-       hintDisplayElement.textContent = '';
+       if (hintDisplayElement) hintDisplayElement.textContent = '';
        // *****************************
     }
 
