@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <script src="duodokusolver.js"></script>
+  <script src="duodokudifficulties.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sufufu Puzzle Viewer</title>
@@ -224,6 +225,51 @@
       color: #ff6600 !important;
       font-weight: bold;
     }
+
+    /* Difficulty indicator styles */
+    .difficulty-indicator {
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+      margin: 10px 0;
+      padding: 8px 16px;
+      border-radius: 5px;
+      display: inline-block;
+    }
+
+    .difficulty-1 {
+      background-color: #28a745;
+      color: white;
+    }
+
+    .difficulty-2 {
+      background-color: #ffc107;
+      color: #212529;
+    }
+
+    .difficulty-3 {
+      background-color: #fd7e14;
+      color: white;
+    }
+
+    .difficulty-4 {
+      background-color: #dc3545;
+      color: white;
+    }
+
+    /* Hint display styles */
+    .hint-display {
+      background-color: #f8f9fa;
+      color: #495057;
+      border: 1px solid #dee2e6;
+      border-radius: 5px;
+      padding: 15px;
+      margin: 15px 0;
+      max-width: 600px;
+      text-align: center;
+      font-size: 16px;
+      line-height: 1.4;
+    }
     
     @media (max-width: 768px) {
       .puzzle-container {
@@ -266,6 +312,10 @@
     Time: 0:00
   </div>
 
+  <div id="difficulty-display" style="text-align: center; margin: 10px 0;">
+    <div class="difficulty-indicator" id="difficulty-badge">Calculating difficulty...</div>
+  </div>
+
   <div class="puzzle-container">
     <!-- Left column with puzzle -->
     <div class="puzzle-column">
@@ -304,6 +354,7 @@
 
   <div class="button-container">
     <button id="checkButton">Check Solution</button>
+    <button id="hintButton">Get Hint</button>
     <button id="resetHighlights">Reset Highlights</button>
     <button id="clearCandidates">Clear All Candidates</button>
     <button id="print">Print this puzzle</button>
@@ -311,6 +362,7 @@
   </div>
 
   <div id="feedback"></div>
+  <div id="hint-display" class="hint-display" style="display: none;"></div>
 
   <script>
     // Cache DOM elements and initialize state variables
@@ -318,12 +370,59 @@
     const tableElement = document.getElementById('puzzleTable');
     const timerElement = document.getElementById('timer');
     const feedbackElement = document.getElementById('feedback');
+    const hintDisplayElement = document.getElementById('hint-display');
+    const difficultyBadgeElement = document.getElementById('difficulty-badge');
     
     let selectedCell = null;
     let grid = [];
+    let candidates = [];
     let currentHighlightedDigit = null;
     let startTime = Date.now();
     let timerInterval;
+    let difficultyAnalyzer = null;
+    let puzzleDifficulty = 'CALCULATING';
+
+    // Mock DuoDoKuGenerator class for compatibility
+    class DuoDoKuGenerator {
+      isNotDuplicated(row, col, value, grid) {
+        // Check row constraint
+        let rowCount = 0;
+        for (let c = 0; c < 8; c++) {
+          if (grid[row][c] === value) rowCount++;
+        }
+        if (rowCount >= 2) return false;
+
+        // Check column constraint  
+        let colCount = 0;
+        for (let r = 0; r < 8; r++) {
+          if (grid[r][col] === value) colCount++;
+        }
+        if (colCount >= 2) return false;
+
+        // Check block constraint
+        const blockRow = Math.floor(row / 2) * 2;
+        const blockCol = Math.floor(col / 4) * 4;
+        let blockCount = 0;
+        for (let r = 0; r < 2; r++) {
+          for (let c = 0; c < 4; c++) {
+            if (grid[blockRow + r][blockCol + c] === value) blockCount++;
+          }
+        }
+        if (blockCount >= 2) return false;
+
+        // Check adjacency constraint
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        for (const [dr, dc] of directions) {
+          const newRow = row + dr;
+          const newCol = col + dc;
+          if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 && grid[newRow][newCol] === value) {
+            return false;
+          }
+        }
+
+        return true;
+      }
+    }
 
     function backToMain() {
       window.location.href = 'duodokumain.html';
@@ -331,10 +430,13 @@
 
     // Initialize the puzzle
     function init() {
+      initializeCandidates();
       renderPuzzle();
+      calculateDifficulty();
       
       // Set up event listeners
       document.getElementById('checkButton').addEventListener('click', checkPuzzle);
+      document.getElementById('hintButton').addEventListener('click', getHint);
       document.getElementById('resetHighlights').addEventListener('click', resetHighlights);
       document.getElementById('clearCandidates').addEventListener('click', clearAllCandidates);
       document.getElementById('print').addEventListener('click', printPuzzle);
@@ -353,6 +455,118 @@
       
       // Start the timer
       timerInterval = setInterval(updateTimer, 1000);
+    }
+
+    function initializeCandidates() {
+      candidates = [];
+      for (let r = 0; r < 8; r++) {
+        candidates[r] = [];
+        for (let c = 0; c < 8; c++) {
+          candidates[r][c] = [1, 2, 3, 4]; // All possible candidates initially
+        }
+      }
+    }
+
+    function calculateDifficulty() {
+      try {
+        const puzzleString = getPuzzleFromURL();
+        const puzzleArray = convertToArray(puzzleString);
+        
+        // Create a copy for difficulty analysis
+        const gridCopy = puzzleArray.map(row => [...row]);
+        const candidatesCopy = candidates.map(row => row.map(cell => [...cell]));
+        
+        difficultyAnalyzer = new duodokudifficulties();
+        difficultyAnalyzer.refreshCandidates(gridCopy, candidatesCopy);
+        
+        const difficulty = difficultyAnalyzer.solve(gridCopy, candidatesCopy);
+        puzzleDifficulty = difficulty;
+        
+        // Convert numeric difficulty to string for display
+        const difficultyNames = { 1: 'EASY', 2: 'MEDIUM', 3: 'HARD', 4: 'UNFAIR' };
+        const difficultyName = difficultyNames[difficulty] || difficulty;
+        
+        // Update the difficulty display
+        difficultyBadgeElement.textContent = `Difficulty: ${difficultyName}`;
+        difficultyBadgeElement.className = `difficulty-indicator difficulty-${difficulty}`;
+        
+      } catch (error) {
+        console.error('Error calculating difficulty:', error);
+        difficultyBadgeElement.textContent = 'Difficulty: Unknown';
+        difficultyBadgeElement.className = 'difficulty-indicator';
+      }
+    }
+
+    function getHint() {
+      try {
+        // Create copies of current state
+        const gridCopy = grid.map(row => [...row]);
+        const candidatesCopy = getCurrentCandidates();
+        
+        // Create a new analyzer for hints
+        const hintAnalyzer = new duodokudifficulties();
+        hintAnalyzer.smartHint = true;
+        hintAnalyzer.refreshCandidates(gridCopy, candidatesCopy);
+        
+        // Try to get a step
+        const stepFound = hintAnalyzer.getStep(gridCopy, candidatesCopy);
+        
+        if (stepFound && hintAnalyzer.hintString) {
+          hintDisplayElement.textContent = hintAnalyzer.hintString;
+          hintDisplayElement.style.display = 'block';
+          feedbackElement.textContent = 'Hint provided above!';
+          feedbackElement.style.color = '#0066cc';
+        } else {
+          hintDisplayElement.textContent = 'No hints available. The puzzle might be complete or require advanced techniques.';
+          hintDisplayElement.style.display = 'block';
+          feedbackElement.textContent = 'No more hints available.';
+          feedbackElement.style.color = '#ffc107';
+        }
+        
+      } catch (error) {
+        console.error('Error getting hint:', error);
+        hintDisplayElement.textContent = 'Error generating hint. Please try again.';
+        hintDisplayElement.style.display = 'block';
+        feedbackElement.textContent = 'Hint system error.';
+        feedbackElement.style.color = 'red';
+      }
+    }
+
+    function getCurrentCandidates() {
+      const currentCandidates = [];
+      for (let r = 0; r < 8; r++) {
+        currentCandidates[r] = [];
+        for (let c = 0; c < 8; c++) {
+          if (grid[r][c] !== 0) {
+            currentCandidates[r][c] = [];
+          } else {
+            const cell = tableElement.rows[r].cells[c].querySelector('.cell-div');
+            const candidatesDiv = cell.querySelector('.candidates');
+            const cellCandidates = [];
+            
+            if (candidatesDiv.style.display === 'grid') {
+              // Get candidates from UI
+              for (let digit = 1; digit <= 4; digit++) {
+                const candidate = candidatesDiv.querySelector(`.candidate[data-value="${digit}"]`);
+                if (candidate.textContent === digit.toString()) {
+                  cellCandidates.push(digit);
+                }
+              }
+            } else {
+              // Generate valid candidates automatically
+              for (let digit = 1; digit <= 4; digit++) {
+                const generator = new DuoDoKuGenerator();
+                if (generator.isNotDuplicated(r, c, digit, grid)) {
+                  cellCandidates.push(digit);
+                }
+              }
+            }
+            
+            currentCandidates[r][c] = cellCandidates;
+          }
+        }
+      }
+      return currentCandidates;
     }
 
     function getPuzzleFromURL() {
@@ -710,6 +924,9 @@
         candidatesDiv.style.display = 'none';
         clearCellCandidates(cell);
       }
+      
+      // Hide hint when user makes a move
+      hintDisplayElement.style.display = 'none';
     }
     
     function toggleCandidate(cell, value) {
@@ -734,6 +951,9 @@
         candidate.textContent = value;
         candidate.classList.add('active');
       }
+      
+      // Hide hint when user makes a move
+      hintDisplayElement.style.display = 'none';
     }
 
     function clearCellCandidates(cell) {
@@ -794,6 +1014,8 @@
       
       // Clear digit highlights when checking
       clearDigitHighlights();
+      // Hide hint when checking
+      hintDisplayElement.style.display = 'none';
     }
 
     function resetHighlights() {
@@ -807,6 +1029,8 @@
       
       // Also clear digit highlights
       clearDigitHighlights();
+      // Hide hint
+      hintDisplayElement.style.display = 'none';
     }
 
     function clearAllCandidates() {
@@ -817,6 +1041,8 @@
         candidatesDiv.style.display = 'none';
       });
       feedbackElement.textContent = 'All candidates cleared.';
+      // Hide hint
+      hintDisplayElement.style.display = 'none';
     }
 
     function printPuzzle() {
