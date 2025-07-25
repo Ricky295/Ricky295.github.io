@@ -1,10 +1,14 @@
-<!DOCTYPE html>
+function updateAttemptsValue() {
+            const attemptsValue = document.getElementById("maxAttemptsRange").value;
+            document.getElementById("attemptsValue").textContent = attemptsValue;
+        }<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sufufu</title>
     <script src="duodokuapi.js"></script>
+    <script src="duodokudifficulties.js"></script>
     <link rel="stylesheet" href="googletitle.css">
     <style>
         body {
@@ -19,7 +23,7 @@
         }
         .controls {
             margin: 20px auto;
-            max-width: 400px;
+            max-width: 450px;
             background-color: white;
             padding: 20px;
             border-radius: 12px;
@@ -40,7 +44,7 @@
             font-weight: bold;
             color: #555;
         }
-        input[type="range"], input[type="number"] {
+        input[type="range"], input[type="number"], select {
             width: 100%;
             padding: 8px;
             font-size: 16px;
@@ -50,6 +54,116 @@
         }
         input[type="range"] {
             padding: 0;
+        }
+        .difficulty-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .difficulty-btn {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            border: 2px solid #dee2e6;
+            background-color: #f8f9fa;
+            color: #495057;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            margin: 0;
+        }
+        
+        .difficulty-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .difficulty-btn.selected {
+            border-color: #007bff;
+            background-color: #007bff;
+            color: white;
+        }
+        
+        .difficulty-btn[data-difficulty="1"] {
+            border-color: #28a745;
+        }
+        .difficulty-btn[data-difficulty="1"].selected {
+            background-color: #28a745;
+        }
+        
+        .difficulty-btn[data-difficulty="2"] {
+            border-color: #ffc107;
+        }
+        .difficulty-btn[data-difficulty="2"].selected {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        
+        .difficulty-btn[data-difficulty="3"] {
+            border-color: #fd7e14;
+        }
+        .difficulty-btn[data-difficulty="3"].selected {
+            background-color: #fd7e14;
+        }
+        
+        .difficulty-btn[data-difficulty="4"] {
+            border-color: #dc3545;
+        }
+        .difficulty-btn[data-difficulty="4"].selected {
+            background-color: #dc3545;
+        }
+        
+        /* Tooltip styling */
+        .difficulty-btn::after {
+            content: attr(title);
+            position: absolute;
+            top: 50%;
+            left: 100%;
+            transform: translateY(-50%);
+            margin-left: 12px;
+            background-color: #333;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: normal;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+            z-index: 1000;
+            max-width: 300px;
+            white-space: normal;
+            text-align: left;
+            line-height: 1.4;
+        }
+        
+        .difficulty-btn:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .difficulty-btn::before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 100%;
+            transform: translateY(-50%);
+            margin-left: 6px;
+            border: 6px solid transparent;
+            border-right-color: #333;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+            z-index: 1000;
+        }
+        
+        .difficulty-btn:hover::before {
+            opacity: 1;
+            visibility: visible;
         }
         button {
             display: block;
@@ -71,15 +185,63 @@
             background-color: #6c757d;
             color: white;
         }
+        .construct-btn {
+            background-color: #28a745;
+            color: white;
+        }
         button:hover {
             opacity: 0.9;
             transform: scale(1.03);
         }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
         .difficulty-easy { color: #28a745; }
         .difficulty-medium { color: #ffc107; }
         .difficulty-hard { color: #fd7e14; }
-        .difficulty-expert { color: #dc3545; }
-        .difficulty-insane { color: #6f42c1; }
+        .difficulty-unfair { color: #dc3545; }
+        
+        .generation-status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: bold;
+            display: none;
+        }
+        .status-generating {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .technique-info {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            font-size: 14px;
+            text-align: left;
+        }
+        .technique-info h4 {
+            margin: 0 0 8px 0;
+            color: #495057;
+        }
+        .technique-list {
+            margin: 5px 0;
+            color: #6c757d;
+        }
     </style>
 </head>
 <body>
@@ -87,9 +249,21 @@
     
     <div class="controls">
         <div class="form-group">
-            <label for="clueRange">Number of Clues: <span id="clueValue">30</span></label>
-            <input type="range" id="clueRange" min="12" max="40" value="30" oninput="updateClueValue()">
-            <span class="difficulty-label">Difficulty: <span id="difficultyLabel" class="difficulty-hard">Hard</span></span>
+            <label>Target Difficulty:</label>
+            <div class="difficulty-buttons">
+                <button type="button" class="difficulty-btn" data-difficulty="1" title="Easy: Full House, Last Twin, Hidden Single - Basic techniques only" onclick="selectDifficulty(1)">
+                    Easy
+                </button>
+                <button type="button" class="difficulty-btn selected" data-difficulty="2" title="Medium: All Easy techniques + Hidden Twin, Naked Single - Includes twin techniques" onclick="selectDifficulty(2)">
+                    Medium
+                </button>
+                <button type="button" class="difficulty-btn" data-difficulty="3" title="Hard: All Medium techniques + Almost Hidden Twin, Advanced Combinations - Requires advanced logical techniques" onclick="selectDifficulty(3)">
+                    Hard
+                </button>
+                <button type="button" class="difficulty-btn" data-difficulty="4" title="Unfair: Puzzles that cannot be solved with logical techniques alone - May require guessing or advanced computer techniques" onclick="selectDifficulty(4)">
+                    Unfair
+                </button>
+            </div>
         </div>
         
         <div class="form-group">
@@ -97,65 +271,197 @@
             <input type="number" id="zoomInput" placeholder="Zoom (default 50)" min="10" max="200" value="50">
         </div>
         
-        <button class="generate-btn" onclick="generateCustomDuodoku()">Generate Sufufu</button>
+        <div class="generation-status" id="generationStatus"></div>
+        
+        <button class="generate-btn" id="generateBtn" onclick="generateTechniqueDuodoku()">Generate Sufufu</button>
         <button class="print-btn" onclick="printDuodokus()">Print Multiple</button>
-        <button class="construct-btn" onclick="constructDuodoku()"> Construct </button>
+        <button class="construct-btn" onclick="constructDuodoku()">Construct</button>
         <p>Rules: every row, column and 2x4 square should have numbers 1-4 twice without touching orthogonally.</p>
     </div>
 
-    <p style="color: white;"> This puzzle variant is free for all uses, no rights reserved. No permission needed. Do what you want.
+    <p style="color: white;">This puzzle variant is free for all uses, no rights reserved. No permission needed. Do what you want.</p>
     
     <script>
-        function updateClueValue() {
-            const clueValue = document.getElementById("clueRange").value;
-            document.getElementById("clueValue").textContent = clueValue;
-            
-            // Update difficulty label based on clue count
-            const difficultyLabel = document.getElementById("difficultyLabel");
-            if (clueValue <= 21) {
-                difficultyLabel.textContent = "Insane";
-                difficultyLabel.className = "difficulty-insane";
-            } else if (clueValue >= 22 && clueValue <= 25) {
-                difficultyLabel.textContent = "Expert";
-                difficultyLabel.className = "difficulty-expert";
-            } else if (clueValue >= 26 && clueValue <= 30) {
-                difficultyLabel.textContent = "Hard";
-                difficultyLabel.className = "difficulty-hard";
-            } else if (clueValue >= 31 && clueValue <= 32) {
-                difficultyLabel.textContent = "Medium";
-                difficultyLabel.className = "difficulty-medium";
-            } else if (clueValue >= 33 && clueValue <= 40) {
-                difficultyLabel.textContent = "Easy";
-                difficultyLabel.className = "difficulty-easy";
+        const Difficulty = {
+            EASY: 1,
+            MEDIUM: 2, 
+            HARD: 3,
+            UNFAIR: 4
+        };
+        
+        const difficultyNames = {
+            1: "Easy",
+            2: "Medium", 
+            3: "Hard",
+            4: "Unfair"
+        };
+        
+        const difficultyTechniques = {
+            1: {
+                name: "Easy",
+                techniques: ["Full House", "Last Twin", "Hidden Single"],
+                description: "Basic techniques only"
+            },
+            2: {
+                name: "Medium", 
+                techniques: ["Full House", "Last Twin", "Hidden Single", "Hidden Twin", "Naked Single"],
+                description: "Includes twin techniques"
+            },
+            3: {
+                name: "Hard",
+                techniques: ["All Medium techniques", "Almost Hidden Twin", "Advanced Combinations"],
+                description: "Requires advanced logical techniques"
+            },
+            4: {
+                name: "Unfair",
+                techniques: ["Cannot be solved with logical techniques alone"],
+                description: "May require guessing or advanced computer techniques"
             }
+        };
+        
+        let selectedDifficulty = 2; // Default to Medium
+        
+        function selectDifficulty(difficulty) {
+            selectedDifficulty = difficulty;
+            
+            // Update button selection
+            document.querySelectorAll('.difficulty-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            document.querySelector(`[data-difficulty="${difficulty}"]`).classList.add('selected');
         }
         
-        function generateCustomDuodoku() {
-            let generator = new DuoDoKuGenerator();
-            generator.generateSeedPuzzle();
-            
-            // Get selected number of clues
-            const clues = parseInt(document.getElementById("clueRange").value);
-            
-            generator.generatePuzzle(clues);
-            let puzzle = generator.mPuzzle;
-            let puzzleString = "";
-            for (let i = 0; i < 8; i++) {
-                for (let j = 0; j < 8; j++) {
-                    puzzleString += puzzle[i][j];
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById("generationStatus");
+            statusDiv.textContent = message;
+            statusDiv.className = `generation-status status-${type}`;
+            statusDiv.style.display = "block";
+        }
+        
+        function hideStatus() {
+            const statusDiv = document.getElementById("generationStatus");
+            statusDiv.style.display = "none";
+        }
+        
+        function initializeCandidates() {
+            const candidates = [];
+            for (let r = 0; r < 8; r++) {
+                candidates[r] = [];
+                for (let c = 0; c < 8; c++) {
+                    candidates[r][c] = [1, 2, 3, 4]; // All possible candidates
                 }
             }
-            let zoom = document.getElementById("zoomInput").value || 50;
-            window.location.href = "https://ricky295.github.io/duodokuplay.html?puzzle=" + 
-                encodeURIComponent(puzzleString) + "&zoom=" + encodeURIComponent(zoom);
+            return candidates;
+        }
+        
+        function deepCopyGrid(grid) {
+            return grid.map(row => [...row]);
+        }
+        
+        function deepCopyCandidates(candidates) {
+            return candidates.map(row => row.map(cell => [...cell]));
+        }
+        
+        async function generateTechniqueDuodoku() {
+            const generateBtn = document.getElementById("generateBtn");
+            generateBtn.disabled = true;
+            
+            const targetDifficulty = selectedDifficulty;
+            const maxAttempts = MAX_ATTEMPTS;
+            
+            showStatus(`Generating ${difficultyNames[targetDifficulty]} puzzle... (0/${maxAttempts})`, "generating");
+            
+            let generator = new DuoDoKuGenerator();
+            let solver = new duodokudifficulties();
+            let bestPuzzle = null;
+            let bestDifficulty = Difficulty.UNFAIR;
+            let attempts = 0;
+            
+            try {
+                for (attempts = 1; attempts <= maxAttempts; attempts++) {
+                    if (attempts % 5 === 0) {
+                        showStatus(`Generating ${difficultyNames[targetDifficulty]} puzzle... (${attempts}/${maxAttempts})`, "generating");
+                        // Allow UI to update
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                    }
+                    
+                    // Generate a random puzzle with random clue count
+                    generator.generateSeedPuzzle();
+                    const clueCount = Math.floor(Math.random() * 20) + 20; // 20-39 clues
+                    generator.generatePuzzle(clueCount);
+                    
+                    // Create copies for solving
+                    const puzzleCopy = deepCopyGrid(generator.mPuzzle);
+                    const candidates = initializeCandidates();
+                    solver.refreshCandidates(puzzleCopy, candidates);
+                    
+                    // Test the difficulty
+                    const difficulty = solver.solve(deepCopyGrid(puzzleCopy), deepCopyCandidates(candidates));
+                    
+                    // If we found our target difficulty, use it immediately
+                    if (difficulty === targetDifficulty) {
+                        bestPuzzle = generator.mPuzzle;
+                        bestDifficulty = difficulty;
+                        break;
+                    }
+                    
+                    // Keep track of the best puzzle we've found so far
+                    // Prefer puzzles closer to target difficulty
+                    if (bestPuzzle === null || 
+                        Math.abs(difficulty - targetDifficulty) < Math.abs(bestDifficulty - targetDifficulty)) {
+                        bestPuzzle = deepCopyGrid(generator.mPuzzle);
+                        bestDifficulty = difficulty;
+                    }
+                }
+                
+                if (bestPuzzle === null) {
+                    throw new Error("Failed to generate any valid puzzle");
+                }
+                
+                // Show result status
+                if (bestDifficulty === targetDifficulty) {
+                    showStatus(`Success! Generated ${difficultyNames[bestDifficulty]} puzzle (attempt ${attempts})`, "success");
+                } else {
+                    showStatus(`Generated ${difficultyNames[bestDifficulty]} puzzle (closest to target after ${maxAttempts} attempts)`, "success");
+                }
+                
+                // Convert puzzle to string and navigate
+                let puzzleString = "";
+                for (let i = 0; i < 8; i++) {
+                    for (let j = 0; j < 8; j++) {
+                        puzzleString += bestPuzzle[i][j];
+                    }
+                }
+                
+                setTimeout(() => {
+                    const zoom = document.getElementById("zoomInput").value || 50;
+                    window.location.href = "https://ricky295.github.io/duodokuplay.html?puzzle=" + 
+                        encodeURIComponent(puzzleString) + "&zoom=" + encodeURIComponent(zoom);
+                }, 1500);
+                
+            } catch (error) {
+                console.error("Generation error:", error);
+                showStatus(`Error: ${error.message}`, "error");
+                generateBtn.disabled = false;
+            }
         }
         
         function printDuodokus() {
-            // Option to get multiple clue values for printing
-            const currentClues = document.getElementById("clueRange").value;
+            // Generate multiple puzzles for printing - use current difficulty setting
+            const targetDifficulty = selectedDifficulty;
+            // Create clues string (we'll use a range that typically produces the target difficulty)
             let cluesString = "";
+            const clueRanges = {
+                1: [32, 35], // Easy
+                2: [28, 32], // Medium  
+                3: [24, 28], // Hard
+                4: [20, 24]  // Unfair
+            };
+            const range = clueRanges[targetDifficulty] || [28, 32];
+            
             for (let i = 0; i < 6; i++) {
-                cluesString += currentClues;
+                const clues = Math.floor(Math.random() * (range[1] - range[0] + 1)) + range[0];
+                cluesString += clues;
                 if (i < 5) {
                     cluesString += ",";
                 }
@@ -167,8 +473,8 @@
             window.location.href = "https://ricky295.github.io/duodokuconstructor";
         }
         
-        // Initialize difficulty label on page load
-        updateClueValue();
+        // Initialize on page load
+        // No initialization needed for fixed attempts
     </script>
 </body>
 </html>
