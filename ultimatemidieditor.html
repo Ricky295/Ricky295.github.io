@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate MIDI Editor - With Channel Selection</title>
+    <title>Ultimate MIDI Editor - With Sound</title>
     <style>
         * {
             margin: 0;
@@ -906,6 +906,7 @@
                 <div>0 = Silent, 127 = Maximum</div>
                 <div>Selected Notes: <span id="selectedNotesCount">0</span></div>
                 <div>Channel: <span id="currentChannel">1</span></div>
+                <div>Audio: <span id="audioStatus">Not initialized</span></div>
             </div>
             <div class="note-info" id="noteInfo">
                 <div>No note selected</div>
@@ -931,6 +932,12 @@
         let isVelocityMode = false;
         let currentVelocity = 100;
         let currentChannel = 0;
+        let audioContext = null;
+        let masterGain = null;
+        let isAudioInitialized = false;
+        let scheduledNotes = [];
+        let playbackStartTime = 0;
+        let playbackStartOffset = 0;
 
         // DOM Elements
         const playPauseBtn = document.getElementById('playPause');
@@ -956,6 +963,7 @@
         const errorDisplay = document.getElementById('errorDisplay');
         const errorDetails = document.getElementById('errorDetails');
         const currentChannelDisplay = document.getElementById('currentChannel');
+        const audioStatus = document.getElementById('audioStatus');
 
         // Error handling function
         function showError(message, error = null) {
@@ -967,6 +975,165 @@
             setTimeout(() => {
                 errorDisplay.classList.remove('show');
             }, 5000);
+        }
+
+        // Initialize Web Audio API
+        function initAudio() {
+            try {
+                if (isAudioInitialized) return true;
+                
+                if (!window.AudioContext && !window.webkitAudioContext) {
+                    throw new Error('Web Audio API is not supported in this browser');
+                }
+                
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                masterGain = audioContext.createGain();
+                masterGain.connect(audioContext.destination);
+                masterGain.gain.value = 0.7;
+                
+                isAudioInitialized = true;
+                if (audioStatus) audioStatus.textContent = 'Ready';
+                return true;
+            } catch (error) {
+                showError('Failed to initialize audio', error);
+                if (audioStatus) audioStatus.textContent = 'Error';
+                return false;
+            }
+        }
+
+        // Play a note using Web Audio API
+        function playNote(frequency, velocity, duration, channel) {
+            try {
+                if (!isAudioInitialized || !audioContext) {
+                    if (!initAudio()) return;
+                }
+                
+                // Resume audio context if suspended
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+                
+                const now = audioContext.currentTime;
+                const noteGain = audioContext.createGain();
+                const oscillator = audioContext.createOscillator();
+                
+                // Set volume based on velocity (0-127) and track volume
+                const trackItem = trackItems[channel] || trackItems[0];
+                let trackVolume = 0.8;
+                if (trackItem) {
+                    const volumeSlider = trackItem.querySelector('.volume-slider');
+                    if (volumeSlider) {
+                        trackVolume = (parseInt(volumeSlider.value) || 80) / 100;
+                    }
+                }
+                
+                const volume = (velocity / 127) * trackVolume;
+                noteGain.gain.value = volume;
+                
+                // Set oscillator type based on channel
+                const oscillatorTypes = [
+                    'sine',     // Channel 1 - Piano
+                    'square',   // Channel 2 - Chromatic Percussion
+                    'triangle', // Channel 3 - Organ
+                    'sawtooth', // Channel 4 - Guitar
+                    'triangle', // Channel 5 - Strings
+                    'square',   // Channel 6 - Brass
+                    'sawtooth', // Channel 7 - Reed
+                    'sine',     // Channel 8 - Synth Lead
+                    'triangle', // Channel 9 - Synth Pad
+                    'square',   // Channel 10 - Drums
+                    'sine',     // Channel 11 - Ethnic
+                    'sawtooth', // Channel 12 - Sound Effects
+                    'sine',     // Channel 13 - Woodwinds
+                    'triangle', // Channel 14 - Ensemble
+                    'sine',     // Channel 15 - Pipe
+                    'sawtooth'  // Channel 16 - Synth Effects
+                ];
+                
+                oscillator.type = oscillatorTypes[channel % oscillatorTypes.length];
+                oscillator.frequency.value = frequency;
+                
+                // Apply ADSR envelope
+                const attackTime = 0.01;
+                const decayTime = 0.1;
+                const sustainLevel = 0.7;
+                const releaseTime = 0.2;
+                
+                noteGain.gain.setValueAtTime(0, now);
+                noteGain.gain.linearRampToValueAtTime(volume, now + attackTime);
+                noteGain.gain.linearRampToValueAtTime(volume * sustainLevel, now + attackTime + decayTime);
+                
+                oscillator.connect(noteGain);
+                noteGain.connect(masterGain);
+                
+                oscillator.start(now);
+                oscillator.stop(now + duration);
+                
+                // Release phase
+                noteGain.gain.setValueAtTime(volume * sustainLevel, now + duration - releaseTime);
+                noteGain.gain.linearRampToValueAtTime(0, now + duration);
+                
+                return { oscillator, noteGain };
+            } catch (error) {
+                showError('Failed to play note', error);
+                return null;
+            }
+        }
+
+        // Convert note name to frequency
+        function noteToFrequency(note) {
+            try {
+                const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+                const octave = parseInt(note.slice(-1));
+                const noteName = note.slice(0, -1);
+                const noteIndex = notes.indexOf(noteName);
+                
+                if (noteIndex === -1) return 440; // Default to A4
+                
+                const semitonesFromA4 = (octave - 4) * 12 + (noteIndex - 9);
+                return 440 * Math.pow(2, semitonesFromA4 / 12);
+            } catch (error) {
+                showError('Failed to convert note to frequency', error);
+                return 440;
+            }
+        }
+
+        // Schedule notes for playback
+        function scheduleNotes() {
+            try {
+                if (!isAudioInitialized) return;
+                
+                const gridContainer = document.getElementById('gridContainer');
+                if (!gridContainer) return;
+                
+                const notes = gridContainer.querySelectorAll('.note');
+                const currentTimeInBeats = currentTime;
+                
+                notes.forEach(noteElement => {
+                    try {
+                        const startTime = parseFloat(noteElement.getAttribute('data-start-time')) || 0;
+                        const duration = parseFloat(noteElement.getAttribute('data-duration')) || 0;
+                        const noteName = noteElement.getAttribute('data-note') || 'C4';
+                        const velocity = parseInt(noteElement.getAttribute('data-velocity')) || 100;
+                        const channel = parseInt(noteElement.getAttribute('data-channel')) || 0;
+                        
+                        // Only schedule notes that are about to play
+                        if (startTime >= currentTimeInBeats && startTime < currentTimeInBeats + 1) {
+                            const timeOffset = startTime - currentTimeInBeats;
+                            const frequency = noteToFrequency(noteName);
+                            
+                            // Schedule the note
+                            setTimeout(() => {
+                                playNote(frequency, velocity, duration, channel);
+                            }, timeOffset * (60000 / bpm));
+                        }
+                    } catch (error) {
+                        showError('Failed to schedule note', error);
+                    }
+                });
+            } catch (error) {
+                showError('Failed to schedule notes', error);
+            }
         }
 
         // Initialize piano keys
@@ -991,6 +1158,19 @@
                     key.style.top = (index * 20) + 'px';
                     key.setAttribute('data-note', note);
                     key.setAttribute('title', `Piano Key ${note}`);
+                    
+                    // Add click to play sound
+                    key.addEventListener('click', () => {
+                        try {
+                            if (initAudio()) {
+                                const frequency = noteToFrequency(note);
+                                playNote(frequency, currentVelocity, 0.5, currentChannel);
+                            }
+                        } catch (error) {
+                            showError('Failed to play piano key sound', error);
+                        }
+                    });
+                    
                     pianoKeys.appendChild(key);
                 });
             } catch (error) {
@@ -1023,11 +1203,15 @@
         // Play/Pause functionality
         function togglePlay() {
             try {
+                if (!initAudio()) return;
+                
                 isPlaying = !isPlaying;
                 
                 if (isPlaying) {
                     playIcon.style.display = 'none';
                     pauseIcon.style.display = 'block';
+                    playbackStartTime = audioContext.currentTime;
+                    playbackStartOffset = currentTime;
                     startPlayback();
                 } else {
                     playIcon.style.display = 'block';
@@ -1044,10 +1228,13 @@
             try {
                 const interval = 60000 / bpm / 4; // Quarter note interval in ms
                 playheadInterval = setInterval(() => {
-                    currentTime += 0.25; // Increment by quarter note
-                    updateTimeDisplay();
-                    movePlayhead();
-                }, interval);
+                    if (isPlaying) {
+                        currentTime = playbackStartOffset + (audioContext.currentTime - playbackStartTime) * (bpm / 60);
+                        updateTimeDisplay();
+                        movePlayhead();
+                        scheduleNotes();
+                    }
+                }, 50); // Update more frequently for smoother playback
             } catch (error) {
                 showError('Failed to start playback', error);
             }
@@ -1091,6 +1278,7 @@
                 pauseIcon.style.display = 'none';
                 stopPlayback();
                 currentTime = 0;
+                playbackStartOffset = 0;
                 updateTimeDisplay();
                 if (playhead) {
                     playhead.style.left = '0px';
@@ -1108,8 +1296,9 @@
                 if (newBpm >= 20 && newBpm <= 300) {
                     bpm = newBpm;
                     if (isPlaying) {
-                        stopPlayback();
-                        startPlayback();
+                        // Update playback timing
+                        playbackStartOffset = currentTime;
+                        playbackStartTime = audioContext.currentTime;
                     }
                 }
             } catch (error) {
@@ -1816,6 +2005,13 @@
                 if (alignBtn) {
                     alignBtn.addEventListener('click', alignNotesToGrid);
                 }
+                
+                // Try to initialize audio
+                setTimeout(() => {
+                    if (initAudio()) {
+                        console.log('Audio initialized successfully');
+                    }
+                }, 1000);
                 
                 console.log('MIDI Editor initialized successfully');
             } catch (error) {
