@@ -36,31 +36,20 @@ linear-gradient(#eee .1em, transparent .1em);
 background-size: 100% 1.2em;
         }
         
-        /* Sonic Timer Styles */
-        #sonic-timer {
-            width: fit-content;
-            height: fit-content;
-            display: inline-block;
+        /* Sonic 3 Timer Styles */
+        .sonic-timer-container {
             margin-bottom: 20px;
-        }
-        
-        #sonic-canvas {
-            image-rendering: pixelated;
-            image-rendering: -moz-crisp-edges;
-            image-rendering: crisp-edges;
-            display: block;
             border: 2px solid #333;
             border-radius: 8px;
+            background: #000;
+            padding: 10px;
         }
         
-        .timer {
-            font-size: 40px;
-            margin-bottom: 20px;
+        .sonic-timer-iframe {
+            border: none;
+            display: block;
         }
-        #stats {
-            font-size: 32px;
-            margin-bottom: 20px;
-        }
+        
         table {
             border-collapse: collapse;
             margin: 20px 0;
@@ -114,13 +103,221 @@ background-size: 100% 1.2em;
 </head>
 <body>
     <div>
-        <!-- Sonic 3 Timer -->
-        <div id="sonic-timer">
-            <canvas id="sonic-canvas" width="320" height="224"></canvas>
+        <!-- Sonic 3 Timer replacing the old timer and stats -->
+        <div class="sonic-timer-container">
+            <iframe id="sonicTimer" class="sonic-timer-iframe" 
+                    src="data:text/html;charset=utf-8,<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Sonic 3 Timer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: transparent; overflow: hidden; }
+        
+        %23sonic-timer {
+            width: fit-content;
+            height: fit-content;
+            display: inline-block;
+        }
+        
+        canvas {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id='sonic-timer'>
+        <canvas id='gameCanvas' width='320' height='224'></canvas>
+    </div>
+
+    <script>
+        (function() {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Get URL params for embedding
+            const params = new URLSearchParams(window.location.search);
+            let scale = parseInt(params.get('scale')) || 3;
+            let score = parseInt(params.get('score')) || 0;
+            let rings = parseInt(params.get('rings')) || 0;
+            let autostart = params.get('autostart') !== 'false';
+            
+            let startTime = Date.now();
+            let elapsedTime = parseInt(params.get('time')) * 1000 || 900000; // 15 minutes default
+            let isCountdown = elapsedTime > 0;
+            let timerInterval = null;
+            let isRunning = false;
+
+            // Set canvas size based on scale
+            canvas.style.width = (320 * scale) + 'px';
+            canvas.style.height = (224 * scale) + 'px';
+
+            // Sonic 3 font data
+            const fontData = {
+                '0': [0b00111100,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b00111100],
+                '1': [0b00011000,0b00111000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b01111110],
+                '2': [0b00111100,0b01100110,0b00000110,0b00001100,0b00011000,0b00110000,0b01100000,0b01111110],
+                '3': [0b00111100,0b01100110,0b00000110,0b00011100,0b00000110,0b00000110,0b01100110,0b00111100],
+                '4': [0b00001100,0b00011100,0b00111100,0b01101100,0b01111110,0b00001100,0b00001100,0b00001100],
+                '5': [0b01111110,0b01100000,0b01100000,0b01111100,0b00000110,0b00000110,0b01100110,0b00111100],
+                '6': [0b00111100,0b01100110,0b01100000,0b01111100,0b01100110,0b01100110,0b01100110,0b00111100],
+                '7': [0b01111110,0b00000110,0b00001100,0b00011000,0b00110000,0b00110000,0b00110000,0b00110000],
+                '8': [0b00111100,0b01100110,0b01100110,0b00111100,0b01100110,0b01100110,0b01100110,0b00111100],
+                '9': [0b00111100,0b01100110,0b01100110,0b01100110,0b00111110,0b00000110,0b01100110,0b00111100],
+                ':': [0b00000000,0b00000000,0b00011000,0b00011000,0b00000000,0b00011000,0b00011000,0b00000000],
+                'S': [0b00111100,0b01100110,0b01100000,0b00111100,0b00000110,0b00000110,0b01100110,0b00111100],
+                'C': [0b00111100,0b01100110,0b01100000,0b01100000,0b01100000,0b01100000,0b01100110,0b00111100],
+                'O': [0b00111100,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b00111100],
+                'R': [0b01111100,0b01100110,0b01100110,0b01111100,0b01111000,0b01101100,0b01100110,0b01100011],
+                'E': [0b01111110,0b01100000,0b01100000,0b01111100,0b01100000,0b01100000,0b01100000,0b01111110],
+                'T': [0b01111110,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000],
+                'I': [0b01111110,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b01111110],
+                'M': [0b01100011,0b01110111,0b01111111,0b01101011,0b01100011,0b01100011,0b01100011,0b01100011],
+                'N': [0b01100011,0b01110011,0b01111011,0b01101111,0b01100111,0b01100011,0b01100011,0b01100011],
+                'G': [0b00111100,0b01100110,0b01100000,0b01101110,0b01100110,0b01100110,0b01100110,0b00111100],
+                ' ': [0b00000000,0b00000000,0b00000000,0b00000000,0b00000000,0b00000000,0b00000000,0b00000000]
+            };
+
+            function drawChar(char, x, y, color = '%23FFFFFF') {
+                if (!fontData[char]) return;
+                const charData = fontData[char];
+                ctx.fillStyle = color;
+                for (let row = 0; row < 8; row++) {
+                    for (let col = 0; col < 8; col++) {
+                        if (charData[row] & (1 << (7 - col))) {
+                            ctx.fillRect(x + col, y + row, 1, 1);
+                        }
+                    }
+                }
+            }
+
+            function drawText(text, x, y, color = '%23FFFFFF') {
+                for (let i = 0; i < text.length; i++) {
+                    drawChar(text[i], x + (i * 8), y, color);
+                }
+            }
+
+            function formatTime(ms) {
+                const totalSec = Math.floor(ms / 1000);
+                const min = Math.floor(totalSec / 60);
+                const sec = totalSec % 60;
+                return `${min}:${sec.toString().padStart(2, '0')}`;
+            }
+
+            function draw() {
+                ctx.fillStyle = '%23000000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Add subtle background pattern for beauty
+                ctx.fillStyle = '%23001100';
+                for (let x = 0; x < canvas.width; x += 32) {
+                    for (let y = 0; y < canvas.height; y += 32) {
+                        ctx.fillRect(x, y, 1, 1);
+                        ctx.fillRect(x + 16, y + 16, 1, 1);
+                    }
+                }
+
+                // HUD elements - vertical layout with enhanced styling
+                drawText('SCORE', 16, 16, '%23FFD700');
+                drawText(score.toString().padStart(7, '0'), 16, 32, '%2300FF00');
+                
+                // TIME with countdown color change
+                let timeColor = '%2300FF00';
+                if (isCountdown && elapsedTime <= 10000) { // Last 10 seconds
+                    timeColor = elapsedTime <= 3000 ? '%23FF0000' : '%23FF8800'; // Red/Orange warning
+                }
+                drawText('TIME', 16, 56, '%23FFD700');
+                drawText(formatTime(elapsedTime), 16, 72, timeColor);
+                
+                drawText('RINGS', 16, 96, '%23FFD700');
+                drawText(rings.toString().padStart(3, '0'), 16, 112, '%2300FF00');
+
+                // Enhanced border with corner decorations
+                ctx.fillStyle = '%2300AA00';
+                ctx.fillRect(0, 0, canvas.width, 2);
+                ctx.fillRect(0, canvas.height - 2, canvas.width, 2);
+                ctx.fillRect(0, 0, 2, canvas.height);
+                ctx.fillRect(canvas.width - 2, 0, 2, canvas.height);
+                
+                // Corner decorations
+                ctx.fillStyle = '%23FFD700';
+                ctx.fillRect(2, 2, 4, 4);
+                ctx.fillRect(canvas.width - 6, 2, 4, 4);
+                ctx.fillRect(2, canvas.height - 6, 4, 4);
+                ctx.fillRect(canvas.width - 6, canvas.height - 6, 4, 4);
+                
+                // Subtle glow effect around text
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+                ctx.fillRect(14, 14, 200, 20);
+                ctx.fillRect(14, 54, 120, 20);
+                ctx.fillRect(14, 94, 140, 20);
+            }
+
+            function startTimer() {
+                if (!isRunning) {
+                    startTime = Date.now();
+                    timerInterval = setInterval(() => {
+                        const now = Date.now();
+                        const deltaTime = now - startTime;
+                        startTime = now;
+                        
+                        if (isCountdown) {
+                            // Countdown mode: decrease time
+                            elapsedTime -= deltaTime;
+                            if (elapsedTime <= 0) {
+                                elapsedTime = 0;
+                                clearInterval(timerInterval);
+                                isRunning = false;
+                                // Timer finished - could add callback here
+                            }
+                        } else {
+                            // Stopwatch mode: increase time
+                            elapsedTime += deltaTime;
+                        }
+                        draw();
+                    }, 16);
+                    isRunning = true;
+                }
+            }
+
+            // Global functions for external control
+            window.sonicTimer = {
+                start: startTimer,
+                pause: () => {
+                    if (isRunning) {
+                        clearInterval(timerInterval);
+                        isRunning = false;
+                    }
+                },
+                reset: () => {
+                    clearInterval(timerInterval);
+                    isRunning = false;
+                    elapsedTime = 0;
+                    draw();
+                },
+                setScore: (val) => { score = val; if (!isRunning) draw(); },
+                setRings: (val) => { rings = val; if (!isRunning) draw(); },
+                setTime: (val) => { elapsedTime = val * 1000; if (!isRunning) draw(); },
+                getTime: () => Math.floor(elapsedTime / 1000)
+            };
+
+            // Initialize
+            draw();
+            if (autostart) {
+                setTimeout(startTimer, 100);
+            }
+        })();
+    </script>
+</body>
+</html>" 
+                    width="960" height="672" frameborder="0"></iframe>
         </div>
         
-        <div class="timer" id="timer">Time remaining: 15:00</div>
-        <div id="stats">Score: 0 - Completed: 0</div>
         <div class="progress-bar-container">
             <div class="progress-bar" id="progress-bar"></div>
         </div>
@@ -131,142 +328,6 @@ background-size: 100% 1.2em;
     </div>
 	<script src="legacysudokusolver.js"></script>
     <script>
-        // Sonic Timer Integration
-        const sonicCanvas = document.getElementById('sonic-canvas');
-        const sonicCtx = sonicCanvas.getContext('2d');
-        
-        let sonicScale = 3;
-        let sonicTimerRunning = false;
-        let sonicTimerInterval = null;
-        let sonicStartTime = Date.now();
-        
-        // Set canvas size based on scale
-        sonicCanvas.style.width = (320 * sonicScale) + 'px';
-        sonicCanvas.style.height = (224 * sonicScale) + 'px';
-
-        // Sonic 3 font data
-        const fontData = {
-            '0': [0b00111100,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b00111100],
-            '1': [0b00011000,0b00111000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b01111110],
-            '2': [0b00111100,0b01100110,0b00000110,0b00001100,0b00011000,0b00110000,0b01100000,0b01111110],
-            '3': [0b00111100,0b01100110,0b00000110,0b00011100,0b00000110,0b00000110,0b01100110,0b00111100],
-            '4': [0b00001100,0b00011100,0b00111100,0b01101100,0b01111110,0b00001100,0b00001100,0b00001100],
-            '5': [0b01111110,0b01100000,0b01100000,0b01111100,0b00000110,0b00000110,0b01100110,0b00111100],
-            '6': [0b00111100,0b01100110,0b01100000,0b01111100,0b01100110,0b01100110,0b01100110,0b00111100],
-            '7': [0b01111110,0b00000110,0b00001100,0b00011000,0b00110000,0b00110000,0b00110000,0b00110000],
-            '8': [0b00111100,0b01100110,0b01100110,0b00111100,0b01100110,0b01100110,0b01100110,0b00111100],
-            '9': [0b00111100,0b01100110,0b01100110,0b01100110,0b00111110,0b00000110,0b01100110,0b00111100],
-            ':': [0b00000000,0b00000000,0b00011000,0b00011000,0b00000000,0b00011000,0b00011000,0b00000000],
-            'S': [0b00111100,0b01100110,0b01100000,0b00111100,0b00000110,0b00000110,0b01100110,0b00111100],
-            'C': [0b00111100,0b01100110,0b01100000,0b01100000,0b01100000,0b01100000,0b01100110,0b00111100],
-            'O': [0b00111100,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b01100110,0b00111100],
-            'R': [0b01111100,0b01100110,0b01100110,0b01111100,0b01111000,0b01101100,0b01100110,0b01100011],
-            'E': [0b01111110,0b01100000,0b01100000,0b01111100,0b01100000,0b01100000,0b01100000,0b01111110],
-            'T': [0b01111110,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000],
-            'I': [0b01111110,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b01111110],
-            'M': [0b01100011,0b01110111,0b01111111,0b01101011,0b01100011,0b01100011,0b01100011,0b01100011],
-            'N': [0b01100011,0b01110011,0b01111011,0b01101111,0b01100111,0b01100011,0b01100011,0b01100011],
-            'G': [0b00111100,0b01100110,0b01100000,0b01101110,0b01100110,0b01100110,0b01100110,0b00111100],
-            ' ': [0b00000000,0b00000000,0b00000000,0b00000000,0b00000000,0b00000000,0b00000000,0b00000000]
-        };
-
-        function drawChar(char, x, y, color = '#FFFFFF') {
-            if (!fontData[char]) return;
-            const charData = fontData[char];
-            sonicCtx.fillStyle = color;
-            for (let row = 0; row < 8; row++) {
-                for (let col = 0; col < 8; col++) {
-                    if (charData[row] & (1 << (7 - col))) {
-                        sonicCtx.fillRect(x + col, y + row, 1, 1);
-                    }
-                }
-            }
-        }
-
-        function drawText(text, x, y, color = '#FFFFFF') {
-            for (let i = 0; i < text.length; i++) {
-                drawChar(text[i], x + (i * 8), y, color);
-            }
-        }
-
-        function formatTime(ms) {
-            const totalSec = Math.floor(ms / 1000);
-            const min = Math.floor(totalSec / 60);
-            const sec = totalSec % 60;
-            return `${min}:${sec.toString().padStart(2, '0')}`;
-        }
-
-        function drawSonicTimer() {
-            sonicCtx.fillStyle = '#000000';
-            sonicCtx.fillRect(0, 0, sonicCanvas.width, sonicCanvas.height);
-
-            // Add subtle background pattern for beauty
-            sonicCtx.fillStyle = '#001100';
-            for (let x = 0; x < sonicCanvas.width; x += 32) {
-                for (let y = 0; y < sonicCanvas.height; y += 32) {
-                    sonicCtx.fillRect(x, y, 1, 1);
-                    sonicCtx.fillRect(x + 16, y + 16, 1, 1);
-                }
-            }
-
-            // Calculate remaining time in milliseconds for countdown
-            const remainingMs = timeRemaining * 1000;
-            
-            // HUD elements - vertical layout with enhanced styling
-            drawText('SCORE', 16, 16, '#FFD700');
-            drawText(score.toString().padStart(7, '0'), 16, 32, '#00FF00');
-            
-            // TIME with countdown color change
-            let timeColor = '#00FF00';
-            if (remainingMs <= 10000) { // Last 10 seconds
-                timeColor = remainingMs <= 3000 ? '#FF0000' : '#FF8800'; // Red/Orange warning
-            }
-            drawText('TIME', 16, 56, '#FFD700');
-            drawText(formatTime(remainingMs), 16, 72, timeColor);
-            
-            drawText('RINGS', 16, 96, '#FFD700');
-            drawText(sudokuscompleted.toString().padStart(3, '0'), 16, 112, '#00FF00');
-
-            // Enhanced border with corner decorations
-            sonicCtx.fillStyle = '#00AA00';
-            sonicCtx.fillRect(0, 0, sonicCanvas.width, 2);
-            sonicCtx.fillRect(0, sonicCanvas.height - 2, sonicCanvas.width, 2);
-            sonicCtx.fillRect(0, 0, 2, sonicCanvas.height);
-            sonicCtx.fillRect(sonicCanvas.width - 2, 0, 2, sonicCanvas.height);
-            
-            // Corner decorations
-            sonicCtx.fillStyle = '#FFD700';
-            sonicCtx.fillRect(2, 2, 4, 4);
-            sonicCtx.fillRect(sonicCanvas.width - 6, 2, 4, 4);
-            sonicCtx.fillRect(2, sonicCanvas.height - 6, 4, 4);
-            sonicCtx.fillRect(sonicCanvas.width - 6, sonicCanvas.height - 6, 4, 4);
-            
-            // Subtle glow effect around text
-            sonicCtx.fillStyle = 'rgba(0, 255, 0, 0.1)';
-            sonicCtx.fillRect(14, 14, 200, 20);
-            sonicCtx.fillRect(14, 54, 120, 20);
-            sonicCtx.fillRect(14, 94, 140, 20);
-        }
-
-        function startSonicTimer() {
-            if (!sonicTimerRunning) {
-                sonicTimerRunning = true;
-                sonicTimerInterval = setInterval(() => {
-                    if (!paused) {
-                        drawSonicTimer();
-                    }
-                }, 16); // ~60fps
-            }
-        }
-
-        function stopSonicTimer() {
-            if (sonicTimerRunning) {
-                clearInterval(sonicTimerInterval);
-                sonicTimerRunning = false;
-            }
-        }
-
-        // Original Sudoku Game Code
         let solution;
         let givens = 50; //CHANGE THIS TO 50 IN FINAL VERSION OK
         let score = 0;
@@ -385,7 +446,6 @@ background-size: 100% 1.2em;
             displayPuzzle(puzzle);
             if (lastcompletedtimestamp == 900) {
                 startTimer();
-                startSonicTimer(); // Start the Sonic timer display
             }
         }
 
@@ -393,16 +453,31 @@ background-size: 100% 1.2em;
         
         function startTimer() {
             timeRemaining = 900; // Reset to 15 minutes in seconds
-            document.getElementById('timer').innerText = `Time remaining: 15:00`;
+            
+            // Update Sonic timer
+            const sonicTimerWindow = document.getElementById('sonicTimer').contentWindow;
+            if (sonicTimerWindow && sonicTimerWindow.sonicTimer) {
+                sonicTimerWindow.sonicTimer.setTime(900);
+                sonicTimerWindow.sonicTimer.setScore(score);
+                sonicTimerWindow.sonicTimer.setRings(sudokuscompleted);
+                sonicTimerWindow.sonicTimer.start();
+            }
 
             clearInterval(timerInterval);
             timerInterval = setInterval(() => {
                 if (paused) return; // If paused, do not update time
 
                 timeRemaining--;
-                const minutes = Math.floor(timeRemaining / 60);
-                const seconds = timeRemaining % 60;
-                document.getElementById('timer').innerText = `Time remaining: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                
+                // Update Sonic timer
+                const sonicTimerWindow = document.getElementById('sonicTimer').contentWindow;
+                if (sonicTimerWindow && sonicTimerWindow.sonicTimer) {
+                    const currentTime = sonicTimerWindow.sonicTimer.getTime();
+                    if (currentTime !== timeRemaining) {
+                        sonicTimerWindow.sonicTimer.setTime(timeRemaining);
+                    }
+                }
+                
 		    hue = timeRemaining / 900 * 175;
 		    document.getElementById('progress-bar').style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
 
@@ -433,16 +508,32 @@ background-size: 100% 1.2em;
                     }
                     score += Math.round((1e6 / lastcompletedtimestamp) * (digitsleft / 31));
                     clearInterval(timerInterval);
-                    stopSonicTimer(); // Stop the Sonic timer
+                    
+                    // Update Sonic timer
+                    const sonicTimerWindow = document.getElementById('sonicTimer').contentWindow;
+                    if (sonicTimerWindow && sonicTimerWindow.sonicTimer) {
+                        sonicTimerWindow.sonicTimer.setScore(score);
+                        sonicTimerWindow.sonicTimer.pause();
+                    }
+                    
                     alert(`Out of time! Score: ${score}`);
-        document.getElementById('stats').innerText = `Score: ${String(score)} - Completed: ${String(sudokuscompleted)}`;
-		
                 }
             }, 1000);
         }
 
 function togglePause() {
             paused = !paused;
+            
+            // Control Sonic timer
+            const sonicTimerWindow = document.getElementById('sonicTimer').contentWindow;
+            if (sonicTimerWindow && sonicTimerWindow.sonicTimer) {
+                if (paused) {
+                    sonicTimerWindow.sonicTimer.pause();
+                } else {
+                    sonicTimerWindow.sonicTimer.start();
+                }
+            }
+            
             if (paused) {
                 document.getElementById('pauseButton').innerText = 'Resume'; // Change button text to Resume
             } else {
@@ -490,7 +581,14 @@ function togglePause() {
         score += Math.round(1e6 / (lastcompletedtimestamp - timeRemaining));
         sudokuscompleted++;
         lastcompletedtimestamp = timeRemaining;
-        document.getElementById('stats').innerText = `Score: ${String(score)} - Completed: ${String(sudokuscompleted)}`;
+        
+        // Update Sonic timer
+        const sonicTimerWindow = document.getElementById('sonicTimer').contentWindow;
+        if (sonicTimerWindow && sonicTimerWindow.sonicTimer) {
+            sonicTimerWindow.sonicTimer.setScore(score);
+            sonicTimerWindow.sonicTimer.setRings(sudokuscompleted);
+        }
+        
         startGame();
     }
 }
@@ -508,21 +606,19 @@ function togglePause() {
         
         randomCell.value = solution[row][col];  // Fill the hint in the empty cell
 	timeRemaining -= 20; //HERE!!! LOOK OVER THERE! LOOK! 20 SECONDS EXTRA FOR HINT! THIS PREVENTS HINT ABUSE!!!
+	
+	// Update Sonic timer
+        const sonicTimerWindow = document.getElementById('sonicTimer').contentWindow;
+        if (sonicTimerWindow && sonicTimerWindow.sonicTimer) {
+            sonicTimerWindow.sonicTimer.setTime(timeRemaining);
+        }
     }
 }
 
 
         document.addEventListener('DOMContentLoaded', (event) => {
-    // Initialize Sonic timer display
-    drawSonicTimer();
     startGame();
 });
-
-        // Expose global API for external control (optional)
-        window.sonicTimer = {
-            updateScore: (val) => { score = val; if (!paused) drawSonicTimer(); },
-            updateRings: (val) => { sudokuscompleted = val; if (!paused) drawSonicTimer(); }
-        };
     </script>
 </body>
 </html>
