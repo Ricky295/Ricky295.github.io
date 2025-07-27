@@ -164,7 +164,7 @@
         <div class="btn btn-clear" id="clear">Clear</div>
         <div class="btn btn-analyze" id="analyze">Analyze</div>
         <div class="btn" id="showCandidates">Show Candidates</div>
-        <div class="btn" id="pastePuzzle">Paste Puzzle String</div> <!-- Updated Button Text -->
+        <div class="btn" id="pastePuzzle">Paste Puzzle String</div>
         <div class="btn" id="findRedundant">Find Redundant</div>
         <div class="btn btn-export" id="exportPlay">Export to Play</div>
         <div class="btn btn-export" id="copyString">Copy String</div>
@@ -239,7 +239,9 @@
         }
         return true;
       }
-      getCandidates(row, col) {
+      
+      // Helper function to check if a number is a candidate based on constraints only
+      getPossibleCandidates(row, col) {
         if (this.grid[row][col] !== 0) return [];
         const candidates = [];
         for (let num = 1; num <= 4; num++) {
@@ -249,19 +251,35 @@
         }
         return candidates;
       }
+      
+      // Function to get actual candidates from all solutions
+      getActualCandidatesFromSolutions(row, col, solutions) {
+        if (this.grid[row][col] !== 0 || solutions.length === 0) return [];
+        
+        const candidateSet = new Set();
+        for (const solution of solutions) {
+            candidateSet.add(solution[row][col]);
+        }
+        // Return sorted array of unique candidates found in solutions
+        return Array.from(candidateSet).sort((a, b) => a - b);
+      }
     }
+    
     // App state
     let grid = Array(8).fill().map(() => Array(8).fill(0));
     let selectedCell = null;
     let showingCandidates = false;
     let redundantCells = new Set();
     const solver = new SimpleSolver();
+    let lastAnalysisSolutions = []; // Store solutions from last analysis
+    
     // Initialize
     function init() {
       renderTable();
       setupEventListeners();
       updateStatus();
     }
+    
     function renderTable() {
       const table = document.getElementById('puzzleTable');
       let html = '';
@@ -289,6 +307,7 @@
       table.innerHTML = html;
       setupCellListeners();
     }
+    
     function setupCellListeners() {
       document.querySelectorAll('.cell-div').forEach(cell => {
         cell.addEventListener('click', function() {
@@ -300,6 +319,7 @@
         });
       });
     }
+    
     function setupEventListeners() {
       // Numpad
       document.querySelectorAll('.numpad .btn').forEach(btn => {
@@ -329,7 +349,7 @@
       // Show candidates
       document.getElementById('showCandidates').addEventListener('click', toggleCandidates);
       // Paste Puzzle String
-      document.getElementById('pastePuzzle').addEventListener('click', pasteString); // Added Event Listener
+      document.getElementById('pastePuzzle').addEventListener('click', pasteString);
       // Find redundant
       document.getElementById('findRedundant').addEventListener('click', findRedundant);
       // Export
@@ -339,6 +359,7 @@
       document.getElementById('clearAll').addEventListener('click', function() {
         grid = Array(8).fill().map(() => Array(8).fill(0));
         redundantCells.clear();
+        lastAnalysisSolutions = [];
         renderTable();
         updateStatus();
       });
@@ -359,12 +380,15 @@
         }
       });
     }
+    
     function updateStatus() {
       const givens = grid.flat().filter(x => x !== 0).length;
       document.getElementById('givens').textContent = givens;
     }
+    
     function analyze() {
       const solutions = solver.solve(grid);
+      lastAnalysisSolutions = solutions; // Store solutions for candidate display
       const count = solutions.length >= solver.maxSolutions ? `${solver.maxSolutions}+` : solutions.length;
       document.getElementById('solutions').textContent = count;
       const status = document.getElementById('status');
@@ -379,22 +403,59 @@
         status.className = 'status multiple';
       }
     }
+    
     function toggleCandidates() {
       showingCandidates = !showingCandidates;
       const btn = document.getElementById('showCandidates');
       if (showingCandidates) {
-        solver.grid = grid.map(row => [...row]);
+        // Use the solutions from the last analysis if available
+        let solutionsToUse = lastAnalysisSolutions;
+        let solutionsCount = solutionsToUse.length;
+        
+        // If no previous analysis or too many solutions, re-analyze
+        if (solutionsToUse.length === 0 || solutionsCount >= solver.maxSolutions) {
+            solutionsToUse = solver.solve(grid);
+            solutionsCount = solutionsToUse.length;
+        }
+        
+        solver.grid = grid.map(row => [...row]); // Update solver's grid reference
+        
         document.querySelectorAll('.cell-div').forEach(cell => {
           const row = parseInt(cell.dataset.row);
           const col = parseInt(cell.dataset.col);
           if (grid[row][col] === 0) {
-            const candidates = solver.getCandidates(row, col);
             const candidatesDiv = cell.querySelector('.candidates');
             candidatesDiv.style.display = 'grid';
-            candidatesDiv.querySelectorAll('.candidate').forEach(candEl => {
-              const value = parseInt(candEl.dataset.value);
-              candEl.textContent = candidates.includes(value) ? value : '';
-            });
+            
+            if (solutionsCount >= solver.maxSolutions) {
+                // Too many solutions, show possible candidates based on constraints only
+                const possibleCandidates = solver.getPossibleCandidates(row, col);
+                candidatesDiv.querySelectorAll('.candidate').forEach(candEl => {
+                    const value = parseInt(candEl.dataset.value);
+                    candEl.textContent = possibleCandidates.includes(value) ? value : '';
+                    candEl.style.color = '#666'; // Gray color for possible candidates
+                });
+            } else if (solutionsCount === 0) {
+                // No solutions, show possible candidates based on constraints only
+                const possibleCandidates = solver.getPossibleCandidates(row, col);
+                candidatesDiv.querySelectorAll('.candidate').forEach(candEl => {
+                    const value = parseInt(candEl.dataset.value);
+                    candEl.textContent = possibleCandidates.includes(value) ? value : '';
+                    candEl.style.color = '#666';
+                });
+            } else {
+                // Valid number of solutions, show actual candidates from solutions
+                const actualCandidates = solver.getActualCandidatesFromSolutions(row, col, solutionsToUse);
+                candidatesDiv.querySelectorAll('.candidate').forEach(candEl => {
+                    const value = parseInt(candEl.dataset.value);
+                    if (actualCandidates.includes(value)) {
+                        candEl.textContent = value;
+                        candEl.style.color = '#eeeeee'; // Normal color for actual candidates
+                    } else {
+                        candEl.textContent = '';
+                    }
+                });
+            }
           }
         });
         btn.textContent = 'Hide Candidates';
@@ -406,7 +467,7 @@
       }
     }
 
-    // New pasteString function
+    // Updated pasteString function
     function pasteString() {
       try {
         const string = prompt("Insert the 64-character puzzle string here:");
@@ -424,9 +485,9 @@
             }
         }
 
-
-        // Clear previous redundant cells
+        // Clear previous redundant cells and cached solutions
         redundantCells.clear();
+        lastAnalysisSolutions = [];
 
         // Update the grid
         for (let i = 0; i < 64; i++) {
@@ -451,7 +512,6 @@
          console.error("Paste String Error:", error);
       }
     }
-
 
     function findRedundant() {
       const solutions = solver.solve(grid);
@@ -483,11 +543,13 @@
         document.getElementById('status').className = 'status none';
       }
     }
+    
     function exportToPlay() {
       const puzzleString = grid.flat().join('');
       const url = `duodokuplay.html?puzzle=${puzzleString}&zoom=50`;
       window.open(url, '_blank');
     }
+    
     function copyString() {
       const puzzleString = grid.flat().join('');
       navigator.clipboard.writeText(puzzleString).then(() => {
@@ -499,6 +561,7 @@
         document.getElementById('status').className = 'status none';
       });
     }
+    
     init();
   </script>
 </body>
