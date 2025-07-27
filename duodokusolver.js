@@ -92,7 +92,6 @@ class DuoDoKuSolver {
         if (r === 8) {
             if (this.checkSolution(sol)) {
                 this.solutionCount++;
-                this.displayPuzzle(sol);
                 this.solutions.push(JSON.parse(JSON.stringify(sol))); // Store the solution
                 return puz; // Return the puzzle after the first solution is found
             }
