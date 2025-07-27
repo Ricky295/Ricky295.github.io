@@ -40,6 +40,8 @@
         .cell.candidate-mode{background:rgba(139,92,246,0.4)!important}
         .cell.related{background:rgba(255,255,255,0.1)!important}
         .cell.conflict{background:rgba(239,68,68,0.8)!important}
+        /* New CSS class for highlighting cells with the same value as the selected cell */
+        .cell.highlighted-value { background: rgba(96, 165, 250, 0.4) !important; color: #bfdbfe; font-weight: bold; }
         .candidates{font-size:8px;position:absolute;top:2px;left:2px;color:#fbbf24;line-height:1}
         .keypad{position:fixed;bottom:20px;right:20px;background:rgba(0,0,0,0.8);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:12px;backdrop-filter:blur(20px);z-index:1000}
         .keypad-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:4px 8px;background:rgba(255,255,255,0.1);border-radius:6px;cursor:grab}
@@ -76,7 +78,6 @@
             <h1>3D Sudoku</h1>
             <div class="timer">⏱️ <span id="timer">00:00</span></div>
         </div>
-        
         <div class="controls">
             <button class="btn primary" onclick="newGame()">New Game</button>
             <button class="btn secondary active" id="candidateBtn" onclick="toggleCandidateMode()">Candidate Mode</button>
@@ -87,12 +88,9 @@
                 <input type="range" id="clues" min="10" max="50" value="25" class="slider">
             </div>
         </div>
-        
         <div class="mode-indicator" id="modeIndicator">🎯 Mode: Candidate Entry</div>
         <div class="hint-display" id="hintDisplay"></div>
-        
         <div class="board-container" id="board-container"></div>
-        
         <div class="keypad" id="floatingKeypad">
             <div class="keypad-header" id="keypadHeader">
                 <span class="keypad-title">Keypad</span>
@@ -107,13 +105,11 @@
                 <div class="num-btn clear" onclick="selectNumber(0)">✕</div>
             </div>
         </div>
-        
         <div class="stats">
             <div class="stat"><div>Filled</div><div id="filled">0/125</div></div>
             <div class="stat"><div>Hints</div><div id="hints">0</div></div>
         </div>
     </div>
-    
     <div id="winModal" class="modal">
         <div class="modal-content">
             <h2>🎉 Congratulations!</h2>
@@ -122,11 +118,9 @@
             <button class="btn primary" onclick="closeModal()">New Game</button>
         </div>
     </div>
-
     <script>
         const S=5,V=[1,2,3,4,5];
         let b=[],sol=[],cand={},sel=null,start=null,timer=null,candMode=true,hints=0,won=false,keyMin=false,drag=false,dragOff={x:0,y:0};
-        
         function makeBoard(){return Array(S).fill().map(()=>Array(S).fill().map(()=>Array(S).fill(0)))}
         function copyBoard(board){return board.map(l=>l.map(r=>[...r]))}
         function getRelated(x,y,z){
@@ -180,13 +174,11 @@
             const s=genSol(),p=copyBoard(s),all=[];
             for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++)all.push([x,y,z]);
             shuffle(all);
-            
             let attempts=0,maxAttempts=Math.min(all.length,125-targetClues+20);
             for(const[x,y,z] of all){
                 if(attempts++>=maxAttempts)break;
                 const filled=all.reduce((c,[tx,ty,tz])=>c+(p[tz][ty][tx]!==0?1:0),0);
                 if(filled<=targetClues)break;
-                
                 const orig=p[z][y][x];
                 if(orig===0)continue;
                 p[z][y][x]=0;
@@ -196,7 +188,6 @@
                     p[z][y][x]=orig;
                 }
             }
-            
             return{puzzle:p,solution:s};
         }
         function shuffle(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]}}
@@ -294,10 +285,19 @@
             }
         }
         function updateBoard(){
+            // --- Modification starts here ---
+            // Clear previous highlights and related highlights
+            document.querySelectorAll('.cell').forEach(c => {
+                c.classList.remove('related', 'highlighted-value');
+            });
+
+            // Update cell content and base states
             const cells=document.querySelectorAll('.cell');
             cells.forEach(cell=>{
                 const x=+cell.dataset.x,y=+cell.dataset.y,z=+cell.dataset.z,val=b[z][y][x];
-                cell.className='cell';cell.innerHTML='';
+                // Reset class and content
+                cell.className='cell';
+                cell.innerHTML='';
                 if(val!==0){
                     cell.textContent=val;
                     cell.classList.add(sol[z][y][x]===val?'completed':'error');
@@ -305,16 +305,42 @@
                     const userCand=getCand(x,y,z);
                     if(userCand.length>0)cell.innerHTML=`<div class="candidates">${userCand.join('')}</div>`;
                 }
-                if(sel&&sel.x===x&&sel.y===y&&sel.z===z){
-                    cell.classList.add(candMode&&val===0?'candidate-mode':'selected');
-                    if(!candMode||val!==0){
-                        getRelated(x,y,z).forEach(([rx,ry,rz])=>{
-                            const rc=document.querySelector(`[data-x="${rx}"][data-y="${ry}"][data-z="${rz}"]`);
-                            if(rc)rc.classList.add('related');
-                        });
-                    }
-                }
             });
+
+            // Apply selection-based states (related, selected, candidate-mode)
+            if(sel){
+                const{x,y,z}=sel;
+                const selectedVal = b[z][y][x]; // Get the value of the selected cell
+                const selectedCell = document.querySelector(`[data-x="${x}"][data-y="${y}"][data-z="${z}"]`);
+
+                // --- Highlight cells with the same value as the selected cell ---
+                if(selectedVal !== 0) {
+                    document.querySelectorAll('.cell').forEach(cell => {
+                        const cx = +cell.dataset.x, cy = +cell.dataset.y, cz = +cell.dataset.z;
+                        if (b[cz][cy][cx] === selectedVal) {
+                            cell.classList.add('highlighted-value');
+                        }
+                    });
+                }
+
+                // Apply selected/candidate-mode classes to the selected cell itself
+                if(selectedCell) {
+                     selectedCell.classList.add(candMode && selectedVal === 0 ? 'candidate-mode' : 'selected');
+                }
+
+                // Highlight related cells if in number mode or selected cell is empty
+                 if(!candMode || selectedVal === 0){
+                    getRelated(x,y,z).forEach(([rx,ry,rz])=>{
+                        const rc=document.querySelector(`[data-x="${rx}"][data-y="${ry}"][data-z="${rz}"]`);
+                        // Only add 'related' if it's not already highlighted by value
+                        if(rc && !rc.classList.contains('highlighted-value')) {
+                             rc.classList.add('related');
+                        }
+                    });
+                }
+            }
+            // --- Modification ends here ---
+
             updateStats();checkWin();
         }
         function selectCell(x,y,z){
