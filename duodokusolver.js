@@ -13,9 +13,14 @@ class DuoDoKuSolver {
             [[6, 4], [6, 5], [6, 6], [6, 7], [7, 4], [7, 5], [7, 6], [7, 7]]
         ];
 
+        this.reset();
+    }
+
+    reset() {
         this.solutionCount = 0;
         this.setOfSolutions = new Set();
-        this.solutions = [];  // To store the solutions
+        this.solutions = [];
+        this.maxSolutions = 3; // Stop after finding this many solutions for efficiency
     }
 
     block(r, c) {
@@ -80,6 +85,7 @@ class DuoDoKuSolver {
     }
 
     enterPuzzle(input) {
+        this.reset(); // Reset state before solving
         for (let r = 0; r <= 7; r++) {
             for (let c = 0; c <= 7; c++) {
                 this.mPuzzle[r][c] = input[r][c];
@@ -89,11 +95,16 @@ class DuoDoKuSolver {
     }
 
     bruteForcePuzzle(r, c, puz, sol) {
+        // Stop if we've found enough solutions
+        if (this.solutionCount >= this.maxSolutions) {
+            return;
+        }
+
         if (r === 8) {
             if (this.checkSolution(sol)) {
                 this.solutionCount++;
                 this.solutions.push(JSON.parse(JSON.stringify(sol))); // Store the solution
-                return puz; // Return the puzzle after the first solution is found
+                // Don't return here - continue searching for more solutions
             }
             return;
         }
@@ -102,11 +113,9 @@ class DuoDoKuSolver {
             if (this.isNotDuplicated(r, c, puz[r][c], sol)) {
                 sol[r][c] = puz[r][c];
                 if (c !== 7) {
-                    const result = this.bruteForcePuzzle(r, c + 1, puz, sol);
-                    if (result) return result; // Propagate the result back up if a solution is found
+                    this.bruteForcePuzzle(r, c + 1, puz, sol);
                 } else {
-                    const result = this.bruteForcePuzzle(r + 1, 0, puz, sol);
-                    if (result) return result; // Propagate the result back up if a solution is found
+                    this.bruteForcePuzzle(r + 1, 0, puz, sol);
                 }
                 sol[r][c] = 0;
             }
@@ -115,13 +124,16 @@ class DuoDoKuSolver {
                 if (this.isNotDuplicated(r, c, n, sol)) {
                     sol[r][c] = n;
                     if (c !== 7) {
-                        const result = this.bruteForcePuzzle(r, c + 1, puz, sol);
-                        if (result) return result; // Propagate the result back up if a solution is found
+                        this.bruteForcePuzzle(r, c + 1, puz, sol);
                     } else {
-                        const result = this.bruteForcePuzzle(r + 1, 0, puz, sol);
-                        if (result) return result; // Propagate the result back up if a solution is found
+                        this.bruteForcePuzzle(r + 1, 0, puz, sol);
                     }
                     sol[r][c] = 0;
+                    
+                    // Early exit if we've found enough solutions
+                    if (this.solutionCount >= this.maxSolutions) {
+                        return;
+                    }
                 }
             }
         }
@@ -155,20 +167,14 @@ class DuoDoKuSolver {
     getSolutions() {
         return this.solutions;
     }
+
+    // Get the number of solutions found
+    getSolutionCount() {
+        return this.solutionCount;
+    }
+
+    // Check if puzzle has a unique solution
+    hasUniqueSolution() {
+        return this.solutionCount === 1;
+    }
 }
-
-// Example usage:
-
-const solver = new DuoDoKuSolver();
-solver.enterPuzzle([
-    [0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0]
-]);
-
-console.log(solver.getSolutions());  // Get all the solutions
