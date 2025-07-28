@@ -141,7 +141,7 @@
   </style>
 </head>
 <body>
-  <h1>DuoDoKu Constructor</h1>
+  <h1>Sufufu Constructor</h1>
   <div class="info-box">
     <strong>Rules:</strong> Use digits 1–4 exactly twice per row, column, and 2×4 box. No same digits may touch orthogonally.
   </div>
@@ -151,6 +151,7 @@
       <div class="info-box">
         <div>Givens: <span id="givens">0</span>/64</div>
         <div>Solutions: <span id="solutions">Unknown</span></div>
+        <div>Difficulty: <span id="difficulty">Unknown</span></div> <!-- Changed from "Coming soon" -->
       </div>
     </div>
     <div class="controls">
@@ -173,8 +174,10 @@
       <div id="status" class="status"></div>
     </div>
   </div>
+  <!-- Ensure duodokudifficulties.js is loaded before this script -->
+  <script src="duodokudifficulties.js"></script>
   <script>
-    // Simplified DuoDoKu Solver
+    // Simplified DuoDoKu Solver (for counting solutions)
     class SimpleSolver {
       constructor() {
         this.solutions = [];
@@ -239,7 +242,6 @@
         }
         return true;
       }
-      
       // Helper function to check if a number is a candidate based on constraints only
       getPossibleCandidates(row, col) {
         if (this.grid[row][col] !== 0) return [];
@@ -251,11 +253,9 @@
         }
         return candidates;
       }
-      
       // Function to get actual candidates from all solutions
       getActualCandidatesFromSolutions(row, col, solutions) {
         if (this.grid[row][col] !== 0 || solutions.length === 0) return [];
-        
         const candidateSet = new Set();
         for (const solution of solutions) {
             candidateSet.add(solution[row][col]);
@@ -264,22 +264,57 @@
         return Array.from(candidateSet).sort((a, b) => a - b);
       }
     }
-    
+
+    // --- Helper Functions for Candidate Initialization (Matching duodokudifficulties.js) ---
+    // Block definitions matching duodokudifficulties.js
+    const blocks = [
+        [[0, 0], [0, 1], [0, 2], [0, 3], [1, 0], [1, 1], [1, 2], [1, 3]], // block0
+        [[0, 4], [0, 5], [0, 6], [0, 7], [1, 4], [1, 5], [1, 6], [1, 7]], // block1
+        [[2, 0], [2, 1], [2, 2], [2, 3], [3, 0], [3, 1], [3, 2], [3, 3]], // block2
+        [[2, 4], [2, 5], [2, 6], [2, 7], [3, 4], [3, 5], [3, 6], [3, 7]], // block3
+        [[4, 0], [4, 1], [4, 2], [4, 3], [5, 0], [5, 1], [5, 2], [5, 3]], // block4
+        [[4, 4], [4, 5], [4, 6], [4, 7], [5, 4], [5, 5], [5, 6], [5, 7]], // block5
+        [[6, 0], [6, 1], [6, 2], [6, 3], [7, 0], [7, 1], [7, 2], [7, 3]], // block6
+        [[6, 4], [6, 5], [6, 6], [6, 7], [7, 4], [7, 5], [7, 6], [7, 7]]  // block7
+    ];
+    function rG(b, j) {
+        return blocks[b][j][0];
+    }
+    function cG(b, j) {
+        return blocks[b][j][1];
+    }
+
+    // Initialize candidate sets for all cells (used by duodokudifficulties.js)
+    function initializeCandidates(grid) {
+        const ps = Array(8).fill().map(() => Array(8).fill().map(() => new Set()));
+        // Initialize full candidate sets for empty cells
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                if (grid[r][c] === 0) {
+                    ps[r][c] = new Set([1, 2, 3, 4]);
+                }
+            }
+        }
+        return ps;
+    }
+
+
     // App state
     let grid = Array(8).fill().map(() => Array(8).fill(0));
     let selectedCell = null;
     let showingCandidates = false;
     let redundantCells = new Set();
-    const solver = new SimpleSolver();
+    const solver = new SimpleSolver(); // For solution counting
+    const difficultySolver = new duodokudifficulties(); // For difficulty rating
     let lastAnalysisSolutions = []; // Store solutions from last analysis
-    
+
     // Initialize
     function init() {
       renderTable();
       setupEventListeners();
       updateStatus();
     }
-    
+
     function renderTable() {
       const table = document.getElementById('puzzleTable');
       let html = '';
@@ -290,7 +325,7 @@
           const isRedundant = redundantCells.has(`${row}-${col}`);
           html += `
             <td>
-              <div class="cell-div${isRedundant ? ' redundant' : ''}" 
+              <div class="cell-div${isRedundant ? ' redundant' : ''}"
                    data-row="${row}" data-col="${col}">
                 ${value || ''}
                 <div class="candidates" style="display: none">
@@ -307,7 +342,7 @@
       table.innerHTML = html;
       setupCellListeners();
     }
-    
+
     function setupCellListeners() {
       document.querySelectorAll('.cell-div').forEach(cell => {
         cell.addEventListener('click', function() {
@@ -319,7 +354,7 @@
         });
       });
     }
-    
+
     function setupEventListeners() {
       // Numpad
       document.querySelectorAll('.numpad .btn').forEach(btn => {
@@ -362,6 +397,8 @@
         lastAnalysisSolutions = [];
         renderTable();
         updateStatus();
+        // Reset difficulty display
+        document.getElementById('difficulty').textContent = 'Unknown';
       });
       // Keyboard
       document.addEventListener('keydown', function(e) {
@@ -380,30 +417,65 @@
         }
       });
     }
-    
+
     function updateStatus() {
       const givens = grid.flat().filter(x => x !== 0).length;
       document.getElementById('givens').textContent = givens;
     }
-    
+
     function analyze() {
-      const solutions = solver.solve(grid);
-      lastAnalysisSolutions = solutions; // Store solutions for candidate display
-      const count = solutions.length >= solver.maxSolutions ? `${solver.maxSolutions}+` : solutions.length;
-      document.getElementById('solutions').textContent = count;
-      const status = document.getElementById('status');
-      if (solutions.length === 0) {
-        status.textContent = 'No valid solutions';
-        status.className = 'status none';
-      } else if (solutions.length === 1) {
-        status.textContent = 'Unique solution!';
-        status.className = 'status unique';
-      } else {
-        status.textContent = `Multiple solutions (${count})`;
-        status.className = 'status multiple';
-      }
+        // 1. Count solutions using SimpleSolver
+        const solutions = solver.solve(grid);
+        lastAnalysisSolutions = solutions; // Store solutions for candidate display
+        const count = solutions.length >= solver.maxSolutions ? `${solver.maxSolutions}+` : solutions.length;
+        document.getElementById('solutions').textContent = count;
+
+        const status = document.getElementById('status');
+        if (solutions.length === 0) {
+            status.textContent = 'No valid solutions';
+            status.className = 'status none';
+            document.getElementById('difficulty').textContent = 'None'; // Or 'Unsolvable'?
+        } else if (solutions.length === 1) {
+            status.textContent = 'Unique solution!';
+            status.className = 'status unique';
+
+            // 2. Calculate difficulty using duodokudifficulties.js if solution is unique
+            try {
+                // Deep copy the grid for the difficulty solver to modify
+                const gridCopy = grid.map(row => [...row]);
+                // Initialize candidate sets (ps) for the copy
+                const candidatesCopy = initializeCandidates(gridCopy);
+                // Refresh candidates based on initial grid state (like orthogonality)
+                difficultySolver.refreshCandidates(gridCopy, candidatesCopy);
+
+                // Solve and get difficulty rating (this modifies gridCopy and candidatesCopy)
+                const difficultyRating = difficultySolver.solve(gridCopy, candidatesCopy);
+
+                // Map the numeric rating to text
+                const difficultyMap = {
+                    1: "Easy",
+                    2: "Medium",
+                    3: "Hard",
+                    4: "Unfair" // Or could be "Requires Guessing" etc.
+                };
+                const difficultyText = difficultyMap[difficultyRating] || "Unknown";
+                document.getElementById('difficulty').textContent = difficultyText;
+
+            } catch (err) {
+                console.error("Error calculating difficulty:", err);
+                document.getElementById('difficulty').textContent = 'Error';
+                status.textContent = 'Error during difficulty calculation';
+                status.className = 'status none';
+            }
+
+        } else {
+            status.textContent = `Multiple solutions (${count})`;
+            status.className = 'status multiple';
+            document.getElementById('difficulty').textContent = 'Multiple Solutions'; // Indicate issue
+        }
     }
-    
+
+
     function toggleCandidates() {
       showingCandidates = !showingCandidates;
       const btn = document.getElementById('showCandidates');
@@ -411,22 +483,18 @@
         // Use the solutions from the last analysis if available
         let solutionsToUse = lastAnalysisSolutions;
         let solutionsCount = solutionsToUse.length;
-        
         // If no previous analysis or too many solutions, re-analyze
         if (solutionsToUse.length === 0 || solutionsCount >= solver.maxSolutions) {
             solutionsToUse = solver.solve(grid);
             solutionsCount = solutionsToUse.length;
         }
-        
         solver.grid = grid.map(row => [...row]); // Update solver's grid reference
-        
         document.querySelectorAll('.cell-div').forEach(cell => {
           const row = parseInt(cell.dataset.row);
           const col = parseInt(cell.dataset.col);
           if (grid[row][col] === 0) {
             const candidatesDiv = cell.querySelector('.candidates');
             candidatesDiv.style.display = 'grid';
-            
             if (solutionsCount >= solver.maxSolutions) {
                 // Too many solutions, show possible candidates based on constraints only
                 const possibleCandidates = solver.getPossibleCandidates(row, col);
@@ -472,11 +540,9 @@
       try {
         const string = prompt("Insert the 64-character puzzle string here:");
         if (string === null) return; // User cancelled
-
         if (string.length !== 64) {
            throw new Error("Puzzle string must be exactly 64 characters long.");
         }
-
         // Validate characters (digits 1-4 or 0/'.' for empty)
         for (let i = 0; i < string.length; i++) {
             const char = string[i];
@@ -484,11 +550,9 @@
                  throw new Error(`Invalid character '${char}' at position ${i + 1}. Only digits 0, 1, 2, 3, 4, or '.' are allowed.`);
             }
         }
-
         // Clear previous redundant cells and cached solutions
         redundantCells.clear();
         lastAnalysisSolutions = [];
-
         // Update the grid
         for (let i = 0; i < 64; i++) {
             const row = Math.floor(i / 8);
@@ -497,16 +561,14 @@
             // Convert '.' to 0 for empty cells, otherwise parse the digit
             grid[row][col] = (char === '.' || char === '0') ? 0 : parseInt(char, 10);
         }
-
         // Re-render the table and update status
         renderTable();
         updateStatus();
         document.getElementById('solutions').textContent = 'Unknown'; // Reset solution count display
-
+        document.getElementById('difficulty').textContent = 'Unknown'; // Reset difficulty display
         // Provide feedback
         document.getElementById('status').textContent = 'Puzzle string pasted successfully!';
         document.getElementById('status').className = 'status unique';
-
       } catch (error) {
          alert("Error pasting puzzle string: " + error.message);
          console.error("Paste String Error:", error);
@@ -543,13 +605,13 @@
         document.getElementById('status').className = 'status none';
       }
     }
-    
+
     function exportToPlay() {
       const puzzleString = grid.flat().join('');
       const url = `duodokuplay.html?puzzle=${puzzleString}&zoom=50`;
       window.open(url, '_blank');
     }
-    
+
     function copyString() {
       const puzzleString = grid.flat().join('');
       navigator.clipboard.writeText(puzzleString).then(() => {
@@ -561,7 +623,7 @@
         document.getElementById('status').className = 'status none';
       });
     }
-    
+
     init();
   </script>
 </body>
