@@ -40,7 +40,6 @@
         .cell.candidate-mode{background:rgba(139,92,246,0.4)!important}
         .cell.related{background:rgba(255,255,255,0.1)!important}
         .cell.conflict{background:rgba(239,68,68,0.8)!important}
-        /* New CSS class for highlighting cells with the same value as the selected cell */
         .cell.highlighted-value { background: rgba(96, 165, 250, 0.4) !important; color: #bfdbfe; font-weight: bold; }
         .candidates{font-size:8px;position:absolute;top:2px;left:2px;color:#fbbf24;line-height:1}
         .keypad{position:fixed;bottom:20px;right:20px;background:rgba(0,0,0,0.8);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:12px;backdrop-filter:blur(20px);z-index:1000}
@@ -134,61 +133,202 @@
         function isValid(board,x,y,z,val){
             return !getRelated(x,y,z).some(([rx,ry,rz])=>board[rz][ry][rx]===val);
         }
-        function solve(board){
-            const empty=[];
-            for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++)if(board[z][y][x]===0)empty.push([x,y,z]);
-            if(!empty.length)return true;
-            const[x,y,z]=empty[0],vals=[...V];
-            shuffle(vals);
-            for(const val of vals){
-                if(isValid(board,x,y,z,val)){
-                    board[z][y][x]=val;
-                    if(solve(board))return true;
-                    board[z][y][x]=0;
+        // Advanced solving with constraint propagation
+        function solve(board, countSolutions = false, maxSolutions = 2) {
+            function buildCandidateBoard(b) {
+                const candBoard = Array(S).fill().map(() => 
+                    Array(S).fill().map(() => 
+                        Array(S).fill().map(() => [])
+                    )
+                );
+                
+                for (let z = 0; z < S; z++) {
+                    for (let y = 0; y < S; y++) {
+                        for (let x = 0; x < S; x++) {
+                            if (b[z][y][x] === 0) {
+                                candBoard[z][y][x] = [...V];
+                            } else {
+                                candBoard[z][y][x] = b[z][y][x];
+                            }
+                        }
+                    }
                 }
+                return candBoard;
             }
-            return false;
-        }
-        function countSolutions(board,maxSols=2){
-            let solCount=0;
-            function solveCount(b){
-                if(solCount>=maxSols)return;
-                const empty=[];
-                for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++)if(b[z][y][x]===0)empty.push([x,y,z]);
-                if(!empty.length){solCount++;return}
-                const[x,y,z]=empty[0];
-                for(const val of V){
-                    if(isValid(b,x,y,z,val)){
-                        b[z][y][x]=val;
-                        solveCount(b);
-                        if(solCount>=maxSols){b[z][y][x]=0;return}
-                        b[z][y][x]=0;
+            
+            function propagate(candBoard, x, y, z, val) {
+                candBoard[z][y][x] = val;
+                const related = getRelated(x, y, z);
+                
+                for (const [rx, ry, rz] of related) {
+                    const cell = candBoard[rz][ry][rx];
+                    if (Array.isArray(cell)) {
+                        const idx = cell.indexOf(val);
+                        if (idx !== -1) {
+                            cell.splice(idx, 1);
+                            if (cell.length === 0) {
+                                return false; // Conflict detected
+                            }
+                        }
+                    }
+                }
+                return true;
+            }
+            
+            function findBestCell(candBoard) {
+                let minLen = S + 1;
+                let best = null;
+                
+                for (let z = 0; z < S; z++) {
+                    for (let y = 0; y < S; y++) {
+                        for (let x = 0; x < S; x++) {
+                            const cell = candBoard[z][y][x];
+                            if (Array.isArray(cell) && cell.length < minLen) {
+                                minLen = cell.length;
+                                best = { x, y, z };
+                            }
+                        }
+                    }
+                }
+                return best;
+            }
+            
+            function isSolved(candBoard) {
+                for (let z = 0; z < S; z++) {
+                    for (let y = 0; y < S; y++) {
+                        for (let x = 0; x < S; x++) {
+                            if (Array.isArray(candBoard[z][y][x])) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+                return true;
+            }
+            
+            function innerSolve(candBoard, solutions) {
+                if (solutions.length >= maxSolutions) return;
+                
+                if (isSolved(candBoard)) {
+                    // Convert candidate board back to regular board
+                    const solution = Array(S).fill().map(() => 
+                        Array(S).fill().map(() => Array(S).fill(0))
+                    );
+                    for (let z = 0; z < S; z++) {
+                        for (let y = 0; y < S; y++) {
+                            for (let x = 0; x < S; x++) {
+                                solution[z][y][x] = candBoard[z][y][x];
+                            }
+                        }
+                    }
+                    solutions.push(solution);
+                    return;
+                }
+                
+                const coord = findBestCell(candBoard);
+                if (!coord) return;
+                
+                const { x, y, z } = coord;
+                const options = [...candBoard[z][y][x]];
+                
+                for (const val of options) {
+                    // Deep copy the candidate board
+                    const newCandBoard = candBoard.map(layer => 
+                        layer.map(row => 
+                            row.map(cell => Array.isArray(cell) ? [...cell] : cell)
+                        )
+                    );
+                    
+                    if (propagate(newCandBoard, x, y, z, val)) {
+                        innerSolve(newCandBoard, solutions);
                     }
                 }
             }
-            solveCount(copyBoard(board));
-            return solCount;
-        }
-        function genSol(){const board=makeBoard();solve(board);return board}
-        function genPuzzle(targetClues){
-            const s=genSol(),p=copyBoard(s),all=[];
-            for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++)all.push([x,y,z]);
-            shuffle(all);
-            let attempts=0,maxAttempts=Math.min(all.length,125-targetClues+20);
-            for(const[x,y,z] of all){
-                if(attempts++>=maxAttempts)break;
-                const filled=all.reduce((c,[tx,ty,tz])=>c+(p[tz][ty][tx]!==0?1:0),0);
-                if(filled<=targetClues)break;
-                const orig=p[z][y][x];
-                if(orig===0)continue;
-                p[z][y][x]=0;
-                if(countSolutions(p)===1){
-                    continue;
-                }else{
-                    p[z][y][x]=orig;
+            
+            // Build initial candidate board
+            const candBoard = buildCandidateBoard(board);
+            
+            // Apply constraint propagation for fixed clues
+            for (let z = 0; z < S; z++) {
+                for (let y = 0; y < S; y++) {
+                    for (let x = 0; x < S; x++) {
+                        const val = board[z][y][x];
+                        if (val !== 0) {
+                            if (!propagate(candBoard, x, y, z, val)) {
+                                return countSolutions ? 0 : null;
+                            }
+                        }
+                    }
                 }
             }
-            return{puzzle:p,solution:s};
+            
+            const solutions = [];
+            innerSolve(candBoard, solutions);
+            
+            if (countSolutions) {
+                return solutions.length;
+            } else {
+                return solutions.length > 0 ? solutions[0] : null;
+            }
+        }
+        function countSolutions(board, maxSols = 2) {
+            return solve(board, true, maxSols);
+        }
+        function genSol() {
+            const board = makeBoard();
+            const solution = solve(board, false, 1);
+            return solution || board;
+        }
+        function genPuzzle(targetClues) {
+            const solution = genSol();
+            const puzzle = copyBoard(solution);
+            
+            // Generate all coordinates and randomize order
+            const allCoords = [];
+            for (let z = 0; z < S; z++) {
+                for (let y = 0; y < S; y++) {
+                    for (let x = 0; x < S; x++) {
+                        allCoords.push([x, y, z]);
+                    }
+                }
+            }
+            shuffle(allCoords);
+            
+            let currentClues = S * S * S;
+            let attempts = 0;
+            const maxAttempts = allCoords.length;
+            
+            console.log(`Starting puzzle generation with ${currentClues} clues, target: ${targetClues}`);
+            
+            while (allCoords.length > 0 && currentClues > targetClues && attempts < maxAttempts) {
+                const [x, y, z] = allCoords.pop();
+                attempts++;
+                
+                if (puzzle[z][y][x] === 0) continue; // Already removed
+                
+                const backup = puzzle[z][y][x];
+                puzzle[z][y][x] = 0;
+                
+                const puzzleCopy = copyBoard(puzzle);
+                const numSolutions = countSolutions(puzzleCopy, 2);
+                
+                if (numSolutions === 1) {
+                    currentClues--;
+                    if (attempts % 10 === 0) {
+                        console.log(`Current clues: ${currentClues}/${targetClues}, Remaining cells: ${allCoords.length}`);
+                    }
+                } else {
+                    puzzle[z][y][x] = backup; // Restore if not unique
+                }
+                
+                // Break early if we've reached our target
+                if (currentClues <= targetClues) {
+                    break;
+                }
+            }
+            
+            console.log(`Final puzzle has ${currentClues} clues (target was ${targetClues})`);
+            return { puzzle, solution };
         }
         function shuffle(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]}}
         function candKey(x,y,z){return`${x},${y},${z}`}
@@ -285,7 +425,6 @@
             }
         }
         function updateBoard(){
-            // --- Modification starts here ---
             // Clear previous highlights and related highlights
             document.querySelectorAll('.cell').forEach(c => {
                 c.classList.remove('related', 'highlighted-value');
@@ -313,7 +452,7 @@
                 const selectedVal = b[z][y][x]; // Get the value of the selected cell
                 const selectedCell = document.querySelector(`[data-x="${x}"][data-y="${y}"][data-z="${z}"]`);
 
-                // --- Highlight cells with the same value as the selected cell ---
+                // Highlight cells with the same value as the selected cell
                 if(selectedVal !== 0) {
                     document.querySelectorAll('.cell').forEach(cell => {
                         const cx = +cell.dataset.x, cy = +cell.dataset.y, cz = +cell.dataset.z;
@@ -339,7 +478,6 @@
                     });
                 }
             }
-            // --- Modification ends here ---
 
             updateStats();checkWin();
         }
