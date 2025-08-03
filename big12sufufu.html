@@ -43,6 +43,10 @@ tr:nth-child(3n) td{border-bottom:3px solid #0066cc}
 .game-controls{margin:15px 0}
 .game-controls button{margin:0 5px}
 .instructions{background:#333;color:#fff;padding:10px;border-radius:8px;margin:10px auto;max-width:600px;font-size:14px;line-height:1.4}
+.mode-selector{margin:15px 0;background:#333;padding:10px;border-radius:8px;color:#fff}
+.mode-selector label{display:inline-block;margin:0 10px;font-weight:normal}
+.mode-selector input[type="radio"]{margin-right:5px}
+.mode-selector input[type="checkbox"]{margin-right:5px}
 @media (max-width:768px){
 .puzzle-container{flex-direction:column}
 .cell{width:28px;height:28px;font-size:14px}
@@ -74,6 +78,19 @@ td{width:24px;height:24px}
 
 <div id="game" style="display:none">
 <table id="table"></table>
+
+<div class="mode-selector">
+<label>
+<input type="radio" name="input-mode" value="normal" checked> Normal Mode
+</label>
+<label>
+<input type="radio" name="input-mode" value="candidate"> Candidate Mode
+</label>
+<label>
+<input type="checkbox" id="auto-candidates" checked> Auto Candidate Removal
+</label>
+</div>
+
 <div class="numpad">
 <div class="num-btn" onclick="input(1)">1</div>
 <div class="num-btn" onclick="input(2)">2</div>
@@ -88,6 +105,8 @@ td{width:24px;height:24px}
 <button onclick="check()">Check Solution</button>
 <button onclick="reset()">Reset Puzzle</button>
 <button onclick="hint()">Get Hint</button>
+<button onclick="clearAllCandidates()">Clear All Candidates</button>
+<button onclick="resetHighlights()">Reset Highlights</button>
 <button onclick="backToMenu()">Back to Menu</button>
 </div>
 <div id="feedback"></div>
@@ -96,7 +115,7 @@ td{width:24px;height:24px}
 <div class="instructions">
 <strong>Rules:</strong> Fill the grid with digits 1-6. Each digit must appear exactly twice in each row, column, and 4×3 box. Same digits cannot be adjacent (touch orthogonally).
 <br><br>
-<strong>Controls:</strong> Click a cell to select it, then click numbers or use keyboard 1-6. Toggle between Normal and Candidate modes. On Mac: Use ⌘+P to print.
+<strong>Controls:</strong> Click a cell to select it, then click numbers or use keyboard 1-6. Toggle between Normal and Candidate modes. Arrow keys to navigate. Tab to toggle mode. On Mac: Use ⌘+P to print.
 </div>
 
 <script>
@@ -106,6 +125,7 @@ let puzzle = [];
 let selected = null;
 let mode = 'normal';
 let hintCount = 0;
+let currentHighlightedDigit = null;
 
 function updateClues() {
     const v = document.getElementById('clueRange').value;
@@ -200,13 +220,19 @@ function createPuzzle(clues) {
         }
     }
 
-    cells.sort(() => Math.random() - 0.5);
-    let removed = 0;
-    for (let [r, c] of cells) {
-        if (removed >= 144 - clues) break;
-        puzzle[r][c] = 0;
-        removed++;
+    // Shuffle the cells array properly
+    for (let i = cells.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [cells[i], cells[j]] = [cells[j], cells[i]];
     }
+    
+    // Remove cells to leave the specified number of clues
+    const cellsToRemove = 144 - clues;
+    for (let i = 0; i < cellsToRemove && i < cells.length; i++) {
+        const [r, c] = cells[i];
+        puzzle[r][c] = 0;
+    }
+    
     grid = puzzle.map(r => [...r]);
 }
 
@@ -251,12 +277,88 @@ function renderPuzzle() {
     table.innerHTML = html;
 }
 
+
+
+function highlightDigit(digit) {
+    // Remove any existing highlights first
+    clearDigitHighlights();
+    
+    // If we're clicking the already highlighted digit, just clear the highlights
+    if (currentHighlightedDigit === digit) {
+        currentHighlightedDigit = null;
+        return;
+    }
+    
+    currentHighlightedDigit = digit;
+    
+    // Highlight all cells with this digit
+    for (let row = 0; row < 12; row++) {
+        for (let col = 0; col < 12; col++) {
+            const cell = document.querySelector(`[data-r="${row}"][data-c="${col}"]`);
+            const cellValue = cell.childNodes[0]?.nodeValue?.trim();
+            
+            if (cellValue === digit.toString()) {
+                cell.classList.add('highlight');
+            }
+            
+            // Also highlight candidates with this digit
+            const candidatesDiv = cell.querySelector('.candidates');
+            if (candidatesDiv.style.display === 'grid') {
+                const candidate = candidatesDiv.querySelector(`.candidate[data-v="${digit}"]`);
+                if (candidate && candidate.textContent === digit.toString()) {
+                    candidate.classList.add('candidate-highlight');
+                }
+            }
+        }
+    }
+}
+
+function clearDigitHighlights() {
+    const cells = document.querySelectorAll('.cell');
+    cells.forEach(cell => {
+        cell.classList.remove('highlight');
+        
+        // Also clear candidate highlights
+        const candidates = cell.querySelectorAll('.candidate');
+        candidates.forEach(candidate => {
+            candidate.classList.remove('candidate-highlight');
+        });
+    });
+    
+    currentHighlightedDigit = null;
+}
+
 function selectCell(r, c) {
     const cell = document.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+    
+    // Handle digit highlighting first
+    const cellValue = cell.textContent.trim();
+    if (cellValue && ["1", "2", "3", "4", "5", "6"].includes(cellValue)) {
+        // If clicking on the same highlighted digit, clear highlights and select if editable
+        if (parseInt(cellValue) === currentHighlightedDigit) {
+            clearDigitHighlights();
+            
+            // Only select if editable
+            if (cell.classList.contains('editable')) {
+                if (selected) selected.classList.remove('selected');
+                selected = cell;
+                selected.classList.add('selected');
+            }
+        } else {
+            highlightDigit(parseInt(cellValue));
+        }
+        return;
+    }
+    
+    // Regular cell selection for empty/editable cells
     if (selected) selected.classList.remove('selected');
     if (!cell.classList.contains('editable')) return;
     selected = cell;
     selected.classList.add('selected');
+}
+
+function getInputMode() {
+    return document.querySelector('input[name="input-mode"]:checked').value;
 }
 
 function input(num) {
@@ -264,10 +366,18 @@ function input(num) {
     const r = parseInt(selected.dataset.r);
     const c = parseInt(selected.dataset.c);
     
-    if (mode === 'normal') {
+    const inputMode = getInputMode();
+    
+    if (inputMode === 'normal') {
+        // Clear candidates when setting a value
+        clearCellCandidates(selected);
         selected.textContent = num;
         grid[r][c] = num;
-        clearCandidates(selected);
+        
+        // Apply auto candidate removal if enabled
+        if (document.getElementById('auto-candidates').checked) {
+            removeInvalidCandidates();
+        }
     } else {
         toggleCandidate(selected, num);
     }
@@ -278,6 +388,11 @@ function input(num) {
         feedback.textContent = '';
         feedback.className = '';
     }
+    
+    // Rehighlight if a digit is currently highlighted
+    if (currentHighlightedDigit !== null) {
+        highlightDigit(currentHighlightedDigit);
+    }
 }
 
 function clearCell() {
@@ -285,21 +400,33 @@ function clearCell() {
     const r = parseInt(selected.dataset.r);
     const c = parseInt(selected.dataset.c);
     
-    if (mode === 'normal') {
+    const inputMode = getInputMode();
+    
+    if (inputMode === 'normal') {
         selected.textContent = '';
         grid[r][c] = 0;
+        clearCellCandidates(selected);
     } else {
-        clearCandidates(selected);
+        clearCellCandidates(selected);
+    }
+    
+    // Rehighlight if a digit is currently highlighted
+    if (currentHighlightedDigit !== null) {
+        highlightDigit(currentHighlightedDigit);
     }
 }
 
 function toggleCandidate(cell, num) {
+    // Clear the main value if present
+    if (cell.textContent.trim()) {
+        cell.textContent = '';
+        const r = parseInt(cell.dataset.r);
+        const c = parseInt(cell.dataset.c);
+        grid[r][c] = 0;
+    }
+    
     const candidates = cell.querySelector('.candidates');
     candidates.style.display = 'grid';
-    cell.textContent = '';
-    const r = parseInt(cell.dataset.r);
-    const c = parseInt(cell.dataset.c);
-    grid[r][c] = 0;
     
     const candidate = candidates.children[num - 1];
     if (candidate.classList.contains('active')) {
@@ -311,7 +438,7 @@ function toggleCandidate(cell, num) {
     }
 }
 
-function clearCandidates(cell) {
+function clearCellCandidates(cell) {
     const candidates = cell.querySelector('.candidates');
     candidates.style.display = 'none';
     for (let c of candidates.children) {
@@ -321,8 +448,113 @@ function clearCandidates(cell) {
 }
 
 function toggleMode() {
-    mode = mode === 'normal' ? 'candidate' : 'normal';
-    document.getElementById('modeBtn').textContent = mode === 'normal' ? 'Normal Mode' : 'Candidate Mode';
+    const modeRadios = document.querySelectorAll('input[name="input-mode"]');
+    if (modeRadios[0].checked) {
+        modeRadios[1].checked = true;
+        mode = 'candidate';
+    } else {
+        modeRadios[0].checked = true;
+        mode = 'normal';
+    }
+    updateModeButton();
+}
+
+function updateModeButton() {
+    const currentMode = getInputMode();
+    document.getElementById('modeBtn').textContent = currentMode === 'normal' ? 'Normal Mode' : 'Candidate Mode';
+}
+
+// Sync radio buttons with mode button
+document.addEventListener('DOMContentLoaded', function() {
+    const modeRadios = document.querySelectorAll('input[name="input-mode"]');
+    modeRadios.forEach(radio => {
+        radio.addEventListener('change', updateModeButton);
+    });
+});
+
+function removeInvalidCandidates() {
+    // For each empty cell, check which candidates should be removed
+    for (let row = 0; row < 12; row++) {
+        for (let col = 0; col < 12; col++) {
+            if (grid[row][col] === 0) {
+                const cell = document.querySelector(`[data-r="${row}"][data-c="${col}"]`);
+                if (cell && cell.classList.contains('editable')) {
+                    const candidatesDiv = cell.querySelector('.candidates');
+                    if (candidatesDiv.style.display === 'grid') {
+                        // Check each candidate
+                        for (let digit = 1; digit <= 6; digit++) {
+                            const candidate = candidatesDiv.querySelector(`.candidate[data-v="${digit}"]`);
+                            if (candidate && candidate.textContent === digit.toString()) {
+                                // Check all constraints
+                                if (
+                                    countInRow(row, digit) >= 2 ||
+                                    countInCol(col, digit) >= 2 ||
+                                    countInBox(row, col, digit) >= 2 ||
+                                    hasAdjacentSameDigit(row, col, digit)
+                                ) {
+                                    candidate.textContent = '';
+                                    candidate.classList.remove('active');
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+function countInRow(row, digit) {
+    return grid[row].filter(cell => cell === digit).length;
+}
+
+function countInCol(col, digit) {
+    return grid.map(row => row[col]).filter(cell => cell === digit).length;
+}
+
+function countInBox(row, col, digit) {
+    const boxRow = Math.floor(row / 3) * 3;
+    const boxCol = Math.floor(col / 4) * 4;
+    let count = 0;
+    
+    for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 4; c++) {
+            if (grid[boxRow + r][boxCol + c] === digit) count++;
+        }
+    }
+    return count;
+}
+
+function hasAdjacentSameDigit(row, col, digit) {
+    const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    
+    for (const [dr, dc] of directions) {
+        const newRow = row + dr;
+        const newCol = col + dc;
+        
+        if (newRow >= 0 && newRow < 12 && newCol >= 0 && newCol < 12 && grid[newRow][newCol] === digit) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+function clearAllCandidates() {
+    const cells = document.querySelectorAll('.cell.editable');
+    cells.forEach(cell => {
+        clearCellCandidates(cell);
+    });
+    document.getElementById('feedback').textContent = 'All candidates cleared.';
+}
+
+function resetHighlights() {
+    clearDigitHighlights();
+    const cells = document.querySelectorAll('.cell');
+    cells.forEach(cell => {
+        cell.classList.remove('error');
+    });
+    document.getElementById('feedback').textContent = 'Highlights cleared.';
 }
 
 function check() {
@@ -360,6 +592,9 @@ function check() {
         feedback.textContent = `❌ ${errors} error${errors > 1 ? 's' : ''} found (highlighted in red).`;
         feedback.className = 'red';
     }
+    
+    // Clear digit highlights when checking
+    clearDigitHighlights();
 }
 
 function reset() {
@@ -367,6 +602,7 @@ function reset() {
     renderPuzzle();
     selected = null;
     hintCount = 0;
+    currentHighlightedDigit = null;
     document.getElementById('feedback').textContent = '';
     document.getElementById('feedback').className = '';
 }
@@ -414,6 +650,7 @@ function backToMenu() {
     document.getElementById('menu').style.display = 'block';
     document.getElementById('game').style.display = 'none';
     selected = null;
+    currentHighlightedDigit = null;
 }
 
 function print() {
@@ -424,7 +661,7 @@ function print() {
 updateClues();
 grid = Array(12).fill().map(() => Array(12).fill(0));
 
-// Enhanced keyboard support for Mac
+// Enhanced keyboard support
 document.addEventListener('keydown', e => {
     if (!selected) return;
     
@@ -462,7 +699,18 @@ document.addEventListener('keydown', e => {
     }
     
     e.preventDefault();
-    selectCell(newR, newC);
+    const newCell = document.querySelector(`[data-r="${newR}"][data-c="${newC}"]`);
+    if (newCell && newCell.classList.contains('editable')) {
+        selectCell(newR, newC);
+    }
+});
+
+// Deselect when clicking elsewhere
+document.addEventListener('click', function(event) {
+    if (selected && !event.target.closest('.cell') && !event.target.closest('.numpad')) {
+        selected.classList.remove('selected');
+        selected = null;
+    }
 });
 </script>
 </body>
