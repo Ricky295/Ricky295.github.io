@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DuoDoKu Constructor</title>
+  <script src="duodokudifficulties.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -120,6 +121,87 @@
     .status.unique { background-color: #d4edda; color: #155724; }
     .status.multiple { background-color: #fff3cd; color: #856404; }
     .status.none { background-color: #f8d7da; color: #721c24; }
+    
+    /* Difficulty Display */
+    .difficulty-display {
+      background-color: #2a2a2a;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 10px 0;
+      text-align: center;
+    }
+    
+    .difficulty-badge {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    
+    .difficulty-1 { background-color: #28a745; color: white; }
+    .difficulty-2 { background-color: #ffc107; color: #212529; }
+    .difficulty-3 { background-color: #fd7e14; color: white; }
+    .difficulty-4 { background-color: #dc3545; color: white; }
+    .difficulty-unknown { background-color: #6c757d; color: white; }
+    
+    /* Technique Bar */
+    .technique-bar-container {
+      margin-top: 10px;
+    }
+    
+    .technique-bar {
+      height: 20px;
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      border: 1px solid #555;
+      background-color: #000;
+    }
+    
+    .technique-segment {
+      height: 100%;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+    
+    .technique-segment:hover {
+      filter: brightness(1.2);
+      cursor: pointer;
+    }
+    
+    /* Technique Colors */
+    .tech-fullhouse { background-color: #0066cc; }
+    .tech-lasttwin { background-color: #4da6ff; }
+    .tech-hiddensingle { background-color: #28a745; }
+    .tech-nakedsingle { background-color: #ffc107; }
+    .tech-hiddentwins { background-color: #fd7e14; }
+    .tech-aht { background-color: #dc3545; }
+    .tech-combinations { background-color: #800000; }
+    .tech-unknown { background-color: #000000; }
+    
+    .technique-legend {
+      margin-top: 8px;
+      font-size: 12px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 5px;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      display: inline-block;
+    }
+    
     @media (max-width: 768px) {
       .container {
         flex-direction: column;
@@ -152,6 +234,17 @@
         <div>Givens: <span id="givens">0</span>/64</div>
         <div>Solutions: <span id="solutions">Unknown</span></div>
       </div>
+      
+      <!-- Difficulty and Techniques Display -->
+      <div class="difficulty-display">
+        <div class="difficulty-badge difficulty-unknown" id="difficultyBadge">
+          Difficulty: Unknown
+        </div>
+        <div class="technique-bar-container">
+          <div class="technique-bar" id="techniqueBar"></div>
+          <div class="technique-legend" id="techniqueLegend"></div>
+        </div>
+      </div>
     </div>
     <div class="controls">
       <div class="numpad">
@@ -174,6 +267,48 @@
     </div>
   </div>
   <script>
+    // Mock DuoDoKuGenerator class for compatibility
+    class DuoDoKuGenerator {
+      isNotDuplicated(row, col, value, grid) {
+        // Check row constraint
+        let rowCount = 0;
+        for (let c = 0; c < 8; c++) {
+          if (grid[row][c] === value) rowCount++;
+        }
+        if (rowCount >= 2) return false;
+
+        // Check column constraint  
+        let colCount = 0;
+        for (let r = 0; r < 8; r++) {
+          if (grid[r][col] === value) colCount++;
+        }
+        if (colCount >= 2) return false;
+
+        // Check block constraint
+        const blockRow = Math.floor(row / 2) * 2;
+        const blockCol = Math.floor(col / 4) * 4;
+        let blockCount = 0;
+        for (let r = 0; r < 2; r++) {
+          for (let c = 0; c < 4; c++) {
+            if (grid[blockRow + r][blockCol + c] === value) blockCount++;
+          }
+        }
+        if (blockCount >= 2) return false;
+
+        // Check adjacency constraint
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        for (const [dr, dc] of directions) {
+          const newRow = row + dr;
+          const newCol = col + dc;
+          if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 && grid[newRow][newCol] === value) {
+            return false;
+          }
+        }
+
+        return true;
+      }
+    }
+
     // Simplified DuoDoKu Solver
     class SimpleSolver {
       constructor() {
@@ -272,12 +407,14 @@
     let redundantCells = new Set();
     const solver = new SimpleSolver();
     let lastAnalysisSolutions = []; // Store solutions from last analysis
+    let techniqueStats = {}; // Store technique usage statistics
     
     // Initialize
     function init() {
       renderTable();
       setupEventListeners();
       updateStatus();
+      analyzeDifficultyAndTechniques();
     }
     
     function renderTable() {
@@ -331,6 +468,7 @@
             grid[row][col] = grid[row][col] === value ? 0 : value;
             renderTable();
             updateStatus();
+            analyzeDifficultyAndTechniques();
           }
         });
       });
@@ -342,6 +480,7 @@
           grid[row][col] = 0;
           renderTable();
           updateStatus();
+          analyzeDifficultyAndTechniques();
         }
       });
       // Analyze
@@ -360,8 +499,10 @@
         grid = Array(8).fill().map(() => Array(8).fill(0));
         redundantCells.clear();
         lastAnalysisSolutions = [];
+        techniqueStats = {};
         renderTable();
         updateStatus();
+        analyzeDifficultyAndTechniques();
       });
       // Keyboard
       document.addEventListener('keydown', function(e) {
@@ -373,10 +514,12 @@
           grid[row][col] = grid[row][col] === value ? 0 : value;
           renderTable();
           updateStatus();
+          analyzeDifficultyAndTechniques();
         } else if (e.key === 'Delete' || e.key === 'Backspace') {
           grid[row][col] = 0;
           renderTable();
           updateStatus();
+          analyzeDifficultyAndTechniques();
         }
       });
     }
@@ -402,6 +545,205 @@
         status.textContent = `Multiple solutions (${count})`;
         status.className = 'status multiple';
       }
+      
+      // Update difficulty and techniques
+      analyzeDifficultyAndTechniques();
+    }
+    
+    function analyzeDifficultyAndTechniques() {
+      try {
+        // Create copies for analysis
+        const gridCopy = grid.map(row => [...row]);
+        const candidatesCopy = initializeCandidatesArray();
+        
+        // Initialize difficulty analyzer
+        const analyzer = new duodokudifficulties();
+        analyzer.refreshCandidates(gridCopy, candidatesCopy);
+        
+        // Track techniques used
+        techniqueStats = {
+          fullHouse: 0,
+          lastTwin: 0,
+          hiddenSingle: 0,
+          nakedSingle: 0,
+          hiddenTwin: 0,
+          almostHiddenTwin: 0,
+          combinations: 0,
+          unknown: 0
+        };
+        
+        let difficulty = 1; // Start with EASY
+        let stepsProcessed = 0;
+        const maxSteps = 100; // Prevent infinite loops
+        
+        // Enable hint mode to track techniques
+        analyzer.smartHint = true;
+        
+        // Count empty cells initially
+        let emptyCells = 0;
+        for (let r = 0; r < 8; r++) {
+          for (let c = 0; c < 8; c++) {
+            if (gridCopy[r][c] === 0) emptyCells++;
+          }
+        }
+        
+        // Simulate solving step by step
+        while (stepsProcessed < maxSteps) {
+          let stepFound = false;
+          
+          // Try each technique in order and actually apply the moves
+          analyzer.smartHint = false; // Disable hint mode to actually make moves
+          
+          if (analyzer.fullHouse(gridCopy, candidatesCopy)) {
+            techniqueStats.fullHouse++;
+            stepFound = true;
+          } else if (analyzer.lastTwin(gridCopy, candidatesCopy)) {
+            techniqueStats.lastTwin++;
+            stepFound = true;
+          } else if (analyzer.hiddenSingle(gridCopy, candidatesCopy)) {
+            techniqueStats.hiddenSingle++;
+            stepFound = true;
+          } else if (analyzer.hiddenTwin(gridCopy, candidatesCopy)) {
+            techniqueStats.hiddenTwin++;
+            if (difficulty < 2) difficulty = 2; // MEDIUM
+            stepFound = true;
+          } else if (analyzer.nakedSingle(gridCopy, candidatesCopy)) {
+            techniqueStats.nakedSingle++;
+            if (difficulty < 2) difficulty = 2; // MEDIUM
+            stepFound = true;
+          } else if (analyzer.almostHiddenTwin(gridCopy, candidatesCopy)) {
+            techniqueStats.almostHiddenTwin++;
+            if (difficulty < 3) difficulty = 3; // HARD
+            stepFound = true;
+          } else {
+            // Try combinations
+            let combinationFound = false;
+            for (let size = 3; size <= 6; size++) {
+              if (analyzer.combinations(gridCopy, candidatesCopy, size)) {
+                techniqueStats.combinations++;
+                if (difficulty < 3) difficulty = 3; // HARD
+                combinationFound = true;
+                stepFound = true;
+                break;
+              }
+            }
+            if (!combinationFound) {
+              // Count remaining empty cells as "unknown"
+              let currentEmpty = 0;
+              for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                  if (gridCopy[r][c] === 0) currentEmpty++;
+                }
+              }
+              if (currentEmpty > 0) {
+                techniqueStats.unknown += currentEmpty;
+                difficulty = 4; // UNFAIR
+              }
+              break;
+            }
+          }
+          
+          if (!stepFound) break;
+          
+          // After each successful technique, refresh candidates
+          // This is automatically done by the technique methods when smartHint = false
+          
+          stepsProcessed++;
+        }
+        
+        updateDifficultyDisplay(difficulty);
+        updateTechniqueBar();
+        
+      } catch (error) {
+        console.error('Error analyzing difficulty and techniques:', error);
+        document.getElementById('difficultyBadge').textContent = 'Difficulty: Error';
+        document.getElementById('difficultyBadge').className = 'difficulty-badge difficulty-unknown';
+      }
+    }
+    
+    function initializeCandidatesArray() {
+      const candidates = [];
+      for (let r = 0; r < 8; r++) {
+        candidates[r] = [];
+        for (let c = 0; c < 8; c++) {
+          if (grid[r][c] === 0) {
+            candidates[r][c] = [1, 2, 3, 4];
+          } else {
+            candidates[r][c] = [];
+          }
+        }
+      }
+      return candidates;
+    }
+    
+    function updateDifficultyDisplay(difficulty) {
+      const difficultyNames = {
+        1: 'EASY',
+        2: 'MEDIUM', 
+        3: 'HARD',
+        4: 'UNFAIR'
+      };
+      
+      const badge = document.getElementById('difficultyBadge');
+      badge.textContent = `Difficulty: ${difficultyNames[difficulty] || 'Unknown'}`;
+      badge.className = `difficulty-badge difficulty-${difficulty}`;
+    }
+    
+    function updateTechniqueBar() {
+      const bar = document.getElementById('techniqueBar');
+      const legend = document.getElementById('techniqueLegend');
+      
+      // Calculate sqrt lengths
+      const techniques = [
+        { name: 'Full House', key: 'fullHouse', class: 'tech-fullhouse', count: techniqueStats.fullHouse },
+        { name: 'Last Twin', key: 'lastTwin', class: 'tech-lasttwin', count: techniqueStats.lastTwin },
+        { name: 'Hidden Single', key: 'hiddenSingle', class: 'tech-hiddensingle', count: techniqueStats.hiddenSingle },
+        { name: 'Naked Single', key: 'nakedSingle', class: 'tech-nakedsingle', count: techniqueStats.nakedSingle },
+        { name: 'Hidden Twin', key: 'hiddenTwin', class: 'tech-hiddentwins', count: techniqueStats.hiddenTwin },
+        { name: 'Almost Hidden Twin', key: 'almostHiddenTwin', class: 'tech-aht', count: techniqueStats.almostHiddenTwin },
+        { name: 'Combinations', key: 'combinations', class: 'tech-combinations', count: techniqueStats.combinations },
+        { name: 'Unknown', key: 'unknown', class: 'tech-unknown', count: techniqueStats.unknown }
+      ];
+      
+      const lengths = techniques.map(tech => ({
+        ...tech,
+        length: tech.count > 0 ? Math.sqrt(tech.count) : 0
+      }));
+      
+      const totalLength = lengths.reduce((sum, tech) => sum + tech.length, 0);
+      
+      // Build bar segments
+      let barHTML = '';
+      let legendHTML = '';
+      
+      if (totalLength > 0) {
+        lengths.forEach(tech => {
+          if (tech.length > 0) {
+            const percentage = (tech.length / totalLength) * 100;
+            barHTML += `<div class="technique-segment ${tech.class}" 
+                           style="width: ${percentage}%" 
+                           title="${tech.name}: ${tech.count} uses"></div>`;
+          }
+        });
+        
+        // Create legend
+        techniques.forEach(tech => {
+          if (tech.count > 0) {
+            legendHTML += `
+              <div class="legend-item">
+                <div class="legend-color ${tech.class}"></div>
+                <span>${tech.name} (${tech.count})</span>
+              </div>
+            `;
+          }
+        });
+      } else {
+        barHTML = '<div class="technique-segment tech-unknown" style="width: 100%" title="No analysis available"></div>';
+        legendHTML = '<div class="legend-item"><div class="legend-color tech-unknown"></div><span>No techniques analyzed</span></div>';
+      }
+      
+      bar.innerHTML = barHTML;
+      legend.innerHTML = legendHTML;
     }
     
     function toggleCandidates() {
@@ -488,6 +830,7 @@
         // Clear previous redundant cells and cached solutions
         redundantCells.clear();
         lastAnalysisSolutions = [];
+        techniqueStats = {};
 
         // Update the grid
         for (let i = 0; i < 64; i++) {
@@ -502,6 +845,7 @@
         renderTable();
         updateStatus();
         document.getElementById('solutions').textContent = 'Unknown'; // Reset solution count display
+        analyzeDifficultyAndTechniques();
 
         // Provide feedback
         document.getElementById('status').textContent = 'Puzzle string pasted successfully!';
