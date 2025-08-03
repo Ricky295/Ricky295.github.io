@@ -23,7 +23,7 @@ td{text-align:center;border:1px solid #eee;width:35px;height:35px;padding:0}
 .editable{color:#4a9eff;background:#333}
 .editable:hover{background:#444}
 .selected{outline:3px solid #0066cc;background:#444!important}
-.candidates{display:none;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);width:100%;height:100%;font-size:8px;position:absolute;top:0;left:0}
+.candidates{position:absolute;top:0;left:0;width:100%;height:100%;display:none;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);font-size:8px;pointer-events:none}
 .candidate{display:flex;justify-content:center;align-items:center;color:#666;font-size:10px}
 .candidate.active{color:#0066cc;font-weight:bold}
 td:nth-child(4n){border-right:3px solid #0066cc}
@@ -265,7 +265,13 @@ function renderPuzzle() {
         for (let c = 0; c < 12; c++) {
             const val = grid[r][c];
             const editable = puzzle[r][c] === 0;
-            html += `<td><div class="cell${editable ? ' editable' : ''}" data-r="${r}" data-c="${c}" onclick="selectCell(${r},${c})">${val || ''}`;
+            html += `<td><div class="cell${editable ? ' editable' : ''}" data-r="${r}" data-c="${c}" onclick="selectCell(${r},${c})">`;
+            
+            // Only show the number if it exists and there are no candidates visible
+            if (val) {
+                html += val;
+            }
+            
             html += '<div class="candidates">';
             for (let i = 1; i <= 6; i++) {
                 html += `<div class="candidate" data-v="${i}"></div>`;
@@ -276,8 +282,6 @@ function renderPuzzle() {
     }
     table.innerHTML = html;
 }
-
-
 
 function highlightDigit(digit) {
     // Remove any existing highlights first
@@ -295,9 +299,10 @@ function highlightDigit(digit) {
     for (let row = 0; row < 12; row++) {
         for (let col = 0; col < 12; col++) {
             const cell = document.querySelector(`[data-r="${row}"][data-c="${col}"]`);
-            const cellValue = cell.childNodes[0]?.nodeValue?.trim();
             
-            if (cellValue === digit.toString()) {
+            // Check if the main cell value matches
+            const mainValue = grid[row][col];
+            if (mainValue === digit) {
                 cell.classList.add('highlight');
             }
             
@@ -305,7 +310,7 @@ function highlightDigit(digit) {
             const candidatesDiv = cell.querySelector('.candidates');
             if (candidatesDiv.style.display === 'grid') {
                 const candidate = candidatesDiv.querySelector(`.candidate[data-v="${digit}"]`);
-                if (candidate && candidate.textContent === digit.toString()) {
+                if (candidate && candidate.classList.contains('active')) {
                     candidate.classList.add('candidate-highlight');
                 }
             }
@@ -332,10 +337,10 @@ function selectCell(r, c) {
     const cell = document.querySelector(`[data-r="${r}"][data-c="${c}"]`);
     
     // Handle digit highlighting first
-    const cellValue = cell.textContent.trim();
-    if (cellValue && ["1", "2", "3", "4", "5", "6"].includes(cellValue)) {
+    const cellValue = grid[r][c];
+    if (cellValue && [1, 2, 3, 4, 5, 6].includes(cellValue)) {
         // If clicking on the same highlighted digit, clear highlights and select if editable
-        if (parseInt(cellValue) === currentHighlightedDigit) {
+        if (cellValue === currentHighlightedDigit) {
             clearDigitHighlights();
             
             // Only select if editable
@@ -345,7 +350,7 @@ function selectCell(r, c) {
                 selected.classList.add('selected');
             }
         } else {
-            highlightDigit(parseInt(cellValue));
+            highlightDigit(cellValue);
         }
         return;
     }
@@ -371,8 +376,8 @@ function input(num) {
     if (inputMode === 'normal') {
         // Clear candidates when setting a value
         clearCellCandidates(selected);
-        selected.textContent = num;
         grid[r][c] = num;
+        updateCellDisplay(selected, r, c);
         
         // Apply auto candidate removal if enabled
         if (document.getElementById('auto-candidates').checked) {
@@ -395,6 +400,24 @@ function input(num) {
     }
 }
 
+function updateCellDisplay(cell, r, c) {
+    const candidatesDiv = cell.querySelector('.candidates');
+    const val = grid[r][c];
+    
+    if (val) {
+        // Hide candidates and show the number
+        candidatesDiv.style.display = 'none';
+        // Remove the candidates content and show the number as text content
+        const textNodes = Array.from(cell.childNodes).filter(node => node.nodeType === Node.TEXT_NODE);
+        textNodes.forEach(node => node.remove());
+        cell.insertBefore(document.createTextNode(val), candidatesDiv);
+    } else {
+        // Clear any text content
+        const textNodes = Array.from(cell.childNodes).filter(node => node.nodeType === Node.TEXT_NODE);
+        textNodes.forEach(node => node.remove());
+    }
+}
+
 function clearCell() {
     if (!selected) return;
     const r = parseInt(selected.dataset.r);
@@ -403,11 +426,13 @@ function clearCell() {
     const inputMode = getInputMode();
     
     if (inputMode === 'normal') {
-        selected.textContent = '';
         grid[r][c] = 0;
+        updateCellDisplay(selected, r, c);
         clearCellCandidates(selected);
     } else {
         clearCellCandidates(selected);
+        grid[r][c] = 0;
+        updateCellDisplay(selected, r, c);
     }
     
     // Rehighlight if a digit is currently highlighted
@@ -417,12 +442,13 @@ function clearCell() {
 }
 
 function toggleCandidate(cell, num) {
+    const r = parseInt(cell.dataset.r);
+    const c = parseInt(cell.dataset.c);
+    
     // Clear the main value if present
-    if (cell.textContent.trim()) {
-        cell.textContent = '';
-        const r = parseInt(cell.dataset.r);
-        const c = parseInt(cell.dataset.c);
+    if (grid[r][c] !== 0) {
         grid[r][c] = 0;
+        updateCellDisplay(cell, r, c);
     }
     
     const candidates = cell.querySelector('.candidates');
@@ -484,7 +510,7 @@ function removeInvalidCandidates() {
                         // Check each candidate
                         for (let digit = 1; digit <= 6; digit++) {
                             const candidate = candidatesDiv.querySelector(`.candidate[data-v="${digit}"]`);
-                            if (candidate && candidate.textContent === digit.toString()) {
+                            if (candidate && candidate.classList.contains('active')) {
                                 // Check all constraints
                                 if (
                                     countInRow(row, digit) >= 2 ||
