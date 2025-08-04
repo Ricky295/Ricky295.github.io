@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku of the Day</title>
+    <script src="sudoku.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #333;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            max-width: 600px;
+            width: 90%;
+            backdrop-filter: blur(10px);
+        }
+
+        .screen {
+            display: none;
+        }
+
+        .screen.active {
+            display: block;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1, h2 {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            color: #4a5568;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .level-selector {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .level-button {
+            padding: 1rem;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(240, 147, 251, 0.4);
+        }
+
+        .level-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(240, 147, 251, 0.6);
+        }
+
+        .sudoku-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 2px;
+            background: #2d3748;
+            padding: 10px;
+            border-radius: 12px;
+            margin: 1rem 0;
+            max-width: 450px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .sudoku-cell {
+            aspect-ratio: 1;
+            border: none;
+            background: white;
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .sudoku-cell:nth-child(3n):not(:nth-child(9n)) {
+            border-right: 3px solid #2d3748;
+        }
+
+        .sudoku-cell:nth-child(n+19):nth-child(-n+27),
+        .sudoku-cell:nth-child(n+46):nth-child(-n+54) {
+            border-bottom: 3px solid #2d3748;
+        }
+
+        .sudoku-cell.given {
+            background: #e2e8f0;
+            color: #2d3748;
+            font-weight: 900;
+        }
+
+        .sudoku-cell.error {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .sudoku-cell.hint {
+            background: #c6f6d5;
+            color: #2f855a;
+        }
+
+        .sudoku-cell:focus {
+            outline: 3px solid #667eea;
+            background: #ebf8ff;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+            margin: 1rem 0;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .stat-item {
+            text-align: center;
+            background: rgba(102, 126, 234, 0.1);
+            padding: 1rem;
+            border-radius: 12px;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #718096;
+            margin-top: 0.25rem;
+        }
+
+        .number-pad {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0.5rem;
+            margin: 1rem 0;
+            max-width: 300px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .number-btn {
+            aspect-ratio: 1;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            background: #f7fafc;
+            color: #4a5568;
+            transition: all 0.2s ease;
+        }
+
+        .number-btn:hover {
+            background: #edf2f7;
+            transform: scale(1.05);
+        }
+
+        .completion-message {
+            text-align: center;
+            padding: 2rem;
+            background: linear-gradient(135deg, #48bb78, #38a169);
+            color: white;
+            border-radius: 12px;
+            margin: 1rem 0;
+        }
+
+        .daily-indicator {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #718096;
+            margin-bottom: 1rem;
+        }
+
+        .home-buttons {
+            display: grid;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .settings-grid {
+            display: grid;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 8px;
+        }
+
+        .toggle {
+            position: relative;
+            width: 50px;
+            height: 24px;
+            background: #cbd5e0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .toggle.active {
+            background: #667eea;
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s ease;
+        }
+
+        .toggle.active::after {
+            transform: translateX(26px);
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 1rem;
+                margin: 1rem;
+            }
+            
+            .level-selector {
+                grid-template-columns: 1fr;
+            }
+            
+            .sudoku-cell {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Home Screen -->
+        <div id="homeScreen" class="screen active">
+            <h1>Sudoku of the Day</h1>
+            <div class="daily-indicator" id="dailyDate"></div>
+            
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="totalSolved">0</div>
+                    <div class="stat-label">Puzzles Solved</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="currentStreak">0</div>
+                    <div class="stat-label">Current Streak</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="bestScore">0</div>
+                    <div class="stat-label">Best Score</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="avgTime">--</div>
+                    <div class="stat-label">Avg Time</div>
+                </div>
+            </div>
+
+            <div class="home-buttons">
+                <button class="btn btn-primary" onclick="showLevelSelector()" id="playButton">Play Today's Puzzle</button>
+                <button class="btn btn-secondary" onclick="showSettings()">Settings</button>
+                <button class="btn btn-secondary" onclick="showStats()">Detailed Stats</button>
+            </div>
+        </div>
+
+        <!-- Level Selector Screen -->
+        <div id="levelScreen" class="screen">
+            <h2>Choose Your Difficulty</h2>
+            <div class="level-selector">
+                <button class="level-button" onclick="startGame(0)">
+                    <div>Beginner</div>
+                    <small>Level 0</small>
+                </button>
+                <button class="level-button" onclick="startGame(1)">
+                    <div>Easy</div>
+                    <small>Level 1</small>
+                </button>
+                <button class="level-button" onclick="startGame(2)">
+                    <div>Medium</div>
+                    <small>Level 2</small>
+                </button>
+                <button class="level-button" onclick="startGame(3)">
+                    <div>Hard</div>
+                    <small>Level 3</small>
+                </button>
+                <button class="level-button" onclick="startGame(4)">
+                    <div>Expert</div>
+                    <small>Level 4</small>
+                </button>
+                <button class="level-button" onclick="startGame(5)">
+                    <div>Master</div>
+                    <small>Level 5</small>
+                </button>
+            </div>
+            <button class="btn btn-secondary" onclick="showHome()">Back</button>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="gameScreen" class="screen">
+            <div class="daily-indicator" id="gameDailyDate"></div>
+            
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="gameTime">00:00</div>
+                    <div class="stat-label">Time</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="gameScore">1000</div>
+                    <div class="stat-label">Score</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="mistakes">0</div>
+                    <div class="stat-label">Mistakes</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="hintsUsed">0</div>
+                    <div class="stat-label">Hints Used</div>
+                </div>
+            </div>
+
+            <div class="sudoku-grid" id="sudokuGrid"></div>
+
+            <div class="number-pad">
+                <button class="number-btn" onclick="selectNumber(1)">1</button>
+                <button class="number-btn" onclick="selectNumber(2)">2</button>
+                <button class="number-btn" onclick="selectNumber(3)">3</button>
+                <button class="number-btn" onclick="selectNumber(4)">4</button>
+                <button class="number-btn" onclick="selectNumber(5)">5</button>
+                <button class="number-btn" onclick="selectNumber(6)">6</button>
+                <button class="number-btn" onclick="selectNumber(7)">7</button>
+                <button class="number-btn" onclick="selectNumber(8)">8</button>
+                <button class="number-btn" onclick="selectNumber(9)">9</button>
+                <button class="number-btn" onclick="selectNumber(0)">✕</button>
+            </div>
+
+            <div class="controls">
+                <button class="btn btn-secondary" onclick="getHint()">💡 Hint</button>
+                <button class="btn btn-secondary" onclick="checkSolution()">✓ Check</button>
+                <button class="btn btn-secondary" onclick="resetPuzzle()">🔄 Reset</button>
+                <button class="btn btn-secondary" onclick="showHome()">🏠 Home</button>
+            </div>
+        </div>
+
+        <!-- Settings Screen -->
+        <div id="settingsScreen" class="screen">
+            <h2>Settings</h2>
+            <div class="settings-grid">
+                <div class="setting-item">
+                    <span>Show Timer</span>
+                    <div class="toggle" id="showTimerToggle" onclick="toggleSetting('showTimer')"></div>
+                </div>
+                <div class="setting-item">
+                    <span>Auto-check Errors</span>
+                    <div class="toggle" id="autoCheckToggle" onclick="toggleSetting('autoCheck')"></div>
+                </div>
+                <div class="setting-item">
+                    <span>Highlight Numbers</span>
+                    <div class="toggle" id="highlightToggle" onclick="toggleSetting('highlight')"></div>
+                </div>
+                <div class="setting-item">
+                    <span>Sound Effects</span>
+                    <div class="toggle" id="soundToggle" onclick="toggleSetting('sound')"></div>
+                </div>
+            </div>
+            <div class="controls">
+                <button class="btn btn-secondary" onclick="resetStats()">Reset All Stats</button>
+                <button class="btn btn-primary" onclick="showHome()">Back to Home</button>
+            </div>
+        </div>
+
+        <!-- Stats Screen -->
+        <div id="statsScreen" class="screen">
+            <h2>Detailed Statistics</h2>
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="detailTotalSolved">0</div>
+                    <div class="stat-label">Total Solved</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="detailWinRate">0%</div>
+                    <div class="stat-label">Win Rate</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="detailAvgScore">0</div>
+                    <div class="stat-label">Avg Score</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="detailBestTime">--</div>
+                    <div class="stat-label">Best Time</div>
+                </div>
+            </div>
+            <h3 style="margin: 2rem 0 1rem 0; text-align: center;">Level Breakdown</h3>
+            <div id="levelStats"></div>
+            <button class="btn btn-primary" onclick="showHome()">Back to Home</button>
+        </div>
+    </div>
+
+    <script>
+        // Game state
+        let gameState = {
+            sudoku: new Sudoku(),
+            currentPuzzle: null,
+            solution: null,
+            solvePath: null,
+            selectedCell: null,
+            startTime: null,
+            gameTime: 0,
+            baseScore: 1000,
+            currentScore: 1000,
+            mistakes: 0,
+            hintsUsed: 0,
+            level: 0,
+            isCompleted: false,
+            timer: null
+        };
+
+        // Settings with defaults
+        let settings = {
+            showTimer: true,
+            autoCheck: true,
+            highlight: true,
+            sound: false
+        };
+
+        // Load settings and stats from localStorage
+        function loadData() {
+            const savedSettings = JSON.parse(localStorage.getItem('sudokuSettings') || '{}');
+            settings = { ...settings, ...savedSettings };
+            
+            updateSettingsUI();
+            updateStats();
+        }
+
+        // Save settings to localStorage
+        function saveSettings() {
+            localStorage.setItem('sudokuSettings', JSON.stringify(settings));
+        }
+
+        // Get today's date string
+        function getTodayString() {
+            const today = new Date();
+            return today.toISOString().split('T')[0];
+        }
+
+        // Check if today's puzzle is already completed
+        function isTodayCompleted() {
+            const today = getTodayString();
+            const completedPuzzles = JSON.parse(localStorage.getItem('completedPuzzles') || '{}');
+            return completedPuzzles[today] || false;
+        }
+
+        // Mark today as completed
+        function markTodayCompleted(score, time, level, mistakes, hints) {
+            const today = getTodayString();
+            const completedPuzzles = JSON.parse(localStorage.getItem('completedPuzzles') || '{}');
+            const stats = JSON.parse(localStorage.getItem('sudokuStats') || '{}');
+            
+            completedPuzzles[today] = {
+                score: score,
+                time: time,
+                level: level,
+                mistakes: mistakes,
+                hints: hints,
+                completed: true
+            };
+            
+            // Update stats
+            if (!stats.totalSolved) stats.totalSolved = 0;
+            if (!stats.totalAttempts) stats.totalAttempts = 0;
+            if (!stats.bestScore) stats.bestScore = 0;
+            if (!stats.totalTime) stats.totalTime = 0;
+            if (!stats.levelStats) stats.levelStats = {};
+            
+            stats.totalSolved++;
+            stats.totalAttempts++;
+            stats.bestScore = Math.max(stats.bestScore, score);
+            stats.totalTime += time;
+            
+            if (!stats.levelStats[level]) {
+                stats.levelStats[level] = { solved: 0, attempts: 0, bestScore: 0, totalTime: 0 };
+            }
+            stats.levelStats[level].solved++;
+            stats.levelStats[level].attempts++;
+            stats.levelStats[level].bestScore = Math.max(stats.levelStats[level].bestScore, score);
+            stats.levelStats[level].totalTime += time;
+            
+            // Calculate streak
+            const dates = Object.keys(completedPuzzles).sort();
+            let streak = 0;
+            const todayDate = new Date(today);
+            
+            for (let i = dates.length - 1; i >= 0; i--) {
+                const date = new Date(dates[i]);
+                const daysDiff = Math.floor((todayDate - date) / (1000 * 60 * 60 * 24));
+                
+                if (daysDiff === streak && completedPuzzles[dates[i]].completed) {
+                    streak++;
+                } else {
+                    break;
+                }
+            }
+            
+            stats.currentStreak = streak;
+            
+            localStorage.setItem('completedPuzzles', JSON.stringify(completedPuzzles));
+            localStorage.setItem('sudokuStats', JSON.stringify(stats));
+        }
+
+        // Update stats display
+        function updateStats() {
+            const stats = JSON.parse(localStorage.getItem('sudokuStats') || '{}');
+            
+            document.getElementById('totalSolved').textContent = stats.totalSolved || 0;
+            document.getElementById('currentStreak').textContent = stats.currentStreak || 0;
+            document.getElementById('bestScore').textContent = stats.bestScore || 0;
+            
+            const avgTime = stats.totalSolved ? Math.floor(stats.totalTime / stats.totalSolved) : 0;
+            document.getElementById('avgTime').textContent = avgTime ? formatTime(avgTime) : '--';
+            
+            // Update play button text
+            const playButton = document.getElementById('playButton');
+            if (isTodayCompleted()) {
+                playButton.textContent = "Today's Puzzle (Completed)";
+                playButton.disabled = true;
+                playButton.style.opacity = '0.6';
+            } else {
+                playButton.textContent = "Play Today's Puzzle";
+                playButton.disabled = false;
+                playButton.style.opacity = '1';
+            }
+        }
+
+        // Show different screens
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            document.getElementById(screenId).classList.add('active');
+        }
+
+        function showHome() {
+            updateStats();
+            showScreen('homeScreen');
+        }
+
+        function showLevelSelector() {
+            if (isTodayCompleted()) {
+                alert('You have already completed today\'s puzzle! Come back tomorrow for a new challenge.');
+                return;
+            }
+            showScreen('levelScreen');
+        }
+
+        function showSettings() {
+            updateSettingsUI();
+            showScreen('settingsScreen');
+        }
+
+        function showStats() {
+            updateDetailedStats();
+            showScreen('statsScreen');
+        }
+
+        // Settings functions
+        function updateSettingsUI() {
+            Object.keys(settings).forEach(setting => {
+                const toggle = document.getElementById(setting + 'Toggle');
+                if (toggle) {
+                    toggle.classList.toggle('active', settings[setting]);
+                }
+            });
+        }
+
+        function toggleSetting(setting) {
+            settings[setting] = !settings[setting];
+            updateSettingsUI();
+            saveSettings();
+        }
+
+        function resetStats() {
+            if (confirm('Are you sure you want to reset all statistics? This cannot be undone.')) {
+                localStorage.removeItem('sudokuStats');
+                localStorage.removeItem('completedPuzzles');
+                updateStats();
+                showHome();
+            }
+        }
+
+        // Detailed stats
+        function updateDetailedStats() {
+            const stats = JSON.parse(localStorage.getItem('sudokuStats') || '{}');
+            
+            document.getElementById('detailTotalSolved').textContent = stats.totalSolved || 0;
+            document.getElementById('detailWinRate').textContent = 
+                stats.totalAttempts ? Math.round((stats.totalSolved / stats.totalAttempts) * 100) + '%' : '0%';
+            document.getElementById('detailAvgScore').textContent = 
+                stats.totalSolved ? Math.round(stats.totalTime * 60 / stats.totalSolved) : 0; // Points per minute average
+            document.getElementById('detailBestTime').textContent = 
+                stats.bestTime ? formatTime(stats.bestTime) : '--';
+            
+            // Level breakdown
+            const levelStatsDiv = document.getElementById('levelStats');
+            levelStatsDiv.innerHTML = '';
+            
+            if (stats.levelStats) {
+                const levelNames = ['Beginner', 'Easy', 'Medium', 'Hard', 'Expert', 'Master'];
+                
+                for (let i = 0; i < 6; i++) {
+                    const levelStat = stats.levelStats[i] || { solved: 0, attempts: 0, bestScore: 0, totalTime: 0 };
+                    const avgTime = levelStat.solved ? Math.floor(levelStat.totalTime / levelStat.solved) : 0;
+                    
+                    const levelDiv = document.createElement('div');
+                    levelDiv.className = 'stats';
+                    levelDiv.innerHTML = `
+                        <div class="stat-item">
+                            <div class="stat-value">${levelNames[i]}</div>
+                            <div class="stat-label">Level ${i}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${levelStat.solved}</div>
+                            <div class="stat-label">Solved</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${levelStat.bestScore}</div>
+                            <div class="stat-label">Best Score</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${avgTime ? formatTime(avgTime) : '--'}</div>
+                            <div class="stat-label">Avg Time</div>
+                        </div>
+                    `;
+                    levelStatsDiv.appendChild(levelDiv);
+                }
+            }
+        }
+
+        // Game functions
+        function startGame(level) {
+            if (isTodayCompleted()) {
+                alert('You have already completed today\'s puzzle! Come back tomorrow for a new challenge.');
+                return;
+            }
+            
+            gameState.level = level;
+            gameState.isCompleted = false;
+            gameState.mistakes = 0;
+            gameState.hintsUsed = 0;
+            gameState.startTime = Date.now();
+            gameState.baseScore = 1000;
+            gameState.currentScore = 1000;
+            
+            // Generate today's puzzle
+            const today = new Date();
+            gameState.currentPuzzle = gameState.sudoku.generateDailySudoku(level, today, "matrix");
+            gameState.solution = gameState.sudoku.deepCopy(gameState.currentPuzzle);
+            gameState.sudoku.solveMatrix(gameState.solution);
+            gameState.solvePath = gameState.sudoku.solvePath(gameState.currentPuzzle, 0);
+            
+            // Update UI
+            document.getElementById('gameDailyDate').textContent = 
+                `Today's Puzzle - ${today.toLocaleDateString()} - Level ${level}`;
+            
+            createSudokuGrid();
+            updateGameStats();
+            startTimer();
+            showScreen('gameScreen');
+        }
+
+        function createSudokuGrid() {
+            const grid = document.getElementById('sudokuGrid');
+            grid.innerHTML = '';
+            
+            for (let row = 0; row < 9; row++) {
+                for (let col = 0; col < 9; col++) {
+                    const cell = document.createElement('input');
+                    cell.type = 'text';
+                    cell.maxLength = 1;
+                    cell.className = 'sudoku-cell';
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    
+                    const value = gameState.currentPuzzle[row][col];
+                    if (value !== 0) {
+                        cell.value = value;
+                        cell.classList.add('given');
+                        cell.readOnly = true;
+                    }
+                    
+                    cell.addEventListener('click', () => selectCell(row, col));
+                    cell.addEventListener('input', (e) => handleInput(e, row, col));
+                    
+                    grid.appendChild(cell);
+                }
+            }
+        }
+
+        function selectCell(row, col) {
+            gameState.selectedCell = { row, col };
+            
+            // Highlight selected cell
+            document.querySelectorAll('.sudoku-cell').forEach(cell => {
+                cell.classList.remove('selected');
+            });
+            
+            const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            cell.classList.add('selected');
+            cell.focus();
+        }
+
+        function selectNumber(num) {
+            if (gameState.selectedCell) {
+                const { row, col } = gameState.selectedCell;
+                const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                
+                if (!cell.classList.contains('given')) {
+                    if (num === 0) {
+                        cell.value = '';
+                        gameState.currentPuzzle[row][col] = 0;
+                    } else {
+                        cell.value = num;
+                        gameState.currentPuzzle[row][col] = num;
+                        
+                        if (settings.autoCheck) {
+                            checkCell(row, col);
+                        }
+                    }
+                    
+                    updateScore();
+                    
+                    if (isPuzzleComplete()) {
+                        completePuzzle();
+                    }
+                }
+            }
+        }
+
+        function handleInput(event, row, col) {
+            const value = event.target.value;
+            if (value && (!/^[1-9]$/.test(value))) {
+                event.target.value = '';
+                return;
+            }
+            
+            gameState.currentPuzzle[row][col] = value ? parseInt(value) : 0;
+            
+            if (settings.autoCheck && value) {
+                checkCell(row, col);
+            }
+            
+            updateScore();
+            
+            if (isPuzzleComplete()) {
+                completePuzzle();
+            }
+        }
+
+        function checkCell(row, col) {
+            const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            const value = gameState.currentPuzzle[row][col];
+            const correctValue = gameState.solution[row][col];
+            
+            cell.classList.remove('error', 'hint');
+            
+            if (value !== 0 && value !== correctValue) {
+                cell.classList.add('error');
+                gameState.mistakes++;
+                updateGameStats();
+            }
+        }
+
+        function getHint() {
+            if (gameState.isCompleted) return;
+            
+            const hintResult = gameState.sudoku.hint(gameState.currentPuzzle, 0);
+            
+            if (hintResult) {
+                const [technique, [row, col], value] = hintResult;
+                const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                
+                if (cell && !cell.classList.contains('given')) {
+                    cell.value = value;
+                    cell.classList.add('hint');
+                    gameState.currentPuzzle[row][col] = value;
+                    gameState.hintsUsed++;
+                    
+                    updateScore();
+                    updateGameStats();
+                    
+                    if (isPuzzleComplete()) {
+                        completePuzzle();
+                    }
+                    
+                    // Show hint technique
+                    setTimeout(() => {
+                        alert(`Hint: ${technique} - Placed ${value} at row ${row + 1}, column ${col + 1}`);
+                    }, 100);
+                }
+            } else {
+                alert('No hints available at this time.');
+            }
+        }
+
+        function checkSolution() {
+            let hasErrors = false;
+            
+            for (let row = 0; row < 9; row++) {
+                for (let col = 0; col < 9; col++) {
+                    const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                    const value = gameState.currentPuzzle[row][col];
+                    const correctValue = gameState.solution[row][col];
+                    
+                    cell.classList.remove('error');
+                    
+                    if (value !== 0 && value !== correctValue) {
+                        cell.classList.add('error');
+                        hasErrors = true;
+                    }
+                }
+            }
+            
+            if (hasErrors) {
+                gameState.mistakes++;
+                updateScore();
+                updateGameStats();
+                alert('There are some errors in your solution. They are highlighted in red.');
+            } else if (isPuzzleComplete()) {
+                completePuzzle();
+            } else {
+                alert('Looking good so far! Keep going.');
+            }
+        }
+
+        function resetPuzzle() {
+            if (confirm('Are you sure you want to reset the puzzle? All progress will be lost.')) {
+                // Reset only user-entered values
+                for (let row = 0; row < 9; row++) {
+                    for (let col = 0; col < 9; col++) {
+                        const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                        
+                        if (!cell.classList.contains('given')) {
+                            cell.value = '';
+                            cell.classList.remove('error', 'hint');
+                            gameState.currentPuzzle[row][col] = 0;
+                        }
+                    }
+                }
+                
+                gameState.mistakes = 0;
+                gameState.hintsUsed = 0;
+                gameState.startTime = Date.now();
+                gameState.currentScore = gameState.baseScore;
+                
+                updateGameStats();
+            }
+        }
+
+        function isPuzzleComplete() {
+            for (let row = 0; row < 9; row++) {
+                for (let col = 0; col < 9; col++) {
+                    if (gameState.currentPuzzle[row][col] === 0) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function completePuzzle() {
+            if (gameState.isCompleted) return;
+            
+            gameState.isCompleted = true;
+            stopTimer();
+            
+            const endTime = Date.now();
+            const totalTime = Math.floor((endTime - gameState.startTime) / 1000);
+            
+            // Final score calculation with cumulative percentage reductions
+            let finalScore = gameState.currentScore;
+            
+            // Apply mistake penalty (10% per mistake, cumulative)
+            for (let i = 0; i < gameState.mistakes; i++) {
+                finalScore *= 0.9; // 10% reduction per mistake
+            }
+            
+            // Apply hint penalty (20% per hint, cumulative - bigger penalty than mistakes)
+            for (let i = 0; i < gameState.hintsUsed; i++) {
+                finalScore *= 0.8; // 20% reduction per hint
+            }
+            
+            finalScore = Math.floor(Math.max(50, finalScore)); // Minimum score of 50
+            
+            // Mark today as completed
+            markTodayCompleted(finalScore, totalTime, gameState.level, gameState.mistakes, gameState.hintsUsed);
+            
+            // Show completion message
+            const completionDiv = document.createElement('div');
+            completionDiv.className = 'completion-message';
+            completionDiv.innerHTML = `
+                <h3>🎉 Congratulations! 🎉</h3>
+                <p>You completed today's puzzle!</p>
+                <div class="stats" style="margin: 1rem 0;">
+                    <div class="stat-item">
+                        <div class="stat-value">${finalScore}</div>
+                        <div class="stat-label">Final Score</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${formatTime(totalTime)}</div>
+                        <div class="stat-label">Time</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${Math.round(finalScore / (totalTime / 60))}</div>
+                        <div class="stat-label">Points/Min</div>
+                    </div>
+                </div>
+                <p>Come back tomorrow for a new challenge!</p>
+            `;
+            
+            const gameScreen = document.getElementById('gameScreen');
+            gameScreen.insertBefore(completionDiv, document.getElementById('sudokuGrid'));
+            
+            // Disable all inputs
+            document.querySelectorAll('.sudoku-cell').forEach(cell => {
+                cell.readOnly = true;
+            });
+            
+            // Update stats
+            updateStats();
+        }
+
+        function updateScore() {
+            if (gameState.isCompleted) return;
+            
+            const currentTime = Date.now();
+            const elapsedMinutes = (currentTime - gameState.startTime) / (1000 * 60);
+            
+            // Calculate points per minute based on solve path difficulty
+            const basePointsPerMinute = gameState.solvePath ? Math.max(50, gameState.solvePath.length * 2) : 100;
+            
+            // Apply gradual time degradation (2% per minute, cumulative)
+            const timeMultiplier = Math.pow(0.98, elapsedMinutes);
+            
+            gameState.currentScore = Math.floor(Math.max(50, gameState.baseScore * timeMultiplier));
+            
+            document.getElementById('gameScore').textContent = gameState.currentScore;
+        }
+
+        function updateGameStats() {
+            document.getElementById('mistakes').textContent = gameState.mistakes;
+            document.getElementById('hintsUsed').textContent = gameState.hintsUsed;
+        }
+
+        function startTimer() {
+            if (gameState.timer) {
+                clearInterval(gameState.timer);
+            }
+            
+            gameState.timer = setInterval(() => {
+                if (!gameState.isCompleted) {
+                    const currentTime = Date.now();
+                    const elapsed = Math.floor((currentTime - gameState.startTime) / 1000);
+                    
+                    if (settings.showTimer) {
+                        document.getElementById('gameTime').textContent = formatTime(elapsed);
+                    }
+                    
+                    updateScore();
+                }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (gameState.timer) {
+                clearInterval(gameState.timer);
+                gameState.timer = null;
+            }
+        }
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        // Initialize the app
+        function init() {
+            loadData();
+            
+            // Set daily date displays
+            const today = new Date();
+            const dateString = today.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            
+            document.getElementById('dailyDate').textContent = dateString;
+            
+            // Add keyboard support
+            document.addEventListener('keydown', (e) => {
+                if (gameState.selectedCell && !gameState.isCompleted) {
+                    if (e.key >= '1' && e.key <= '9') {
+                        selectNumber(parseInt(e.key));
+                    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                        selectNumber(0);
+                    } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || 
+                               e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        navigateGrid(e.key);
+                    }
+                }
+            });
+        }
+
+        function navigateGrid(direction) {
+            if (!gameState.selectedCell) return;
+            
+            let { row, col } = gameState.selectedCell;
+            
+            switch (direction) {
+                case 'ArrowUp':
+                    row = Math.max(0, row - 1);
+                    break;
+                case 'ArrowDown':
+                    row = Math.min(8, row + 1);
+                    break;
+                case 'ArrowLeft':
+                    col = Math.max(0, col - 1);
+                    break;
+                case 'ArrowRight':
+                    col = Math.min(8, col + 1);
+                    break;
+            }
+            
+            selectCell(row, col);
+        }
+
+        // Sound effects (if enabled)
+        function playSound(type) {
+            if (!settings.sound) return;
+            
+            // Create simple beep sounds using Web Audio API
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            let frequency = 440; // Default
+            let duration = 200;
+            
+            switch (type) {
+                case 'success':
+                    frequency = 523; // C5
+                    duration = 300;
+                    break;
+                case 'error':
+                    frequency = 220; // A3
+                    duration = 150;
+                    break;
+                case 'hint':
+                    frequency = 659; // E5
+                    duration = 200;
+                    break;
+            }
+            
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration / 1000);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration / 1000);
+        }
+
+        // Start the app when page loads
+        window.addEventListener('load', init);
+        
+        // Handle page visibility change to pause/resume timer
+        document.addEventListener('visibilitychange', () => {
+            if (gameState.timer) {
+                if (document.hidden) {
+                    stopTimer();
+                } else if (!gameState.isCompleted) {
+                    startTimer();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
