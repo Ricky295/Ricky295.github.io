@@ -237,19 +237,110 @@ function createPuzzle(clues) {
         [cells[i], cells[j]] = [cells[j], cells[i]];
     }
     
-    // Remove cells to leave the specified number of clues
+    // Remove cells one by one and check uniqueness
     const cellsToRemove = 144 - clues;
-    for (let i = 0; i < cellsToRemove && i < cells.length; i++) {
+    let removedCount = 0;
+    
+    for (let i = 0; i < cells.length && removedCount < cellsToRemove; i++) {
         const [r, c] = cells[i];
+        const originalValue = puzzle[r][c];
+        
+        // Try removing this cell
         puzzle[r][c] = 0;
+        
+        // Check if puzzle still has unique solution
+        if (hasUniqueSolution(puzzle)) {
+            // Good, keep it removed
+            removedCount++;
+        } else {
+            // Restore the cell - removing it made puzzle ambiguous
+            puzzle[r][c] = originalValue;
+        }
     }
     
     grid = puzzle.map(r => [...r]);
 }
 
+function hasUniqueSolution(testPuzzle) {
+    const solutions = [];
+    const tempGrid = testPuzzle.map(r => [...r]);
+    
+    // Try to find multiple solutions (limit to 2 for efficiency)
+    if (solvePuzzle(tempGrid, solutions, 2)) {
+        return solutions.length === 1;
+    }
+    return false;
+}
+
+function solvePuzzle(testGrid, solutions, maxSolutions) {
+    // Find first empty cell
+    for (let r = 0; r < 12; r++) {
+        for (let c = 0; c < 12; c++) {
+            if (testGrid[r][c] === 0) {
+                // Try each possible number
+                for (let num = 1; num <= 6; num++) {
+                    if (isValidMove(testGrid, r, c, num)) {
+                        testGrid[r][c] = num;
+                        
+                        if (solvePuzzle(testGrid, solutions, maxSolutions)) {
+                            if (solutions.length >= maxSolutions) {
+                                testGrid[r][c] = 0;
+                                return true;
+                            }
+                        }
+                        
+                        testGrid[r][c] = 0;
+                    }
+                }
+                return false; // No valid number found for this cell
+            }
+        }
+    }
+    
+    // No empty cells found - puzzle is complete
+    solutions.push(testGrid.map(r => [...r]));
+    return true;
+}
+
+function isValidMove(testGrid, r, c, n) {
+    // Count in row
+    let rowCount = 0;
+    for (let i = 0; i < 12; i++) {
+        if (testGrid[r][i] === n) rowCount++;
+    }
+    if (rowCount >= 2) return false;
+
+    // Count in column
+    let colCount = 0;
+    for (let i = 0; i < 12; i++) {
+        if (testGrid[i][c] === n) colCount++;
+    }
+    if (colCount >= 2) return false;
+
+    // Count in 4×3 box
+    const boxR = Math.floor(r / 3) * 3;
+    const boxC = Math.floor(c / 4) * 4;
+    let boxCount = 0;
+    for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 4; j++) {
+            if (testGrid[boxR + i][boxC + j] === n) boxCount++;
+        }
+    }
+    if (boxCount >= 2) return false;
+
+    // Check adjacency
+    const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    for (let [dr, dc] of dirs) {
+        const nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < 12 && nc >= 0 && nc < 12 && testGrid[nr][nc] === n) return false;
+    }
+
+    return true;
+}
+
 function generate() {
     const feedback = document.getElementById('feedback');
-    feedback.textContent = 'Generating puzzle...';
+    feedback.textContent = 'Generating unique solution puzzle...';
     feedback.className = '';
     
     setTimeout(() => {
@@ -259,14 +350,20 @@ function generate() {
             return;
         }
         const clues = parseInt(document.getElementById('clueRange').value);
-        createPuzzle(clues);
-        renderPuzzle();
-        hintCount = 0;
-        startTimer();
-        document.getElementById('menu').style.display = 'none';
-        document.getElementById('game').style.display = 'block';
-        document.getElementById('timer').style.display = 'block';
-        feedback.textContent = '';
+        
+        feedback.textContent = 'Ensuring unique solution...';
+        
+        // Small delay to show the "ensuring unique solution" message
+        setTimeout(() => {
+            createPuzzle(clues);
+            renderPuzzle();
+            hintCount = 0;
+            startTimer();
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('game').style.display = 'block';
+            document.getElementById('timer').style.display = 'block';
+            feedback.textContent = '';
+        }, 100);
     }, 100);
 }
 
