@@ -65,6 +65,13 @@ td{width:24px;height:24px}
 <body>
 <h1>12×12 Sufufu</h1>
 
+<div id="timer" style="display:none">
+<div style="font-size:24px;font-weight:bold;color:#fff;margin:10px 0;text-shadow:2px 2px 4px rgba(0,0,0,0.5)">
+Time: <span id="timerDisplay">00:00</span>
+<button id="pauseBtn" onclick="togglePause()" style="margin-left:15px;padding:5px 10px;font-size:14px;background:#007bff;color:#fff;border:none;border-radius:4px;cursor:pointer">Pause</button>
+</div>
+</div>
+
 <div id="menu" class="controls">
 <div class="form-group">
 <label>Clues: <span id="clueValue">60</span></label>
@@ -126,6 +133,10 @@ let selected = null;
 let mode = 'normal';
 let hintCount = 0;
 let currentHighlightedDigit = null;
+let startTime = null;
+let timerInterval = null;
+let isPaused = false;
+let pausedTime = 0;
 
 function updateClues() {
     const v = document.getElementById('clueRange').value;
@@ -251,8 +262,10 @@ function generate() {
         createPuzzle(clues);
         renderPuzzle();
         hintCount = 0;
+        startTimer();
         document.getElementById('menu').style.display = 'none';
         document.getElementById('game').style.display = 'block';
+        document.getElementById('timer').style.display = 'block';
         feedback.textContent = '';
     }, 100);
 }
@@ -608,7 +621,11 @@ function check() {
 
     if (errors === 0) {
         if (empty === 0) {
-            feedback.textContent = '🎉 Perfect! Puzzle solved! 🎉';
+            stopTimer();
+            const elapsed = getElapsedTime();
+            const minutes = Math.floor(elapsed / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+            feedback.textContent = `🎉 Perfect! Solved in ${minutes}:${seconds.toString().padStart(2, '0')}! 🎉`;
             feedback.className = 'green';
         } else {
             feedback.textContent = `✓ Good progress! ${empty} cells remaining.`;
@@ -673,14 +690,81 @@ function solve() {
 }
 
 function backToMenu() {
+    stopTimer();
     document.getElementById('menu').style.display = 'block';
     document.getElementById('game').style.display = 'none';
+    document.getElementById('timer').style.display = 'none';
     selected = null;
     currentHighlightedDigit = null;
 }
 
 function print() {
     window.print();
+}
+
+function startTimer() {
+    startTime = Date.now();
+    pausedTime = 0;
+    isPaused = false;
+    document.getElementById('pauseBtn').textContent = 'Pause';
+    timerInterval = setInterval(updateTimer, 1000);
+    updateTimer();
+}
+
+function stopTimer() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+}
+
+function togglePause() {
+    const table = document.getElementById('table');
+    const gameControls = document.querySelector('.game-controls');
+    const numpad = document.querySelector('.numpad');
+    const modeSelector = document.querySelector('.mode-selector');
+    
+    if (isPaused) {
+        // Resume
+        startTime = Date.now() - pausedTime;
+        isPaused = false;
+        document.getElementById('pauseBtn').textContent = 'Pause';
+        timerInterval = setInterval(updateTimer, 1000);
+        
+        // Show the puzzle
+        table.style.display = 'table';
+        gameControls.style.display = 'block';
+        numpad.style.display = 'grid';
+        modeSelector.style.display = 'block';
+    } else {
+        // Pause
+        pausedTime = Date.now() - startTime;
+        isPaused = true;
+        document.getElementById('pauseBtn').textContent = 'Resume';
+        clearInterval(timerInterval);
+        
+        // Hide the puzzle
+        table.style.display = 'none';
+        gameControls.style.display = 'none';
+        numpad.style.display = 'none';
+        modeSelector.style.display = 'none';
+    }
+}
+
+function updateTimer() {
+    if (isPaused) return;
+    
+    const elapsed = Date.now() - startTime;
+    const minutes = Math.floor(elapsed / 60000);
+    const seconds = Math.floor((elapsed % 60000) / 1000);
+    
+    document.getElementById('timerDisplay').textContent = 
+        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function getElapsedTime() {
+    if (!startTime) return 0;
+    return isPaused ? pausedTime : Date.now() - startTime;
 }
 
 // Initialize
