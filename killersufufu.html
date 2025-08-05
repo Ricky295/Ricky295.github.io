@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Killer Sufufu</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 15px;
+      color: #eeeeee;
+      background-color: #1a1a1a;
+    }
+
+    .header {
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    .title {
+      font-size: 2.5em;
+      font-weight: bold;
+      background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffd93d);
+      background-size: 300% 300%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: gradientShift 3s ease-in-out infinite;
+      margin-bottom: 10px;
+    }
+
+    @keyframes gradientShift {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    table {
+      border-collapse: collapse;
+      margin: 20px auto;
+      position: relative;
+    }
+
+    td {
+      text-align: center;
+      border: 1px solid #666;
+      position: relative;
+    }
+
+    .cell-div {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #1a1a1a;
+      cursor: pointer;
+      position: relative;
+      font-size: 20px;
+      font-weight: bold;
+      overflow: visible;
+    }
+
+    .editable {
+      color: #4ecdc4;
+    }
+
+    .given {
+      color: #eeeeee;
+      background-color: #2a2a2a;
+    }
+
+    .candidates {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      width: 100%;
+      height: 100%;
+      font-size: 12px;
+      pointer-events: none; /* Prevent clicking on candidates when in grid mode */
+    }
+
+    .candidate {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: #666;
+      pointer-events: none; /* Prevent clicking on individual candidates */
+    }
+    
+    .candidate.active {
+      color: #4ecdc4;
+      font-weight: bold;
+    }
+
+    /* Sufufu constraints - thick borders for 2x4 boxes */
+    td:nth-child(4n) {
+      border-right: 3px solid #eeeeee;
+    }
+
+    td:nth-child(1) {
+      border-left: 3px solid #eeeeee;
+    }
+
+    tr:nth-child(2n) td {
+      border-bottom: 3px solid #eeeeee;
+    }
+
+    tr:nth-child(1) td {
+      border-top: 3px solid #eeeeee;
+    }
+
+    /* Killer cage styling */
+    .cage {
+      position: relative;
+    }
+
+    .cage-sum {
+      position: absolute;
+      top: 1px;
+      left: 1px;
+      font-size: 11px;
+      color: #ff6b6b;
+      font-weight: bold;
+      background-color: rgba(26, 26, 26, 0.9);
+      padding: 1px 3px;
+      border-radius: 2px;
+      z-index: 10;
+      min-width: 12px;
+      text-align: center;
+      border: 1px solid rgba(255, 107, 107, 0.3);
+      pointer-events: none; /* Prevent clicking on cage sums */
+    }
+
+    .selected-cell {
+      outline: 3px solid #4ecdc4;
+      outline-offset: -3px;
+    }
+
+    /* Four color theorem - high contrast colors */
+    .cage-0 { 
+      background-color: rgba(255, 99, 99, 0.3); 
+    }
+    .cage-1 { 
+      background-color: rgba(99, 255, 99, 0.3); 
+    }
+    .cage-2 { 
+      background-color: rgba(99, 99, 255, 0.3); 
+    }
+    .cage-3 { 
+      background-color: rgba(255, 255, 99, 0.3); 
+    }
+    .cage-4 { 
+      background-color: rgba(255, 99, 99, 0.3); 
+    }
+    .cage-5 { 
+      background-color: rgba(99, 255, 99, 0.3); 
+    }
+    .cage-6 { 
+      background-color: rgba(99, 99, 255, 0.3); 
+    }
+    .cage-7 { 
+      background-color: rgba(255, 255, 99, 0.3); 
+    }
+    .cage-8 { 
+      background-color: rgba(255, 99, 99, 0.3); 
+    }
+    .cage-9 { 
+      background-color: rgba(99, 255, 99, 0.3); 
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin: 20px 0;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background-color: #4ecdc4;
+      color: #1a1a1a;
+      border: none;
+      border-radius: 5px;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background-color: #45b7d1;
+    }
+
+    button:disabled {
+      background-color: #666;
+      cursor: not-allowed;
+    }
+
+    .numpad {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      max-width: 200px;
+      margin: 20px auto;
+    }
+
+    .numpad-button {
+      background-color: #f2f2f2;
+      border: 1px solid #ccc;
+      color: #1a1a1a;
+      border-radius: 5px;
+      padding: 15px 0;
+      font-size: 20px;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.2s;
+    }
+
+    .numpad-button:active {
+      background-color: #d9d9d9;
+    }
+
+    .mode-selector {
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    .mode-selector label {
+      margin: 0 10px;
+    }
+
+    #feedback {
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+      margin: 15px 0;
+      min-height: 20px;
+    }
+
+    .rules {
+      background-color: #2a2a2a;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+
+    .rules h3 {
+      color: #4ecdc4;
+      margin-top: 0;
+    }
+
+    .rules ul {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+
+    .difficulty-controls {
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    .difficulty-controls label {
+      margin: 0 10px;
+    }
+
+    .timer {
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+      margin: 10px 0;
+      color: #4ecdc4;
+    }
+
+    @media (max-width: 768px) {
+      .controls {
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      button {
+        width: 200px;
+      }
+      
+      .cell-div {
+        font-size: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1 class="title">Killer Sufufu</h1>
+    <div class="timer" id="timer">Time: 0:00</div>
+  </div>
+
+  <div class="rules">
+    <h3>Rules:</h3>
+    <ul>
+      <li><strong>Sufufu:</strong> Use digits 1-4 exactly twice per row, column, and 2×4 box</li>
+      <li><strong>No Adjacent:</strong> Same digits cannot touch orthogonally (horizontally or vertically)</li>
+      <li><strong>Killer Cages:</strong> Cells in dashed outlines must sum to the small number in the top-left</li>
+      <li><strong>Cage Constraint:</strong> Each cage can contain at most 2 of any digit</li>
+    </ul>
+  </div>
+
+  <div class="difficulty-controls">
+    <label>Difficulty:</label>
+    <label><input type="radio" name="difficulty" value="easy" checked> Easy</label>
+    <label><input type="radio" name="difficulty" value="medium"> Medium</label>
+    <label><input type="radio" name="difficulty" value="hard"> Hard</label>
+    <label><input type="radio" name="difficulty" value="expert"> Expert</label>
+    <label><input type="radio" name="difficulty" value="unfair"> Unfair</label>
+  </div>
+
+  <div class="controls">
+    <button id="generateBtn">Generate New Puzzle</button>
+    <button id="solveBtn">Show Solution</button>
+    <button id="checkBtn">Check Solution</button>
+    <button id="hintBtn">Get Hint</button>
+    <button id="resetBtn">Reset Puzzle</button>
+  </div>
+
+  <table id="puzzleTable"></table>
+
+  <div class="mode-selector">
+    <label><input type="radio" name="input-mode" value="normal" checked> Normal Mode</label>
+    <label><input type="radio" name="input-mode" value="candidate"> Candidate Mode</label>
+    <label><input type="checkbox" id="auto-candidates" checked> Auto Candidate Removal (ACR)</label>
+  </div>
+
+  <div class="numpad">
+    <div class="numpad-button" data-value="1">1</div>
+    <div class="numpad-button" data-value="2">2</div>
+    <div class="numpad-button" data-value="3">3</div>
+    <div class="numpad-button" data-value="4">4</div>
+  </div>
+
+  <div class="controls">
+    <button id="clearBtn">Clear Cell</button>
+    <button id="clearCandidatesBtn">Clear All Candidates</button>
+    <button id="updateCandidatesBtn">Update All Candidates</button>
+  </div>
+
+  <div id="feedback"></div>
+
+  <script>
+    class KillerSufufuGenerator {
+      constructor() {
+        this.grid = Array(8).fill(null).map(() => Array(8).fill(0));
+        this.solution = Array(8).fill(null).map(() => Array(8).fill(0));
+        this.cages = [];
+        this.cageSums = [];
+      }
+
+      // Generate a complete valid Sufufu solution
+      generateSolution() {
+        this.grid = Array(8).fill(null).map(() => Array(8).fill(0));
+        
+        // Use backtracking to fill the grid
+        if (this.solveSufufu(0, 0)) {
+          this.solution = this.grid.map(row => [...row]);
+          return true;
+        }
+        return false;
+      }
+
+      solveSufufu(row, col) {
+        if (row === 8) return true;
+        
+        const nextRow = col === 7 ? row + 1 : row;
+        const nextCol = col === 7 ? 0 : col + 1;
+        
+        // Try each digit 1-4 in random order
+        const digits = this.shuffleArray([1, 2, 3, 4]);
+        
+        for (const digit of digits) {
+          if (this.isValidPlacement(row, col, digit)) {
+            this.grid[row][col] = digit;
+            
+            if (this.solveSufufu(nextRow, nextCol)) {
+              return true;
+            }
+            
+            this.grid[row][col] = 0;
+          }
+        }
+        
+        return false;
+      }
+
+      isValidPlacement(row, col, digit) {
+        // Check row constraint (max 2 of each digit)
+        let rowCount = 0;
+        for (let c = 0; c < 8; c++) {
+          if (this.grid[row][c] === digit) rowCount++;
+        }
+        if (rowCount >= 2) return false;
+
+        // Check column constraint (max 2 of each digit)
+        let colCount = 0;
+        for (let r = 0; r < 8; r++) {
+          if (this.grid[r][col] === digit) colCount++;
+        }
+        if (colCount >= 2) return false;
+
+        // Check 2x4 box constraint (max 2 of each digit)
+        const boxRow = Math.floor(row / 2) * 2;
+        const boxCol = Math.floor(col / 4) * 4;
+        let boxCount = 0;
+        for (let r = 0; r < 2; r++) {
+          for (let c = 0; c < 4; c++) {
+            if (this.grid[boxRow + r][boxCol + c] === digit) boxCount++;
+          }
+        }
+        if (boxCount >= 2) return false;
+
+        // Check adjacency constraint
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        for (const [dr, dc] of directions) {
+          const newRow = row + dr;
+          const newCol = col + dc;
+          if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 && 
+              this.grid[newRow][newCol] === digit) {
+            return false;
+          }
+        }
+
+        return true;
+      }
+
+      // Generate killer cages with four-coloring
+      generateCages() {
+        this.cages = [];
+        this.cageSums = [];
+        this.cageColors = [];
+        const used = Array(8).fill(null).map(() => Array(8).fill(false));
+        const colorMap = Array(8).fill(null).map(() => Array(8).fill(-1));
+        let cageId = 0;
+
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            if (!used[row][col]) {
+              const cage = this.createCage(row, col, used);
+              if (cage.length > 0) {
+                this.cages.push(cage);
+                
+                // Calculate sum
+                let sum = 0;
+                for (const [r, c] of cage) {
+                  sum += this.solution[r][c];
+                }
+                this.cageSums.push(sum);
+                
+                // Assign color using four-color theorem
+                const color = this.assignCageColor(cage, colorMap);
+                this.cageColors.push(color);
+                
+                // Mark cells as used and assign cage color
+                for (const [r, c] of cage) {
+                  used[r][c] = true;
+                  colorMap[r][c] = color;
+                }
+                cageId++;
+              }
+            }
+          }
+        }
+      }
+
+      // Assign color ensuring no adjacent cages have same color
+      assignCageColor(cage, colorMap) {
+        const usedColors = new Set();
+        
+        // Check all cells adjacent to this cage
+        for (const [row, col] of cage) {
+          const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+          for (const [dr, dc] of directions) {
+            const newRow = row + dr;
+            const newCol = col + dc;
+            
+            if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+              const adjacentColor = colorMap[newRow][newCol];
+              if (adjacentColor !== -1) {
+                usedColors.add(adjacentColor);
+              }
+            }
+          }
+        }
+        
+        // Find first available color (0-3 for four colors)
+        for (let color = 0; color < 4; color++) {
+          if (!usedColors.has(color)) {
+            return color;
+          }
+        }
+        
+        // Fallback (shouldn't happen with proper four-coloring)
+        return 0;
+      }
+
+      createCage(startRow, startCol, used) {
+        // For expert/unfair difficulties, create larger cages for more challenge
+        const isExpert = document.querySelector('input[name="difficulty"]:checked')?.value === 'expert';
+        const isUnfair = document.querySelector('input[name="difficulty"]:checked')?.value === 'unfair';
+        
+        let cageSize;
+        if (isUnfair) {
+          // Unfair: Mostly large cages (3-5 cells)
+          cageSize = Math.random() < 0.2 ? 2 : (Math.random() < 0.5 ? 3 : (Math.random() < 0.8 ? 4 : 5));
+        } else if (isExpert) {
+          // Expert: Mix of medium and large cages (2-4 cells)
+          cageSize = Math.random() < 0.3 ? 2 : (Math.random() < 0.6 ? 3 : 4);
+        } else {
+          // Normal difficulties: Smaller cages
+          cageSize = Math.random() < 0.3 ? 2 : (Math.random() < 0.6 ? 3 : 4);
+        }
+        
+        const cage = [[startRow, startCol]];
+        
+        while (cage.length < cageSize) {
+          const possibleCells = [];
+          
+          // Find adjacent cells
+          for (const [row, col] of cage) {
+            const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+            for (const [dr, dc] of directions) {
+              const newRow = row + dr;
+              const newCol = col + dc;
+              
+              if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 && 
+                  !used[newRow][newCol] && 
+                  !cage.some(([r, c]) => r === newRow && c === newCol)) {
+                possibleCells.push([newRow, newCol]);
+              }
+            }
+          }
+          
+          if (possibleCells.length === 0) break;
+          
+          // Choose a random adjacent cell
+          const randomCell = possibleCells[Math.floor(Math.random() * possibleCells.length)];
+          
+          // Check if adding this cell would violate killer cage constraint
+          if (this.wouldViolateCageConstraint([...cage, randomCell])) {
+            break;
+          }
+          
+          cage.push(randomCell);
+        }
+        
+        return cage;
+      }
+
+      wouldViolateCageConstraint(cage) {
+        const digitCounts = [0, 0, 0, 0, 0]; // index 0 unused, 1-4 for digits
+        
+        for (const [row, col] of cage) {
+          const digit = this.solution[row][col];
+          digitCounts[digit]++;
+          if (digitCounts[digit] > 2) {
+            return true;
+          }
+        }
+        
+        return false;
+      }
+
+      // Remove some numbers to create the puzzle
+      createPuzzle(difficulty = 'medium') {
+        const difficultySettings = {
+          easy: { removeCount: 45, minGivens: 19 },
+          medium: { removeCount: 50, minGivens: 14 },
+          hard: { removeCount: 55, minGivens: 9 },
+          expert: { removeCount: 64, minGivens: 0 }, // No givens at all!
+          unfair: { removeCount: 64, minGivens: 0 }  // No givens at all!
+        };
+        
+        const settings = difficultySettings[difficulty];
+        this.grid = this.solution.map(row => [...row]);
+        
+        // For expert/unfair, remove all numbers
+        if (difficulty === 'expert' || difficulty === 'unfair') {
+          for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+              this.grid[r][c] = 0;
+            }
+          }
+          return;
+        }
+        
+        const cells = [];
+        for (let r = 0; r < 8; r++) {
+          for (let c = 0; c < 8; c++) {
+            cells.push([r, c]);
+          }
+        }
+        
+        this.shuffleArray(cells);
+        
+        let removed = 0;
+        for (const [row, col] of cells) {
+          if (removed >= settings.removeCount) break;
+          
+          const original = this.grid[row][col];
+          this.grid[row][col] = 0;
+          
+          // Check if puzzle still has unique solution (simplified check)
+          const remainingGivens = this.countGivens();
+          if (remainingGivens >= settings.minGivens) {
+            removed++;
+          } else {
+            this.grid[row][col] = original;
+          }
+        }
+      }
+
+      countGivens() {
+        let count = 0;
+        for (let r = 0; r < 8; r++) {
+          for (let c = 0; c < 8; c++) {
+            if (this.grid[r][c] !== 0) count++;
+          }
+        }
+        return count;
+      }
+
+      shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+      }
+    }
+
+    class KillerSufufuPlayer {
+      constructor() {
+        this.generator = new KillerSufufuGenerator();
+        this.currentGrid = Array(8).fill(null).map(() => Array(8).fill(0));
+        this.originalGrid = Array(8).fill(null).map(() => Array(8).fill(0));
+        this.selectedCell = null;
+        this.startTime = Date.now();
+        this.timerInterval = null;
+        this.isComplete = false;
+        
+        this.setupEventListeners();
+        this.generateNewPuzzle();
+      }
+
+      setupEventListeners() {
+        document.getElementById('generateBtn').addEventListener('click', () => this.generateNewPuzzle());
+        document.getElementById('solveBtn').addEventListener('click', () => this.showSolution());
+        document.getElementById('checkBtn').addEventListener('click', () => this.checkSolution());
+        document.getElementById('hintBtn').addEventListener('click', () => this.getHint());
+        document.getElementById('resetBtn').addEventListener('click', () => this.resetPuzzle());
+        document.getElementById('clearBtn').addEventListener('click', () => this.clearCell());
+        document.getElementById('clearCandidatesBtn').addEventListener('click', () => this.clearAllCandidates());
+        document.getElementById('updateCandidatesBtn').addEventListener('click', () => this.updateAllCandidates());
+        
+        // Numpad listeners
+        document.querySelectorAll('.numpad-button').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            if (this.selectedCell) {
+              this.handleInput(e.target.dataset.value);
+            }
+          });
+        });
+        
+        // Keyboard support
+        document.addEventListener('keydown', (e) => this.handleKeyboard(e));
+        
+        // Start timer
+        this.startTimer();
+      }
+
+      generateNewPuzzle() {
+        document.getElementById('feedback').textContent = 'Generating puzzle...';
+        document.getElementById('generateBtn').disabled = true;
+        
+        setTimeout(() => {
+          const difficulty = document.querySelector('input[name="difficulty"]:checked').value;
+          
+          // Generate solution
+          let attempts = 0;
+          while (attempts < 10) {
+            if (this.generator.generateSolution()) {
+              break;
+            }
+            attempts++;
+          }
+          
+          if (attempts >= 10) {
+            document.getElementById('feedback').textContent = 'Failed to generate puzzle. Please try again.';
+            document.getElementById('generateBtn').disabled = false;
+            return;
+          }
+          
+          // Generate cages
+          this.generator.generateCages();
+          
+          // Create puzzle
+          this.generator.createPuzzle(difficulty);
+          
+          // Set up game state
+          this.currentGrid = this.generator.grid.map(row => [...row]);
+          this.originalGrid = this.generator.grid.map(row => [...row]);
+          this.isComplete = false;
+          
+          // Render puzzle
+          this.renderPuzzle();
+          
+          // Reset timer
+          this.startTime = Date.now();
+          
+          document.getElementById('feedback').textContent = 'New puzzle generated!';
+          document.getElementById('generateBtn').disabled = false;
+        }, 100);
+      }
+
+      renderPuzzle() {
+        const table = document.getElementById('puzzleTable');
+        let html = '';
+        
+        for (let row = 0; row < 8; row++) {
+          html += '<tr>';
+          for (let col = 0; col < 8; col++) {
+            const value = this.currentGrid[row][col];
+            const isGiven = this.originalGrid[row][col] !== 0;
+            const cageInfo = this.getCageInfo(row, col);
+            
+            html += `
+              <td>
+                <div class="cell-div ${isGiven ? 'given' : 'editable'} ${cageInfo.class}" 
+                     data-row="${row}" data-col="${col}"
+                     style="width: 50px; height: 50px;">
+                  ${cageInfo.showSum ? `<div class="cage-sum">${cageInfo.sum}</div>` : ''}
+                  <span style="font-size: 20px; z-index: 5; position: relative;">${value !== 0 ? value : ''}</span>
+                  <div class="candidates" style="display: none">
+                    <div class="candidate" data-value="1"></div>
+                    <div class="candidate" data-value="2"></div>
+                    <div class="candidate" data-value="3"></div>
+                    <div class="candidate" data-value="4"></div>
+                  </div>
+                </div>
+              </td>`;
+          }
+          html += '</tr>';
+        }
+        
+        table.innerHTML = html;
+        
+        // Add click listeners to cells
+        document.querySelectorAll('.cell-div').forEach(cell => {
+          cell.addEventListener('click', (e) => {
+            // Prevent event bubbling from child elements
+            e.stopPropagation();
+            this.selectCell(e.currentTarget);
+          });
+        });
+      }
+
+      getCageInfo(row, col) {
+        for (let i = 0; i < this.generator.cages.length; i++) {
+          const cage = this.generator.cages[i];
+          const cellIndex = cage.findIndex(([r, c]) => r === row && c === col);
+          
+          if (cellIndex !== -1) {
+            const color = this.generator.cageColors[i];
+            return {
+              class: `cage cage-${color}`,
+              showSum: cellIndex === 0, // Show sum only on first cell of cage
+              sum: this.generator.cageSums[i]
+            };
+          }
+        }
+        
+        return { class: '', showSum: false, sum: 0 };
+      }
+
+      selectCell(target) {
+        // Find the actual cell div if we clicked on a child element
+        let cell = target;
+        while (cell && !cell.classList.contains('cell-div')) {
+          cell = cell.parentElement;
+        }
+        
+        if (!cell) return;
+        
+        if (this.selectedCell) {
+          this.selectedCell.classList.remove('selected-cell');
+        }
+        
+        if (!cell.classList.contains('given')) {
+          this.selectedCell = cell;
+          cell.classList.add('selected-cell');
+        }
+      }
+
+      handleInput(value) {
+        if (!this.selectedCell) return;
+        
+        const row = parseInt(this.selectedCell.dataset.row);
+        const col = parseInt(this.selectedCell.dataset.col);
+        const mode = document.querySelector('input[name="input-mode"]:checked').value;
+        
+        if (mode === 'normal') {
+          this.currentGrid[row][col] = parseInt(value);
+          const span = this.selectedCell.querySelector('span');
+          if (span) {
+            span.textContent = value;
+          }
+          
+          // Hide candidates
+          const candidates = this.selectedCell.querySelector('.candidates');
+          candidates.style.display = 'none';
+          
+          // Auto remove candidates if enabled
+          if (document.getElementById('auto-candidates').checked) {
+            this.removeInvalidCandidates();
+          }
+        } else {
+          this.toggleCandidate(value);
+        }
+        
+        this.checkCompletion();
+      }
+
+      toggleCandidate(value) {
+        if (!this.selectedCell) return;
+        
+        const candidates = this.selectedCell.querySelector('.candidates');
+        candidates.style.display = 'grid';
+        
+        const candidate = candidates.querySelector(`[data-value="${value}"]`);
+        if (candidate.textContent === value) {
+          candidate.textContent = '';
+          candidate.classList.remove('active');
+        } else {
+          candidate.textContent = value;
+          candidate.classList.add('active');
+        }
+        
+        // Clear main cell value
+        const row = parseInt(this.selectedCell.dataset.row);
+        const col = parseInt(this.selectedCell.dataset.col);
+        this.currentGrid[row][col] = 0;
+        const span = this.selectedCell.querySelector('span');
+        if (span) {
+          span.textContent = '';
+        }
+      }
+
+      clearCell() {
+        if (!this.selectedCell) return;
+        
+        const row = parseInt(this.selectedCell.dataset.row);
+        const col = parseInt(this.selectedCell.dataset.col);
+        
+        this.currentGrid[row][col] = 0;
+        const span = this.selectedCell.querySelector('span');
+        if (span) {
+          span.textContent = '';
+        }
+        
+        // Clear candidates
+        const candidates = this.selectedCell.querySelectorAll('.candidate');
+        candidates.forEach(c => {
+          c.textContent = '';
+          c.classList.remove('active');
+        });
+        
+        const candidatesDiv = this.selectedCell.querySelector('.candidates');
+        candidatesDiv.style.display = 'none';
+        
+        // Auto remove candidates if enabled
+        if (document.getElementById('auto-candidates').checked) {
+          this.removeInvalidCandidates();
+        }
+      }
+
+      clearAllCandidates() {
+        document.querySelectorAll('.candidate').forEach(c => {
+          c.textContent = '';
+          c.classList.remove('active');
+        });
+        
+        document.querySelectorAll('.candidates').forEach(c => {
+          c.style.display = 'none';
+        });
+        
+        document.getElementById('feedback').textContent = 'All candidates cleared.';
+      }
+
+      updateAllCandidates() {
+        // First, show candidates for all empty cells
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            if (this.currentGrid[row][col] === 0) {
+              const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+              if (cell && cell.classList.contains('editable')) {
+                const candidatesDiv = cell.querySelector('.candidates');
+                candidatesDiv.style.display = 'grid';
+                
+                // Show all candidates initially
+                for (let digit = 1; digit <= 4; digit++) {
+                  const candidate = candidatesDiv.querySelector(`[data-value="${digit}"]`);
+                  candidate.textContent = digit.toString();
+                  candidate.classList.add('active');
+                }
+              }
+            }
+          }
+        }
+        
+        // Then remove invalid ones
+        this.removeInvalidCandidates();
+        document.getElementById('feedback').textContent = 'All candidates updated with constraint checking.';
+      }
+
+      removeInvalidCandidates() {
+        let removedCount = 0;
+        
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            if (this.currentGrid[row][col] === 0) {
+              const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+              if (cell && cell.classList.contains('editable')) {
+                const candidatesDiv = cell.querySelector('.candidates');
+                
+                if (candidatesDiv.style.display === 'grid') {
+                  for (let digit = 1; digit <= 4; digit++) {
+                    const candidate = candidatesDiv.querySelector(`[data-value="${digit}"]`);
+                    
+                    if (candidate.textContent === digit.toString()) {
+                      if (!this.isValidCandidateMove(row, col, digit)) {
+                        candidate.textContent = '';
+                        candidate.classList.remove('active');
+                        removedCount++;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        
+        if (removedCount > 0) {
+          document.getElementById('feedback').textContent = `Removed ${removedCount} invalid candidates.`;
+        }
+      }
+
+      isValidCandidateMove(row, col, digit) {
+        // Temporarily place the digit
+        const originalValue = this.currentGrid[row][col];
+        this.currentGrid[row][col] = digit;
+        
+        let isValid = true;
+        
+        // Check row constraint (max 2 of each digit) - ACR ACTIVE
+        let rowCount = 0;
+        for (let c = 0; c < 8; c++) {
+          if (this.currentGrid[row][c] === digit) rowCount++;
+        }
+        if (rowCount > 2) isValid = false;
+
+        // Check column constraint (max 2 of each digit) - ACR ACTIVE
+        if (isValid) {
+          let colCount = 0;
+          for (let r = 0; r < 8; r++) {
+            if (this.currentGrid[r][col] === digit) colCount++;
+          }
+          if (colCount > 2) isValid = false;
+        }
+
+        // Check 2x4 box constraint (max 2 of each digit) - ACR ACTIVE
+        if (isValid) {
+          const boxRow = Math.floor(row / 2) * 2;
+          const boxCol = Math.floor(col / 4) * 4;
+          let boxCount = 0;
+          for (let r = 0; r < 2; r++) {
+            for (let c = 0; c < 4; c++) {
+              if (this.currentGrid[boxRow + r][boxCol + c] === digit) boxCount++;
+            }
+          }
+          if (boxCount > 2) isValid = false;
+        }
+
+        // Check adjacency constraint - ACR ACTIVE
+        if (isValid) {
+          const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+          for (const [dr, dc] of directions) {
+            const newRow = row + dr;
+            const newCol = col + dc;
+            if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 && 
+                this.currentGrid[newRow][newCol] === digit) {
+              isValid = false;
+              break;
+            }
+          }
+        }
+
+        // Check killer cage constraint (max 2 of same digit per cage) - ACR DISABLED
+        // Keeping structure but not using for ACR
+        /*
+        if (isValid) {
+          for (const cage of this.generator.cages) {
+            if (cage.some(([r, c]) => r === row && c === col)) {
+              let cageCount = 0;
+              for (const [r, c] of cage) {
+                if (this.currentGrid[r][c] === digit) cageCount++;
+              }
+              if (cageCount > 2) {
+                isValid = false;
+                break;
+              }
+            }
+          }
+        }
+        */
+
+        // Check killer cage sum constraint - ACR DISABLED
+        // Keeping structure but not using for ACR
+        /*
+        if (isValid) {
+          for (let i = 0; i < this.generator.cages.length; i++) {
+            const cage = this.generator.cages[i];
+            if (cage.some(([r, c]) => r === row && c === col)) {
+              const targetSum = this.generator.cageSums[i];
+              let currentSum = 0;
+              let emptyCells = 0;
+              
+              for (const [r, c] of cage) {
+                if (this.currentGrid[r][c] === 0) {
+                  emptyCells++;
+                } else {
+                  currentSum += this.currentGrid[r][c];
+                }
+              }
+              
+              // If this would be the last cell in the cage, check exact sum
+              if (emptyCells === 1 && currentSum !== targetSum) {
+                isValid = false;
+                break;
+              }
+              
+              // If sum is already too high, invalid
+              if (currentSum > targetSum) {
+                isValid = false;
+                break;
+              }
+              
+              // If remaining cells can't possibly reach target (minimum case)
+              if (currentSum + emptyCells - 1 > targetSum) { // -1 because we're testing this cell
+                isValid = false;
+                break;
+              }
+              
+              // If remaining cells can't possibly reach target (maximum case)
+              if (currentSum + (emptyCells - 1) * 4 < targetSum) { // -1 because we're testing this cell
+                isValid = false;
+                break;
+              }
+              
+              break;
+            }
+          }
+        }
+        */
+        
+        // Restore original value
+        this.currentGrid[row][col] = originalValue;
+        
+        return isValid;
+      }
+
+      handleKeyboard(event) {
+        if (!this.selectedCell) return;
+        
+        const key = event.key;
+        
+        if (['1', '2', '3', '4'].includes(key)) {
+          this.handleInput(key);
+          event.preventDefault();
+        } else if (key === 'Delete' || key === 'Backspace') {
+          this.clearCell();
+          event.preventDefault();
+        } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+          this.navigateWithArrows(key);
+          event.preventDefault();
+        }
+      }
+
+      navigateWithArrows(key) {
+        if (!this.selectedCell) return;
+        
+        const row = parseInt(this.selectedCell.dataset.row);
+        const col = parseInt(this.selectedCell.dataset.col);
+        let newRow = row, newCol = col;
+        
+        switch (key) {
+          case 'ArrowUp': newRow = Math.max(0, row - 1); break;
+          case 'ArrowDown': newRow = Math.min(7, row + 1); break;
+          case 'ArrowLeft': newCol = Math.max(0, col - 1); break;
+          case 'ArrowRight': newCol = Math.min(7, col + 1); break;
+        }
+        
+        const newCell = document.querySelector(`[data-row="${newRow}"][data-col="${newCol}"]`);
+        if (newCell && !newCell.classList.contains('given')) {
+          this.selectCell(newCell);
+        }
+      }
+
+      checkSolution() {
+        let errors = 0;
+        const feedback = document.getElementById('feedback');
+        
+        // Clear previous error highlighting
+        document.querySelectorAll('.cell-div').forEach(cell => {
+          cell.style.boxShadow = '';
+        });
+        
+        // Check each constraint
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            const value = this.currentGrid[row][col];
+            if (value === 0) continue;
+            
+            const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            
+            if (!this.isValidMove(row, col, value)) {
+              cell.style.boxShadow = 'inset 0 0 0 3px #ff6b6b';
+              errors++;
+            }
+          }
+        }
+        
+        // Check cage sums
+        for (let i = 0; i < this.generator.cages.length; i++) {
+          const cage = this.generator.cages[i];
+          const targetSum = this.generator.cageSums[i];
+          let currentSum = 0;
+          let hasEmpty = false;
+          
+          for (const [row, col] of cage) {
+            if (this.currentGrid[row][col] === 0) {
+              hasEmpty = true;
+            } else {
+              currentSum += this.currentGrid[row][col];
+            }
+          }
+          
+          if (!hasEmpty && currentSum !== targetSum) {
+            for (const [row, col] of cage) {
+              const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+              cell.style.boxShadow = 'inset 0 0 0 3px #ff6b6b';
+            }
+            errors++;
+          }
+        }
+        
+        if (errors === 0 && this.isGridComplete()) {
+          feedback.textContent = 'Congratulations! Puzzle solved correctly!';
+          feedback.style.color = '#4ecdc4';
+          this.isComplete = true;
+          clearInterval(this.timerInterval);
+        } else if (errors === 0) {
+          feedback.textContent = 'No errors found. Keep going!';
+          feedback.style.color = '#4ecdc4';
+        } else {
+          feedback.textContent = `Found ${errors} error(s). Check highlighted cells.`;
+          feedback.style.color = '#ff6b6b';
+        }
+      }
+
+      isValidMove(row, col, value) {
+        // Check row constraint (exactly 2 of each digit)
+        let rowCount = 0;
+        for (let c = 0; c < 8; c++) {
+          if (this.currentGrid[row][c] === value) rowCount++;
+        }
+        if (rowCount > 2) return false;
+
+        // Check column constraint (exactly 2 of each digit)
+        let colCount = 0;
+        for (let r = 0; r < 8; r++) {
+          if (this.currentGrid[r][col] === value) colCount++;
+        }
+        if (colCount > 2) return false;
+
+        // Check 2x4 box constraint (exactly 2 of each digit)
+        const boxRow = Math.floor(row / 2) * 2;
+        const boxCol = Math.floor(col / 4) * 4;
+        let boxCount = 0;
+        for (let r = 0; r < 2; r++) {
+          for (let c = 0; c < 4; c++) {
+            if (this.currentGrid[boxRow + r][boxCol + c] === value) boxCount++;
+          }
+        }
+        if (boxCount > 2) return false;
+
+        // Check adjacency constraint
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        for (const [dr, dc] of directions) {
+          const newRow = row + dr;
+          const newCol = col + dc;
+          if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 && 
+              this.currentGrid[newRow][newCol] === value) {
+            return false;
+          }
+        }
+
+        // Check killer cage constraint (max 2 of same digit per cage)
+        for (const cage of this.generator.cages) {
+          if (cage.some(([r, c]) => r === row && c === col)) {
+            let cageCount = 0;
+            for (const [r, c] of cage) {
+              if (this.currentGrid[r][c] === value) cageCount++;
+            }
+            if (cageCount > 2) return false;
+            break;
+          }
+        }
+
+        return true;
+      }
+
+      isGridComplete() {
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            if (this.currentGrid[row][col] === 0) return false;
+          }
+        }
+        return true;
+      }
+
+      checkCompletion() {
+        if (this.isGridComplete() && !this.isComplete) {
+          setTimeout(() => this.checkSolution(), 100);
+        }
+      }
+
+      showSolution() {
+        if (confirm('This will reveal the complete solution. Are you sure?')) {
+          this.currentGrid = this.generator.solution.map(row => [...row]);
+          this.renderPuzzle();
+          document.getElementById('feedback').textContent = 'Solution revealed.';
+          document.getElementById('feedback').style.color = '#4ecdc4';
+          this.isComplete = true;
+          clearInterval(this.timerInterval);
+        }
+      }
+
+      resetPuzzle() {
+        if (confirm('This will reset the puzzle to its initial state. Are you sure?')) {
+          this.currentGrid = this.originalGrid.map(row => [...row]);
+          this.renderPuzzle();
+          document.getElementById('feedback').textContent = 'Puzzle reset.';
+          document.getElementById('feedback').style.color = '#4ecdc4';
+          this.startTime = Date.now();
+          this.isComplete = false;
+          
+          if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+          }
+          this.startTimer();
+        }
+      }
+
+      getHint() {
+        // Find first empty cell that can be solved with current constraints
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            if (this.currentGrid[row][col] === 0) {
+              const validDigits = [];
+              
+              for (let digit = 1; digit <= 4; digit++) {
+                // Temporarily place digit
+                this.currentGrid[row][col] = digit;
+                if (this.isValidMove(row, col, digit)) {
+                  validDigits.push(digit);
+                }
+                this.currentGrid[row][col] = 0;
+              }
+              
+              if (validDigits.length === 1) {
+                document.getElementById('feedback').textContent = 
+                  `Hint: Cell at row ${row + 1}, column ${col + 1} must be ${validDigits[0]}.`;
+                document.getElementById('feedback').style.color = '#4ecdc4';
+                
+                // Highlight the cell
+                const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                cell.style.boxShadow = 'inset 0 0 0 3px #ffd93d';
+                setTimeout(() => {
+                  cell.style.boxShadow = '';
+                }, 3000);
+                
+                return;
+              }
+            }
+          }
+        }
+        
+        // Look for cage-based hints
+        for (let i = 0; i < this.generator.cages.length; i++) {
+          const cage = this.generator.cages[i];
+          const targetSum = this.generator.cageSums[i];
+          let currentSum = 0;
+          let emptyCells = [];
+          
+          for (const [row, col] of cage) {
+            if (this.currentGrid[row][col] === 0) {
+              emptyCells.push([row, col]);
+            } else {
+              currentSum += this.currentGrid[row][col];
+            }
+          }
+          
+          if (emptyCells.length === 1) {
+            const neededValue = targetSum - currentSum;
+            if (neededValue >= 1 && neededValue <= 4) {
+              const [row, col] = emptyCells[0];
+              document.getElementById('feedback').textContent = 
+                `Hint: Cell at row ${row + 1}, column ${col + 1} must be ${neededValue} to complete the cage.`;
+              document.getElementById('feedback').style.color = '#4ecdc4';
+              
+              // Highlight the cell
+              const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+              cell.style.boxShadow = 'inset 0 0 0 3px #ffd93d';
+              setTimeout(() => {
+                cell.style.boxShadow = '';
+              }, 3000);
+              
+              return;
+            }
+          }
+        }
+        
+        document.getElementById('feedback').textContent = 'No obvious hints available. Try eliminating candidates!';
+        document.getElementById('feedback').style.color = '#666';
+      }
+
+      startTimer() {
+        this.timerInterval = setInterval(() => {
+          if (!this.isComplete) {
+            const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('timer').textContent = 
+              `Time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+          }
+        }, 1000);
+      }
+    }
+
+    // Initialize the game when page loads
+    let game;
+    document.addEventListener('DOMContentLoaded', () => {
+      game = new KillerSufufuPlayer();
+    });
+  </script>
+</body>
+</html>
