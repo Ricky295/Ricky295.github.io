@@ -513,19 +513,22 @@
                 
                 this.userSkillLevel = null;
                 
-                this.init();
+                // Don't initialize immediately, wait for DOM
             }
             
             init() {
+                console.log('Initializing Sudoku of the Day...');
                 this.updateDateDisplay();
                 
-                // In artifact environment, we'll use a simple in-memory persistence
-                // that works better than localStorage which isn't supported
+                // Load user skill level
                 this.userSkillLevel = this.getUserSkillLevel();
+                console.log('Loaded skill level:', this.userSkillLevel);
                 
                 if (this.userSkillLevel !== null) {
+                    console.log('Showing home screen');
                     this.showHome();
                 } else {
+                    console.log('Showing skill assessment');
                     this.showSkillAssessment();
                 }
                 
@@ -534,33 +537,34 @@
             }
             
             getUserSkillLevel() {
-                // Try localStorage first, fallback to a cookie-based approach
+                // For GitHub Pages, localStorage should work fine
                 try {
                     const saved = localStorage.getItem('userSkillLevel');
-                    if (saved !== null) {
-                        return parseInt(saved);
-                    }
-                } catch (e) {
-                    // localStorage not supported, try cookies
-                    const cookies = document.cookie.split(';');
-                    for (let cookie of cookies) {
-                        const [name, value] = cookie.trim().split('=');
-                        if (name === 'userSkillLevel') {
-                            return parseInt(value);
+                    console.log('Retrieved from localStorage:', saved);
+                    if (saved !== null && saved !== undefined) {
+                        const level = parseInt(saved);
+                        console.log('Parsed skill level:', level);
+                        if (!isNaN(level) && level >= 0 && level <= 5) {
+                            return level;
                         }
                     }
+                } catch (e) {
+                    console.error('Error accessing localStorage:', e);
                 }
                 return null;
             }
             
             saveUserSkillLevel(skillIndex) {
+                console.log('Saving skill level:', skillIndex);
                 try {
                     localStorage.setItem('userSkillLevel', skillIndex.toString());
+                    console.log('Saved to localStorage successfully');
+                    
+                    // Verify it was saved
+                    const verification = localStorage.getItem('userSkillLevel');
+                    console.log('Verification read:', verification);
                 } catch (e) {
-                    // Fallback to cookie
-                    const expires = new Date();
-                    expires.setFullYear(expires.getFullYear() + 1); // 1 year expiry
-                    document.cookie = `userSkillLevel=${skillIndex}; expires=${expires.toUTCString()}; path=/`;
+                    console.error('Error saving to localStorage:', e);
                 }
             }
             
@@ -1132,8 +1136,19 @@
         // Initialize the game
         let game;
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, creating game instance...');
             game = new SudokuOfTheDay();
+            game.init();
         });
+        
+        // Also try immediate initialization in case DOMContentLoaded already fired
+        if (document.readyState === 'loading') {
+            console.log('Document still loading, waiting for DOMContentLoaded...');
+        } else {
+            console.log('Document already loaded, initializing immediately...');
+            game = new SudokuOfTheDay();
+            game.init();
+        }
     </script>
 </body>
 </html>
