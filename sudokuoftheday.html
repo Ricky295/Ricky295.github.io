@@ -519,10 +519,11 @@
             init() {
                 this.updateDateDisplay();
                 
-                // Check if user has set their skill level
-                const savedSkillLevel = sessionStorage.getItem('userSkillLevel');
-                if (savedSkillLevel !== null) {
-                    this.userSkillLevel = parseInt(savedSkillLevel);
+                // In artifact environment, we'll use a simple in-memory persistence
+                // that works better than localStorage which isn't supported
+                this.userSkillLevel = this.getUserSkillLevel();
+                
+                if (this.userSkillLevel !== null) {
                     this.showHome();
                 } else {
                     this.showSkillAssessment();
@@ -530,6 +531,37 @@
                 
                 this.loadStats();
                 this.checkTodayCompletion();
+            }
+            
+            getUserSkillLevel() {
+                // Try localStorage first, fallback to a cookie-based approach
+                try {
+                    const saved = localStorage.getItem('userSkillLevel');
+                    if (saved !== null) {
+                        return parseInt(saved);
+                    }
+                } catch (e) {
+                    // localStorage not supported, try cookies
+                    const cookies = document.cookie.split(';');
+                    for (let cookie of cookies) {
+                        const [name, value] = cookie.trim().split('=');
+                        if (name === 'userSkillLevel') {
+                            return parseInt(value);
+                        }
+                    }
+                }
+                return null;
+            }
+            
+            saveUserSkillLevel(skillIndex) {
+                try {
+                    localStorage.setItem('userSkillLevel', skillIndex.toString());
+                } catch (e) {
+                    // Fallback to cookie
+                    const expires = new Date();
+                    expires.setFullYear(expires.getFullYear() + 1); // 1 year expiry
+                    document.cookie = `userSkillLevel=${skillIndex}; expires=${expires.toUTCString()}; path=/`;
+                }
             }
             
             updateDateDisplay() {
@@ -561,11 +593,21 @@
                     currentStreak: 0,
                     lastCompletedDate: null
                 };
-                return JSON.parse(sessionStorage.getItem('sudokuStats') || JSON.stringify(defaultStats));
+                
+                try {
+                    return JSON.parse(sessionStorage.getItem('sudokuStats') || JSON.stringify(defaultStats));
+                } catch (e) {
+                    return defaultStats;
+                }
             }
             
             saveStats(stats) {
-                sessionStorage.setItem('sudokuStats', JSON.stringify(stats));
+                try {
+                    sessionStorage.setItem('sudokuStats', JSON.stringify(stats));
+                } catch (e) {
+                    // If sessionStorage fails, we'll just lose the stats for this session
+                    console.log('Could not save stats');
+                }
             }
             
             showSkillAssessment() {
@@ -655,15 +697,23 @@
             isTodayCompleted() {
                 const today = new Date().toDateString();
                 const completedKey = `completed_${today}`;
-                return sessionStorage.getItem(completedKey) === 'true';
+                try {
+                    return sessionStorage.getItem(completedKey) === 'true';
+                } catch (e) {
+                    return false;
+                }
             }
             
             markTodayCompleted(score) {
                 const today = new Date().toDateString();
                 const completedKey = `completed_${today}`;
                 const scoreKey = `score_${today}`;
-                sessionStorage.setItem(completedKey, 'true');
-                sessionStorage.setItem(scoreKey, score.toString());
+                try {
+                    sessionStorage.setItem(completedKey, 'true');
+                    sessionStorage.setItem(scoreKey, score.toString());
+                } catch (e) {
+                    console.log('Could not save completion status');
+                }
             }
             
             isLevelCompletedToday(level) {
