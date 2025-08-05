@@ -519,10 +519,10 @@
             init() {
                 this.updateDateDisplay();
                 
-                // Check if user has set their skill level - use in-memory storage for demo
-                this.userSkillLevel = null; // Always show skill assessment in demo
-                
-                if (this.userSkillLevel !== null) {
+                // Check if user has set their skill level
+                const savedSkillLevel = sessionStorage.getItem('userSkillLevel');
+                if (savedSkillLevel !== null) {
+                    this.userSkillLevel = parseInt(savedSkillLevel);
                     this.showHome();
                 } else {
                     this.showSkillAssessment();
@@ -561,11 +561,11 @@
                     currentStreak: 0,
                     lastCompletedDate: null
                 };
-                return defaultStats; // Use default stats for demo
+                return JSON.parse(sessionStorage.getItem('sudokuStats') || JSON.stringify(defaultStats));
             }
             
             saveStats(stats) {
-                // In demo, we don't persist stats
+                sessionStorage.setItem('sudokuStats', JSON.stringify(stats));
             }
             
             showSkillAssessment() {
@@ -629,19 +629,48 @@
             }
             
             isLevelCompletedToday(level) {
-                return false; // For demo, no levels are completed
+                const today = new Date().toDateString();
+                const completedKey = `completed_${today}_${level}`;
+                return sessionStorage.getItem(completedKey) === 'true';
             }
             
             markLevelCompleted(level, score) {
-                // Demo version doesn't persist completion
+                const today = new Date().toDateString();
+                const completedKey = `completed_${today}_${level}`;
+                const scoreKey = `score_${today}_${level}`;
+                sessionStorage.setItem(completedKey, 'true');
+                sessionStorage.setItem(scoreKey, score.toString());
             }
             
             checkTodayCompletion() {
-                // Demo version - no completion tracking
+                // Check if any level was completed today
+                let anyCompleted = false;
+                for (let i = 0; i < 6; i++) {
+                    if (this.isLevelCompletedToday(i)) {
+                        anyCompleted = true;
+                        break;
+                    }
+                }
+                
+                if (anyCompleted) {
+                    // Update completion streak
+                    this.updateStreak();
+                }
             }
             
             updateStreak() {
-                // Demo version - no streak tracking
+                const stats = this.getStats();
+                const today = new Date().toDateString();
+                const yesterday = new Date(Date.now() - 86400000).toDateString();
+                
+                if (stats.lastCompletedDate === yesterday) {
+                    stats.currentStreak += 1;
+                } else if (stats.lastCompletedDate !== today) {
+                    stats.currentStreak = 1;
+                }
+                
+                stats.lastCompletedDate = today;
+                this.saveStats(stats);
             }
             
             startGame(level) {
@@ -649,12 +678,16 @@
                 this.mistakes = 0;
                 this.hintsUsed = 0;
                 
-                // Generate a simple puzzle for demo (since we don't have sudoku.js)
-                this.currentPuzzle = this.generateDemoPuzzle();
+                // Generate today's puzzle for this level using the real Sudoku class
+                const today = new Date();
+                this.currentPuzzle = this.sudoku.generateDailySudoku(level, today, "matrix");
                 this.originalPuzzle = this.currentPuzzle.map(row => [...row]);
                 
-                // Set demo complexity
-                this.pointsPerMinute = 800 + (level * 200);
+                // Generate solution path for scoring
+                this.solutionPath = this.sudoku.solvePath(this.currentPuzzle, 0);
+                
+                // Calculate points per minute based on puzzle complexity
+                this.pointsPerMinute = this.calculatePointsPerMinute(this.solutionPath);
                 
                 this.createSudokuGrid();
                 this.startTimer();
@@ -663,21 +696,7 @@
                 this.showScreen('gameScreen');
             }
             
-            generateDemoPuzzle() {
-                // Generate a simple demo puzzle
-                const puzzle = [
-                    [5,3,0,0,7,0,0,0,0],
-                    [6,0,0,1,9,5,0,0,0],
-                    [0,9,8,0,0,0,0,6,0],
-                    [8,0,0,0,6,0,0,0,3],
-                    [4,0,0,8,0,3,0,0,1],
-                    [7,0,0,0,2,0,0,0,6],
-                    [0,6,0,0,0,0,2,8,0],
-                    [0,0,0,4,1,9,0,0,5],
-                    [0,0,0,0,8,0,0,7,9]
-                ];
-                return puzzle;
-            }
+
             
             createSudokuGrid() {
                 const grid = document.getElementById('sudokuGrid');
@@ -807,35 +826,20 @@
             }
             
             getHint() {
-                // Simple hint implementation for demo
-                const emptyCells = [];
-                for (let row = 0; row < 9; row++) {
-                    for (let col = 0; col < 9; col++) {
-                        if (this.currentPuzzle[row][col] === 0) {
-                            emptyCells.push([row, col]);
-                        }
-                    }
-                }
-                
-                if (emptyCells.length > 0) {
-                    const [row, col] = emptyCells[0];
-                    // For demo, just put a valid number
-                    for (let value = 1; value <= 9; value++) {
-                        if (this.isValidMove(row, col, value)) {
-                            const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-                            if (cell && !cell.readOnly) {
-                                cell.value = value;
-                                cell.classList.add('hint');
-                                this.currentPuzzle[row][col] = value;
-                                this.hintsUsed++;
-                                this.updateScore();
-                                this.updateGameInfo();
-                                
-                                if (this.isPuzzleComplete()) {
-                                    this.completeGame();
-                                }
-                                break;
-                            }
+                const hint = this.sudoku.hint(this.currentPuzzle, 0);
+                if (hint) {
+                    const [technique, [row, col], value] = hint;
+                    const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                    if (cell && !cell.readOnly) {
+                        cell.value = value;
+                        cell.classList.add('hint');
+                        this.currentPuzzle[row][col] = value;
+                        this.hintsUsed++;
+                        this.updateScore();
+                        this.updateGameInfo();
+                        
+                        if (this.isPuzzleComplete()) {
+                            this.completeGame();
                         }
                     }
                 }
