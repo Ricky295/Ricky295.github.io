@@ -404,7 +404,7 @@
                 </div>
                 
                 <div class="game-controls">
-                    <button class="btn" onclick="startTodaysPuzzle()">Play Today's Puzzle</button>
+                    <button class="btn" onclick="startTodaysPuzzle()" id="playTodayBtn">Play Today's Puzzle</button>
                     <button class="btn secondary" onclick="showSettings()">Settings</button>
                 </div>
                 
@@ -607,6 +607,16 @@
             }
             
             startTodaysPuzzle() {
+                // Check if today's puzzle is already completed
+                if (this.isTodayCompleted()) {
+                    const today = new Date().toDateString();
+                    const scoreKey = `score_${today}`;
+                    const savedScore = sessionStorage.getItem(scoreKey);
+                    
+                    alert(`You have already completed today's puzzle!\n\nYour score: ${savedScore || 'Unknown'}\n\nCome back tomorrow for a new puzzle!`);
+                    return;
+                }
+                
                 if (this.userSkillLevel !== null) {
                     const recommendedLevel = this.skillLevels[this.userSkillLevel].recommended;
                     this.startGame(recommendedLevel);
@@ -618,7 +628,21 @@
             
             showHome() {
                 this.updateUserSkillDisplay();
+                this.updatePlayButton();
                 this.showScreen('homeScreen');
+            }
+            
+            updatePlayButton() {
+                const playBtn = document.getElementById('playTodayBtn');
+                if (this.isTodayCompleted()) {
+                    playBtn.textContent = '✅ Today\'s Puzzle Complete';
+                    playBtn.classList.add('success');
+                    playBtn.classList.remove('btn');
+                } else {
+                    playBtn.textContent = 'Play Today\'s Puzzle';
+                    playBtn.classList.add('btn');
+                    playBtn.classList.remove('success');
+                }
             }
             
             showScreen(screenId) {
@@ -628,31 +652,33 @@
                 document.getElementById(screenId).classList.add('active');
             }
             
-            isLevelCompletedToday(level) {
+            isTodayCompleted() {
                 const today = new Date().toDateString();
-                const completedKey = `completed_${today}_${level}`;
+                const completedKey = `completed_${today}`;
                 return sessionStorage.getItem(completedKey) === 'true';
             }
             
-            markLevelCompleted(level, score) {
+            markTodayCompleted(score) {
                 const today = new Date().toDateString();
-                const completedKey = `completed_${today}_${level}`;
-                const scoreKey = `score_${today}_${level}`;
+                const completedKey = `completed_${today}`;
+                const scoreKey = `score_${today}`;
                 sessionStorage.setItem(completedKey, 'true');
                 sessionStorage.setItem(scoreKey, score.toString());
             }
             
+            isLevelCompletedToday(level) {
+                // This method is no longer used since we only track one completion per day
+                return this.isTodayCompleted();
+            }
+            
+            markLevelCompleted(level, score) {
+                // Updated to use the new single completion per day system
+                this.markTodayCompleted(score);
+            }
+            
             checkTodayCompletion() {
-                // Check if any level was completed today
-                let anyCompleted = false;
-                for (let i = 0; i < 6; i++) {
-                    if (this.isLevelCompletedToday(i)) {
-                        anyCompleted = true;
-                        break;
-                    }
-                }
-                
-                if (anyCompleted) {
+                // Check if today's puzzle was completed
+                if (this.isTodayCompleted()) {
                     // Update completion streak
                     this.updateStreak();
                 }
