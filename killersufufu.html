@@ -311,7 +311,6 @@
     <label><input type="radio" name="difficulty" value="medium"> Medium</label>
     <label><input type="radio" name="difficulty" value="hard"> Hard</label>
     <label><input type="radio" name="difficulty" value="expert"> Expert</label>
-    <label><input type="radio" name="difficulty" value="unfair"> Unfair</label>
   </div>
 
   <div class="controls">
@@ -580,12 +579,18 @@
         const settings = difficultySettings[difficulty];
         this.grid = this.solution.map(row => [...row]);
         
-        // For expert/unfair, remove all numbers
+        // For expert/unfair, remove all numbers but ensure unique solution
         if (difficulty === 'expert' || difficulty === 'unfair') {
           for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
               this.grid[r][c] = 0;
             }
+          }
+          
+          // Verify the empty grid with cages has unique solution
+          if (!this.hasUniqueSolution()) {
+            // If not unique, add minimal givens until it becomes unique
+            this.addMinimalGivens();
           }
           return;
         }
@@ -606,12 +611,204 @@
           const original = this.grid[row][col];
           this.grid[row][col] = 0;
           
-          // Check if puzzle still has unique solution (simplified check)
-          const remainingGivens = this.countGivens();
-          if (remainingGivens >= settings.minGivens) {
+          // Check if puzzle still has unique solution
+          if (this.hasUniqueSolution()) {
             removed++;
           } else {
+            // Restore the number if removing it creates multiple solutions
             this.grid[row][col] = original;
+          }
+          
+          // Safety check for minimum givens
+          const remainingGivens = this.countGivens();
+          if (remainingGivens < settings.minGivens) {
+            break;
+          }
+        }
+      }
+
+      // Check if current puzzle has exactly one solution
+      hasUniqueSolution() {
+        const testGrid = this.grid.map(row => [...row]);
+        const solutions = [];
+        
+        // Find up to 2 solutions (if more than 1 exists, it's not unique)
+        this.findSolutions(testGrid, solutions, 2);
+        
+        return solutions.length === 1;
+      }
+
+      // Find all solutions up to maxSolutions
+      findSolutions(grid, solutions, maxSolutions) {
+        if (solutions.length >= maxSolutions) return;
+        
+        // Find first empty cell
+        let emptyRow = -1, emptyCol = -1;
+        for (let r = 0; r < 8 && emptyRow === -1; r++) {
+          for (let c = 0; c < 8 && emptyCol === -1; c++) {
+            if (grid[r][c] === 0) {
+              emptyRow = r;
+              emptyCol = c;
+            }
+          }
+        }
+        
+        // If no empty cells, we found a solution
+        if (emptyRow === -1) {
+          if (this.isValidCompleteGrid(grid)) {
+            solutions.push(grid.map(row => [...row]));
+          }
+          return;
+        }
+        
+        // Try each digit 1-4
+        for (let digit = 1; digit <= 4; digit++) {
+          if (this.isValidPlacementWithCages(emptyRow, emptyCol, digit, grid)) {
+            grid[emptyRow][emptyCol] = digit;
+            this.findSolutions(grid, solutions, maxSolutions);
+            grid[emptyRow][emptyCol] = 0;
+            
+            if (solutions.length >= maxSolutions) break;
+          }
+        }
+      }
+
+      // Check if a placement is valid including cage constraints
+      isValidPlacementWithCages(row, col, digit, grid) {
+        // Basic Sufufu constraints
+        if (!this.isValidPlacementBasic(row, col, digit, grid)) {
+          return false;
+        }
+        
+        // Killer cage constraints
+        for (let i = 0; i < this.cages.length; i++) {
+          const cage = this.cages[i];
+          if (cage.some(([r, c]) => r === row && c === col)) {
+            const targetSum = this.cageSums[i];
+            
+            // Check digit limit in cage (max 2)
+            let digitCount = 0;
+            let currentSum = 0;
+            let emptyCells = 0;
+            
+            for (const [r, c] of cage) {
+              if (r === row && c === col) {
+                digitCount++;
+                currentSum += digit;
+              } else if (grid[r][c] === 0) {
+                emptyCells++;
+              } else {
+                if (grid[r][c] === digit) digitCount++;
+                currentSum += grid[r][c];
+              }
+            }
+            
+            // Max 2 of same digit per cage
+            if (digitCount > 2) return false;
+            
+            // Check sum constraints
+            if (emptyCells === 0) {
+              // Cage complete, must equal target
+              if (currentSum !== targetSum) return false;
+            } else {
+              // Partial cage, check if completion is possible
+              if (currentSum > targetSum) return false;
+              if (currentSum + emptyCells > targetSum) return false; // Min possible
+              if (currentSum + emptyCells * 4 < targetSum) return false; // Max possible
+            }
+            
+            break;
+          }
+        }
+        
+        return true;
+      }
+
+      // Basic Sufufu constraints (without cages)
+      isValidPlacementBasic(row, col, digit, grid) {
+        // Check row constraint (max 2 of each digit)
+        let rowCount = 0;
+        for (let c = 0; c < 8; c++) {
+          if (grid[row][c] === digit) rowCount++;
+        }
+        if (rowCount > 2) return false;
+
+        // Check column constraint (max 2 of each digit)
+        let colCount = 0;
+        for (let r = 0; r < 8; r++) {
+          if (grid[r][col] === digit) colCount++;
+        }
+        if (colCount > 2) return false;
+
+        // Check 2x4 box constraint (max 2 of each digit)
+        const boxRow = Math.floor(row / 2) * 2;
+        const boxCol = Math.floor(col / 4) * 4;
+        let boxCount = 0;
+        for (let r = 0; r < 2; r++) {
+          for (let c = 0; c < 4; c++) {
+            if (grid[boxRow + r][boxCol + c] === digit) boxCount++;
+          }
+        }
+        if (boxCount > 2) return false;
+
+        // Check adjacency constraint
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        for (const [dr, dc] of directions) {
+          const newRow = row + dr;
+          const newCol = col + dc;
+          if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 && 
+              grid[newRow][newCol] === digit) {
+            return false;
+          }
+        }
+
+        return true;
+      }
+
+      // Check if a complete grid is valid
+      isValidCompleteGrid(grid) {
+        // Check all constraints for complete grid
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            const digit = grid[row][col];
+            if (!this.isValidPlacementBasic(row, col, digit, grid)) {
+              return false;
+            }
+          }
+        }
+        
+        // Check cage sums
+        for (let i = 0; i < this.cages.length; i++) {
+          const cage = this.cages[i];
+          const targetSum = this.cageSums[i];
+          let actualSum = 0;
+          
+          for (const [r, c] of cage) {
+            actualSum += grid[r][c];
+          }
+          
+          if (actualSum !== targetSum) return false;
+        }
+        
+        return true;
+      }
+
+      // Add minimal givens to make expert/unfair puzzles unique
+      addMinimalGivens() {
+        const cells = [];
+        for (let r = 0; r < 8; r++) {
+          for (let c = 0; c < 8; c++) {
+            cells.push([r, c]);
+          }
+        }
+        
+        this.shuffleArray(cells);
+        
+        for (const [row, col] of cells) {
+          this.grid[row][col] = this.solution[row][col];
+          
+          if (this.hasUniqueSolution()) {
+            break; // Found minimal givens needed
           }
         }
       }
@@ -684,24 +881,26 @@
           
           // Generate solution
           let attempts = 0;
-          while (attempts < 10) {
+          let success = false;
+          
+          while (attempts < 20 && !success) {
             if (this.generator.generateSolution()) {
-              break;
+              // Generate cages
+              this.generator.generateCages();
+              
+              // Create puzzle with unique solution checking
+              this.generator.createPuzzle(difficulty);
+              success = true;
             }
             attempts++;
           }
           
-          if (attempts >= 10) {
+          if (!success) {
             document.getElementById('feedback').textContent = 'Failed to generate puzzle. Please try again.';
+            document.getElementById('feedback').style.color = '#ff6b6b';
             document.getElementById('generateBtn').disabled = false;
             return;
           }
-          
-          // Generate cages
-          this.generator.generateCages();
-          
-          // Create puzzle
-          this.generator.createPuzzle(difficulty);
           
           // Set up game state
           this.currentGrid = this.generator.grid.map(row => [...row]);
@@ -714,7 +913,10 @@
           // Reset timer
           this.startTime = Date.now();
           
-          document.getElementById('feedback').textContent = 'New puzzle generated!';
+          const givenCount = this.generator.countGivens();
+          document.getElementById('feedback').textContent = 
+            `New puzzle generated! (${givenCount} givens, unique solution guaranteed)`;
+          document.getElementById('feedback').style.color = '#4ecdc4';
           document.getElementById('generateBtn').disabled = false;
         }, 100);
       }
