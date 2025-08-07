@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sudoku of the Day</title>
-    <script src="sudoku.js"></script>
     <style>
         * {
             margin: 0;
@@ -458,6 +457,7 @@
         </div>
     </div>
 
+    <script src="sudoku.js"></script>
     <script>
         class SudokuOfTheDay {
             constructor() {
@@ -470,7 +470,7 @@
                 this.gameTimer = null;
                 this.mistakes = 0;
                 this.hintsUsed = 0;
-                this.pointsPerMinute = 1000; // Will be calculated when puzzle is generated
+                this.pointsPerMinute = 1000;
                 this.currentScore = 1000;
                 
                 this.levelNames = [
@@ -482,165 +482,67 @@
                     {
                         name: "Haven't played yet",
                         description: "I'm completely new to Sudoku",
-                        recommended: 0 // Beginner
+                        recommended: 0
                     },
                     {
                         name: "Just started",
                         description: "I've tried a few puzzles but still learning",
-                        recommended: 1 // Easy
+                        recommended: 1
                     },
                     {
                         name: "Getting comfortable",
                         description: "I can solve easy puzzles without much trouble",
-                        recommended: 2 // Medium
+                        recommended: 2
                     },
                     {
                         name: "Pretty confident",
                         description: "I regularly solve medium difficulty puzzles",
-                        recommended: 3 // Hard
+                        recommended: 3
                     },
                     {
                         name: "Very experienced",
                         description: "I can handle most challenging puzzles",
-                        recommended: 4 // Expert
+                        recommended: 4
                     },
                     {
                         name: "Sudoku master",
                         description: "I live and breathe Sudoku!",
-                        recommended: 5 // Master
+                        recommended: 5
                     }
                 ];
                 
                 this.userSkillLevel = null;
-                
-                // Don't initialize immediately, wait for DOM
+                this.stats = {
+                    totalCompleted: 0,
+                    totalScore: 0,
+                    bestScore: 0,
+                    currentStreak: 0,
+                    lastCompletedDate: null
+                };
             }
             
             init() {
-                console.log('=== INIT START ===');
-                console.log('Current timestamp:', new Date().toISOString());
-                console.log('Document readyState:', document.readyState);
-                console.log('localStorage available:', typeof(Storage) !== "undefined");
-                
                 this.updateDateDisplay();
-                
-                // Load user skill level with extensive debugging
-                console.log('=== LOADING SKILL LEVEL ===');
                 this.userSkillLevel = this.getUserSkillLevel();
-                console.log('Final userSkillLevel value:', this.userSkillLevel);
-                console.log('Type of userSkillLevel:', typeof this.userSkillLevel);
-                console.log('Is null?', this.userSkillLevel === null);
-                console.log('Is undefined?', this.userSkillLevel === undefined);
-                
-                // Let's also check what's actually in localStorage right now
-                console.log('=== LOCALSTORAGE INSPECTION ===');
-                try {
-                    console.log('localStorage length:', localStorage.length);
-                    for (let i = 0; i < localStorage.length; i++) {
-                        const key = localStorage.key(i);
-                        const value = localStorage.getItem(key);
-                        console.log(`localStorage[${key}] = "${value}"`);
-                    }
-                } catch (e) {
-                    console.error('Error inspecting localStorage:', e);
-                }
                 
                 if (this.userSkillLevel !== null) {
-                    console.log('=== SHOWING HOME SCREEN ===');
-                    console.log('User skill level found:', this.userSkillLevel);
-                    console.log('Recommended difficulty:', this.skillLevels[this.userSkillLevel].recommended);
                     this.showHome();
                 } else {
-                    console.log('=== SHOWING SKILL ASSESSMENT ===');
-                    console.log('No skill level found, showing assessment');
                     this.showSkillAssessment();
                 }
                 
                 this.loadStats();
                 this.checkTodayCompletion();
-                console.log('=== INIT COMPLETE ===');
             }
             
+            // Use in-memory storage instead of localStorage for better compatibility
             getUserSkillLevel() {
-                console.log('=== getUserSkillLevel() called ===');
-                console.log('Checking localStorage for userSkillLevel...');
-                
-                // For GitHub Pages, localStorage should work fine
-                try {
-                    const saved = localStorage.getItem('userSkillLevel');
-                    console.log('Raw value from localStorage:', saved);
-                    console.log('Type of raw value:', typeof saved);
-                    console.log('Value === null?', saved === null);
-                    console.log('Value === "null"?', saved === "null");
-                    console.log('Value === undefined?', saved === undefined);
-                    
-                    if (saved !== null && saved !== undefined && saved !== "null") {
-                        const level = parseInt(saved);
-                        console.log('Parsed to integer:', level);
-                        console.log('parseInt result type:', typeof level);
-                        console.log('isNaN check:', isNaN(level));
-                        console.log('Range check (0-5):', level >= 0 && level <= 5);
-                        
-                        if (!isNaN(level) && level >= 0 && level <= 5) {
-                            console.log('✅ Valid skill level found:', level);
-                            return level;
-                        } else {
-                            console.log('❌ Invalid skill level, parsed value out of range');
-                        }
-                    } else {
-                        console.log('❌ No valid value in localStorage');
-                    }
-                } catch (e) {
-                    console.error('❌ Error accessing localStorage:', e);
-                }
-                
-                console.log('❌ Returning null - no valid skill level found');
-                return null;
+                return this.userSkillLevel;
             }
             
             saveUserSkillLevel(skillIndex) {
-                console.log('=== saveUserSkillLevel() called ===');
-                console.log('Input skillIndex:', skillIndex);
-                console.log('Type of skillIndex:', typeof skillIndex);
-                
-                try {
-                    const stringValue = skillIndex.toString();
-                    console.log('Converting to string:', stringValue);
-                    
-                    // Test localStorage before saving
-                    console.log('Testing localStorage write/read...');
-                    localStorage.setItem('test', 'testvalue');
-                    const testRead = localStorage.getItem('test');
-                    console.log('Test write/read result:', testRead);
-                    localStorage.removeItem('test');
-                    
-                    localStorage.setItem('userSkillLevel', stringValue);
-                    console.log('✅ localStorage.setItem() called successfully');
-                    
-                    // Immediate verification
-                    const verification = localStorage.getItem('userSkillLevel');
-                    console.log('Immediate verification read:', verification);
-                    console.log('Verification matches input?', verification === stringValue);
-                    
-                    // Test parsing the stored value
-                    const testParse = parseInt(verification);
-                    console.log('Test parse of stored value:', testParse);
-                    console.log('Test parse matches original?', testParse === skillIndex);
-                    
-                    // Check localStorage length after saving
-                    console.log('localStorage length after save:', localStorage.length);
-                    
-                    // List all localStorage keys
-                    console.log('All localStorage keys after save:');
-                    for (let i = 0; i < localStorage.length; i++) {
-                        const key = localStorage.key(i);
-                        const value = localStorage.getItem(key);
-                        console.log(`  ${key}: ${value}`);
-                    }
-                    
-                } catch (e) {
-                    console.error('❌ Error saving to localStorage:', e);
-                }
+                this.userSkillLevel = skillIndex;
+                this.updateUserSkillDisplay();
             }
             
             updateDateDisplay() {
@@ -656,126 +558,38 @@
             }
             
             loadStats() {
-                const stats = this.getStats();
-                document.getElementById('totalCompleted').textContent = stats.totalCompleted;
+                document.getElementById('totalCompleted').textContent = this.stats.totalCompleted;
                 document.getElementById('averageScore').textContent = 
-                    stats.totalCompleted > 0 ? Math.round(stats.totalScore / stats.totalCompleted) : 0;
-                document.getElementById('bestScore').textContent = stats.bestScore;
-                document.getElementById('currentStreak').textContent = stats.currentStreak;
-            }
-            
-            getStats() {
-                const defaultStats = {
-                    totalCompleted: 0,
-                    totalScore: 0,
-                    bestScore: 0,
-                    currentStreak: 0,
-                    lastCompletedDate: null
-                };
-                
-                try {
-                    return JSON.parse(sessionStorage.getItem('sudokuStats') || JSON.stringify(defaultStats));
-                } catch (e) {
-                    return defaultStats;
-                }
-            }
-            
-            saveStats(stats) {
-                try {
-                    sessionStorage.setItem('sudokuStats', JSON.stringify(stats));
-                } catch (e) {
-                    // If sessionStorage fails, we'll just lose the stats for this session
-                    console.log('Could not save stats');
-                }
+                    this.stats.totalCompleted > 0 ? Math.round(this.stats.totalScore / this.stats.totalCompleted) : 0;
+                document.getElementById('bestScore').textContent = this.stats.bestScore;
+                document.getElementById('currentStreak').textContent = this.stats.currentStreak;
             }
             
             showSkillAssessment() {
-                console.log('=== showSkillAssessment() called ===');
+                const skillGrid = document.getElementById('skillGrid');
+                skillGrid.innerHTML = '';
                 
-                try {
-                    const skillGrid = document.getElementById('skillGrid');
-                    console.log('skillGrid element:', skillGrid);
+                this.skillLevels.forEach((skill, index) => {
+                    const button = document.createElement('div');
+                    button.className = 'level-btn';
+                    button.onclick = () => {
+                        this.setUserSkillLevel(index);
+                    };
                     
-                    if (!skillGrid) {
-                        console.error('❌ skillGrid element not found!');
-                        return;
-                    }
+                    button.innerHTML = `
+                        <div class="level-number">${index + 1}</div>
+                        <div class="level-name">${skill.name}</div>
+                        <div style="font-size: 0.8em; color: #6c757d; margin-top: 5px;">${skill.description}</div>
+                    `;
                     
-                    console.log('Clearing skillGrid innerHTML...');
-                    skillGrid.innerHTML = '';
-                    console.log('skillGrid cleared, current innerHTML length:', skillGrid.innerHTML.length);
-                    
-                    console.log('Creating skill level buttons...');
-                    console.log('this.skillLevels:', this.skillLevels);
-                    console.log('this.skillLevels.length:', this.skillLevels ? this.skillLevels.length : 'undefined');
-                    
-                    if (!this.skillLevels) {
-                        console.error('❌ this.skillLevels is undefined!');
-                        return;
-                    }
-                    
-                    this.skillLevels.forEach((skill, index) => {
-                        console.log(`Creating skill button ${index}: ${skill.name}`);
-                        
-                        const button = document.createElement('div');
-                        console.log('Button element created:', button);
-                        
-                        button.className = 'level-btn';
-                        console.log('Button className set to:', button.className);
-                        
-                        // Add debugging to the click handler
-                        button.onclick = (event) => {
-                            console.log('=== SKILL BUTTON CLICKED ===');
-                            console.log('Click event:', event);
-                            console.log('Button clicked:', event.target);
-                            console.log('Clicked skill index:', index);
-                            console.log('Skill name:', skill.name);
-                            console.log('this context:', this);
-                            console.log('this.setUserSkillLevel exists?', typeof this.setUserSkillLevel === 'function');
-                            
-                            console.log('About to call setUserSkillLevel...');
-                            try {
-                                const result = this.setUserSkillLevel(index);
-                                console.log('setUserSkillLevel returned:', result);
-                            } catch (error) {
-                                console.error('❌ Error in setUserSkillLevel:', error);
-                                console.error('Error name:', error.name);
-                                console.error('Error message:', error.message);
-                                console.error('Error stack:', error.stack);
-                            }
-                            console.log('Finished calling setUserSkillLevel');
-                        };
-                        
-                        console.log('Click handler attached to button');
-                        
-                        button.innerHTML = `
-                            <div class="level-number">${index + 1}</div>
-                            <div class="level-name">${skill.name}</div>
-                            <div style="font-size: 0.8em; color: #6c757d; margin-top: 5px;">${skill.description}</div>
-                        `;
-                        
-                        console.log('Button innerHTML set, length:', button.innerHTML.length);
-                        
-                        skillGrid.appendChild(button);
-                        console.log(`✅ Added skill button ${index} to grid`);
-                        console.log('skillGrid children count:', skillGrid.children.length);
-                    });
-                    
-                    console.log('Total skill buttons created:', this.skillLevels.length);
-                    console.log('Final skillGrid children count:', skillGrid.children.length);
-                    
-                    this.showScreen('skillAssessment');
-                    console.log('✅ showSkillAssessment completed successfully');
-                    
-                } catch (error) {
-                    console.error('❌ Error in showSkillAssessment:', error);
-                    console.error('Error stack:', error.stack);
-                }
+                    skillGrid.appendChild(button);
+                });
+                
+                this.showScreen('skillAssessment');
             }
             
             setUserSkillLevel(skillIndex) {
-                this.userSkillLevel = skillIndex;
-                this.updateUserSkillDisplay();
+                this.saveUserSkillLevel(skillIndex);
                 this.showHome();
             }
             
@@ -791,13 +605,8 @@
             }
             
             startTodaysPuzzle() {
-                // Check if today's puzzle is already completed
-                if (this.isTodayCompleted()) {
-                    const today = new Date().toDateString();
-                    const scoreKey = `score_${today}`;
-                    const savedScore = sessionStorage.getItem(scoreKey);
-                    
-                    alert(`You have already completed today's puzzle!\n\nYour score: ${savedScore || 'Unknown'}\n\nCome back tomorrow for a new puzzle!`);
+                if (this.stats.lastCompletedDate === new Date().toDateString()) {
+                    alert(`You have already completed today's puzzle!\n\nYour score: ${this.stats.bestScore}\n\nCome back tomorrow for a new puzzle!`);
                     return;
                 }
                 
@@ -805,7 +614,6 @@
                     const recommendedLevel = this.skillLevels[this.userSkillLevel].recommended;
                     this.startGame(recommendedLevel);
                 } else {
-                    // Fallback to medium if somehow skill level isn't set
                     this.startGame(2);
                 }
             }
@@ -818,136 +626,79 @@
             
             updatePlayButton() {
                 const playBtn = document.getElementById('playTodayBtn');
-                if (this.isTodayCompleted()) {
+                if (this.stats.lastCompletedDate === new Date().toDateString()) {
                     playBtn.textContent = '✅ Today\'s Puzzle Complete';
                     playBtn.classList.add('success');
-                    playBtn.classList.remove('btn');
                 } else {
                     playBtn.textContent = 'Play Today\'s Puzzle';
-                    playBtn.classList.add('btn');
                     playBtn.classList.remove('success');
+                    playBtn.classList.add('btn');
                 }
             }
             
             showScreen(screenId) {
-                console.log('=== showScreen() called ===');
-                console.log('Switching to screen:', screenId);
-                
-                document.querySelectorAll('.skill-assessment, .home-screen, .level-select, .game-screen').forEach(screen => {
-                    const wasActive = screen.classList.contains('active');
+                document.querySelectorAll('.skill-assessment, .home-screen, .game-screen').forEach(screen => {
                     screen.classList.remove('active');
-                    if (wasActive) {
-                        console.log('Hiding screen:', screen.className);
-                    }
                 });
                 
-                const targetScreen = document.getElementById(screenId);
-                if (targetScreen) {
-                    targetScreen.classList.add('active');
-                    console.log('✅ Showing screen:', screenId);
-                } else {
-                    console.error('❌ Screen not found:', screenId);
-                }
-            }
-            
-            isTodayCompleted() {
-                const today = new Date().toDateString();
-                const completedKey = `completed_${today}`;
-                try {
-                    return sessionStorage.getItem(completedKey) === 'true';
-                } catch (e) {
-                    return false;
-                }
-            }
-            
-            markTodayCompleted(score) {
-                const today = new Date().toDateString();
-                const completedKey = `completed_${today}`;
-                const scoreKey = `score_${today}`;
-                try {
-                    sessionStorage.setItem(completedKey, 'true');
-                    sessionStorage.setItem(scoreKey, score.toString());
-                } catch (e) {
-                    console.log('Could not save completion status');
-                }
-            }
-            
-            isLevelCompletedToday(level) {
-                // This method is no longer used since we only track one completion per day
-                return this.isTodayCompleted();
-            }
-            
-            markLevelCompleted(level, score) {
-                // Updated to use the new single completion per day system
-                this.markTodayCompleted(score);
+                document.getElementById(screenId).classList.add('active');
             }
             
             checkTodayCompletion() {
-                // Check if today's puzzle was completed
-                if (this.isTodayCompleted()) {
-                    // Update completion streak
+                if (this.stats.lastCompletedDate === new Date().toDateString()) {
                     this.updateStreak();
                 }
             }
             
             updateStreak() {
-                const stats = this.getStats();
                 const today = new Date().toDateString();
                 const yesterday = new Date(Date.now() - 86400000).toDateString();
                 
-                if (stats.lastCompletedDate === yesterday) {
-                    stats.currentStreak += 1;
-                } else if (stats.lastCompletedDate !== today) {
-                    stats.currentStreak = 1;
+                if (this.stats.lastCompletedDate === yesterday) {
+                    this.stats.currentStreak += 1;
+                } else if (this.stats.lastCompletedDate !== today) {
+                    this.stats.currentStreak = 1;
                 }
                 
-                stats.lastCompletedDate = today;
-                this.saveStats(stats);
+                this.stats.lastCompletedDate = today;
             }
             
             calculatePointsPerMinute(solutionPath) {
                 if (!solutionPath || solutionPath.length === 0) {
-                    return 1000; // Fallback for unsolvable puzzles
+                    return 1000;
                 }
                 
                 let totalPoints = 0;
                 let consecutiveGuesses = 0;
                 
                 for (const step of solutionPath) {
-                    const [technique, position, value] = step;
+                    const [technique] = step;
                     
                     switch (technique) {
                         case "HIDDEN SINGLE (BOX)":
-                            totalPoints += 100; // Easiest - only check 9 cells in box
+                            totalPoints += 100;
                             consecutiveGuesses = 0;
                             break;
-                            
                         case "HIDDEN SINGLE (LINE)":
-                            totalPoints += 150; // Medium - check row/column (9 cells) but requires line thinking
+                            totalPoints += 150;
                             consecutiveGuesses = 0;
                             break;
-                            
                         case "NAKED SINGLE":
-                            totalPoints += 200; // Hardest - requires elimination across row, column AND box
+                            totalPoints += 200;
                             consecutiveGuesses = 0;
                             break;
-                            
                         case "GUESS":
                             consecutiveGuesses++;
-                            // Exponential increase for consecutive guesses
                             const guessPoints = 500 * Math.pow(1.5, consecutiveGuesses - 1);
                             totalPoints += guessPoints;
                             break;
-                            
                         default:
-                            // Any other advanced techniques
                             totalPoints += 300;
                             consecutiveGuesses = 0;
                             break;
                     }
                 }
                 
-                // Ensure minimum points per minute
                 return Math.max(totalPoints, 500);
             }
             
@@ -956,15 +707,11 @@
                 this.mistakes = 0;
                 this.hintsUsed = 0;
                 
-                // Generate today's puzzle for this level using the real Sudoku class
                 const today = new Date();
                 this.currentPuzzle = this.sudoku.generateDailySudoku(level, today, "matrix");
                 this.originalPuzzle = this.currentPuzzle.map(row => [...row]);
                 
-                // Generate solution path for scoring
                 this.solutionPath = this.sudoku.solvePath(this.currentPuzzle, 0);
-                
-                // Calculate points per minute based on puzzle complexity
                 this.pointsPerMinute = this.calculatePointsPerMinute(this.solutionPath);
                 
                 this.createSudokuGrid();
@@ -973,8 +720,6 @@
                 
                 this.showScreen('gameScreen');
             }
-            
-
             
             createSudokuGrid() {
                 const grid = document.getElementById('sudokuGrid');
@@ -1008,7 +753,6 @@
                 const cell = event.target;
                 const value = cell.value;
                 
-                // Only allow numbers 1-9
                 if (!/^[1-9]$/.test(value)) {
                     cell.value = '';
                     return;
@@ -1018,7 +762,6 @@
                 const col = parseInt(cell.dataset.col);
                 this.currentPuzzle[row][col] = parseInt(value);
                 
-                // Check if the move is valid
                 if (this.isValidMove(row, col, parseInt(value))) {
                     cell.classList.remove('error');
                     cell.classList.add('user-input');
@@ -1030,7 +773,6 @@
                 
                 this.updateGameInfo();
                 
-                // Check if puzzle is complete
                 if (this.isPuzzleComplete()) {
                     this.completeGame();
                 }
@@ -1039,7 +781,6 @@
             handleKeyDown(event) {
                 const cell = event.target;
                 
-                // Allow backspace/delete to clear cell
                 if (event.key === 'Backspace' || event.key === 'Delete') {
                     const row = parseInt(cell.dataset.row);
                     const col = parseInt(cell.dataset.col);
@@ -1047,7 +788,6 @@
                     cell.classList.remove('user-input', 'error', 'hint');
                 }
                 
-                // Navigation with arrow keys
                 const row = parseInt(cell.dataset.row);
                 const col = parseInt(cell.dataset.col);
                 let newRow = row, newCol = col;
@@ -1077,21 +817,17 @@
             }
             
             isValidMove(row, col, value) {
-                // Create a temporary grid for validation
                 const tempGrid = this.currentPuzzle.map(r => [...r]);
-                tempGrid[row][col] = 0; // Temporarily clear the cell
+                tempGrid[row][col] = 0;
                 
-                // Check row
                 for (let c = 0; c < 9; c++) {
                     if (tempGrid[row][c] === value) return false;
                 }
                 
-                // Check column
                 for (let r = 0; r < 9; r++) {
                     if (tempGrid[r][col] === value) return false;
                 }
                 
-                // Check 3x3 box
                 const boxRow = Math.floor(row / 3) * 3;
                 const boxCol = Math.floor(col / 3) * 3;
                 for (let r = boxRow; r < boxRow + 3; r++) {
@@ -1164,19 +900,13 @@
                 this.stopTimer();
                 const finalScore = Math.max(0, this.currentScore);
                 
-                // Update stats
-                const stats = this.getStats();
-                stats.totalCompleted++;
-                stats.totalScore += finalScore;
-                if (finalScore > stats.bestScore) {
-                    stats.bestScore = finalScore;
+                this.stats.totalCompleted++;
+                this.stats.totalScore += finalScore;
+                if (finalScore > this.stats.bestScore) {
+                    this.stats.bestScore = finalScore;
                 }
-                this.saveStats(stats);
+                this.stats.lastCompletedDate = new Date().toDateString();
                 
-                // Mark level as completed
-                this.markLevelCompleted(this.currentLevel, finalScore);
-                
-                // Show completion modal
                 document.getElementById('finalScore').textContent = Math.round(finalScore);
                 document.getElementById('finalTime').textContent = this.getTimeString();
                 document.getElementById('completionModal').classList.add('active');
@@ -1216,7 +946,7 @@
             }
             
             updateScore() {
-                const elapsedMinutes = (Date.now() - this.startTime) / 60000; // Convert to minutes
+                const elapsedMinutes = (Date.now() - this.startTime) / 60000;
                 
                 if (elapsedMinutes <= 0) {
                     this.currentScore = this.pointsPerMinute;
@@ -1224,16 +954,11 @@
                     return;
                 }
                 
-                // Base score: points per minute divided by actual minutes
                 const baseScore = this.pointsPerMinute / elapsedMinutes;
-                
-                // Apply penalties
                 const mistakePenalty = Math.pow(0.9, this.mistakes);
                 const hintPenalty = Math.pow(0.8, this.hintsUsed);
                 
-                // Final score calculation
                 this.currentScore = baseScore * mistakePenalty * hintPenalty;
-                
                 document.getElementById('scoreDisplay').textContent = Math.round(this.currentScore);
             }
             
@@ -1247,21 +972,15 @@
         
         // Screen navigation functions
         function showHome() {
-            if (game) {
-                game.showHome();
-            }
+            if (game) game.showHome();
         }
         
         function startTodaysPuzzle() {
-            if (game) {
-                game.startTodaysPuzzle();
-            }
+            if (game) game.startTodaysPuzzle();
         }
         
         function changeSkillLevel() {
-            if (game) {
-                game.showSkillAssessment();
-            }
+            if (game) game.showSkillAssessment();
         }
         
         function closeModal() {
@@ -1274,72 +993,27 @@
         }
         
         function getHint() {
-            if (game) {
-                game.getHint();
-            }
+            if (game) game.getHint();
         }
         
         function checkSolution() {
-            if (game) {
-                game.checkSolution();
-            }
+            if (game) game.checkSolution();
         }
         
         // Initialize the game
         let game;
         
-        // Add some global debugging
-        console.log('=== SCRIPT LOADING ===');
-        console.log('Script timestamp:', new Date().toISOString());
-        console.log('User agent:', navigator.userAgent);
-        console.log('localStorage supported:', typeof(Storage) !== "undefined");
-        console.log('Current URL:', window.location.href);
-        console.log('Current domain:', window.location.hostname);
-        console.log('Protocol:', window.location.protocol);
-        
-        // Test localStorage immediately on script load
-        console.log('=== IMMEDIATE LOCALSTORAGE TEST ===');
-        try {
-            const testKey = 'immediateTest_' + Date.now();
-            const testValue = 'testValue123';
-            localStorage.setItem(testKey, testValue);
-            const readBack = localStorage.getItem(testKey);
-            console.log('Immediate localStorage test - saved:', testValue, 'read:', readBack);
-            console.log('Immediate test success:', readBack === testValue);
-            localStorage.removeItem(testKey);
-        } catch (e) {
-            console.error('Immediate localStorage test failed:', e);
-        }
-        
         document.addEventListener('DOMContentLoaded', () => {
-            console.log('=== DOMContentLoaded EVENT ===');
-            console.log('Event timestamp:', new Date().toISOString());
-            console.log('Creating game instance...');
             game = new SudokuOfTheDay();
-            console.log('Game instance created, calling init...');
             game.init();
         });
         
-        // Also try immediate initialization in case DOMContentLoaded already fired
         if (document.readyState === 'loading') {
-            console.log('Document still loading, waiting for DOMContentLoaded...');
+            // Wait for DOMContentLoaded
         } else {
-            console.log('=== IMMEDIATE INITIALIZATION ===');
-            console.log('Document already loaded, initializing immediately...');
-            console.log('Document readyState:', document.readyState);
             setTimeout(() => {
-                console.log('Creating game instance immediately...');
                 game = new SudokuOfTheDay();
-                console.log('Game instance created, calling init...');
                 game.init();
-            }, 10); // Small delay to ensure everything is ready
+            }, 10);
         }
-        
-        // Add a listener for when localStorage changes (if another tab modifies it)
-        window.addEventListener('storage', (e) => {
-            console.log('=== STORAGE EVENT ===');
-            console.log('Storage changed:', e.key, 'from', e.oldValue, 'to', e.newValue);
-        });
     </script>
-</body>
-</html>
