@@ -459,9 +459,70 @@
 
     <script src="sudoku.js"></script>
     <script>
+        // Debug helper
+        function debug(...args) {
+            console.log(`[DEBUG ${new Date().toLocaleTimeString()}]`, ...args);
+        }
+        
+        function debugError(...args) {
+            console.error(`[ERROR ${new Date().toLocaleTimeString()}]`, ...args);
+        }
+        
+        // Test if Sudoku class loaded
+        debug('=== INITIALIZATION CHECK ===');
+        debug('Sudoku class available?', typeof Sudoku !== 'undefined');
+        debug('Window object keys:', Object.keys(window).filter(k => k.includes('Sudoku')));
+        debug('Document ready state:', document.readyState);
+        
+        if (typeof Sudoku !== 'undefined') {
+            debug('✅ Sudoku class found, testing instantiation...');
+            try {
+                const testSudoku = new Sudoku();
+                debug('✅ Sudoku instantiation successful');
+                debug('Sudoku methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(testSudoku)));
+            } catch (e) {
+                debugError('❌ Sudoku instantiation failed:', e);
+            }
+        } else {
+            debugError('❌ Sudoku class not found! Check if sudoku.js loaded properly.');
+            debugError('Available global objects:', Object.keys(window).slice(0, 20));
+        }
+
         class SudokuOfTheDay {
             constructor() {
-                this.sudoku = new Sudoku();
+                debug('=== CONSTRUCTOR START ===');
+                
+                try {
+                    if (typeof Sudoku === 'undefined') {
+                        debugError('❌ Sudoku class not available in constructor');
+                        // Create a mock Sudoku for testing
+                        this.sudoku = {
+                            generateDailySudoku: () => {
+                                debug('Using mock Sudoku - generating simple puzzle');
+                                return [
+                                    [5,3,0,0,7,0,0,0,0],
+                                    [6,0,0,1,9,5,0,0,0],
+                                    [0,9,8,0,0,0,0,6,0],
+                                    [8,0,0,0,6,0,0,0,3],
+                                    [4,0,0,8,0,3,0,0,1],
+                                    [7,0,0,0,2,0,0,0,6],
+                                    [0,6,0,0,0,0,2,8,0],
+                                    [0,0,0,4,1,9,0,0,5],
+                                    [0,0,0,0,8,0,0,7,9]
+                                ];
+                            },
+                            hint: () => null,
+                            solvePath: () => []
+                        };
+                    } else {
+                        debug('✅ Sudoku class available, creating instance');
+                        this.sudoku = new Sudoku();
+                        debug('✅ Sudoku instance created successfully');
+                    }
+                } catch (e) {
+                    debugError('❌ Error creating Sudoku instance:', e);
+                    this.sudoku = null;
+                }
                 this.currentPuzzle = null;
                 this.originalPuzzle = null;
                 this.solutionPath = null;
@@ -519,20 +580,48 @@
                     currentStreak: 0,
                     lastCompletedDate: null
                 };
+                
+                debug('✅ Constructor completed successfully');
+                debug('Initial state:', {
+                    sudokuAvailable: this.sudoku !== null,
+                    userSkillLevel: this.userSkillLevel,
+                    skillLevelsCount: this.skillLevels.length
+                });
             }
             
             init() {
-                this.updateDateDisplay();
+                debug('=== INIT START ===');
+                debug('DOM elements check:');
+                debug('- dateDisplay:', !!document.getElementById('dateDisplay'));
+                debug('- skillGrid:', !!document.getElementById('skillGrid'));
+                debug('- homeScreen:', !!document.getElementById('homeScreen'));
+                debug('- skillAssessment:', !!document.getElementById('skillAssessment'));
+                
+                try {
+                    this.updateDateDisplay();
+                    debug('✅ Date display updated');
+                } catch (e) {
+                    debugError('❌ Error updating date display:', e);
+                }
+                
                 this.userSkillLevel = this.getUserSkillLevel();
+                debug('User skill level:', this.userSkillLevel);
                 
                 if (this.userSkillLevel !== null) {
+                    debug('Showing home screen...');
                     this.showHome();
                 } else {
+                    debug('Showing skill assessment...');
                     this.showSkillAssessment();
                 }
                 
-                this.loadStats();
-                this.checkTodayCompletion();
+                try {
+                    this.loadStats();
+                    this.checkTodayCompletion();
+                    debug('✅ Init completed successfully');
+                } catch (e) {
+                    debugError('❌ Error in init completion:', e);
+                }
             }
             
             // Use in-memory storage instead of localStorage for better compatibility
@@ -566,26 +655,66 @@
             }
             
             showSkillAssessment() {
-                const skillGrid = document.getElementById('skillGrid');
-                skillGrid.innerHTML = '';
+                debug('=== SHOW SKILL ASSESSMENT ===');
                 
-                this.skillLevels.forEach((skill, index) => {
-                    const button = document.createElement('div');
-                    button.className = 'level-btn';
-                    button.onclick = () => {
-                        this.setUserSkillLevel(index);
-                    };
+                try {
+                    const skillGrid = document.getElementById('skillGrid');
+                    debug('skillGrid element:', skillGrid);
                     
-                    button.innerHTML = `
-                        <div class="level-number">${index + 1}</div>
-                        <div class="level-name">${skill.name}</div>
-                        <div style="font-size: 0.8em; color: #6c757d; margin-top: 5px;">${skill.description}</div>
-                    `;
+                    if (!skillGrid) {
+                        debugError('❌ skillGrid element not found!');
+                        return;
+                    }
                     
-                    skillGrid.appendChild(button);
-                });
-                
-                this.showScreen('skillAssessment');
+                    debug('Clearing skill grid...');
+                    skillGrid.innerHTML = '';
+                    debug('skillGrid cleared');
+                    
+                    debug('Creating skill buttons, count:', this.skillLevels.length);
+                    
+                    this.skillLevels.forEach((skill, index) => {
+                        debug(`Creating skill button ${index}:`, skill.name);
+                        
+                        const button = document.createElement('div');
+                        button.className = 'level-btn';
+                        
+                        // Add detailed click logging
+                        button.onclick = (event) => {
+                            debug('=== SKILL BUTTON CLICKED ===');
+                            debug('Button clicked, index:', index);
+                            debug('Skill:', skill.name);
+                            debug('Event:', event);
+                            debug('Target:', event.target);
+                            
+                            try {
+                                debug('Calling setUserSkillLevel...');
+                                this.setUserSkillLevel(index);
+                                debug('✅ setUserSkillLevel completed');
+                            } catch (error) {
+                                debugError('❌ Error in setUserSkillLevel:', error);
+                            }
+                        };
+                        
+                        button.innerHTML = `
+                            <div class="level-number">${index + 1}</div>
+                            <div class="level-name">${skill.name}</div>
+                            <div style="font-size: 0.8em; color: #6c757d; margin-top: 5px;">${skill.description}</div>
+                        `;
+                        
+                        debug(`Adding button ${index} to grid`);
+                        skillGrid.appendChild(button);
+                        debug(`✅ Button ${index} added, grid children count:`, skillGrid.children.length);
+                    });
+                    
+                    debug('All buttons created, total:', skillGrid.children.length);
+                    debug('Calling showScreen...');
+                    this.showScreen('skillAssessment');
+                    debug('✅ showSkillAssessment completed');
+                    
+                } catch (error) {
+                    debugError('❌ Error in showSkillAssessment:', error);
+                    debugError('Stack:', error.stack);
+                }
             }
             
             setUserSkillLevel(skillIndex) {
@@ -636,12 +765,38 @@
                 }
             }
             
+            // Use in-memory storage instead of localStorage for better compatibility
+            getUserSkillLevel() {
+                debug('=== GET USER SKILL LEVEL ===');
+                debug('Current userSkillLevel:', this.userSkillLevel);
+                return this.userSkillLevel;
+            }
+            
             showScreen(screenId) {
-                document.querySelectorAll('.skill-assessment, .home-screen, .game-screen').forEach(screen => {
+                debug('=== SHOW SCREEN ===');
+                debug('Switching to screen:', screenId);
+                
+                const screens = document.querySelectorAll('.skill-assessment, .home-screen, .game-screen');
+                debug('Found screens:', screens.length);
+                
+                screens.forEach(screen => {
+                    const wasActive = screen.classList.contains('active');
                     screen.classList.remove('active');
+                    if (wasActive) {
+                        debug('Hiding screen:', screen.id || screen.className);
+                    }
                 });
                 
-                document.getElementById(screenId).classList.add('active');
+                const targetScreen = document.getElementById(screenId);
+                debug('Target screen:', targetScreen);
+                
+                if (targetScreen) {
+                    targetScreen.classList.add('active');
+                    debug('✅ Showing screen:', screenId);
+                    debug('Screen is visible:', targetScreen.offsetHeight > 0);
+                } else {
+                    debugError('❌ Screen not found:', screenId);
+                }
             }
             
             checkTodayCompletion() {
@@ -1000,20 +1155,90 @@
             if (game) game.checkSolution();
         }
         
-        // Initialize the game
+        // Initialize the game with extensive debugging
         let game;
         
-        document.addEventListener('DOMContentLoaded', () => {
-            game = new SudokuOfTheDay();
-            game.init();
+        debug('=== SCRIPT LOADING ===');
+        debug('Script timestamp:', new Date().toISOString());
+        debug('Document ready state:', document.readyState);
+        debug('User agent:', navigator.userAgent);
+        
+        function initializeGame() {
+            debug('=== INITIALIZE GAME ===');
+            
+            try {
+                if (game) {
+                    debug('⚠️ Game already exists, reinitializing...');
+                }
+                
+                debug('Creating SudokuOfTheDay instance...');
+                game = new SudokuOfTheDay();
+                debug('✅ Game instance created');
+                
+                debug('Calling game.init()...');
+                game.init();
+                debug('✅ Game initialization completed');
+                
+                // Test if skill assessment is visible
+                const skillAssessment = document.getElementById('skillAssessment');
+                debug('Skill assessment visible?', skillAssessment && skillAssessment.classList.contains('active'));
+                debug('Skill assessment height:', skillAssessment ? skillAssessment.offsetHeight : 'N/A');
+                
+            } catch (error) {
+                debugError('❌ Fatal error during game initialization:', error);
+                debugError('Stack:', error.stack);
+                
+                // Show error to user
+                const content = document.querySelector('.content');
+                if (content) {
+                    content.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: #d32f2f;">
+                            <h2>⚠️ Initialization Error</h2>
+                            <p>There was an error starting the game. Check the console for details.</p>
+                            <p style="margin-top: 20px;"><button onclick="location.reload()" class="btn">Reload Page</button></p>
+                        </div>
+                    `;
+                }
+            }
+        }
+        
+        // Try multiple initialization methods
+        if (document.readyState === 'loading') {
+            debug('Document still loading, waiting for DOMContentLoaded...');
+            document.addEventListener('DOMContentLoaded', initializeGame);
+        } else {
+            debug('Document already loaded, initializing immediately...');
+            setTimeout(initializeGame, 10);
+        }
+        
+        // Backup initialization
+        window.addEventListener('load', () => {
+            debug('=== WINDOW LOAD EVENT ===');
+            if (!game) {
+                debug('Game not initialized yet, trying backup initialization...');
+                setTimeout(initializeGame, 100);
+            } else {
+                debug('Game already initialized');
+            }
         });
         
-        if (document.readyState === 'loading') {
-            // Wait for DOMContentLoaded
-        } else {
-            setTimeout(() => {
-                game = new SudokuOfTheDay();
-                game.init();
-            }, 10);
-        }
+        // Manual initialization function for debugging
+        window.debugInit = () => {
+            debug('=== MANUAL DEBUG INIT ===');
+            initializeGame();
+        };
+        
+        // Add some global debugging helpers
+        window.debugGame = () => {
+            if (game) {
+                debug('Game state:', {
+                    userSkillLevel: game.userSkillLevel,
+                    skillLevelsCount: game.skillLevels.length,
+                    sudokuAvailable: !!game.sudoku,
+                    stats: game.stats
+                });
+            } else {
+                debug('No game instance available');
+            }
+        };
     </script>
