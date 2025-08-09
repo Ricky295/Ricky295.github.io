@@ -247,8 +247,77 @@
             background: white;
             padding: 30px;
             border: 3px solid #333;
-            max-width: 400px;
+            max-width: 500px;
             text-align: center;
+            font-family: 'Courier New', monospace;
+        }
+
+        .modal-content h2 {
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+
+        .score-breakdown {
+            text-align: left;
+            margin: 20px 0;
+            font-size: 16px;
+            line-height: 1.8;
+        }
+
+        .breakdown-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 5px 0;
+        }
+
+        .breakdown-label {
+            font-weight: bold;
+            width: 80px;
+        }
+
+        .breakdown-time,
+        .breakdown-count {
+            flex: 1;
+            text-align: left;
+            margin-left: 20px;
+        }
+
+        .breakdown-score {
+            font-weight: bold;
+            min-width: 80px;
+            text-align: right;
+        }
+
+        .breakdown-score.positive {
+            color: #2e7d32;
+        }
+
+        .breakdown-score.negative {
+            color: #d32f2f;
+        }
+
+        .final-score-row {
+            border-top: 2px solid #333;
+            margin-top: 15px;
+            padding-top: 10px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .breakdown-final {
+            flex: 1;
+            text-align: left;
+            margin-left: 20px;
+            font-size: 20px;
+        }
+
+        .breakdown-medal {
+            font-size: 14px;
+            color: #666;
+            min-width: 80px;
+            text-align: right;
         }
 
         .modal-content h2 {
@@ -346,9 +415,29 @@
 
     <div class="modal" id="complete-modal">
         <div class="modal-content">
-            <h2>Puzzle Complete!</h2>
-            <p>Final Score: <span id="final-score"></span></p>
-            <p id="medal-text"></p>
+            <h2>CONGRATULATIONS!</h2>
+            <div class="score-breakdown">
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Time:</span>
+                    <span class="breakdown-time" id="final-time"></span>
+                    <span class="breakdown-score positive" id="time-score">+0</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Hints:</span>
+                    <span class="breakdown-count" id="final-hints">0</span>
+                    <span class="breakdown-score negative" id="hint-penalty">-0</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Mistakes:</span>
+                    <span class="breakdown-count" id="final-mistakes">0</span>
+                    <span class="breakdown-score negative" id="mistake-penalty">-0</span>
+                </div>
+                <div class="breakdown-row final-score-row">
+                    <span class="breakdown-label">Score:</span>
+                    <span class="breakdown-final" id="final-score">0</span>
+                    <span class="breakdown-medal" id="medal-text"></span>
+                </div>
+            </div>
             <button onclick="closeModal()">Continue</button>
         </div>
     </div>
@@ -533,14 +622,34 @@
                 this.stopTimer();
                 const elapsed = (Date.now() - this.startTime) / 1000;
                 const minutes = elapsed / 60;
-                const score = this.calculateScore(minutes);
+                const finalScore = this.calculateScore(minutes);
                 
-                document.getElementById('final-score').textContent = score.toLocaleString();
+                // Calculate individual components
+                const baseScore = this.puzzleRating / minutes;
+                const hintPenalty = Math.pow(0.8, this.hintsUsed);
+                const mistakePenalty = Math.pow(0.9, this.mistakes);
                 
-                const medalText = this.getMedalText(score);
-                document.getElementById('medal-text').textContent = medalText;
+                const hintLoss = Math.floor(baseScore * (1 - hintPenalty));
+                const mistakeLoss = Math.floor(baseScore * hintPenalty * (1 - mistakePenalty));
                 
-                this.updateBestScore(score);
+                // Format time display
+                const mins = Math.floor(elapsed / 60);
+                const secs = Math.floor(elapsed % 60);
+                const timeStr = `${mins}m ${secs.toString().padStart(2, '0')}s`;
+                
+                // Update modal content
+                document.getElementById('final-time').textContent = timeStr;
+                document.getElementById('time-score').textContent = `+${Math.floor(baseScore).toLocaleString()}`;
+                document.getElementById('final-hints').textContent = this.hintsUsed.toString();
+                document.getElementById('hint-penalty').textContent = this.hintsUsed > 0 ? `-${hintLoss.toLocaleString()}` : `-0`;
+                document.getElementById('final-mistakes').textContent = this.mistakes.toString();
+                document.getElementById('mistake-penalty').textContent = this.mistakes > 0 ? `-${mistakeLoss.toLocaleString()}` : `-0`;
+                document.getElementById('final-score').textContent = finalScore.toLocaleString();
+                
+                const medalText = this.getMedalText(finalScore);
+                document.getElementById('medal-text').textContent = medalText ? `(${medalText.toLowerCase().replace(/[🏆🥇🥈🥉]/g, '').trim()})` : '';
+                
+                this.updateBestScore(finalScore);
                 this.updateMedalBorders();
                 document.getElementById('complete-modal').style.display = 'block';
             }
