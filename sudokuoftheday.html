@@ -324,13 +324,29 @@
             margin-bottom: 20px;
         }
 
-        .modal-content button {
-            padding: 10px 20px;
-            border: 2px solid #333;
-            background: white;
-            cursor: pointer;
-            font-weight: bold;
-            margin: 5px;
+        .hint-explanation {
+            background: #e8f5e8;
+            border: 2px solid #4caf50;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            font-size: 14px;
+            line-height: 1.4;
+            display: none;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .hint-explanation.show {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hint-explanation strong {
+            color: #2e7d32;
         }
 
         @media (max-width: 768px) {
@@ -385,6 +401,8 @@
                 <button class="action-btn" id="clear-btn">Clear</button>
                 <button class="action-btn" id="hint-btn">Hint</button>
                 <button class="action-btn" id="new-game-btn">New Game</button>
+                
+                <div class="hint-explanation" id="hint-explanation"></div>
             </div>
         </div>
 
@@ -591,7 +609,10 @@
 
             giveHint() {
                 const hint = this.sudoku.hint(this.currentGrid, 0);
-                if (!hint) return;
+                if (!hint) {
+                    this.showHintExplanation("No more hints available. Try solving manually!");
+                    return;
+                }
                 
                 const [technique, [row, col], value] = hint;
                 const index = row * 9 + col;
@@ -601,10 +622,94 @@
                 cell.textContent = value;
                 cell.classList.add('hint');
                 
+                // Show explanation
+                this.showHintExplanation(this.getHintExplanation(technique, row, col, value));
+                
                 this.hintsUsed++;
                 this.updateStats();
                 this.saveProgress();
                 this.checkCompletion();
+            }
+
+            getHintExplanation(technique, row, col, value) {
+                const cellName = `R${row + 1}C${col + 1}`;
+                
+                switch (technique) {
+                    case "HIDDEN SINGLE (BOX)":
+                        return `<strong>Hidden Single (Box):</strong> By cross-hatching, we can see that <strong>${value}</strong> can only be in <strong>${cellName}</strong> in its respective 3×3 box.`;
+                    
+                    case "HIDDEN SINGLE (LINE)":
+                        // Determine if it's row or column based on the technique
+                        const isRow = this.isRowHiddenSingle(row, col, value);
+                        const lineType = isRow ? "row" : "column";
+                        return `<strong>Hidden Single (Line):</strong> <strong>${value}</strong> can only be in <strong>${cellName}</strong> in its ${lineType}.`;
+                    
+                    case "NAKED SINGLE":
+                        return `<strong>Naked Single:</strong> <strong>${cellName}</strong> can only be a <strong>${value}</strong> based on elimination.`;
+                    
+                    case "GUESS":
+                        return `<strong>Logical Deduction:</strong> After analyzing the possibilities, we conclude that <strong>${cellName}</strong> must be a <strong>${value}</strong>.`;
+                    
+                    default:
+                        return `<strong>Hint:</strong> Place <strong>${value}</strong> in <strong>${cellName}</strong>.`;
+                }
+            }
+
+            isRowHiddenSingle(row, col, value) {
+                // Check if this value appears only once in the row's candidates
+                let rowPositions = 0;
+                let colPositions = 0;
+                
+                // Count possible positions in row
+                for (let c = 0; c < 9; c++) {
+                    if (this.currentGrid[row][c] === 0 && this.isValidMove(row, c, value)) {
+                        rowPositions++;
+                    }
+                }
+                
+                // Count possible positions in column
+                for (let r = 0; r < 9; r++) {
+                    if (this.currentGrid[r][col] === 0 && this.isValidMove(r, col, value)) {
+                        colPositions++;
+                    }
+                }
+                
+                return rowPositions === 1 && colPositions > 1;
+            }
+
+            isValidMove(row, col, value) {
+                // Check if placing value at row,col is valid
+                // Check row
+                for (let c = 0; c < 9; c++) {
+                    if (this.currentGrid[row][c] === value) return false;
+                }
+                
+                // Check column
+                for (let r = 0; r < 9; r++) {
+                    if (this.currentGrid[r][col] === value) return false;
+                }
+                
+                // Check 3x3 box
+                const boxRow = 3 * Math.floor(row / 3);
+                const boxCol = 3 * Math.floor(col / 3);
+                for (let r = boxRow; r < boxRow + 3; r++) {
+                    for (let c = boxCol; c < boxCol + 3; c++) {
+                        if (this.currentGrid[r][c] === value) return false;
+                    }
+                }
+                
+                return true;
+            }
+
+            showHintExplanation(text) {
+                const explanationDiv = document.getElementById('hint-explanation');
+                explanationDiv.innerHTML = text;
+                explanationDiv.classList.add('show');
+                
+                // Hide after 8 seconds
+                setTimeout(() => {
+                    explanationDiv.classList.remove('show');
+                }, 8000);
             }
 
             checkCompletion() {
