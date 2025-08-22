@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Clock - Celestial Time Tracker</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(45deg, #0a0a2e, #16213e, #0f3460);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-attachment: fixed;
+        }
+
+        .container {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 90%;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #ffd700, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .cosmic-time {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 1rem 0;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        .cosmic-date {
+            font-size: 1.5rem;
+            margin: 1rem 0;
+            opacity: 0.9;
+        }
+
+        .next-events {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .event-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1rem;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .event-title {
+            font-size: 1rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            color: #ffd700;
+        }
+
+        .event-time {
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .status {
+            margin: 1rem 0;
+            padding: 0.5rem;
+            border-radius: 5px;
+            background: rgba(0, 255, 0, 0.1);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+        }
+
+        .error {
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid rgba(255, 0, 0, 0.3);
+        }
+
+        .loading {
+            background: rgba(255, 255, 0, 0.1);
+            border: 1px solid rgba(255, 255, 0, 0.3);
+        }
+
+        .location-info {
+            font-size: 0.9rem;
+            opacity: 0.7;
+            margin-top: 1rem;
+        }
+
+        .location-controls {
+            margin: 1rem 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .manual-location {
+            display: none;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .manual-location.show {
+            display: flex;
+        }
+
+        .location-input {
+            padding: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-family: inherit;
+            width: 120px;
+            text-align: center;
+        }
+
+        .location-input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .location-input:focus {
+            outline: none;
+            border-color: #ffd700;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .refresh-btn, .location-btn {
+            margin: 0;
+            padding: 0.5rem 1rem;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+
+        .refresh-btn:hover, .location-btn:hover {
+            transform: scale(1.05);
+            transition: transform 0.2s;
+        }
+
+        .location-btn.manual {
+            background: linear-gradient(45deg, #f093fb, #f5576c);
+        }
+
+        .location-source {
+            font-size: 0.8rem;
+            opacity: 0.6;
+            margin-top: 0.5rem;
+        }
+
+        @media (max-width: 600px) {
+            .next-events {
+                grid-template-columns: 1fr;
+            }
+            .cosmic-time {
+                font-size: 2rem;
+            }
+            h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌙 Cosmic Clock ☀️</h1>
+        
+        <div class="cosmic-time" id="cosmic-time">
+            --:--:--
+        </div>
+        
+        <div class="cosmic-date" id="cosmic-date">
+            Day -- | Month -- | Year --
+        </div>
+        
+        <div class="next-events">
+            <div class="event-card">
+                <div class="event-title">Next Sunset</div>
+                <div class="event-time" id="next-sunset">--:--:--</div>
+            </div>
+            <div class="event-card">
+                <div class="event-title">Next New Moon</div>
+                <div class="event-time" id="next-new-moon">-- days</div>
+            </div>
+        </div>
+        
+        <div class="status" id="status">
+            Initializing Cosmic Clock...
+        </div>
+        
+        <div class="location-controls">
+            <div class="btn-group">
+                <button class="refresh-btn" onclick="initializeClock()">🔄 Refresh Data</button>
+                <button class="location-btn" onclick="requestGeolocation()">📍 Get GPS Location</button>
+                <button class="location-btn manual" onclick="toggleManualLocation()">✏️ Set Manual Location</button>
+            </div>
+            
+            <div class="manual-location" id="manual-location">
+                <input type="text" class="location-input" id="lat-input" placeholder="Latitude" step="any">
+                <input type="text" class="location-input" id="lon-input" placeholder="Longitude" step="any">
+                <button class="location-btn" onclick="setManualLocation()">✓ Set Location</button>
+            </div>
+            
+            <div class="location-source" id="location-source">
+                Location method: Unknown
+            </div>
+        </div>
+        
+        <div class="location-info" id="location-info">
+            Location: Unknown
+        </div>
+    </div>
+
+    <script>
+        // Cosmic Clock Implementation
+        class CosmicClock {
+            constructor() {
+                this.latitude = null;
+                this.longitude = null;
+                this.locationSource = 'unknown';
+                this.lastSunsetTime = null;
+                this.nextSunsetTime = null;
+                this.nextNewMoonTime = null;
+                this.cosmicEpoch = new Date('0001-01-01T00:00:00Z'); // Jan 1, 0001 CE
+                this.updateInterval = null;
+                
+                // Cosmic calendar state
+                this.cosmicDay = 1;
+                this.cosmicMonth = 1;
+                this.cosmicYear = 1;
+            }
+
+            // Get URL parameters for location (with error handling)
+            getURLLocation() {
+                try {
+                    // Check if we can access URL parameters
+                    if (typeof window !== 'undefined' && window.location && window.location.search) {
+                        const params = new URLSearchParams(window.location.search);
+                        const lat = params.get('lat');
+                        const lon = params.get('lon');
+                        
+                        if (lat && lon && !isNaN(lat) && !isNaN(lon)) {
+                            const latitude = parseFloat(lat);
+                            const longitude = parseFloat(lon);
+                            
+                            // Validate coordinate ranges
+                            if (latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180) {
+                                return { lat: latitude, lon: longitude };
+                            }
+                        }
+                    }
+                    return null;
+                } catch (error) {
+                    // URL access not allowed or not available
+                    console.log('Cannot read URL parameters:', error.message);
+                    return null;
+                }
+            }
+
+            // Update URL with location parameters (with error handling)
+            updateURL(lat, lon) {
+                try {
+                    // Check if we can access and modify the URL
+                    if (typeof window !== 'undefined' && window.location && window.history) {
+                        const url = new URL(window.location);
+                        url.searchParams.set('lat', lat.toString());
+                        url.searchParams.set('lon', lon.toString());
+                        window.history.replaceState({}, '', url);
+                        return true;
+                    }
+                    return false;
+                } catch (error) {
+                    // URL manipulation not allowed (iframe, file://, security restrictions, etc.)
+                    console.log('Cannot update URL parameters:', error.message);
+                    return false;
+                }
+            }
+
+            // Set location from coordinates
+            setLocation(lat, lon, source = 'manual') {
+                this.latitude = lat;
+                this.longitude = lon;
+                this.locationSource = source;
+                
+                // Try to update URL, but don't fail if we can't
+                const urlUpdated = this.updateURL(lat, lon);
+                if (!urlUpdated) {
+                    console.log('URL update disabled - coordinates saved in memory only');
+                }
+                
+                // Update display
+                this.updateLocationDisplay();
+                
+                return { lat: this.latitude, lon: this.longitude };
+            }
+
+            // Update location display
+            updateLocationDisplay() {
+                const locationElement = document.getElementById('location-info');
+                const sourceElement = document.getElementById('location-source');
+                
+                if (this.latitude && this.longitude) {
+                    const locationText = `Location: ${this.latitude.toFixed(4)}°, ${this.longitude.toFixed(4)}°`;
+                    locationElement.textContent = this.totalCosmicDays ? 
+                        `${locationText} | Total Days: ${this.totalCosmicDays.toLocaleString()}` : 
+                        locationText;
+                    
+                    const sourceText = {
+                        'geolocation': '📍 Auto-detected (GPS)',
+                        'url': '🔗 From URL parameters',
+                        'manual': '✏️ Manually entered',
+                        'unknown': '❓ Unknown method'
+                    };
+                    
+                    sourceElement.textContent = `Location method: ${sourceText[this.locationSource] || sourceText.unknown}`;
+                } else {
+                    locationElement.textContent = 'Location: Unknown';
+                    sourceElement.textContent = 'Location method: Not set';
+                }
+            }
+
+            // Method 1: Get user's geolocation via browser API
+            async getGeolocation() {
+                return new Promise((resolve, reject) => {
+                    if (!navigator.geolocation) {
+                        reject(new Error('Geolocation is not supported by this browser'));
+                        return;
+                    }
+
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            const location = this.setLocation(
+                                position.coords.latitude, 
+                                position.coords.longitude, 
+                                'geolocation'
+                            );
+                            resolve(location);
+                        },
+                        (error) => {
+                            const errorMessages = {
+                                1: 'Location access denied by user',
+                                2: 'Location position unavailable',
+                                3: 'Location request timeout'
+                            };
+                            reject(new Error(errorMessages[error.code] || `Geolocation error: ${error.message}`));
+                        },
+                        { 
+                            enableHighAccuracy: true, 
+                            timeout: 10000, 
+                            maximumAge: 300000 
+                        }
+                    );
+                });
+            }
+
+            // Comprehensive automatic location detection (Methods 1, 2, 3)
+            async getLocation() {
+                // Method 1: Try geolocation API first
+                try {
+                    this.updateStatus('Requesting GPS location...', 'loading');
+                    const location = await this.getGeolocation();
+                    this.updateStatus('GPS location acquired! 📍', 'status');
+                    return location;
+                } catch (geoError) {
+                    console.log('Geolocation failed:', geoError.message);
+                    
+                    // Method 2: Check URL parameters
+                    this.updateStatus('GPS unavailable, checking URL parameters...', 'loading');
+                    const urlLocation = this.getURLLocation();
+                    if (urlLocation) {
+                        const location = this.setLocation(urlLocation.lat, urlLocation.lon, 'url');
+                        this.updateStatus('Using coordinates from URL 🔗', 'status');
+                        return location;
+                    }
+                    
+                    // Method 3: Show manual input as the only remaining option
+                    this.updateStatus('Please set your location manually below 👇', 'error');
+                    this.showManualLocationPrompt();
+                    throw new Error('Location required - please enter coordinates manually');
+                }
+            }
+
+            // Show manual location input automatically when needed
+            showManualLocationPrompt() {
+                const manualDiv = document.getElementById('manual-location');
+                manualDiv.classList.add('show');
+                
+                // Focus on the first input for better UX
+                setTimeout(() => {
+                    document.getElementById('lat-input').focus();
+                }, 100);
+            }
+
+            // Fetch sunset/sunrise times from API
+            async fetchSunData(date = new Date()) {
+                const dateStr = date.toISOString().split('T')[0];
+                const url = `https://api.sunrise-sunset.org/json?lat=${this.latitude}&lng=${this.longitude}&date=${dateStr}&formatted=0`;
+                
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    
+                    if (data.status !== 'OK') {
+                        throw new Error(`Sunrise-Sunset API error: ${data.status}`);
+                    }
+                    
+                    return {
+                        sunset: new Date(data.results.sunset),
+                        sunrise: new Date(data.results.sunrise)
+                    };
+                } catch (error) {
+                    throw new Error(`Failed to fetch sun data: ${error.message}`);
+                }
+            }
+
+            // Calculate lunar phase and variable new moon timing
+            calculateLunarPhase(date = new Date()) {
+                // Known new moon: January 6, 2000 18:14 UTC
+                const knownNewMoon = new Date('2000-01-06T18:14:00Z');
+                
+                // Variable lunar cycle (29.19 to 29.92 days, average 29.530588853)
+                const avgLunarCycle = 29.530588853;
+                
+                const daysSinceKnown = (date.getTime() - knownNewMoon.getTime()) / (1000 * 60 * 60 * 24);
+                
+                // Calculate current lunar cycle number
+                const cycleNumber = Math.floor(daysSinceKnown / avgLunarCycle);
+                
+                // Simulate variable lunar cycle length using sine wave approximation
+                // This creates realistic variation between 29.19 and 29.92 days
+                const cycleVariation = 0.365 * Math.sin((cycleNumber * 2 * Math.PI) / 14.7653); // ~14.77 cycle variation period
+                const currentCycleLength = avgLunarCycle + cycleVariation;
+                
+                // Calculate phase within current cycle
+                const cycleStartDays = this.calculateCumulativeLunarDays(cycleNumber);
+                const daysIntoCycle = daysSinceKnown - cycleStartDays;
+                const phase = daysIntoCycle % currentCycleLength;
+                
+                // Calculate next new moon
+                const daysToNewMoon = currentCycleLength - phase;
+                const nextNewMoon = new Date(date.getTime() + daysToNewMoon * 24 * 60 * 60 * 1000);
+                
+                return {
+                    phase: phase,
+                    daysToNewMoon: daysToNewMoon,
+                    nextNewMoon: nextNewMoon,
+                    currentCycleLength: currentCycleLength,
+                    cycleNumber: cycleNumber,
+                    isNewMoon: Math.abs(phase) < 0.5 || Math.abs(phase - currentCycleLength) < 0.5
+                };
+            }
+
+            // Calculate cumulative days for lunar cycles (accounting for variable lengths)
+            calculateCumulativeLunarDays(cycleNumber) {
+                let totalDays = 0;
+                const avgLunarCycle = 29.530588853;
+                
+                for (let i = 0; i < cycleNumber; i++) {
+                    const cycleVariation = 0.365 * Math.sin((i * 2 * Math.PI) / 14.7653);
+                    const cycleLength = avgLunarCycle + cycleVariation;
+                    totalDays += cycleLength;
+                }
+                
+                return totalDays;
+            }
+
+            // Calculate cosmic calendar values with variable lunar months
+            calculateCosmicCalendar() {
+                const now = new Date();
+                const msPerDay = 24 * 60 * 60 * 1000;
+                const solarYear = 365.2422; // Tropical year in days
+                
+                // Calculate total days since cosmic epoch (Jan 1, 0001)
+                const totalMs = now.getTime() - this.cosmicEpoch.getTime();
+                const totalDays = Math.floor(totalMs / msPerDay);
+                
+                // Calculate cosmic years (complete solar years)
+                this.cosmicYear = Math.floor(totalDays / solarYear) + 1;
+                
+                // Calculate days within current cosmic year
+                const daysInCurrentYear = totalDays % solarYear;
+                
+                // Calculate cosmic months and days within current year
+                const yearStartDate = new Date(this.cosmicEpoch.getTime() + (this.cosmicYear - 1) * solarYear * msPerDay);
+                let monthStartDays = 0;
+                let currentMonth = 1;
+                let dayInMonth = 0;
+                
+                // Find which lunar month we're in within the current cosmic year
+                while (monthStartDays <= daysInCurrentYear && currentMonth <= 13) {
+                    // Calculate the length of this lunar month
+                    const monthDate = new Date(yearStartDate.getTime() + monthStartDays * msPerDay);
+                    const lunarInfo = this.calculateLunarPhase(monthDate);
+                    const monthLength = lunarInfo.currentCycleLength;
+                    
+                    if (monthStartDays + monthLength > daysInCurrentYear) {
+                        // We're in this month
+                        dayInMonth = Math.floor(daysInCurrentYear - monthStartDays);
+                        break;
+                    }
+                    
+                    monthStartDays += monthLength;
+                    currentMonth++;
+                }
+                
+                // Handle edge case where we've gone past month 13
+                if (currentMonth > 13) {
+                    currentMonth = 13;
+                    // Calculate days into the 13th month
+                    const month13StartDays = daysInCurrentYear - (daysInCurrentYear % 29.53);
+                    dayInMonth = Math.floor(daysInCurrentYear - month13StartDays);
+                }
+                
+                this.cosmicMonth = currentMonth;
+                this.cosmicDay = dayInMonth; // Day within current month (starting at 0)
+                
+                // Store additional info for display
+                this.totalCosmicDays = totalDays + 1; // Total days since epoch
+            }
+
+            // Get time since last sunset
+            getTimeSinceLastSunset() {
+                if (!this.lastSunsetTime) return { hours: 0, minutes: 0, seconds: 0 };
+                
+                const now = new Date();
+                const timeDiff = now.getTime() - this.lastSunsetTime.getTime();
+                
+                const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+                const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+                
+                return { hours, minutes, seconds };
+            }
+
+            // Get time until next sunset
+            getTimeUntilNextSunset() {
+                if (!this.nextSunsetTime) return { hours: 0, minutes: 0, seconds: 0 };
+                
+                const now = new Date();
+                const timeDiff = this.nextSunsetTime.getTime() - now.getTime();
+                
+                if (timeDiff <= 0) return { hours: 0, minutes: 0, seconds: 0 };
+                
+                const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+                const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+                
+                return { hours, minutes, seconds };
+            }
+
+            // Initialize sunset times
+            async initializeSunsetTimes() {
+                const now = new Date();
+                
+                // Get today's sunset
+                const todaySunData = await this.fetchSunData(now);
+                
+                // If today's sunset has passed, it's our "last sunset"
+                if (now > todaySunData.sunset) {
+                    this.lastSunsetTime = todaySunData.sunset;
+                    
+                    // Get tomorrow's sunset as "next sunset"
+                    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+                    const tomorrowSunData = await this.fetchSunData(tomorrow);
+                    this.nextSunsetTime = tomorrowSunData.sunset;
+                } else {
+                    // Today's sunset hasn't happened yet
+                    this.nextSunsetTime = todaySunData.sunset;
+                    
+                    // Get yesterday's sunset as "last sunset"
+                    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                    const yesterdaySunData = await this.fetchSunData(yesterday);
+                    this.lastSunsetTime = yesterdaySunData.sunset;
+                }
+            }
+
+            // Update the display
+            updateDisplay() {
+                const timeSinceLastSunset = this.getTimeSinceLastSunset();
+                const timeUntilNextSunset = this.getTimeUntilNextSunset();
+                const lunarInfo = this.calculateLunarPhase();
+                
+                // Update cosmic time (time since last sunset)
+                const cosmicTimeElement = document.getElementById('cosmic-time');
+                cosmicTimeElement.textContent = 
+                    `${String(timeSinceLastSunset.hours).padStart(2, '0')}:${String(timeSinceLastSunset.minutes).padStart(2, '0')}:${String(timeSinceLastSunset.seconds).padStart(2, '0')}`;
+                
+                // Update cosmic date
+                const cosmicDateElement = document.getElementById('cosmic-date');
+                const monthSuffix = this.cosmicMonth === 13 ? ' (Short Month)' : '';
+                cosmicDateElement.textContent = 
+                    `Day ${this.cosmicDay} | Month ${this.cosmicMonth}${monthSuffix} | Year ${this.cosmicYear.toLocaleString()}`;
+                
+                // Update next sunset countdown
+                const nextSunsetElement = document.getElementById('next-sunset');
+                nextSunsetElement.textContent = 
+                    `${String(timeUntilNextSunset.hours).padStart(2, '0')}:${String(timeUntilNextSunset.minutes).padStart(2, '0')}:${String(timeUntilNextSunset.seconds).padStart(2, '0')}`;
+                
+                // Update next new moon with current cycle length
+                const nextNewMoonElement = document.getElementById('next-new-moon');
+                nextNewMoonElement.textContent = `${Math.ceil(lunarInfo.daysToNewMoon)} days (${lunarInfo.currentCycleLength.toFixed(2)}d cycle)`;
+                
+                // Update total cosmic days counter
+                const locationElement = document.getElementById('location-info');
+                const currentLocationText = locationElement.textContent.split(' | ')[0] || 'Location: Unknown';
+                locationElement.textContent = `${currentLocationText} | Total Days: ${this.totalCosmicDays.toLocaleString()}`;
+                
+                // Check if we need to update sunset times (if next sunset has passed)
+                const now = new Date();
+                if (this.nextSunsetTime && now > this.nextSunsetTime) {
+                    this.initializeSunsetTimes().catch(error => {
+                        console.error('Error updating sunset times:', error);
+                    });
+                }
+            }
+
+            // Start the clock with automatic location detection
+            async initialize() {
+                try {
+                    this.updateStatus('Initializing Cosmic Clock...', 'loading');
+                    
+                    // Automatically get location using the 3-tier fallback system
+                    const location = await this.getLocation();
+                    
+                    // If we get here, we have a location - proceed with celestial data
+                    this.updateStatus('Fetching celestial data...', 'loading');
+                    
+                    // Initialize sunset times
+                    await this.initializeSunsetTimes();
+                    
+                    // Calculate cosmic calendar
+                    this.calculateCosmicCalendar();
+                    
+                    this.updateStatus('Cosmic Clock active! 🌟', 'status');
+                    
+                    // Start updating every second
+                    if (this.updateInterval) clearInterval(this.updateInterval);
+                    this.updateInterval = setInterval(() => {
+                        this.updateDisplay();
+                    }, 1000);
+                    
+                    // Initial display update
+                    this.updateDisplay();
+                    
+                } catch (error) {
+                    // Only show error for actual failures, not when waiting for manual input
+                    if (!error.message.includes('manually')) {
+                        this.updateStatus(`Initialization failed: ${error.message}`, 'error');
+                    }
+                    console.error('Cosmic Clock initialization error:', error);
+                }
+            }
+
+            // Update status message
+            updateStatus(message, type = 'status') {
+                const statusElement = document.getElementById('status');
+                statusElement.textContent = message;
+                statusElement.className = type;
+            }
+
+            // Stop the clock
+            stop() {
+                if (this.updateInterval) {
+                    clearInterval(this.updateInterval);
+                    this.updateInterval = null;
+                }
+            }
+        }
+
+        // Global clock instance
+        let cosmicClock = new CosmicClock();
+
+        // Initialize the clock when page loads
+        async function initializeClock() {
+            if (cosmicClock.updateInterval) {
+                cosmicClock.stop();
+            }
+            cosmicClock = new CosmicClock();
+            await cosmicClock.initialize();
+        }
+
+        // Manual location control functions
+        function toggleManualLocation() {
+            const manualDiv = document.getElementById('manual-location');
+            const isVisible = manualDiv.classList.contains('show');
+            
+            if (isVisible) {
+                manualDiv.classList.remove('show');
+            } else {
+                manualDiv.classList.add('show');
+                // Pre-fill with current coordinates if available
+                if (cosmicClock.latitude && cosmicClock.longitude) {
+                    document.getElementById('lat-input').value = cosmicClock.latitude.toFixed(6);
+                    document.getElementById('lon-input').value = cosmicClock.longitude.toFixed(6);
+                }
+            }
+        }
+
+        function setManualLocation() {
+            const latInput = document.getElementById('lat-input').value;
+            const lonInput = document.getElementById('lon-input').value;
+            
+            const lat = parseFloat(latInput);
+            const lon = parseFloat(lonInput);
+            
+            if (isNaN(lat) || isNaN(lon)) {
+                alert('Please enter valid numeric coordinates.\nExample: Latitude: 40.7128, Longitude: -74.0060');
+                return;
+            }
+            
+            if (lat < -90 || lat > 90) {
+                alert('Latitude must be between -90 and 90 degrees.');
+                return;
+            }
+            
+            if (lon < -180 || lon > 180) {
+                alert('Longitude must be between -180 and 180 degrees.');
+                return;
+            }
+            
+            cosmicClock.setLocation(lat, lon, 'manual');
+            
+            // Hide manual input
+            document.getElementById('manual-location').classList.remove('show');
+            
+            // Automatically restart the clock with new location
+            initializeClock();
+        }
+
+        function requestGeolocation() {
+            cosmicClock.updateStatus('Requesting GPS location...', 'loading');
+            cosmicClock.getGeolocation()
+                .then(() => {
+                    // Hide manual input if it was showing
+                    document.getElementById('manual-location').classList.remove('show');
+                    // Automatically restart the clock
+                    initializeClock();
+                })
+                .catch(error => {
+                    cosmicClock.updateStatus(`GPS failed: ${error.message}`, 'error');
+                });
+        }
+
+        // Auto-initialize when page loads
+        window.addEventListener('load', () => {
+            // Automatically start the initialization process
+            initializeClock();
+        });
+
+        // Handle visibility change to pause/resume updates
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                cosmicClock.stop();
+            } else {
+                initializeClock();
+            }
+        });
+
+        // Handle URL changes (back/forward navigation) - only if URL access is available
+        window.addEventListener('popstate', () => {
+            try {
+                const urlLocation = cosmicClock.getURLLocation();
+                if (urlLocation && (urlLocation.lat !== cosmicClock.latitude || urlLocation.lon !== cosmicClock.longitude)) {
+                    cosmicClock.setLocation(urlLocation.lat, urlLocation.lon, 'url');
+                    initializeClock();
+                }
+            } catch (error) {
+                // URL navigation handling not available - ignore silently
+                console.log('URL navigation handling disabled:', error.message);
+            }
+        });
+    </script>
+</body>
+</html>
