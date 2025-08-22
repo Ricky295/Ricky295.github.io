@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mistral Pixel Clock</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: monospace;
+        }
+
+        .clock-container {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .pixel-grid {
+            display: inline-block;
+            margin: 0 4px;
+        }
+
+        .pixel {
+            width: 8px;
+            height: 8px;
+            display: inline-block;
+            margin: 0;
+            background: linear-gradient(180deg, #FFD700 0%, #FFA500 30%, #FF6347 60%, #DC143C 100%);
+        }
+
+        .pixel-row {
+            display: block;
+            line-height: 8px;
+            height: 8px;
+            white-space: nowrap;
+        }
+
+        .time-display {
+            font-size: 0;
+            margin-bottom: 30px;
+            filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.3));
+        }
+
+        .digit {
+            display: inline-block;
+            margin: 0 8px;
+            vertical-align: top;
+        }
+
+        .colon {
+            display: inline-block;
+            margin: 0 4px;
+            vertical-align: top;
+        }
+
+        .colon.blink {
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.2; }
+        }
+
+        .date-display {
+            font-size: 18px;
+            color: #888;
+            margin-bottom: 20px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .mistral-title {
+            font-size: 24px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(180deg, #FFD700 0%, #FFA500 30%, #FF6347 60%, #DC143C 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 30px;
+            letter-spacing: 2px;
+        }
+
+        .controls {
+            margin-top: 20px;
+        }
+
+        .control-btn {
+            background: linear-gradient(135deg, #FFD700, #DC143C);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 0 5px;
+            font-family: 'Courier New', monospace;
+            box-shadow: 0 3px 10px rgba(255, 215, 0, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .control-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+        }
+
+        .control-btn:active {
+            transform: translateY(0);
+        }
+
+        .control-btn.secondary {
+            background: linear-gradient(135deg, #666, #333);
+        }
+
+        .mode-info {
+            color: #888;
+            font-size: 12px;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .timer-input {
+            background: #333;
+            border: 2px solid #555;
+            color: #fff;
+            padding: 8px 12px;
+            font-size: 14px;
+            border-radius: 4px;
+            margin: 0 5px;
+            width: 50px;
+            text-align: center;
+            font-family: 'Courier New', monospace;
+        }
+
+        @media (max-width: 768px) {
+            .pixel {
+                width: 6px;
+                height: 6px;
+            }
+            .pixel-row {
+                height: 6px;
+                line-height: 6px;
+            }
+            .digit {
+                margin: 0 6px;
+            }
+            .colon {
+                margin: 0 3px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="clock-container">
+        <div class="mistral-title">MISTRAL PIXEL CLOCK</div>
+        <div class="time-display" id="timeDisplay"></div>
+        <div class="date-display" id="dateDisplay"></div>
+        <div class="controls" id="controls"></div>
+        <div class="mode-info" id="modeInfo"></div>
+    </div>
+
+    <script>
+        let is24Hour = true;
+        let currentMode = 'clock';
+        let stopwatchRunning = false;
+        let stopwatchStart = 0;
+        let stopwatchElapsed = 0;
+        let timerRunning = false;
+        let timerStart = 0;
+        let timerDuration = 0;
+
+        // Pixel patterns for digits (7x9 grid)
+        const digitPatterns = {
+            '0': [
+                '0111110',
+                '1100011',
+                '1100011',
+                '1100011',
+                '1100011',
+                '1100011',
+                '1100011',
+                '1100011',
+                '0111110'
+            ],
+            '1': [
+                '0001100',
+                '0011100',
+                '0001100',
+                '0001100',
+                '0001100',
+                '0001100',
+                '0001100',
+                '0001100',
+                '0111111'
+            ],
+            '2': [
+                '0111110',
+                '1100011',
+                '0000011',
+                '0000110',
+                '0001100',
+                '0011000',
+                '0110000',
+                '1100000',
+                '1111111'
+            ],
+            '3': [
+                '0111110',
+                '1100011',
+                '0000011',
+                '0000011',
+                '0011110',
+                '0000011',
+                '0000011',
+                '1100011',
+                '0111110'
+            ],
+            '4': [
+                '0000110',
+                '0001110',
+                '0011110',
+                '0110110',
+                '1100110',
+                '1111111',
+                '0000110',
+                '0000110',
+                '0000110'
+            ],
+            '5': [
+                '1111111',
+                '1100000',
+                '1100000',
+                '1111110',
+                '0000011',
+                '0000011',
+                '0000011',
+                '1100011',
+                '0111110'
+            ],
+            '6': [
+                '0111110',
+                '1100011',
+                '1100000',
+                '1111110',
+                '1100011',
+                '1100011',
+                '1100011',
+                '1100011',
+                '0111110'
+            ],
+            '7': [
+                '1111111',
+                '0000011',
+                '0000110',
+                '0001100',
+                '0011000',
+                '0110000',
+                '0110000',
+                '0110000',
+                '0110000'
+            ],
+            '8': [
+                '0111110',
+                '1100011',
+                '1100011',
+                '1100011',
+                '0111110',
+                '1100011',
+                '1100011',
+                '1100011',
+                '0111110'
+            ],
+            '9': [
+                '0111110',
+                '1100011',
+                '1100011',
+                '1100011',
+                '0111111',
+                '0000011',
+                '0000011',
+                '1100011',
+                '0111110'
+            ],
+            ':': [
+                '0000000',
+                '0000000',
+                '0011000',
+                '0011000',
+                '0000000',
+                '0011000',
+                '0011000',
+                '0000000',
+                '0000000'
+            ]
+        };
+
+        function createPixelDigit(digit) {
+            const pattern = digitPatterns[digit] || digitPatterns['0'];
+            let html = '';
+            
+            pattern.forEach(row => {
+                html += '<div class="pixel-row">';
+                for (let char of row) {
+                    if (char === '1') {
+                        html += '<div class="pixel"></div>';
+                    } else {
+                        html += '<div class="pixel" style="background: transparent;"></div>';
+                    }
+                }
+                html += '</div>';
+            });
+            
+            return html;
+        }
+
+        function initializeMode() {
+            const urlParams = new URLSearchParams(window.location.search);
+            currentMode = urlParams.get('mode') || 'clock';
+            
+            switch (currentMode) {
+                case 'stopwatch':
+                    setupStopwatch();
+                    break;
+                case 'timer':
+                    setupTimer();
+                    break;
+                case 'pomodoro':
+                    setupPomodoro();
+                    break;
+                case 'worldtime':
+                    setupWorldTime();
+                    break;
+                case 'binary':
+                    setupBinary();
+                    break;
+                default:
+                    setupClock();
+            }
+        }
+
+        function setupClock() {
+            document.getElementById('controls').innerHTML = `
+                <button class="control-btn" onclick="toggleFormat()">
+                    ${is24Hour ? 'Switch to 12H' : 'Switch to 24H'}
+                </button>
+                <button class="control-btn secondary" onclick="changeMode('stopwatch')">Stopwatch</button>
+                <button class="control-btn secondary" onclick="changeMode('timer')">Timer</button>
+            `;
+            document.getElementById('modeInfo').textContent = 'Current time with date display';
+        }
+
+        function setupStopwatch() {
+            document.getElementById('controls').innerHTML = `
+                <button class="control-btn" onclick="toggleStopwatch()">
+                    ${stopwatchRunning ? 'Stop' : 'Start'}
+                </button>
+                <button class="control-btn secondary" onclick="resetStopwatch()">Reset</button>
+                <button class="control-btn secondary" onclick="changeMode('clock')">Clock</button>
+                <button class="control-btn secondary" onclick="changeMode('timer')">Timer</button>
+            `;
+            document.getElementById('modeInfo').textContent = 'Stopwatch - measure elapsed time';
+        }
+
+        function setupTimer() {
+            document.getElementById('controls').innerHTML = `
+                <input type="number" class="timer-input" id="timerMinutes" placeholder="MM" min="0" max="59" value="5">
+                <input type="number" class="timer-input" id="timerSeconds" placeholder="SS" min="0" max="59" value="0">
+                <button class="control-btn" onclick="startTimer()">Start</button>
+                <button class="control-btn secondary" onclick="stopTimer()">Stop</button>
+                <button class="control-btn secondary" onclick="changeMode('clock')">Clock</button>
+            `;
+            document.getElementById('modeInfo').textContent = 'Countdown timer - set minutes and seconds';
+        }
+
+        function setupPomodoro() {
+            document.getElementById('controls').innerHTML = `
+                <button class="control-btn" onclick="startPomodoro(25)">25 min Work</button>
+                <button class="control-btn" onclick="startPomodoro(5)">5 min Break</button>
+                <button class="control-btn secondary" onclick="stopTimer()">Stop</button>
+                <button class="control-btn secondary" onclick="changeMode('clock')">Clock</button>
+            `;
+            document.getElementById('modeInfo').textContent = 'Pomodoro technique - work/break cycles';
+        }
+
+        function setupWorldTime() {
+            document.getElementById('controls').innerHTML = `
+                <button class="control-btn secondary" onclick="changeTimezone('UTC')">UTC</button>
+                <button class="control-btn secondary" onclick="changeTimezone('America/New_York')">NYC</button>
+                <button class="control-btn secondary" onclick="changeTimezone('Europe/London')">LON</button>
+                <button class="control-btn secondary" onclick="changeTimezone('Asia/Tokyo')">TOK</button>
+                <button class="control-btn secondary" onclick="changeMode('clock')">Local</button>
+            `;
+            document.getElementById('modeInfo').textContent = 'World time - different timezones';
+        }
+
+        function setupBinary() {
+            document.getElementById('controls').innerHTML = `
+                <button class="control-btn secondary" onclick="changeMode('clock')">Normal</button>
+                <button class="control-btn secondary" onclick="changeMode('stopwatch')">Stopwatch</button>
+            `;
+            document.getElementById('modeInfo').textContent = 'Binary clock - time in binary format';
+        }
+
+        function updateDisplay() {
+            switch (currentMode) {
+                case 'stopwatch':
+                    updateStopwatch();
+                    break;
+                case 'timer':
+                case 'pomodoro':
+                    updateTimer();
+                    break;
+                case 'worldtime':
+                    updateWorldTime();
+                    break;
+                case 'binary':
+                    updateBinary();
+                    break;
+                default:
+                    updateClock();
+            }
+        }
+
+        function updateClock() {
+            const now = new Date();
+            
+            let hours = now.getHours();
+            let minutes = now.getMinutes().toString().padStart(2, '0');
+            let seconds = now.getSeconds().toString().padStart(2, '0');
+            
+            if (!is24Hour) {
+                hours = hours % 12;
+                hours = hours ? hours : 12;
+            }
+            
+            hours = hours.toString().padStart(2, '0');
+            
+            displayTime(`${hours}:${minutes}:${seconds}`);
+            
+            const options = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            };
+            const dateString = now.toLocaleDateString('en-US', options);
+            document.getElementById('dateDisplay').textContent = dateString;
+        }
+
+        function updateStopwatch() {
+            let elapsed = stopwatchElapsed;
+            if (stopwatchRunning) {
+                elapsed += Date.now() - stopwatchStart;
+            }
+            
+            const totalSeconds = Math.floor(elapsed / 1000);
+            const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+            const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+            const centiseconds = Math.floor((elapsed % 1000) / 10).toString().padStart(2, '0');
+            
+            displayTime(`${minutes}:${seconds}:${centiseconds}`);
+            document.getElementById('dateDisplay').textContent = 'Stopwatch Mode';
+        }
+
+        function updateTimer() {
+            if (!timerRunning) return;
+            
+            const elapsed = Date.now() - timerStart;
+            const remaining = Math.max(0, timerDuration - elapsed);
+            
+            if (remaining === 0) {
+                timerRunning = false;
+                alert('Timer finished!');
+                if (currentMode === 'timer') {
+                    setupTimer();
+                } else {
+                    setupPomodoro();
+                }
+            }
+            
+            const totalSeconds = Math.ceil(remaining / 1000);
+            const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+            const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+            
+            displayTime(`${minutes}:${seconds}:00`);
+            document.getElementById('dateDisplay').textContent = `Timer: ${Math.ceil(remaining / 1000)}s remaining`;
+        }
+
+        function updateWorldTime() {
+            const timezone = new URLSearchParams(window.location.search).get('tz') || 'UTC';
+            const now = new Date();
+            
+            try {
+                const timeInZone = new Intl.DateTimeFormat('en-US', {
+                    timeZone: timezone,
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                }).format(now);
+                
+                const [hours, minutes, seconds] = timeInZone.split(':');
+                displayTime(`${hours}:${minutes}:${seconds}`);
+                document.getElementById('dateDisplay').textContent = `${timezone} Time`;
+            } catch (e) {
+                displayTime('00:00:00');
+                document.getElementById('dateDisplay').textContent = 'Invalid timezone';
+            }
+        }
+
+        function updateBinary() {
+            const now = new Date();
+            const hours = now.getHours().toString(2).padStart(6, '0');
+            const minutes = now.getMinutes().toString(2).padStart(6, '0');
+            const seconds = now.getSeconds().toString(2).padStart(6, '0');
+            
+            displayBinary(`${hours}:${minutes}:${seconds}`);
+            document.getElementById('dateDisplay').textContent = 'Binary Clock Mode';
+        }
+
+        function displayTime(timeString) {
+            const parts = timeString.split(':');
+            let timeHtml = '';
+            
+            for (let i = 0; i < parts.length; i++) {
+                if (i > 0) {
+                    const colonClass = Date.now() % 2000 < 1000 ? 'colon blink' : 'colon';
+                    timeHtml += `<div class="${colonClass}">${createPixelDigit(':')}</div>`;
+                }
+                
+                for (let char of parts[i]) {
+                    timeHtml += `<div class="digit">${createPixelDigit(char)}</div>`;
+                }
+            }
+            
+            document.getElementById('timeDisplay').innerHTML = timeHtml;
+        }
+
+        function displayBinary(binaryString) {
+            let timeHtml = '';
+            for (let char of binaryString) {
+                if (char === ':') {
+                    timeHtml += `<div class="colon">${createPixelDigit(':')}</div>`;
+                } else {
+                    timeHtml += `<div class="digit">${createPixelDigit(char)}</div>`;
+                }
+            }
+            document.getElementById('timeDisplay').innerHTML = timeHtml;
+        }
+
+        function changeMode(mode) {
+            const url = new URL(window.location);
+            url.searchParams.set('mode', mode);
+            window.location = url;
+        }
+
+        function changeTimezone(tz) {
+            const url = new URL(window.location);
+            url.searchParams.set('tz', tz);
+            window.location = url;
+        }
+
+        function toggleFormat() {
+            is24Hour = !is24Hour;
+            setupClock();
+        }
+
+        function toggleStopwatch() {
+            if (stopwatchRunning) {
+                stopwatchElapsed += Date.now() - stopwatchStart;
+                stopwatchRunning = false;
+            } else {
+                stopwatchStart = Date.now();
+                stopwatchRunning = true;
+            }
+            setupStopwatch();
+        }
+
+        function resetStopwatch() {
+            stopwatchRunning = false;
+            stopwatchElapsed = 0;
+            setupStopwatch();
+        }
+
+        function startTimer() {
+            const minutes = parseInt(document.getElementById('timerMinutes').value) || 0;
+            const seconds = parseInt(document.getElementById('timerSeconds').value) || 0;
+            timerDuration = (minutes * 60 + seconds) * 1000;
+            timerStart = Date.now();
+            timerRunning = true;
+        }
+
+        function stopTimer() {
+            timerRunning = false;
+            if (currentMode === 'timer') {
+                setupTimer();
+            } else {
+                setupPomodoro();
+            }
+        }
+
+        function startPomodoro(minutes) {
+            timerDuration = minutes * 60 * 1000;
+            timerStart = Date.now();
+            timerRunning = true;
+        }
+
+        // Easter egg: Mistral's broken attempt
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('bug') === '1') {
+            document.body.innerHTML = `
+                <div style="color: #ff6b6b; text-align: center; padding: 40px; font-family: monospace;">
+                    <h2>🐛 Mistral's "Attempt" 🐛</h2>
+                    <p>clip-path: polygon(0% 0%, 100% 50%, 0% 100%, 0% 50%);</p>
+                    <p style="font-size: 20px;">Result: ◇ (??)</p>
+                    <p><a href="?" style="color: #4CAF50;">Back to working clock</a></p>
+                </div>
+            `;
+        } else {
+            initializeMode();
+            updateDisplay();
+            setInterval(updateDisplay, 100);
+        }
+    </script>
+</body>
+</html>
