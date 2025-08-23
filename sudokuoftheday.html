@@ -671,13 +671,29 @@
                     const row = Math.floor(index / 9);
                     const col = index % 9;
                     const value = this.currentGrid[row][col];
+                    
+                    // Store current error and hint states before resetting
+                    const wasError = cell.classList.contains('error');
+                    const wasHint = cell.classList.contains('hint');
+                    const wasSelected = cell.classList.contains('selected');
+                    
                     cell.className = 'cell';
+                    
+                    // Restore states
+                    if (wasSelected) cell.classList.add('selected');
+                    if (wasHint) cell.classList.add('hint');
+                    
                     if (value !== 0) {
                         // Cell has a number
                         cell.textContent = value;
                         cell.classList.remove('candidate-mode');
                         if (this.currentPuzzle[row][col] !== 0) {
                             cell.classList.add('given');
+                        } else {
+                            // Check if this is an incorrect user entry
+                            if (value !== this.solution[row][col]) {
+                                cell.classList.add('error');
+                            }
                         }
                     } else {
                         // Empty cell - show candidates if any
@@ -713,9 +729,10 @@
                 const col = this.selectedCell % 9;
                 if (this.currentPuzzle[row][col] !== 0) return; // Can't change given numbers
                 const cell = document.querySelectorAll('.cell')[this.selectedCell];
-                if (number == 0 || number == this.solution[row][col]){
-                    cell.classList.remove('error', 'hint');
-                }
+                
+                // Always remove error and hint classes first
+                cell.classList.remove('error', 'hint');
+                
                 if (this.candidateMode) {
                     // Toggle candidate
                     if (this.candidates[row][col].has(number)) {
@@ -727,14 +744,17 @@
                     // Place number
                     this.currentGrid[row][col] = number;
                     this.candidates[row][col].clear(); // Clear candidates when placing number
-                    // Update candidates in related cells
+                    
+                    // Check if number is correct and handle styling
                     if (number !== 0) {
                         this.updateRelatedCandidates(row, col, number);
                         if (number !== this.solution[row][col]) {
+                            // Wrong number - add error class
                             cell.classList.add('error');
                             this.mistakes++;
                             this.updateStats();
                         } else {
+                            // Correct number - check completion
                             this.checkCompletion();
                         }
                     }
@@ -781,6 +801,11 @@
                 const row = Math.floor(this.selectedCell / 9);
                 const col = this.selectedCell % 9;
                 if (this.currentPuzzle[row][col] !== 0) return;
+                const cell = document.querySelectorAll('.cell')[this.selectedCell];
+                
+                // Remove error and hint classes when clearing
+                cell.classList.remove('error', 'hint');
+                
                 if (this.candidateMode) {
                     // Clear all candidates
                     this.candidates[row][col].clear();
@@ -806,6 +831,8 @@
                 const cell = document.querySelectorAll('.cell')[index];
                 cell.textContent = value;
                 cell.classList.add('hint');
+                // Remove error class if it was there
+                cell.classList.remove('error');
                 this.hintsUsed++;
                 this.updateStats();
                 this.checkCompletion();
