@@ -545,7 +545,7 @@ class Sudoku {
                             if (numCandidates > 0 && numCandidates < minCandidates) {
                                 minCandidates = numCandidates;
                                 bestCell = [row, col];
-                                bestValue = candidatesGrid[row][col][0];  // Take the first candidate as a guess
+                                bestValue = this.solveMatrix(this.deepCopy(grid))[bestCell[0]][bestCell[1]];
                             }
                         }
                     }
