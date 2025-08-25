@@ -714,6 +714,8 @@ class Sudoku {
         }
     }
 
+    
+
     // PhiPulse RNG - Advanced chaotic pseudorandom number generator
     seedRandom(seed) {
         const phi = 1.61803398875;
