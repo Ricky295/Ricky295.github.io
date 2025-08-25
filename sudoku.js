@@ -216,6 +216,182 @@ class Sudoku {
                 for (let col = 0; col < 9; col++) {
                     if (grid[row][col] === 0) {
                         for (let num = 1; num <= 9; num++) {
+                    if (valuePositions[num].length === 1) {
+                        const col = valuePositions[num][0];
+                        const key = `${row},${col}`;
+                        if (!foundSingles.has(key)) {
+                            foundSingles.add(key);
+                            singlesCount++;
+                        }
+                    }
+                }
+            }
+            
+            // Count hidden singles in columns
+            for (let col = 0; col < 9; col++) {
+                const valuePositions = {};
+                for (let num = 1; num <= 9; num++) {
+                    valuePositions[num] = [];
+                }
+                
+                for (let row = 0; row < 9; row++) {
+                    if (currentGrid[row][col] === 0) {
+                        const candidates = getCandidates(currentGrid, row, col);
+                        for (const num of candidates) {
+                            valuePositions[num].push(row);
+                        }
+                    }
+                }
+                
+                for (let num = 1; num <= 9; num++) {
+                    if (valuePositions[num].length === 1) {
+                        const row = valuePositions[num][0];
+                        const key = `${row},${col}`;
+                        if (!foundSingles.has(key)) {
+                            foundSingles.add(key);
+                            singlesCount++;
+                        }
+                    }
+                }
+            }
+            
+            return singlesCount;
+        };
+
+        let totalSteps = 0;
+        let totalStepScores = 0;
+
+        // Solve step by step and track singles
+        while (true) {
+            // Check if solved
+            let isSolved = true;
+            for (const row of workingGrid) {
+                if (row.includes(0)) {
+                    isSolved = false;
+                    break;
+                }
+            }
+            
+            if (isSolved) {
+                break;
+            }
+            
+            // 1. Calculate amount of "singles" in this step
+            const singlesAtThisStep = countCurrentSingles(workingGrid);
+            
+            // Get a hint
+            const hintResult = this.hint(workingGrid, priority);
+            
+            if (!hintResult) {
+                return 100; // Unsolvable
+            }
+            
+            const [technique, [row, col], value] = hintResult;
+            
+            // If we need to guess, return 100%
+            if (technique === "GUESS") {
+                return 100;
+            }
+            
+            totalSteps++;
+            
+            // 2. Assign it a score (100/singles_available)
+            const stepScore = singlesAtThisStep > 0 ? (100 / singlesAtThisStep) : 100;
+            
+            // 3. Update the total (accumulate step scores)
+            totalStepScores += stepScore;
+            
+            // Apply the move
+            workingGrid[row][col] = value;
+        }
+
+        // 4. Calculate the average score of all the steps
+        if (totalSteps === 0) {
+            return 0; // Already solved
+        }
+
+        const avgScore = totalStepScores / totalSteps;
+        return Math.min(99.9, avgScore);
+    }
+
+    // Utility methods
+    deepCopy(arr) {
+        return arr.map(row => [...row]);
+    }
+
+    shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // PhiPulse RNG - Advanced chaotic pseudorandom number generator
+    seedRandom(seed) {
+        const phi = 1.61803398875;
+        this._rngSeed = seed;
+        
+        // Replace Math.random with PhiPulse RNG
+        const originalRandom = Math.random;
+        Math.random = () => {
+            const x = this._rngSeed;
+            let val;
+            
+            try {
+                val = (
+                    Math.sin(1e5 * Math.cos(x * 1e4)) +
+                    Math.cos(1e4 * Math.tanh(x)) +
+                    Math.sin(Math.log(Math.abs(Math.sin(x) + 1e-6)) * 2e3) +
+                    (Math.sin(x * phi) * 1e5 % 1)
+                ) % 1;
+                
+                // Ensure positive result
+                if (val < 0) val += 1;
+            } catch (error) {
+                // Fallback value on math domain errors
+                val = 0.5;
+            }
+            
+            this._rngSeed += 1e-5;
+            return val;
+        };
+        
+        // Store reference to restore later if needed
+        this._originalRandom = originalRandom;
+    }
+}
+
+// Example usage
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = Sudoku;
+} else if (typeof window !== 'undefined') {
+    window.Sudoku = Sudoku;
+}
+
+// Example usage (for Node.js or browser console)
+/*
+const sudoku = new Sudoku();
+
+// Generate a daily Sudoku and test tediousness
+const simplePuzzle = sudoku.generateDailySudoku(2, new Date(), "matrix");
+console.log("Today's daily:");
+simplePuzzle.forEach(row => console.log(row));
+
+// Calculate tediousness
+const tediousness = sudoku.Tediousness(simplePuzzle);
+console.log(`Tediousness score: ${tediousness.toFixed(2)}%`);
+
+// Try each priority for solve path
+for (let priority = 0; priority < 2; priority++) {
+    const solvePath = sudoku.solvePath(simplePuzzle, priority);
+    console.log(`Solve path with priority ${priority}:`);
+    if (solvePath) {
+        solvePath.forEach(step => console.log(step));
+    } else {
+        console.log("No solution found");
+    }
+}
+*/; num <= 9; num++) {
                             if (isSafe(grid, num, row, col)) {
                                 grid[row][col] = num;
                                 countSolutions();
@@ -264,6 +440,8 @@ class Sudoku {
             matrix = this.convertToMatrix(matrix);
         }
         
+        const workingGrid = this.deepCopy(matrix);
+        
         const isSafe = (grid, num, row, col) => {
             if (grid[row].includes(num)) {
                 return false;
@@ -305,9 +483,8 @@ class Sudoku {
             return true;
         };
 
-        this.grid = matrix;
-        if (solve(this.grid)) {
-            return this.grid;
+        if (solve(workingGrid)) {
+            return workingGrid;
         } else {
             return null;
         }
@@ -536,7 +713,6 @@ class Sudoku {
                 // Find the cell with the fewest candidates and make a guess
                 let minCandidates = 10;
                 let bestCell = null;
-                let bestValue = null;
                 
                 for (let row = 0; row < 9; row++) {
                     for (let col = 0; col < 9; col++) {
@@ -545,13 +721,14 @@ class Sudoku {
                             if (numCandidates > 0 && numCandidates < minCandidates) {
                                 minCandidates = numCandidates;
                                 bestCell = [row, col];
-                                bestValue = this.solveMatrix(this.deepCopy(grid))[bestCell[0]][bestCell[1]];
                             }
                         }
                     }
                 }
                 
                 if (bestCell) {
+                    // Use the solver to find the correct value
+                    const bestValue = this.solveMatrix(this.deepCopy(grid))[bestCell[0]][bestCell[1]];
                     return ["GUESS", bestCell, bestValue];
                 }
             }
@@ -702,75 +879,229 @@ class Sudoku {
         }
     }
 
-    // Utility methods
-    deepCopy(arr) {
-        return arr.map(row => [...row]);
-    }
-
-    shuffleArray(array) {
-        for (let i = array.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [array[i], array[j]] = [array[j], array[i]];
-        }
-    }
-
-    
-
-    // PhiPulse RNG - Advanced chaotic pseudorandom number generator
-    seedRandom(seed) {
-        const phi = 1.61803398875;
-        this._rngSeed = seed;
+    Tediousness(puzzle, priority = 0) {
+        /**
+         * Calculate the tediousness score of a Sudoku puzzle.
+         * 
+         * @param {Array|string} puzzle - A Sudoku puzzle in either string or matrix format
+         * @param {number} priority - Which technique sequence to use (0 or 1)
+         * 
+         * @returns {number} Tediousness score as a percentage:
+         *                   Based on average singles per step:
+         *                   2 singles per step = 50%
+         *                   3 singles per step = 33.33%
+         *                   4 singles per step = 25%
+         *                   etc.
+         *                   100% = Needs guesswork
+         */
         
-        // Replace Math.random with PhiPulse RNG
-        const originalRandom = Math.random;
-        Math.random = () => {
-            const x = this._rngSeed;
-            let val;
-            
-            try {
-                val = (
-                    Math.sin(1e5 * Math.cos(x * 1e4)) +
-                    Math.cos(1e4 * Math.tanh(x)) +
-                    Math.sin(Math.log(Math.abs(Math.sin(x) + 1e-6)) * 2e3) +
-                    (Math.sin(x * phi) * 1e5 % 1)
-                ) % 1;
+        // Convert puzzle to matrix format if it's a string
+        let grid;
+        if (typeof puzzle === 'string') {
+            grid = this.convertToMatrix(puzzle);
+        } else {
+            grid = this.deepCopy(puzzle);
+        }
+
+        // Make a working copy
+        const workingGrid = this.deepCopy(grid);
+        
+        // Helper function to count current singles
+        const countCurrentSingles = (currentGrid) => {
+            const getCandidates = (grid, row, col) => {
+                if (grid[row][col] !== 0) {
+                    return [];
+                }
                 
-                // Ensure positive result
-                if (val < 0) val += 1;
-            } catch (error) {
-                // Fallback value on math domain errors
-                val = 0.5;
+                const candidates = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+                
+                // Remove candidates from row
+                for (let c = 0; c < 9; c++) {
+                    if (grid[row][c] !== 0) {
+                        candidates.delete(grid[row][c]);
+                    }
+                }
+                
+                // Remove candidates from column
+                for (let r = 0; r < 9; r++) {
+                    if (grid[r][col] !== 0) {
+                        candidates.delete(grid[r][col]);
+                    }
+                }
+                
+                // Remove candidates from 3x3 box
+                const boxRow = 3 * Math.floor(row / 3);
+                const boxCol = 3 * Math.floor(col / 3);
+                for (let r = boxRow; r < boxRow + 3; r++) {
+                    for (let c = boxCol; c < boxCol + 3; c++) {
+                        if (grid[r][c] !== 0) {
+                            candidates.delete(grid[r][c]);
+                        }
+                    }
+                }
+                
+                return Array.from(candidates);
+            };
+            
+            let singlesCount = 0;
+            const foundSingles = new Set();
+            
+            // Count naked singles
+            for (let row = 0; row < 9; row++) {
+                for (let col = 0; col < 9; col++) {
+                    if (currentGrid[row][col] === 0) {
+                        const candidates = getCandidates(currentGrid, row, col);
+                        if (candidates.length === 1) {
+                            foundSingles.add(`${row},${col}`);
+                            singlesCount++;
+                        }
+                    }
+                }
             }
             
-            this._rngSeed += 1e-5;
-            return val;
+            // Count hidden singles in boxes
+            for (let boxRow = 0; boxRow < 9; boxRow += 3) {
+                for (let boxCol = 0; boxCol < 9; boxCol += 3) {
+                    const valuePositions = {};
+                    for (let num = 1; num <= 9; num++) {
+                        valuePositions[num] = [];
+                    }
+                    
+                    for (let r = boxRow; r < boxRow + 3; r++) {
+                        for (let c = boxCol; c < boxCol + 3; c++) {
+                            if (currentGrid[r][c] === 0) {
+                                const candidates = getCandidates(currentGrid, r, c);
+                                for (const num of candidates) {
+                                    valuePositions[num].push([r, c]);
+                                }
+                            }
+                        }
+                    }
+                    
+                    for (let num = 1; num <= 9; num++) {
+                        if (valuePositions[num].length === 1) {
+                            const [r, c] = valuePositions[num][0];
+                            const key = `${r},${c}`;
+                            if (!foundSingles.has(key)) {
+                                foundSingles.add(key);
+                                singlesCount++;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Count hidden singles in rows
+            for (let row = 0; row < 9; row++) {
+                const valuePositions = {};
+                for (let num = 1; num <= 9; num++) {
+                    valuePositions[num] = [];
+                }
+                
+                for (let col = 0; col < 9; col++) {
+                    if (currentGrid[row][col] === 0) {
+                        const candidates = getCandidates(currentGrid, row, col);
+                        for (const num of candidates) {
+                            valuePositions[num].push(col);
+                        }
+                    }
+                }
+                
+                for (let num = 1; num <= 9; num++) {
+                    if (valuePositions[num].length === 1) {
+                        const col = valuePositions[num][0];
+                        const key = `${row},${col}`;
+                        if (!foundSingles.has(key)) {
+                            foundSingles.add(key);
+                            singlesCount++;
+                        }
+                    }
+                }
+            }
+            
+            // Count hidden singles in columns
+            for (let col = 0; col < 9; col++) {
+                const valuePositions = {};
+                for (let num = 1; num <= 9; num++) {
+                    valuePositions[num] = [];
+                }
+                
+                for (let row = 0; row < 9; row++) {
+                    if (currentGrid[row][col] === 0) {
+                        const candidates = getCandidates(currentGrid, row, col);
+                        for (const num of candidates) {
+                            valuePositions[num].push(row);
+                        }
+                    }
+                }
+                
+                for (let num = 1; num <= 9; num++) {
+                    if (valuePositions[num].length === 1) {
+                        const row = valuePositions[num][0];
+                        const key = `${row},${col}`;
+                        if (!foundSingles.has(key)) {
+                            foundSingles.add(key);
+                            singlesCount++;
+                        }
+                    }
+                }
+            }
+            
+            return singlesCount;
         };
-        
-        // Store reference to restore later if needed
-        this._originalRandom = originalRandom;
+
+        let totalSteps = 0;
+        let totalStepScores = 0;
+
+        // Solve step by step and track singles
+        while (true) {
+            // Check if solved
+            let isSolved = true;
+            for (const row of workingGrid) {
+                if (row.includes(0)) {
+                    isSolved = false;
+                    break;
+                }
+            }
+            
+            if (isSolved) {
+                break;
+            }
+            
+            // 1. Calculate amount of "singles" in this step
+            const singlesAtThisStep = countCurrentSingles(workingGrid);
+            
+            // Get a hint
+            const hintResult = this.hint(workingGrid, priority);
+            
+            if (!hintResult) {
+                return 100; // Unsolvable
+            }
+            
+            const [technique, [row, col], value] = hintResult;
+            
+            // If we need to guess, return 100%
+            if (technique === "GUESS") {
+                return 100;
+            }
+            
+            totalSteps++;
+            
+            // 2. Assign it a score (100/singles_available)
+            const stepScore = singlesAtThisStep > 0 ? (100 / singlesAtThisStep) : 100;
+            
+            // 3. Update the total (accumulate step scores)
+            totalStepScores += stepScore;
+            
+            // Apply the move
+            workingGrid[row][col] = value;
+        }
+
+        // 4. Calculate the average score of all the steps
+        if (totalSteps === 0) {
+            return 0; // Already solved
+        }
+
+        const avgScore = totalStepScores / totalSteps;
+        return Math.min(99.9, avgScore);
     }
-}
-
-// Example usage
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = Sudoku;
-} else if (typeof window !== 'undefined') {
-    window.Sudoku = Sudoku;
-}
-
-// Example usage (for Node.js or browser console)
-/*
-const sudoku = new Sudoku();
-
-// Generate a daily Sudoku and get a hint
-const simplePuzzle = sudoku.generateDailySudoku(5, new Date(), "matrix");
-console.log("Today's daily:");
-simplePuzzle.forEach(row => console.log(row));
-
-// Try each priority
-for (let priority = 0; priority < 2; priority++) {
-    const solvePath = sudoku.solvePath(simplePuzzle, priority);
-    console.log(`Solve path with priority ${priority}:`);
-    solvePath.forEach(step => console.log(step));
-}
-*/
