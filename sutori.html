@@ -74,7 +74,7 @@
         }
 
         .editable {
-            color: blue;
+            color: #87CEEB; /* Sky blue for user entries */
         }
 
         .cell-div {
@@ -143,6 +143,19 @@
             margin-bottom: 15px;
             text-align: left;
         }
+        
+        .difficulty-label {
+            display: inline-block;
+            margin-left: 10px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .difficulty-easy { color: #28a745; }
+        .difficulty-medium { color: #ffc107; }
+        .difficulty-hard { color: #fd7e14; }
+        .difficulty-expert { color: #dc3545; }
+        .difficulty-insane { color: #6f42c1; }
         
         label {
             display: block;
@@ -306,6 +319,7 @@
         <div class="form-group">
             <label for="clueRange">Number of Clues: <span id="clueValue">72</span></label>
             <input type="range" id="clueRange" min="48" max="108" value="72" oninput="updateClueValue()">
+            <span class="difficulty-label">Estimated Difficulty: <span id="difficultyLabel" class="difficulty-medium">Medium</span></span>
         </div>
         
         <div class="form-group">
@@ -381,6 +395,7 @@
                 this.isSolutionGenerated = false;
                 this.solutionCount = 0;
                 this.numbers = [1, 2, 3, 4];
+                this.removable = Array.from({ length: 12 }, () => Array(12).fill(true)); // Track which cells can still be removed
             }
 
             // Get block index for 4x3 blocks in 12x12 grid
@@ -491,38 +506,63 @@
                 }
             }
 
-            // Generate puzzle with specified number of clues
+            // Generate puzzle with specified number of clues - now with smart stopping
             generatePuzzle(minNoOfClues) {
                 // First generate complete solution
                 this.buildCompletePuzzle(0, 0);
                 
                 let completedGrid = this.mPuzzle.map(row => row.slice());
-                let removed = Array.from({ length: 12 }, () => Array(12).fill(false));
-                let noOfDigitsExplored = 0;
+                this.removable = Array.from({ length: 12 }, () => Array(12).fill(true));
+                let removedCount = 0;
+                const maxRemovals = 144 - minNoOfClues;
 
-                while (noOfDigitsExplored < 144 - minNoOfClues) {
-                    let row = Math.floor(Math.random() * 12);
-                    let col = Math.floor(Math.random() * 12);
-                    if (removed[row][col]) continue;
-                    else {
-                        removed[row][col] = true;
-                        noOfDigitsExplored++;
+                while (removedCount < maxRemovals) {
+                    // Find all removable cells
+                    const removableCells = [];
+                    for (let r = 0; r < 12; r++) {
+                        for (let c = 0; c < 12; c++) {
+                            if (this.mPuzzle[r][c] !== 0 && this.removable[r][c]) {
+                                removableCells.push([r, c]);
+                            }
+                        }
                     }
 
+                    // If no more cells can be removed, stop early
+                    if (removableCells.length === 0) {
+                        console.log(`Stopped early: no more removable cells. Generated with ${144 - removedCount} clues instead of ${minNoOfClues}.`);
+                        break;
+                    }
+
+                    // Try to remove a random removable cell
+                    const randomIndex = Math.floor(Math.random() * removableCells.length);
+                    const [row, col] = removableCells[randomIndex];
+                    const originalValue = this.mPuzzle[row][col];
+
+                    // Mark this cell as no longer removable regardless of outcome
+                    this.removable[row][col] = false;
+
+                    // Try removing the cell
                     this.mPuzzle[row][col] = 0;
                     this.solutionCount = 0;
                     this.checkUniqueness(0, 0, this.mPuzzle, Array.from({ length: 12 }, () => Array(12).fill(0)));
 
-                    if (this.solutionCount !== 1) {
-                        this.mPuzzle[row][col] = completedGrid[row][col];
+                    if (this.solutionCount === 1) {
+                        // Successfully removed - count it
+                        removedCount++;
+                    } else {
+                        // Restore the cell if removal leads to multiple solutions
+                        this.mPuzzle[row][col] = originalValue;
                     }
                 }
+
+                console.log(`Final puzzle generated with ${144 - removedCount} clues (target was ${minNoOfClues})`);
             }
         }
 
         // Game state variables
         let selectedCell = null;
         let grid = [];
+        let originalPuzzle = []; // Store the original givens
         let currentHighlightedDigit = null;
         let startTime = null;
         let timerInterval = null;
@@ -530,6 +570,25 @@
         function updateClueValue() {
             const clueValue = document.getElementById("clueRange").value;
             document.getElementById("clueValue").textContent = clueValue;
+            
+            // Update difficulty label based on clue count (estimated for 12x12)
+            const difficultyLabel = document.getElementById("difficultyLabel");
+            if (clueValue <= 55) {
+                difficultyLabel.textContent = "Insane";
+                difficultyLabel.className = "difficulty-insane";
+            } else if (clueValue >= 56 && clueValue <= 65) {
+                difficultyLabel.textContent = "Expert";
+                difficultyLabel.className = "difficulty-expert";
+            } else if (clueValue >= 66 && clueValue <= 78) {
+                difficultyLabel.textContent = "Hard";
+                difficultyLabel.className = "difficulty-hard";
+            } else if (clueValue >= 79 && clueValue <= 88) {
+                difficultyLabel.textContent = "Medium";
+                difficultyLabel.className = "difficulty-medium";
+            } else if (clueValue >= 89 && clueValue <= 108) {
+                difficultyLabel.textContent = "Easy";
+                difficultyLabel.className = "difficulty-easy";
+            }
         }
 
         function generateSutori() {
@@ -579,10 +638,13 @@
             const tableElement = document.getElementById('puzzleTable');
             const cellSize = parseInt(document.getElementById('zoomInput').value) || 40;
             
-            // Initialize grid
+            // Initialize both grids
             grid = [];
+            originalPuzzle = [];
             for (let i = 0; i < puzzleString.length; i += 12) {
-                grid.push(puzzleString.slice(i, i + 12).split('').map(Number));
+                const row = puzzleString.slice(i, i + 12).split('').map(Number);
+                grid.push([...row]);
+                originalPuzzle.push([...row]); // Store original state
             }
 
             let tableHTML = '';
@@ -597,6 +659,7 @@
                             <div class="cell-div${isEditable ? ' editable' : ''}" 
                                  data-row="${row}" 
                                  data-col="${col}" 
+                                 data-original="${cellValue !== '0' ? '1' : '0'}"
                                  style="width: ${cellSize}px; height: ${cellSize}px; font-size: ${cellSize / 2}px;">
                                 ${cellValue !== '0' ? cellValue : ''}
                                 <div class="candidates" style="display: none">
@@ -873,7 +936,7 @@
         }
 
         function checkPuzzle() {
-            // Check if current entries are valid (not against a solution, just constraint-wise)
+            // Check only user-entered values for constraint violations
             let incomplete = 0;
             let incorrect = 0;
             const generator = new SutoriGenerator();
@@ -886,15 +949,17 @@
                 }
             }
             
-            // Check each filled cell for constraint violations
+            // Check each cell
             for (let r = 0; r < 12; r++) {
                 for (let c = 0; c < 12; c++) {
                     const cell = document.getElementById('puzzleTable').rows[r].cells[c].querySelector('.cell-div');
                     const userVal = grid[r][c];
+                    const isOriginal = cell.dataset.original === '1';
                     
                     if (userVal === 0) {
                         incomplete++;
-                    } else {
+                    } else if (!isOriginal) {
+                        // Only check user-entered values (not original givens)
                         // Create a temporary grid without this cell to test if the value is valid
                         const tempGrid = grid.map(row => [...row]);
                         tempGrid[r][c] = 0;
@@ -905,6 +970,7 @@
                             incorrect++;
                         }
                     }
+                    // Original givens are always considered correct, never highlighted
                 }
             }
             
@@ -927,7 +993,7 @@
                     feedbackElement.style.color = 'green';
                 }
             } else {
-                feedbackElement.textContent = `${incorrect} cells violate the rules (highlighted in red).`;
+                feedbackElement.textContent = `${incorrect} user entries violate the rules (highlighted in red).`;
                 feedbackElement.style.color = 'red';
             }
             
@@ -1015,6 +1081,7 @@
             // Reset game state
             selectedCell = null;
             grid = [];
+            originalPuzzle = [];
             currentHighlightedDigit = null;
             startTime = null;
             timerInterval = null;
