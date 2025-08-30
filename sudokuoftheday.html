@@ -243,6 +243,15 @@
             background: #1f4d1f !important;
             color: #4caf50;
         }
+        .cell.highlight-same-number {
+            background: #fff3cd !important;
+            color: #856404;
+            font-weight: bold;
+        }
+        body.night-mode .cell.highlight-same-number {
+            background: #4a4020 !important;
+            color: #ffc107;
+        }
         /* Thick borders for 3x3 boxes - using correct nth-child formulas */
         .cell:nth-child(3n):not(.cell:nth-child(9n)) { border-right: 2px solid #333; }
         .cell:nth-child(6n):not(.cell:nth-child(9n)) { border-right: 2px solid #333; }
@@ -331,6 +340,61 @@
             display: flex;
             justify-content: space-between;
             margin-bottom: 5px;
+        }
+        .medal-times {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ccc;
+        }
+        body.night-mode .medal-times {
+            border-top-color: #555;
+        }
+        .medal-times h4 {
+            text-align: center;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        body.night-mode .medal-times h4 {
+            color: #999;
+        }
+        .medal-time-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3px;
+            font-size: 12px;
+        }
+        .medal-name {
+            font-weight: bold;
+            min-width: 60px;
+        }
+        .medal-name.platinum { color: #6c5ce7; }
+        .medal-name.gold { color: #fdcb6e; }
+        .medal-name.silver { color: #74b9ff; }
+        .medal-name.bronze { color: #e17055; }
+        body.night-mode .medal-name.platinum { color: #a29bfe; }
+        body.night-mode .medal-name.gold { color: #ffeaa7; }
+        body.night-mode .medal-name.silver { color: #81ecec; }
+        body.night-mode .medal-name.bronze { color: #fab1a0; }
+        .medal-time {
+            font-family: 'Courier New', monospace;
+            min-width: 50px;
+            text-align: right;
+        }
+        .medal-time.achieved {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        body.night-mode .medal-time.achieved {
+            color: #00b894;
+        }
+        .medal-time.missed {
+            color: #e74c3c;
+            text-decoration: line-through;
+        }
+        body.night-mode .medal-time.missed {
+            color: #fd79a8;
         }
         .modal {
             display: none;
@@ -513,6 +577,25 @@
                 <span>Best Score:</span>
                 <span id="best-score">0</span>
             </div>
+            <div class="medal-times">
+                <h4>Medal Times</h4>
+                <div class="medal-time-row">
+                    <span class="medal-name platinum">Platinum:</span>
+                    <span class="medal-time" id="platinum-time">--:--</span>
+                </div>
+                <div class="medal-time-row">
+                    <span class="medal-name gold">Gold:</span>
+                    <span class="medal-time" id="gold-time">--:--</span>
+                </div>
+                <div class="medal-time-row">
+                    <span class="medal-name silver">Silver:</span>
+                    <span class="medal-time" id="silver-time">--:--</span>
+                </div>
+                <div class="medal-time-row">
+                    <span class="medal-name bronze">Bronze:</span>
+                    <span class="medal-time" id="bronze-time">--:--</span>
+                </div>
+            </div>
         </div>
     </div>
     <div class="modal" id="complete-modal">
@@ -544,6 +627,44 @@
         </div>
     </div>
     <script>
+        // Sudoku class placeholder - you'll need to include the actual Sudoku class
+        class Sudoku {
+            generateDailySudoku(difficulty, date, format) {
+                // This is a placeholder - replace with actual sudoku generation
+                const puzzle = Array(9).fill().map(() => Array(9).fill(0));
+                // Add some numbers for testing
+                puzzle[0][0] = 5;
+                puzzle[1][2] = 3;
+                puzzle[2][4] = 7;
+                return puzzle;
+            }
+            
+            deepCopy(matrix) {
+                return matrix.map(row => [...row]);
+            }
+            
+            solveMatrix(matrix) {
+                // Simple solving logic for demo
+                return matrix.map(row => row.map(cell => cell === 0 ? Math.floor(Math.random() * 9) + 1 : cell));
+            }
+            
+            solvePath(matrix, difficulty) {
+                return [["NAKED SINGLE", [0, 1], 8]];
+            }
+            
+            hint(matrix, difficulty) {
+                // Find first empty cell and suggest a number
+                for (let r = 0; r < 9; r++) {
+                    for (let c = 0; c < 9; c++) {
+                        if (matrix[r][c] === 0) {
+                            return ["NAKED SINGLE", [r, c], Math.floor(Math.random() * 9) + 1];
+                        }
+                    }
+                }
+                return null;
+            }
+        }
+
         class SudokuGame {
             constructor() {
                 this.sudoku = new Sudoku();
@@ -560,12 +681,35 @@
                 this.puzzleRating = 0;
                 this.candidateMode = false;
                 this.nightMode = false;
+                
+                // Check for new day and reset scores if needed
+                this.checkAndResetDailyScores();
+                
                 this.initializeGame();
                 this.bindEvents();
                 this.loadProgress();
                 this.updateMedalBorders();
                 this.loadNightMode();
             }
+            
+            checkAndResetDailyScores() {
+                const today = new Date().toDateString();
+                const lastScoreDate = localStorage.getItem('last-score-date');
+                
+                if (lastScoreDate !== today) {
+                    // New day detected - reset all scores
+                    console.log('New day detected, resetting scores...');
+                    for (let i = 0; i < 6; i++) {
+                        localStorage.removeItem(`best-score-${i}`);
+                    }
+                    // Update the last score date
+                    localStorage.setItem('last-score-date', today);
+                    
+                    // Also clear any saved game from previous day
+                    localStorage.removeItem('sudoku-save');
+                }
+            }
+            
             initializeGame() {
                 this.createGrid();
                 this.generateNewPuzzle();
@@ -672,15 +816,16 @@
                     const col = index % 9;
                     const value = this.currentGrid[row][col];
                     
-                    // Store current error and hint states before resetting
-                    const wasError = cell.classList.contains('error');
-                    const wasHint = cell.classList.contains('hint');
+                    // Store current highlight and selection states before resetting
                     const wasSelected = cell.classList.contains('selected');
+                    const wasHighlightSameNumber = cell.classList.contains('highlight-same-number');
+                    const wasHint = cell.classList.contains('hint');
                     
                     cell.className = 'cell';
                     
-                    // Restore states
+                    // Restore highlight states first
                     if (wasSelected) cell.classList.add('selected');
+                    if (wasHighlightSameNumber) cell.classList.add('highlight-same-number');
                     if (wasHint) cell.classList.add('hint');
                     
                     if (value !== 0) {
@@ -707,6 +852,43 @@
                         }
                     }
                 });
+                
+                // Re-apply highlighting if there's a selected cell
+                if (this.selectedCell !== null) {
+                    this.updateHighlighting();
+                }
+            }
+            
+            updateHighlighting() {
+                if (this.selectedCell === null) return;
+                
+                const cells = document.querySelectorAll('.cell');
+                const index = this.selectedCell;
+                const row = Math.floor(index / 9);
+                const col = index % 9;
+                const selectedValue = this.currentGrid[row][col];
+                
+                // Clear existing highlights except selected
+                cells.forEach(cell => {
+                    cell.classList.remove('highlight-same-number');
+                });
+                
+                // Highlight cells with same number (if not empty)
+                if (selectedValue !== 0) {
+                    cells.forEach((cell, cellIndex) => {
+                        const cellRow = Math.floor(cellIndex / 9);
+                        const cellCol = cellIndex % 9;
+                        const cellValue = this.currentGrid[cellRow][cellCol];
+                        
+                        // Skip the selected cell itself
+                        if (cellIndex === index) return;
+                        
+                        // Highlight cells with same number
+                        if (cellValue === selectedValue) {
+                            cell.classList.add('highlight-same-number');
+                        }
+                    });
+                }
             }
             renderCandidates(candidates) {
                 let html = '<div class="candidates-grid">';
@@ -719,9 +901,39 @@
             }
             selectCell(index) {
                 const cells = document.querySelectorAll('.cell');
-                cells.forEach(cell => cell.classList.remove('selected'));
+                
+                // Clear all previous highlights
+                cells.forEach(cell => {
+                    cell.classList.remove('selected', 'highlight-same-number');
+                });
+                
                 this.selectedCell = index;
-                cells[index].classList.add('selected');
+                const selectedCell = cells[index];
+                selectedCell.classList.add('selected');
+                
+                // Calculate row and col
+                const row = Math.floor(index / 9);
+                const col = index % 9;
+                
+                // Get the value of the selected cell
+                const selectedValue = this.currentGrid[row][col];
+                
+                // Highlight cells with same number (if not empty)
+                if (selectedValue !== 0) {
+                    cells.forEach((cell, cellIndex) => {
+                        const cellRow = Math.floor(cellIndex / 9);
+                        const cellCol = cellIndex % 9;
+                        const cellValue = this.currentGrid[cellRow][cellCol];
+                        
+                        // Skip the selected cell itself
+                        if (cellIndex === index) return;
+                        
+                        // Highlight cells with same number
+                        if (cellValue === selectedValue) {
+                            cell.classList.add('highlight-same-number');
+                        }
+                    });
+                }
             }
             placeNumber(number) {
                 if (this.selectedCell === null) return;
@@ -762,6 +974,10 @@
                     }
                 }
                 this.renderGrid();
+                // Update highlighting after placing number
+                if (this.selectedCell !== null) {
+                    this.selectCell(this.selectedCell);
+                }
             }
             toggleNightMode() {
                 this.nightMode = !this.nightMode;
@@ -817,6 +1033,10 @@
                     this.candidates[row][col].clear();
                 }
                 this.renderGrid();
+                // Update highlighting after clearing
+                if (this.selectedCell !== null) {
+                    this.selectCell(this.selectedCell);
+                }
             }
             giveHint() {
                 const hint = this.sudoku.hint(this.currentGrid, 0);
@@ -902,11 +1122,83 @@
                 this.updateMedalBorders();
                 document.getElementById('complete-modal').style.display = 'block';
             }
-            calculateScore(minutes) {
-                const baseScore = this.puzzleRating / minutes;
+            calculateMedalTimes() {
+                // Calculate the time thresholds for each medal based on current state
                 const hintPenalty = Math.pow(0.8, this.hintsUsed);
                 const mistakePenalty = Math.pow(0.9, this.mistakes);
-                return Math.floor(baseScore * hintPenalty * mistakePenalty);
+                const totalPenalty = hintPenalty * mistakePenalty;
+                
+                // Required scores for each medal
+                const platinumScore = 200000;
+                const goldScore = 100000;
+                const silverScore = 50000;
+                const bronzeScore = 25000;
+                
+                // Calculate maximum time (in minutes) for each medal
+                // score = (puzzleRating / minutes) * totalPenalty
+                // So: minutes = (puzzleRating * totalPenalty) / score
+                const platinumTime = (this.puzzleRating * totalPenalty) / platinumScore;
+                const goldTime = (this.puzzleRating * totalPenalty) / goldScore;
+                const silverTime = (this.puzzleRating * totalPenalty) / silverScore;
+                const bronzeTime = (this.puzzleRating * totalPenalty) / bronzeScore;
+                
+                return {
+                    platinum: platinumTime,
+                    gold: goldTime,
+                    silver: silverTime,
+                    bronze: bronzeTime
+                };
+            }
+            
+            formatTime(minutes) {
+                const mins = Math.floor(minutes);
+                const secs = Math.floor((minutes - mins) * 60);
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+            
+            updateMedalTimes() {
+                const medalTimes = this.calculateMedalTimes();
+                const currentTime = this.startTime ? (Date.now() - this.startTime) / 1000 / 60 : 0;
+                
+                // Update platinum time
+                const platinumElement = document.getElementById('platinum-time');
+                platinumElement.textContent = this.formatTime(medalTimes.platinum);
+                platinumElement.className = 'medal-time';
+                if (currentTime > medalTimes.platinum) {
+                    platinumElement.classList.add('missed');
+                } else if (currentTime > 0) {
+                    platinumElement.classList.add('achievable');
+                }
+                
+                // Update gold time
+                const goldElement = document.getElementById('gold-time');
+                goldElement.textContent = this.formatTime(medalTimes.gold);
+                goldElement.className = 'medal-time';
+                if (currentTime > medalTimes.gold) {
+                    goldElement.classList.add('missed');
+                } else if (currentTime > 0) {
+                    goldElement.classList.add('achievable');
+                }
+                
+                // Update silver time
+                const silverElement = document.getElementById('silver-time');
+                silverElement.textContent = this.formatTime(medalTimes.silver);
+                silverElement.className = 'medal-time';
+                if (currentTime > medalTimes.silver) {
+                    silverElement.classList.add('missed');
+                } else if (currentTime > 0) {
+                    silverElement.classList.add('achievable');
+                }
+                
+                // Update bronze time
+                const bronzeElement = document.getElementById('bronze-time');
+                bronzeElement.textContent = this.formatTime(medalTimes.bronze);
+                bronzeElement.className = 'medal-time';
+                if (currentTime > medalTimes.bronze) {
+                    bronzeElement.classList.add('missed');
+                } else if (currentTime > 0) {
+                    bronzeElement.classList.add('achievable');
+                }
             }
             getMedalText(score) {
                 if (score >= 200000) return "🏆 Platinum Medal!";
@@ -944,6 +1236,8 @@
                         `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
                     // Update score every 100ms for smooth animation
                     this.updateScoreDisplay();
+                    // Update medal times
+                    this.updateMedalTimes();
                 }, 100);
             }
             updateScoreDisplay() {
@@ -970,6 +1264,8 @@
                 this.updateScoreDisplay();
                 const bestScore = localStorage.getItem(`best-score-${this.currentDifficulty}`) || '0';
                 document.getElementById('best-score').textContent = parseInt(bestScore).toLocaleString();
+                // Update medal times when stats change
+                this.updateMedalTimes();
             }
             changeDifficulty(difficulty) {
                 this.currentDifficulty = difficulty;
@@ -1015,35 +1311,86 @@
                     this.initializeCandidates();
                 }
             }
+            
+            saveProgress() {
+                const saveData = {
+                    date: new Date().toDateString(),
+                    currentGrid: this.currentGrid,
+                    currentPuzzle: this.currentPuzzle,
+                    solution: this.solution,
+                    startTime: this.startTime,
+                    hintsUsed: this.hintsUsed,
+                    mistakes: this.mistakes,
+                    difficulty: this.currentDifficulty,
+                    puzzleRating: this.puzzleRating,
+                    candidateMode: this.candidateMode,
+                    candidates: this.candidates.map(row => 
+                        row.map(cell => Array.from(cell))
+                    )
+                };
+                localStorage.setItem('sudoku-save', JSON.stringify(saveData));
+            }
+            
             bindEvents() {
                 // Number pad
                 document.querySelectorAll('.number-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
                         this.placeNumber(parseInt(btn.dataset.number));
+                        this.saveProgress(); // Save after each move
                     });
                 });
                 // Action buttons
-                document.getElementById('clear-btn').addEventListener('click', () => this.clearCell());
-                document.getElementById('hint-btn').addEventListener('click', () => this.giveHint());
-                document.getElementById('candidate-mode-btn').addEventListener('click', () => this.toggleCandidateMode());
+                document.getElementById('clear-btn').addEventListener('click', () => {
+                    this.clearCell();
+                    this.saveProgress(); // Save after clearing
+                });
+                document.getElementById('hint-btn').addEventListener('click', () => {
+                    this.giveHint();
+                    this.saveProgress(); // Save after hint
+                });
+                document.getElementById('candidate-mode-btn').addEventListener('click', () => {
+                    this.toggleCandidateMode();
+                    this.saveProgress(); // Save candidate mode state
+                });
                 document.getElementById('night-mode-btn').addEventListener('click', () => this.toggleNightMode());
-                document.getElementById('new-game-btn').addEventListener('click', () => this.generateNewPuzzle());
+                document.getElementById('new-game-btn').addEventListener('click', () => {
+                    this.generateNewPuzzle();
+                    this.saveProgress(); // Save new game
+                });
                 // Difficulty buttons
                 document.querySelectorAll('.difficulty-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
                         this.changeDifficulty(parseInt(btn.dataset.difficulty));
+                        this.saveProgress(); // Save new difficulty
                     });
                 });
                 // Keyboard events
                 document.addEventListener('keydown', (e) => {
                     if (e.key >= '1' && e.key <= '9') {
                         this.placeNumber(parseInt(e.key));
+                        this.saveProgress();
                     } else if (e.key === '0' || e.key === 'Backspace' || e.key === 'Delete') {
                         this.clearCell();
+                        this.saveProgress();
                     } else if (e.key === 'c' || e.key === 'C') {
                         this.toggleCandidateMode();
+                        this.saveProgress();
                     } else if (e.key === 'n' || e.key === 'N') {
                         this.toggleNightMode();
+                    }
+                });
+                
+                // Save progress periodically (every 30 seconds)
+                setInterval(() => {
+                    if (this.startTime) {
+                        this.saveProgress();
+                    }
+                }, 30000);
+                
+                // Save progress when page is unloaded
+                window.addEventListener('beforeunload', () => {
+                    if (this.startTime) {
+                        this.saveProgress();
                     }
                 });
             }
