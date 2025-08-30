@@ -653,6 +653,55 @@
                 this.updateMedalBorders();
                 this.loadNightMode();
             }
+
+            calculateScore(minutes) {
+                // Calculate hints penalty using the actual solve path
+                let hintsPenalty = 0;
+                if (this.hintsUsed > 0) {
+                    // Get the solve path to determine what types of hints were used
+                    const solvePath = this.sudoku.solvePath(this.currentPuzzle, 0);
+                    if (solvePath && solvePath.length >= this.hintsUsed) {
+                        // Calculate penalty based on the first N hints that would be given
+                        for (let i = 0; i < this.hintsUsed; i++) {
+                            const [technique] = solvePath[i];
+                            if (technique === "HIDDEN SINGLE (BOX)") {
+                                hintsPenalty += 10000;
+                            } else if (technique === "HIDDEN SINGLE (LINE)") {
+                                hintsPenalty += 15000;
+                            } else if (technique === "NAKED SINGLE") {
+                                hintsPenalty += 20000;
+                            } else if (technique === "GUESS") {
+                                // For guesses, we need to calculate the escalating penalty
+                                // Count consecutive guesses up to this point
+                                let consecutiveGuesses = 0;
+                                for (let j = 0; j <= i; j++) {
+                                    if (solvePath[j][0] === "GUESS") {
+                                        consecutiveGuesses++;
+                                        if (j === i) {
+                                            // This is the current guess, calculate its penalty
+                                            hintsPenalty += 50000 * Math.pow(1.5, consecutiveGuesses - 1);
+                                        }
+                                    } else {
+                                        consecutiveGuesses = 0; // Reset if not a guess
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Fallback: assume worst case (all naked singles)
+                        hintsPenalty = this.hintsUsed * 20000;
+                    }
+                }
+                
+                // Calculate mistake penalty
+                const mistakePenalty = Math.pow(0.9, this.mistakes);
+                
+                // Final formula: ((PuzzleRating - HintsPenalty) / minutes) * MistakesPenalty
+                const adjustedRating = Math.max(0, this.puzzleRating - hintsPenalty);
+                const finalScore = (adjustedRating / minutes) * mistakePenalty;
+                
+                return Math.floor(finalScore);
+            }
             
             checkAndResetDailyScores() {
                 const today = new Date().toDateString();
