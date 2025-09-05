@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Overflow Game</title>
+    <style>
+        :root {
+            --bg-color: #2c3e50;
+            --text-color: #ecf0f1;
+            --container-bg: #34495e;
+            --border-color: #7f8c8d;
+            --button-bg: #2ecc71;
+            --button-hover-bg: #27ae60;
+            --arrow-color: #3498db;
+            --arrow-hover-color: #2980b9;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            flex-direction: column;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: var(--container-bg);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            max-width: 95vw;
+            width: 600px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            color: #bdc3c7;
+        }
+
+        .game-board-container {
+            display: grid;
+            grid-template-areas:
+                ". top ."
+                "left board right"
+                ". bottom .";
+            gap: 5px;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        #gameTable {
+            grid-area: board;
+            border-collapse: collapse;
+            border: 2px solid var(--border-color);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        #gameTable td {
+            width: 40px;
+            height: 40px;
+            border: 1px solid var(--border-color);
+            transition: background-color 0.2s;
+            cursor: pointer;
+        }
+        
+        #gameTable td.occupied {
+            cursor: not-allowed;
+        }
+
+        .arrows-container {
+            display: flex;
+            justify-content: space-around;
+        }
+
+        .top-arrows { grid-area: top; width: 100%; justify-content: space-around; }
+        .bottom-arrows { grid-area: bottom; width: 100%; justify-content: space-around; }
+        .left-arrows { grid-area: left; flex-direction: column; height: 100%; justify-content: space-around; }
+        .right-arrows { grid-area: right; flex-direction: column; height: 100%; justify-content: space-around; }
+        
+        .arrow-btn {
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+            color: var(--arrow-color);
+            font-size: 1.5em;
+            padding: 5px;
+            transition: color 0.2s, transform 0.2s;
+        }
+        
+        .arrow-btn:hover {
+            color: var(--arrow-hover-color);
+            transform: scale(1.2);
+        }
+        
+        .arrow-btn.disabled {
+            color: #555;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        #player-selects {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        #controls select,
+        button {
+            padding: 10px 15px;
+            border-radius: 5px;
+            border: none;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.2s;
+        }
+
+        #controls select {
+            background-color: #2c3e50;
+            color: var(--text-color);
+        }
+
+        button {
+            background-color: var(--button-bg);
+            color: var(--text-color);
+        }
+
+        button:hover {
+            background-color: var(--button-hover-bg);
+            transform: translateY(-2px);
+        }
+        
+        #game-status {
+            font-size: 1em;
+            color: #ecf0f1;
+            margin-top: 15px;
+            height: 20px;
+        }
+
+        .hidden {
+            display: none;
+        }
+        
+        @media (max-width: 600px) {
+            #gameTable td {
+                width: 30px;
+                height: 30px;
+            }
+            .container { padding: 15px; }
+            h1 { font-size: 1.5em; }
+            h2 { font-size: 1em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Overflow</h1>
+        <h2>A Minecraft Mini-Game</h2>
+        <div id="controls">
+            <label for="grid-size">Grid Size:</label>
+            <select id="grid-size">
+                <option value="4">4x4</option>
+                <option value="5">5x5</option>
+                <option value="6">6x6</option>
+                <option value="7" selected>7x7 (Recommended)</option>
+                <option value="8">8x8</option>
+                <option value="9">9x9</option>
+                <option value="10">10x10</option>
+                <option value="11">11x11</option>
+                <option value="12">12x12</option>
+            </select>
+            <div id="player-selects">
+                <label>Player 1: 
+                    <select id="player1-type">
+                        <option value="player" selected>Player</option>
+                        <option value="easy">Easy AI</option>
+                        <option value="medium">Medium AI</option>
+                        <option value="hard">Hard AI</option>
+                    </select>
+                </label>
+                <label>Player 2:
+                    <select id="player2-type">
+                        <option value="player">Player</option>
+                        <option value="easy">Easy AI</option>
+                        <option value="medium">Medium AI</option>
+                        <option value="hard" selected>Hard AI</option>
+                    </select>
+                </label>
+                <label>Player 3:
+                    <select id="player3-type">
+                        <option value="none" selected>None</option>
+                        <option value="player">Player</option>
+                        <option value="easy">Easy AI</option>
+                        <option value="medium">Medium AI</option>
+                        <option value="hard">Hard AI</option>
+                    </select>
+                </label>
+                <label>Player 4:
+                    <select id="player4-type">
+                        <option value="none" selected>None</option>
+                        <option value="player">Player</option>
+                        <option value="easy">Easy AI</option>
+                        <option value="medium">Medium AI</option>
+                        <option value="hard">Hard AI</option>
+                    </select>
+                </label>
+            </div>
+            <button id="startGameBtn">Start New Game</button>
+        </div>
+        <div id="game-play-area" class="hidden">
+            <div class="game-board-container">
+                <div class="arrows-container top-arrows" id="top-arrows"></div>
+                <div class="arrows-container left-arrows" id="left-arrows"></div>
+                <table id="gameTable"></table>
+                <div class="arrows-container right-arrows" id="right-arrows"></div>
+                <div class="arrows-container bottom-arrows" id="bottom-arrows"></div>
+            </div>
+            <div id="info-box">
+                <span id="player-turn"></span> |
+                <span id="blocks-left"></span>
+            </div>
+            <div id="game-status"></div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const gameTable = document.getElementById('gameTable');
+            const statusDisplay = document.getElementById('game-status');
+            const playerTurnDisplay = document.getElementById('player-turn');
+            const blocksLeftDisplay = document.getElementById('blocks-left');
+            const startGameBtn = document.getElementById('startGameBtn');
+            const gridSizeSelect = document.getElementById('grid-size');
+            const topArrowsContainer = document.getElementById('top-arrows');
+            const bottomArrowsContainer = document.getElementById('bottom-arrows');
+            const leftArrowsContainer = document.getElementById('left-arrows');
+            const rightArrowsContainer = document.getElementById('right-arrows');
+            const playerTypeSelects = [
+                document.getElementById('player1-type'),
+                document.getElementById('player2-type'),
+                document.getElementById('player3-type'),
+                document.getElementById('player4-type')
+            ];
+            const gamePlayArea = document.getElementById('game-play-area');
+            
+            const PLAYER_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f'];
+            const BLACK_POWDER_COLOR = '#444444';
+            
+            let GRID_SIZE;
+            let grid = [];
+            let playerBlocks = {};
+            let playerTypes = [];
+            let currentPlayerIndex = 0;
+            let totalBlocksToPlace = 0;
+            let blocksPlaced = 0;
+            let gameOver = false;
+            let lastMove = { index: -1, direction: '' };
+            let isSetupPhase = true;
+
+            function setupGame() {
+                gamePlayArea.classList.remove('hidden');
+
+                GRID_SIZE = parseInt(gridSizeSelect.value);
+                playerTypes = playerTypeSelects.map(select => select.value).filter(type => type !== 'none');
+                
+                grid = [];
+                playerBlocks = {};
+                gameOver = false;
+                lastMove = { index: -1, direction: '' };
+                isSetupPhase = true;
+                
+                // Initialize the grid with empty black squares
+                for (let i = 0; i < GRID_SIZE; i++) {
+                    grid[i] = new Array(GRID_SIZE).fill(-1);
+                }
+
+                // Calculate total blocks to place and distribute them
+                const totalSquares = GRID_SIZE * GRID_SIZE;
+                totalBlocksToPlace = totalSquares - (totalSquares % playerTypes.length);
+                blocksPlaced = 0;
+                
+                for (let i = 0; i < playerTypes.length; i++) {
+                    playerBlocks[i] = 0;
+                }
+                
+                renderTable();
+                createArrows();
+                updateInfo();
+                statusDisplay.textContent = 'Setup phase: Click a square to place your block.';
+                checkPlayerTurn();
+            }
+
+            function createArrows() {
+                topArrowsContainer.innerHTML = '';
+                bottomArrowsContainer.innerHTML = '';
+                leftArrowsContainer.innerHTML = '';
+                rightArrowsContainer.innerHTML = '';
+
+                for (let i = 0; i < GRID_SIZE; i++) {
+                    const topBtn = document.createElement('button');
+                    topBtn.classList.add('arrow-btn', 'disabled');
+                    topBtn.dataset.col = i;
+                    topBtn.dataset.direction = 'down';
+                    topBtn.innerHTML = '&#x2193;';
+                    topArrowsContainer.appendChild(topBtn);
+
+                    const bottomBtn = document.createElement('button');
+                    bottomBtn.classList.add('arrow-btn', 'disabled');
+                    bottomBtn.dataset.col = i;
+                    bottomBtn.dataset.direction = 'up';
+                    bottomBtn.innerHTML = '&#x2191;';
+                    bottomArrowsContainer.appendChild(bottomBtn);
+
+                    const leftBtn = document.createElement('button');
+                    leftBtn.classList.add('arrow-btn', 'disabled');
+                    leftBtn.dataset.row = i;
+                    leftBtn.dataset.direction = 'right';
+                    leftBtn.innerHTML = '&#x2192;';
+                    leftArrowsContainer.appendChild(leftBtn);
+
+                    const rightBtn = document.createElement('button');
+                    rightBtn.classList.add('arrow-btn', 'disabled');
+                    rightBtn.dataset.row = i;
+                    rightBtn.dataset.direction = 'left';
+                    rightBtn.innerHTML = '&#x2190;';
+                    rightArrowsContainer.appendChild(rightBtn);
+                }
+            }
+            
+            function enableArrows() {
+                document.querySelectorAll('.arrow-btn').forEach(btn => btn.classList.remove('disabled'));
+            }
+
+            function handleCellClick(event) {
+                if (!isSetupPhase || gameOver) return;
+                
+                const cell = event.target;
+                const row = parseInt(cell.dataset.row);
+                const col = parseInt(cell.dataset.col);
+
+                if (grid[row][col] === -1) {
+                    grid[row][col] = currentPlayerIndex;
+                    playerBlocks[currentPlayerIndex]++;
+                    blocksPlaced++;
+                    updateTable();
+                    
+                    if (blocksPlaced >= totalBlocksToPlace) {
+                        isSetupPhase = false;
+                        enableArrows();
+                        statusDisplay.textContent = 'Game started! Use the arrows to push a row or column.';
+                    }
+                    nextTurn();
+                } else {
+                    statusDisplay.textContent = 'This square is already occupied. Choose an empty one!';
+                }
+            }
+
+            function handleArrowClick(event) {
+                if (isSetupPhase || gameOver) return;
+
+                const target = event.target.closest('.arrow-btn');
+                if (!target || target.classList.contains('disabled')) return;
+
+                const direction = target.dataset.direction;
+                
+                if (direction === 'up' || direction === 'down') {
+                    const col = parseInt(target.dataset.col);
+                    if (lastMove.direction === direction && lastMove.index === col) {
+                        statusDisplay.textContent = 'Cannot push the same column back!';
+                        return;
+                    }
+                    pushColumn(col, direction);
+                    lastMove = { index: col, direction: direction === 'up' ? 'down' : 'up' };
+                } else if (direction === 'left' || direction === 'right') {
+                    const row = parseInt(target.dataset.row);
+                    if (lastMove.direction === direction && lastMove.index === row) {
+                        statusDisplay.textContent = 'Cannot push the same row back!';
+                        return;
+                    }
+                    pushRow(row, direction);
+                    lastMove = { index: row, direction: direction === 'left' ? 'right' : 'left' };
+                }
+                
+                checkWinCondition();
+            }
+
+            function renderTable() {
+                gameTable.innerHTML = '';
+                for (let i = 0; i < GRID_SIZE; i++) {
+                    const row = document.createElement('tr');
+                    for (let j = 0; j < GRID_SIZE; j++) {
+                        const cell = document.createElement('td');
+                        cell.dataset.row = i;
+                        cell.dataset.col = j;
+                        cell.style.backgroundColor = grid[i][j] === -1 ? BLACK_POWDER_COLOR : PLAYER_COLORS[grid[i][j]];
+                        row.appendChild(cell);
+                    }
+                    gameTable.appendChild(row);
+                }
+            }
+            
+            function updateTable() {
+                for (let i = 0; i < GRID_SIZE; i++) {
+                    for (let j = 0; j < GRID_SIZE; j++) {
+                        const cell = gameTable.rows[i].cells[j];
+                        cell.style.backgroundColor = grid[i][j] === -1 ? BLACK_POWDER_COLOR : PLAYER_COLORS[grid[i][j]];
+                        if (grid[i][j] !== -1) {
+                           cell.classList.add('occupied');
+                        } else {
+                           cell.classList.remove('occupied');
+                        }
+                    }
+                }
+            }
+
+            function updateInfo() {
+                playerTurnDisplay.textContent = `Player: ${currentPlayerIndex + 1}`;
+                playerTurnDisplay.style.color = PLAYER_COLORS[currentPlayerIndex];
+
+                if (isSetupPhase) {
+                    blocksLeftDisplay.textContent = `Blocks placed: ${blocksPlaced} / ${totalBlocksToPlace}`;
+                } else {
+                    const totalBlocks = Object.values(playerBlocks).reduce((acc, val) => acc + val, 0);
+                    blocksLeftDisplay.textContent = `Blocks: ${totalBlocks} / ${totalBlocksToPlace}`;
+                }
+            }
+
+            function pushRow(rowIndex, direction) {
+                let lastBlock;
+                if (direction === 'right') {
+                    lastBlock = grid[rowIndex].pop();
+                    grid[rowIndex].unshift(-1);
+                } else { // 'left'
+                    lastBlock = grid[rowIndex].shift();
+                    grid[rowIndex].push(-1);
+                }
+                
+                if (lastBlock !== -1) {
+                    playerBlocks[lastBlock]--;
+                }
+            }
+
+            function pushColumn(colIndex, direction) {
+                let lastBlock;
+                if (direction === 'down') {
+                    lastBlock = grid[GRID_SIZE - 1][colIndex];
+                    for (let i = GRID_SIZE - 1; i > 0; i--) {
+                        grid[i][colIndex] = grid[i-1][colIndex];
+                    }
+                    grid[0][colIndex] = -1;
+                } else { // 'up'
+                    lastBlock = grid[0][colIndex];
+                    for (let i = 0; i < GRID_SIZE - 1; i++) {
+                        grid[i][colIndex] = grid[i+1][colIndex];
+                    }
+                    grid[GRID_SIZE - 1][colIndex] = -1;
+                }
+                
+                if (lastBlock !== -1) {
+                    playerBlocks[lastBlock]--;
+                }
+            }
+
+            function checkWinCondition() {
+                const activePlayers = Object.keys(playerBlocks).filter(key => playerBlocks[key] > 0);
+                
+                if (activePlayers.length <= 1) {
+                    gameOver = true;
+                    if (activePlayers.length === 1) {
+                        const winner = parseInt(activePlayers[0]);
+                        statusDisplay.textContent = `Player ${winner + 1} Wins!`;
+                    } else {
+                        statusDisplay.textContent = `It's a draw!`;
+                    }
+                } else {
+                    nextTurn();
+                }
+            }
+
+            function nextTurn() {
+                updateTable();
+                
+                const originalPlayerIndex = currentPlayerIndex;
+                do {
+                    currentPlayerIndex = (currentPlayerIndex + 1) % playerTypes.length;
+                    if (playerBlocks[currentPlayerIndex] > 0 || isSetupPhase) {
+                        break;
+                    }
+                } while (currentPlayerIndex !== originalPlayerIndex);
+                
+                if (!isSetupPhase && playerBlocks[currentPlayerIndex] <= 0) {
+                    gameOver = true;
+                    statusDisplay.textContent = "It's a draw!";
+                    return;
+                }
+
+                updateInfo();
+                checkPlayerTurn();
+            }
+            
+            function checkPlayerTurn() {
+                const playerType = playerTypes[currentPlayerIndex];
+                if (playerType === 'player') {
+                    if (isSetupPhase) {
+                        statusDisplay.textContent = `Player ${currentPlayerIndex + 1}, click a square to place your block.`;
+                    } else {
+                        statusDisplay.textContent = `Your turn! Push a row or column.`;
+                    }
+                } else {
+                    statusDisplay.textContent = `Player ${currentPlayerIndex + 1} (${playerType} AI) is thinking...`;
+                    setTimeout(() => {
+                        makeAIMove(playerType);
+                    }, 1000); // 1-second delay for AI
+                }
+            }
+
+            function makeAIMove(difficulty) {
+                let move = {};
+                if (isSetupPhase) {
+                    move = getAISetupMove();
+                } else if (difficulty === 'easy') {
+                    move = getEasyMove();
+                } else if (difficulty === 'medium') {
+                    move = getMediumMove();
+                } else if (difficulty === 'hard') {
+                    move = getHardMove();
+                }
+                processMove(move);
+            }
+
+            function processMove(move) {
+                if (isSetupPhase) {
+                    const cell = gameTable.rows[move.row]?.cells[move.col];
+                    if (cell && grid[move.row][move.col] === -1) {
+                        handleCellClick({ target: cell });
+                    } else {
+                        console.error("AI returned an invalid setup move. Re-generating.");
+                        makeAIMove(playerTypes[currentPlayerIndex]);
+                    }
+                } else {
+                    let pushDirection;
+                    if (move.direction.includes('row')) {
+                        const row = move.index;
+                        const direction = move.direction.split('-')[1];
+                        pushRow(row, direction);
+                        pushDirection = direction === 'left' ? 'right' : 'left';
+                        lastMove = { index: row, direction: pushDirection };
+                    } else { // col
+                        const col = move.index;
+                        const direction = move.direction.split('-')[1];
+                        pushColumn(col, direction);
+                        pushDirection = direction === 'up' ? 'down' : 'up';
+                        lastMove = { index: col, direction: pushDirection };
+                    }
+                    checkWinCondition();
+                }
+            }
+            
+            function getAISetupMove() {
+                let row, col;
+                do {
+                    row = Math.floor(Math.random() * GRID_SIZE);
+                    col = Math.floor(Math.random() * GRID_SIZE);
+                } while (grid[row][col] !== -1);
+                return { row, col };
+            }
+
+            function getEasyMove() {
+                const isRowMove = Math.random() < 0.5;
+                let index, direction;
+                do {
+                    if (isRowMove) {
+                        index = Math.floor(Math.random() * GRID_SIZE);
+                        direction = Math.random() < 0.5 ? 'row-left' : 'row-right';
+                    } else {
+                        index = Math.floor(Math.random() * GRID_SIZE);
+                        direction = Math.random() < 0.5 ? 'col-up' : 'col-down';
+                    }
+                } while (lastMove.direction.includes(direction.split('-')[1]) && lastMove.index === index);
+                return { index, direction };
+            }
+
+            function getMediumMove() {
+                let moves = [];
+                for (let i = 0; i < GRID_SIZE; i++) {
+                    const pushRowLeft = grid[i][0];
+                    if (pushRowLeft !== -1 && pushRowLeft !== currentPlayerIndex) {
+                        if (lastMove.direction !== 'right' || lastMove.index !== i) {
+                            moves.push({ index: i, direction: 'row-left' });
+                        }
+                    }
+                    const pushRowRight = grid[i][GRID_SIZE - 1];
+                    if (pushRowRight !== -1 && pushRowRight !== currentPlayerIndex) {
+                        if (lastMove.direction !== 'left' || lastMove.index !== i) {
+                            moves.push({ index: i, direction: 'row-right' });
+                        }
+                    }
+                    const pushColUp = grid[0][i];
+                    if (pushColUp !== -1 && pushColUp !== currentPlayerIndex) {
+                        if (lastMove.direction !== 'down' || lastMove.index !== i) {
+                            moves.push({ index: i, direction: 'col-up' });
+                        }
+                    }
+                    const pushColDown = grid[GRID_SIZE - 1][i];
+                    if (pushColDown !== -1 && pushColDown !== currentPlayerIndex) {
+                        if (lastMove.direction !== 'up' || lastMove.index !== i) {
+                            moves.push({ index: i, direction: 'col-down' });
+                        }
+                    }
+                }
+                if (moves.length > 0) {
+                    return moves[Math.floor(Math.random() * moves.length)];
+                } else {
+                    return getEasyMove();
+                }
+            }
+
+            function getHardMove() {
+                for (let i = 0; i < GRID_SIZE; i++) {
+                    const lastBlockLeft = grid[i][0];
+                    if (lastBlockLeft !== -1 && playerBlocks[lastBlockLeft] === 1 && (lastMove.direction !== 'right' || lastMove.index !== i)) {
+                         return { index: i, direction: 'row-left' };
+                    }
+                    const lastBlockRight = grid[i][GRID_SIZE - 1];
+                    if (lastBlockRight !== -1 && playerBlocks[lastBlockRight] === 1 && (lastMove.direction !== 'left' || lastMove.index !== i)) {
+                         return { index: i, direction: 'row-right' };
+                    }
+                    const lastBlockUp = grid[0][i];
+                    if (lastBlockUp !== -1 && playerBlocks[lastBlockUp] === 1 && (lastMove.direction !== 'down' || lastMove.index !== i)) {
+                         return { index: i, direction: 'col-up' };
+                    }
+                    const lastBlockDown = grid[GRID_SIZE - 1][i];
+                    if (lastBlockDown !== -1 && playerBlocks[lastBlockDown] === 1 && (lastMove.direction !== 'up' || lastMove.index !== i)) {
+                         return { index: i, direction: 'col-down' };
+                    }
+                }
+
+                let bestMove = { index: -1, direction: '', score: -1 };
+                for (let i = 0; i < GRID_SIZE; i++) {
+                    const lastBlockLeft = grid[i][0];
+                    if (lastBlockLeft !== -1 && lastBlockLeft !== currentPlayerIndex && (lastMove.direction !== 'right' || lastMove.index !== i)) {
+                        bestMove = { index: i, direction: 'row-left', score: 1 };
+                    }
+                    const lastBlockRight = grid[i][GRID_SIZE - 1];
+                    if (lastBlockRight !== -1 && lastBlockRight !== currentPlayerIndex && (lastMove.direction !== 'left' || lastMove.index !== i)) {
+                        if (bestMove.score < 1) bestMove = { index: i, direction: 'row-right', score: 1 };
+                    }
+                    const lastBlockUp = grid[0][i];
+                    if (lastBlockUp !== -1 && lastBlockUp !== currentPlayerIndex && (lastMove.direction !== 'down' || lastMove.index !== i)) {
+                        if (bestMove.score < 1) bestMove = { index: i, direction: 'col-up', score: 1 };
+                    }
+                    const lastBlockDown = grid[GRID_SIZE - 1][i];
+                    if (lastBlockDown !== -1 && lastBlockDown !== currentPlayerIndex && (lastMove.direction !== 'up' || lastMove.index !== i)) {
+                        if (bestMove.score < 1) bestMove = { index: i, direction: 'col-down', score: 1 };
+                    }
+                }
+                
+                if (bestMove.score > 0) {
+                    return { index: bestMove.index, direction: bestMove.direction };
+                }
+
+                let validMoveFound = false;
+                let move;
+                while (!validMoveFound) {
+                    move = getEasyMove();
+                    const index = move.index;
+                    const direction = move.direction;
+                    
+                    if (direction === 'row-left') {
+                        if (grid[index][0] !== currentPlayerIndex) validMoveFound = true;
+                    } else if (direction === 'row-right') {
+                        if (grid[index][GRID_SIZE - 1] !== currentPlayerIndex) validMoveFound = true;
+                    } else if (direction === 'col-up') {
+                        if (grid[0][index] !== currentPlayerIndex) validMoveFound = true;
+                    } else if (direction === 'col-down') {
+                        if (grid[GRID_SIZE - 1][index] !== currentPlayerIndex) validMoveFound = true;
+                    }
+                }
+                return move;
+            }
+            
+            startGameBtn.addEventListener('click', setupGame);
+            gameTable.addEventListener('click', handleCellClick);
+            topArrowsContainer.addEventListener('click', handleArrowClick);
+            bottomArrowsContainer.addEventListener('click', handleArrowClick);
+            leftArrowsContainer.addEventListener('click', handleArrowClick);
+            rightArrowsContainer.addEventListener('click', handleArrowClick);
+        });
+    </script>
+</body>
+</html>
