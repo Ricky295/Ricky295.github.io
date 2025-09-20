@@ -123,28 +123,28 @@
         <div class="form-group">
             <label for="generationMode">Generation Mode:</label>
             <select id="generationMode" onchange="updateGenerationMode()">
+                <option value="difficulty" selected>By Target Difficulty</option>
                 <option value="clues">By Number of Clues</option>
-                <option value="difficulty">By Target Difficulty</option>
             </select>
         </div>
 
-        <div class="form-group" id="cluesGroup">
-            <label for="clueRange">Number of Clues: <span id="clueValue">30</span></label>
-            <input type="range" id="clueRange" min="12" max="40" value="30" oninput="updateClueValue()">
-            <span class="difficulty-label">Estimated Difficulty: <span id="difficultyLabel" class="difficulty-hard">Hard</span></span>
-        </div>
-
-        <div class="form-group" id="difficultyGroup" style="display: none;">
+        <div class="form-group" id="difficultyGroup">
             <label for="targetDifficulty">Target Difficulty:</label>
             <select id="targetDifficulty">
                 <option value="1">Easy</option>
                 <option value="2">Medium</option>
                 <option value="3" selected>Hard</option>
-                <option value="4">Unfair (May take long to generate)</option>
+                <option value="4">Challenging (May take time to generate)</option>
             </select>
             <small style="color: #666; display: block; margin-top: 5px;">
-                Unfair puzzles require advanced techniques beyond basic logic
+                Challenging puzzles require advanced techniques beyond basic logic
             </small>
+        </div>
+
+        <div class="form-group" id="cluesGroup" style="display: none;">
+            <label for="clueRange">Number of Clues: <span id="clueValue">30</span></label>
+            <input type="range" id="clueRange" min="12" max="40" value="30" oninput="updateClueValue()">
+            <span class="difficulty-label">Estimated Difficulty: <span id="difficultyLabel" class="difficulty-hard">Hard</span></span>
         </div>
         
         <div class="form-group">
@@ -152,8 +152,8 @@
             <input type="number" id="zoomInput" placeholder="Zoom (default 50)" min="10" max="200" value="50">
         </div>
         
-        <button class="generate-btn" id="generateCluesBtn" onclick="generateCustomDuodoku()">Generate by Clues</button>
-        <button class="generate-difficulty-btn" id="generateDifficultyBtn" onclick="generateByDifficulty()" style="display: none;">Generate by Difficulty</button>
+        <button class="generate-difficulty-btn" id="generateDifficultyBtn" onclick="generateByDifficulty()">Generate by Difficulty</button>
+        <button class="generate-btn" id="generateCluesBtn" onclick="generateCustomDuodoku()" style="display: none;">Generate by Clues</button>
         <button class="print-btn" onclick="printDuodokus()">Print Multiple</button>
         <button class="construct-btn" onclick="constructDuodoku()">Construct</button>
         
@@ -191,21 +191,21 @@
             const clueValue = document.getElementById("clueRange").value;
             document.getElementById("clueValue").textContent = clueValue;
             
-            // Update difficulty label based on clue count
+            // Update difficulty label based on clue count (made easier)
             const difficultyLabel = document.getElementById("difficultyLabel");
-            if (clueValue <= 21) {
+            if (clueValue <= 18) {
                 difficultyLabel.textContent = "Insane";
                 difficultyLabel.className = "difficulty-insane";
-            } else if (clueValue >= 22 && clueValue <= 25) {
+            } else if (clueValue >= 19 && clueValue <= 23) {
                 difficultyLabel.textContent = "Expert";
                 difficultyLabel.className = "difficulty-expert";
-            } else if (clueValue >= 26 && clueValue <= 30) {
+            } else if (clueValue >= 24 && clueValue <= 28) {
                 difficultyLabel.textContent = "Hard";
                 difficultyLabel.className = "difficulty-hard";
-            } else if (clueValue >= 31 && clueValue <= 32) {
+            } else if (clueValue >= 29 && clueValue <= 34) {
                 difficultyLabel.textContent = "Medium";
                 difficultyLabel.className = "difficulty-medium";
-            } else if (clueValue >= 33 && clueValue <= 40) {
+            } else if (clueValue >= 35 && clueValue <= 40) {
                 difficultyLabel.textContent = "Easy";
                 difficultyLabel.className = "difficulty-easy";
             }
@@ -260,11 +260,11 @@
 
         // Check if puzzle has unique solution
         function hasUniqueSolution(puzzle) {
-    const solver = new DuoDoKuSolver(); // Create a new instance each time
-    solver.enterPuzzle(puzzle);
-    console.log(`Found ${solver.getSolutionCount()} solutions`);
-    return solver.hasUniqueSolution();
-}
+            const solver = new DuoDoKuSolver(); // Create a new instance each time
+            solver.enterPuzzle(puzzle);
+            console.log(`Found ${solver.getSolutionCount()} solutions`);
+            return solver.hasUniqueSolution();
+        }
 
         async function generateDuodoku(targetDifficulty) {
             return new Promise((resolve) => {
@@ -279,12 +279,17 @@
                 // Create removability matrix
                 let removable = Array(8).fill(null).map(() => Array(8).fill(true));
                 let attempts = 0;
-                const maxAttempts = 10000; // Increased for unfair puzzles
+                const maxAttempts = 8000; // Reduced for challenging puzzles
                 let currentDifficulty = Difficulty.EASY;
                 let backup = null;
                 let backupDifficulty = Difficulty.EASY;
                 let bestPuzzle = deepCopy2D(puzzle);
                 let bestDifficulty = Difficulty.EASY;
+                
+                // For "Challenging" difficulty, we want to stop earlier to avoid minimum clues
+                const isChallengingTarget = (targetDifficulty === Difficulty.UNFAIR);
+                let challengingStopsLeft = 2; // Stop removing clues when we have 2 consecutive failed attempts for challenging puzzles
+                let consecutiveFailures = 0;
                 
                 const processGeneration = async () => {
                     while (attempts < maxAttempts) {
@@ -301,6 +306,12 @@
                         }
                         
                         if (removableCells.length === 0) break;
+                        
+                        // For challenging difficulty, stop early if we've had several consecutive failures
+                        if (isChallengingTarget && consecutiveFailures >= challengingStopsLeft && bestDifficulty >= Difficulty.HARD) {
+                            console.log(`Stopping challenging generation early after ${consecutiveFailures} consecutive failures with ${countClues(puzzle)} clues`);
+                            break;
+                        }
                         
                         // Try to remove a random cell
                         const randomIndex = Math.floor(Math.random() * removableCells.length);
@@ -324,10 +335,11 @@
                         if (hasValidSolution) {
                             // Valid removal - keep it
                             currentDifficulty = difficulty;
+                            consecutiveFailures = 0; // Reset consecutive failures counter
                             
                             // Update best puzzle if this one is better (closer to target)
-                            if (targetDifficulty === Difficulty.UNFAIR) {
-                                // For unfair target, keep the hardest solvable puzzle
+                            if (isChallengingTarget) {
+                                // For challenging target, keep the hardest solvable puzzle but not necessarily minimum clues
                                 if (difficulty >= bestDifficulty) {
                                     bestPuzzle = deepCopy2D(puzzle);
                                     bestDifficulty = difficulty;
@@ -343,7 +355,7 @@
                             }
                             
                             // Keep a backup of any valid puzzle at or above target difficulty
-                            if (difficulty >= targetDifficulty || targetDifficulty === Difficulty.UNFAIR) {
+                            if (difficulty >= targetDifficulty || isChallengingTarget) {
                                 backup = deepCopy2D(puzzle);
                                 backupDifficulty = difficulty;
                             }
@@ -351,6 +363,7 @@
                         } else {
                             // Invalid removal - restore the cell
                             puzzle[r][c] = originalValue;
+                            consecutiveFailures++; // Increment consecutive failures counter
                         }
                         
                         // Update status periodically
@@ -360,8 +373,8 @@
                             showStatus(statusMsg, 'generating');
                         }
                         
-                        // Early exit if we found exact target (except for unfair)
-                        if (targetDifficulty !== Difficulty.UNFAIR && bestDifficulty === targetDifficulty && countClues(bestPuzzle) < 35) {
+                        // Early exit if we found exact target (except for challenging)
+                        if (!isChallengingTarget && bestDifficulty === targetDifficulty && countClues(bestPuzzle) < 35) {
                             break;
                         }
                     }
@@ -369,9 +382,8 @@
                     // Choose final puzzle
                     let finalPuzzle, finalDifficulty;
                     
-                    if (targetDifficulty === Difficulty.UNFAIR) {
-                        // For unfair target, use the hardest puzzle we found
-                        // If we couldn't make it unsolvable by the algorithm, return the hardest solvable one
+                    if (isChallengingTarget) {
+                        // For challenging target, use the hardest puzzle we found (should have more clues than minimum)
                         finalPuzzle = bestPuzzle;
                         finalDifficulty = bestDifficulty;
                     } else {
@@ -429,7 +441,7 @@
                     1: "Easy",
                     2: "Medium", 
                     3: "Hard",
-                    4: "Unfair"
+                    4: "Challenging"
                 };
                 
                 showStatus(`Generated ${difficultyNames[result.difficulty]} puzzle with ${countClues(result.puzzle)} clues!`, 'success');
