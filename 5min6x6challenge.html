@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&display=swap" rel="stylesheet">
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>6x6 Sudoku Challenge</title>
+    <style>
+        /* Remove the default disabled gray style */
+        input:disabled {
+            color: black;
+            background-color: white;
+            border: 1px solid #ccc;
+            opacity: 1;
+        }
+        input:not(:disabled) {
+            color: blue;
+        }
+        body {
+            font-family: "Caveat", cursive;
+            font-optical-sizing: auto;
+            font-weight: 500;
+            font-style: normal;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #fff;
+            flex-direction: column;
+            background-image:
+                linear-gradient(90deg, transparent 79px, #abced4 79px, #abced4 81px, transparent 81px),
+                linear-gradient(#eee .1em, transparent .1em);
+            background-size: 100% 1.2em;
+        }
+        .timer {
+            font-size: 40px;
+            margin-bottom: 20px;
+        }
+        #stats {
+            font-size: 32px;
+            margin-bottom: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        td {
+            width: 50px;
+            height: 50px;
+            text-align: center;
+            border: 1px solid #ccc;
+        }
+        /* 6x6 grid: 2x3 blocks */
+        tr:nth-child(2n + 1) td {
+            border-top: 2px solid black;
+        }
+        td:nth-child(3n) {
+            border-right: 2px solid black;
+        }
+        input {
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            font-size: 24px;
+            border: none;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        /* Progress bar styles */
+        .progress-bar-container {
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            height: 20px;
+            margin-bottom: 20px;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0;
+            background-color: #76c7c0;
+            border-radius: 5px;
+            transition: width 1s linear;
+        }
+        input.error {
+            background-color: #ffcccc;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <div class="timer" id="timer">Time remaining: 5:00</div>
+        <div id="stats">Score: 0 - Completed: 0</div>
+        <div class="progress-bar-container">
+            <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <table id="sudoku-grid"></table>
+        <div class="button-container">
+            <button onclick="validateSudoku()">Validate Sudoku</button>
+            <button onclick="giveHint()">Hint (-10s)</button>
+            <button id="pauseButton" onclick="togglePause()">Pause</button>
+        </div>
+    </div>
+    <script>
+        let solution;
+        let givens = 15; // Appropriate difficulty for 6x6
+        let score = 0;
+        let lastcompletedtimestamp;
+        let sudokuscompleted = 0;
+        let timeRemaining;
+        let initialTime;
+        let paused = false;
+        
+        // Get timer value from URL parameter
+        function getTimerFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const timeParam = urlParams.get('t');
+            if (timeParam && !isNaN(timeParam) && timeParam > 0) {
+                return parseInt(timeParam);
+            }
+            return 300; // Default 5 minutes for 6x6
+        }
+        
+        // Initialize timer values based on URL parameter
+        initialTime = getTimerFromURL();
+        timeRemaining = initialTime;
+        lastcompletedtimestamp = initialTime;
+
+        // 6x6 Sudoku Class
+        class Sudoku6x6 {
+            constructor() {
+                this.size = 6;
+                this.blockRows = 2;
+                this.blockCols = 3;
+                this.nums = [1, 2, 3, 4, 5, 6];
+            }
+
+            shuffle(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            }
+
+            isSafe(board, row, col, num) {
+                for (let i = 0; i < this.size; i++) {
+                    if (board[row][i] === num) return false;
+                    if (board[i][col] === num) return false;
+                }
+                const startRow = row - (row % this.blockRows);
+                const startCol = col - (col % this.blockCols);
+                for (let r = 0; r < this.blockRows; r++) {
+                    for (let c = 0; c < this.blockCols; c++) {
+                        if (board[startRow + r][startCol + c] === num) return false;
+                    }
+                }
+                return true;
+            }
+
+            solve(board, countSolutions = false, limit = 2) {
+                let solutions = 0;
+
+                const helper = () => {
+                    for (let r = 0; r < this.size; r++) {
+                        for (let c = 0; c < this.size; c++) {
+                            if (board[r][c] === 0) {
+                                for (let num of this.nums) {
+                                    if (this.isSafe(board, r, c, num)) {
+                                        board[r][c] = num;
+                                        if (helper()) return true;
+                                        board[r][c] = 0;
+                                    }
+                                }
+                                return false;
+                            }
+                        }
+                    }
+                    solutions++;
+                    if (!countSolutions) return true;
+                    return solutions >= limit;
+                };
+
+                const result = helper();
+                if (countSolutions) return solutions;
+                return result;
+            }
+
+            generateSudoku(clues = 15, asString = false) {
+                let board = Array.from({ length: this.size }, () =>
+                    Array(this.size).fill(0)
+                );
+                
+                // Add some randomization by filling first row randomly
+                const shuffledNums = this.shuffle([...this.nums]);
+                for (let i = 0; i < this.size; i++) {
+                    board[0][i] = shuffledNums[i];
+                }
+                
+                this.solve(board);
+
+                let cells = [];
+                for (let r = 0; r < this.size; r++) {
+                    for (let c = 0; c < this.size; c++) {
+                        cells.push([r, c]);
+                    }
+                }
+                this.shuffle(cells);
+
+                let cluesLeft = this.size * this.size;
+                for (let [r, c] of cells) {
+                    if (cluesLeft <= clues) break;
+
+                    let backup = board[r][c];
+                    board[r][c] = 0;
+
+                    const boardCopy = board.map(row => row.slice());
+                    const solutions = this.solve(boardCopy, true, 2);
+                    if (solutions !== 1) {
+                        board[r][c] = backup;
+                    } else {
+                        cluesLeft--;
+                    }
+                }
+
+                return board;
+            }
+        }
+
+        const sudokuGenerator = new Sudoku6x6();
+
+        function generateSudokuPuzzle() {
+            // Generate a fresh puzzle each time with proper randomization
+            const puzzle = sudokuGenerator.generateSudoku(givens);
+            // Get the complete solution by solving the puzzle
+            solution = puzzle.map(row => [...row]);
+            sudokuGenerator.solve(solution);
+            return puzzle;
+        }
+
+        function displayPuzzle(puzzle) {
+            const grid = document.getElementById('sudoku-grid');
+            if (!grid) {
+                console.log("Grid element not found!");
+                return;
+            }
+
+            grid.innerHTML = '';
+
+            for (let row = 0; row < 6; row++) {
+                const tr = document.createElement('tr');
+                for (let col = 0; col < 6; col++) {
+                    const td = document.createElement('td');
+                    const input = document.createElement('input');
+                    input.value = puzzle[row][col] === 0 ? '' : puzzle[row][col];
+                    input.disabled = puzzle[row][col] !== 0;
+                    input.addEventListener('input', function(e) {
+                        const val = e.target.value;
+                        if (val && (!/^[1-6]$/.test(val))) {
+                            e.target.value = '';
+                        }
+                    });
+                    td.appendChild(input);
+                    tr.appendChild(td);
+                }
+                grid.appendChild(tr);
+            }
+        }
+
+        let currentSolution;
+
+        function startGame() {
+            const puzzle = generateSudokuPuzzle();
+            currentSolution = puzzle.map(row => [...row]);
+            displayPuzzle(puzzle);
+            if (lastcompletedtimestamp == initialTime) {
+                startTimer();
+            }
+        }
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        let timerInterval;
+        
+        function startTimer() {
+            timeRemaining = initialTime;
+            document.getElementById('timer').innerText = `Time remaining: ${formatTime(timeRemaining)}`;
+
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (paused) return;
+
+                timeRemaining--;
+                document.getElementById('timer').innerText = `Time remaining: ${formatTime(timeRemaining)}`;
+                let hue = timeRemaining / initialTime * 175;
+                document.getElementById('progress-bar').style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
+
+                const progress = (timeRemaining / initialTime * 100);
+                document.getElementById('progress-bar').style.width = `${progress}%`;
+
+                let digitsleft = 0;
+
+                if (timeRemaining <= 0) {
+                    const inputs = [...document.querySelectorAll('#sudoku-grid input')];
+                    const userSolution = [];
+                    for (let i = 0; i < 6; i++) userSolution.push([]);
+                    inputs.forEach((input, index) => {
+                        const row = Math.floor(index / 6);
+                        const col = index % 6;
+                        userSolution[row][col] = parseInt(input.value) || 0;
+                    });
+
+                    for (let row = 0; row < 6; row++) {
+                        for (let col = 0; col < 6; col++) {
+                            if (userSolution[row][col] !== solution[row][col]) {
+                                digitsleft++;
+                            }
+                        }
+                    }
+                    // Adjusted scoring for 6x6 - give points for correct cells, not wrong ones!
+                    score += Math.round((5e5 / lastcompletedtimestamp) * ((21 - digitsleft) / 21));
+                    clearInterval(timerInterval);
+                    alert(`Out of time! Score: ${score}`);
+                    document.getElementById('stats').innerText = `Score: ${String(score)} - Completed: ${String(sudokuscompleted)}`;
+                }
+            }, 1000);
+        }
+
+        function togglePause() {
+            paused = !paused;
+            if (paused) {
+                document.getElementById('pauseButton').innerText = 'Resume';
+            } else {
+                document.getElementById('pauseButton').innerText = 'Pause';
+            }
+        }
+
+        function validateSudoku() {
+            const inputs = [...document.querySelectorAll('#sudoku-grid input')];
+            const userSolution = [];
+            let errorFound = false;
+            inputs.forEach((input, index) => {
+                const row = Math.floor(index / 6);
+                const col = index % 6;
+                userSolution[row] = userSolution[row] || [];
+                userSolution[row][col] = parseInt(input.value) || 0;
+            });
+
+            inputs.forEach(input => {
+                input.style.backgroundColor = '';
+            });
+
+            for (let row = 0; row < 6; row++) {
+                for (let col = 0; col < 6; col++) {
+                    if (userSolution[row][col] !== 0 && userSolution[row][col] !== solution[row][col]) {
+                        const index = row * 6 + col;
+                        inputs[index].style.backgroundColor = '#ffcccc';
+                        errorFound = true;
+                    }
+                }
+            }
+
+            if (errorFound) {
+                alert('There are errors in your puzzle!');
+                return;
+            }
+
+            const emptyCells = inputs.filter(input => !input.value).length;
+            if (emptyCells === 0) {
+                alert('Congratulations! You completed the puzzle! Keep going since you still have time!');
+                // Adjusted scoring for shorter puzzles
+                score += Math.round(5e5 / (lastcompletedtimestamp - timeRemaining));
+                sudokuscompleted++;
+                lastcompletedtimestamp = timeRemaining;
+                document.getElementById('stats').innerText = `Score: ${String(score)} - Completed: ${String(sudokuscompleted)}`;
+                startGame();
+            }
+        }
+
+        function giveHint() {
+            const emptyCells = [...document.querySelectorAll('#sudoku-grid input')]
+                .filter(input => !input.value);
+
+            if (emptyCells.length > 0) {
+                const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                const td = randomCell.parentElement;
+                const row = td.parentElement.rowIndex;
+                const col = td.cellIndex;
+                
+                randomCell.value = solution[row][col];
+                timeRemaining -= 10; // 10 seconds penalty for hint (reduced from 20)
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', (event) => {
+            startGame();
+        });
+    </script>
+</body>
+</html>
