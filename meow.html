@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Fast Can You Meow?</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s ease;
+        }
+        .bg-gradient-pink-blue {
+            background-image: linear-gradient(to right, #ff7e5f, #feb47b);
+        }
+        .glow-button {
+            transition: all 0.3s ease;
+        }
+        .glow-button:hover {
+            box-shadow: 0 0 15px #f43f5e;
+        }
+        .meow-button {
+            transition: transform 0.1s ease, background-color 0.3s ease;
+        }
+        .meow-button:active {
+            transform: scale(0.95);
+        }
+        .game-over-message {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        .game-over-message.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .disabled-button {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl max-w-lg w-full text-center border border-gray-200 dark:border-gray-700 transition-all duration-300 transform scale-100 hover:scale-[1.01] flex flex-col items-center">
+        <h1 class="text-4xl font-bold mb-2 text-pink-500">How Fast Can You Meow?</h1>
+        <p class="text-gray-600 dark:text-gray-400 mb-6">Type "meow" as fast as you can!</p>
+
+        <!-- New 2x2 grid for metrics -->
+        <div class="grid grid-cols-2 gap-4 mb-8 w-full justify-center">
+            <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded-xl shadow-inner flex flex-col items-center justify-center">
+                <span class="text-2xl font-bold text-gray-700 dark:text-gray-300 block">Time Left:</span>
+                <span id="timer" class="text-3xl font-extrabold text-blue-500">60.0</span>
+            </div>
+            <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded-xl shadow-inner flex flex-col items-center justify-center">
+                <span class="text-2xl font-bold text-gray-700 dark:text-gray-300 block">Meows:</span>
+                <span id="meow-count" class="text-3xl font-extrabold text-purple-500">0</span>
+            </div>
+            <!-- Empty cell for visual balance -->
+            <div></div>
+            <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded-xl shadow-inner flex flex-col items-center justify-center">
+                <span class="text-2xl font-bold text-gray-700 dark:text-gray-300 block">Meows/Minute:</span>
+                <span id="meows-per-minute" class="text-3xl font-extrabold">0.0</span>
+            </div>
+        </div>
+        
+        <!-- Timer input -->
+        <div class="w-full mb-4">
+            <label for="game-duration" class="block text-xl font-bold mb-2">Set Game Duration (seconds):</label>
+            <input 
+                id="game-duration" 
+                type="number" 
+                value="60" 
+                min="1"
+                class="w-full py-2 px-4 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white text-center text-xl shadow-inner focus:outline-none focus:ring-2 focus:ring-pink-500"
+            >
+        </div>
+
+        <!-- Replaced the button with a text input for typing -->
+        <input 
+            id="meow-input" 
+            type="text" 
+            placeholder="Type 'meow' here..." 
+            class="meow-button w-full mb-4 py-4 px-6 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white text-2xl rounded-2xl shadow-lg focus:outline-none focus:ring-4 focus:ring-purple-300 disabled:opacity-50 disabled:cursor-not-allowed text-center"
+            disabled
+            autofocus
+        >
+
+        <div id="controls" class="flex flex-col md:flex-row w-full gap-4">
+            <button id="start-button" class="w-full py-3 px-6 bg-green-500 text-white font-bold rounded-2xl shadow-md hover:bg-green-600 focus:outline-none focus:ring-4 focus:ring-green-300">
+                Start Game
+            </button>
+            <button id="reset-button" class="w-full py-3 px-6 bg-red-500 text-white font-bold rounded-2xl shadow-md hover:bg-red-600 focus:outline-none focus:ring-4 focus:ring-red-300" disabled>
+                Reset
+            </button>
+        </div>
+
+        <div id="game-over-message" class="game-over-message mt-8 p-4 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded-xl w-full text-lg font-bold">
+            <!-- Message will be displayed here -->
+        </div>
+    </div>
+
+    <script>
+        const meowInput = document.getElementById('meow-input');
+        const startButton = document.getElementById('start-button');
+        const resetButton = document.getElementById('reset-button');
+        const timerDisplay = document.getElementById('timer');
+        const meowCountDisplay = document.getElementById('meow-count');
+        const gameOverMessage = document.getElementById('game-over-message');
+        const gameDurationInput = document.getElementById('game-duration');
+        const meowsPerMinuteDisplay = document.getElementById('meows-per-minute');
+
+        let meowCount = 0;
+        let timeLeft;
+        let timerInterval;
+        const targetWord = "meow";
+        const defaultTime = 60;
+        let userTime;
+
+        // Function to interpolate color between two points
+        function lerpColor(a, b, amount) {
+            const ar = a[0], ag = a[1], ab = a[2];
+            const br = b[0], bg = b[1], bb = b[2];
+            
+            const r = ar + (br - ar) * amount;
+            const g = ag + (bg - ag) * amount;
+            const lb = ab + (bb - ab) * amount;
+            
+            return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(lb)})`;
+        }
+
+        // Function to get the color based on the meow rate
+        function getMeowsPerMinuteColor(rate) {
+            const red = [239, 68, 68];   // Tailwind red-500
+            const yellow = [253, 224, 71]; // Tailwind yellow-300
+            const green = [34, 197, 94];   // Tailwind green-500
+            
+            if (rate <= 60) {
+                return lerpColor(red, yellow, rate / 60);
+            } else if (rate <= 120) {
+                return lerpColor(yellow, green, (rate - 60) / 60);
+            } else {
+                return `rgb(${green[0]}, ${green[1]}, ${green[2]})`;
+            }
+        }
+
+        function updateUI() {
+            meowCountDisplay.textContent = meowCount;
+            timerDisplay.textContent = timeLeft.toFixed(1);
+
+            // Calculate meows per minute in real-time
+            const timeElapsed = userTime - timeLeft;
+            if (timeElapsed > 0.1) { // Avoids division by zero at the start
+                const meowsPerMinute = (meowCount / timeElapsed) * 60;
+                meowsPerMinuteDisplay.textContent = meowsPerMinute.toFixed(1);
+                meowsPerMinuteDisplay.style.color = getMeowsPerMinuteColor(meowsPerMinute);
+            } else {
+                meowsPerMinuteDisplay.textContent = '0.0';
+                meowsPerMinuteDisplay.style.color = 'rgb(239, 68, 68)'; // Start with red
+            }
+        }
+
+        function startGame() {
+            meowCount = 0;
+            userTime = parseInt(gameDurationInput.value, 10);
+            if (isNaN(userTime) || userTime <= 0) {
+                userTime = defaultTime;
+            }
+            timeLeft = userTime;
+
+            meowInput.value = '';
+            updateUI();
+            
+            startButton.disabled = true;
+            resetButton.disabled = false;
+            meowInput.disabled = false;
+            gameDurationInput.disabled = true;
+            meowInput.focus();
+            
+            gameOverMessage.classList.remove('visible');
+            
+            timerInterval = setInterval(() => {
+                timeLeft -= 0.1;
+                if (timeLeft <= 0) {
+                    endGame();
+                } else {
+                    updateUI();
+                }
+            }, 100);
+        }
+
+        function endGame() {
+            clearInterval(timerInterval);
+            timerDisplay.textContent = '0.0';
+            meowInput.disabled = true;
+            startButton.disabled = false;
+            resetButton.disabled = false;
+            gameDurationInput.disabled = false;
+            
+            const meowsPerMinute = (meowCount / userTime) * 60;
+            meowsPerMinuteDisplay.textContent = meowsPerMinute.toFixed(1);
+            meowsPerMinuteDisplay.style.color = getMeowsPerMinuteColor(meowsPerMinute);
+
+            gameOverMessage.textContent = `Time's up! You meowed ${meowCount} times for a final rate of ${meowsPerMinute.toFixed(1)} meows/minute!`;
+            gameOverMessage.classList.add('visible');
+        }
+
+        function resetGame() {
+            clearInterval(timerInterval);
+            meowCount = 0;
+            meowsPerMinuteDisplay.textContent = '0.0';
+            meowsPerMinuteDisplay.style.color = 'rgb(239, 68, 68)'; // Reset color to red
+            timeLeft = parseInt(gameDurationInput.value, 10) || defaultTime;
+            updateUI();
+            
+            meowInput.disabled = true;
+            meowInput.value = '';
+            startButton.disabled = false;
+            resetButton.disabled = true;
+            gameDurationInput.disabled = false;
+            
+            gameOverMessage.textContent = '';
+            gameOverMessage.classList.remove('visible');
+        }
+        
+        // This is the updated logic for handling the spacebar
+        meowInput.addEventListener('keyup', (e) => {
+            if (e.key === ' ') {
+                // Check if the trimmed value is exactly "meow"
+                if (meowInput.value.trim() === targetWord) {
+                    meowCount++;
+                    meowCountDisplay.textContent = meowCount;
+                }
+                // Always clear the input after a space is pressed
+                meowInput.value = '';
+            }
+        });
+
+        startButton.addEventListener('click', startGame);
+        resetButton.addEventListener('click', resetGame);
+        
+        resetGame();
+    </script>
+</body>
+</html>
