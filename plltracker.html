@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Perceptual Light Load (PLL) Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #333333;
+            --card-bg: #f8f9fa;
+            --border-color: #e0e0e0;
+            --primary-color: #007bff;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+            --success-color: #28a745;
+            --info-color: #17a2b8;
+            --shadow: 0 2px 10px rgba(0,0,0,0.1);
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #1a1a1a;
+            --text-color: #ffffff;
+            --card-bg: #2d2d2d;
+            --border-color: #444444;
+            --primary-color: #4dabf7;
+            --danger-color: #ff6b6b;
+            --warning-color: #ffd43b;
+            --success-color: #51cf66;
+            --info-color: #22d3ee;
+            --shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 20px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: var(--gradient);
+            color: white;
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background-color: var(--primary-color);
+            color: white;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,123,255,0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background-color: var(--card-bg);
+            color: var(--text-color);
+            border: 2px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--border-color);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+        }
+
+        .btn-danger:hover {
+            box-shadow: 0 4px 15px rgba(220,53,69,0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 25px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .card h3 {
+            margin-bottom: 25px;
+            font-size: 1.4em;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 16px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .result {
+            background: var(--bg-color);
+            border: 3px solid var(--border-color);
+            border-radius: 12px;
+            padding: 25px;
+            margin-top: 25px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .pll-value {
+            font-size: 3em;
+            font-weight: 800;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .pll-safe { 
+            color: var(--success-color);
+            text-shadow: 0 0 20px rgba(40,167,69,0.3);
+        }
+        .pll-caution { 
+            color: var(--warning-color);
+            text-shadow: 0 0 20px rgba(255,193,7,0.3);
+        }
+        .pll-warning { 
+            color: var(--danger-color);
+            text-shadow: 0 0 20px rgba(220,53,69,0.3);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .threshold-list {
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        .threshold-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .threshold-item:last-child {
+            border-bottom: none;
+        }
+
+        .timer-display {
+            font-size: 4em;
+            font-weight: 900;
+            text-align: center;
+            margin: 30px 0;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: none;
+        }
+
+        .timer-controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .sensitivity-slider {
+            margin-top: 25px;
+            padding: 20px;
+            background: var(--bg-color);
+            border-radius: 12px;
+            border: 2px solid var(--border-color);
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .slider {
+            flex: 1;
+            height: 8px;
+            border-radius: 4px;
+            background: var(--border-color);
+            outline: none;
+            -webkit-appearance: none;
+            position: relative;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,123,255,0.3);
+            transition: all 0.2s ease;
+        }
+
+        .slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .slider::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 10px rgba(0,123,255,0.3);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--success-color), var(--warning-color), var(--danger-color));
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: var(--bg-color);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+
+        .error-message {
+            background: #fff5f5;
+            color: var(--danger-color);
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid var(--danger-color);
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        [data-theme="dark"] .error-message {
+            background: #2d1b1b;
+        }
+
+        @media (max-width: 600px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .timer-controls {
+                flex-direction: column;
+            }
+
+            .timer-display {
+                font-size: 2.5em;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--card-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: var(--shadow);
+            max-width: 350px;
+            z-index: 1000;
+            animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes slideIn {
+            from { 
+                transform: translateX(100%) scale(0.8); 
+                opacity: 0; 
+            }
+            to { 
+                transform: translateX(0) scale(1); 
+                opacity: 1; 
+            }
+        }
+
+        .notification.warning { 
+            border-left: 6px solid var(--warning-color);
+            background: linear-gradient(135deg, #fff8dc, var(--card-bg));
+        }
+        .notification.danger { 
+            border-left: 6px solid var(--danger-color);
+            background: linear-gradient(135deg, #ffe6e6, var(--card-bg));
+        }
+        .notification.critical { 
+            border-left: 6px solid #8b0000;
+            background: linear-gradient(135deg, #ffcccc, var(--card-bg));
+            animation: slideIn 0.4s ease, shake 0.5s ease 0.4s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .lux-presets {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .preset-btn {
+            padding: 6px 12px;
+            background: var(--border-color);
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .preset-btn:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌟 Enhanced PLL Tracker</h1>
+            <p>Advanced Perceptual Light Load monitoring with real-time alerts and smart predictions</p>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-secondary" onclick="toggleDarkMode()">🌓 Toggle Dark Mode</button>
+            <button class="btn" onclick="requestNotificationPermission()">🔔 Enable Notifications</button>
+            <button class="btn btn-secondary" onclick="exportData()">📊 Export Data</button>
+        </div>
+
+        <div class="card">
+            <h3>🧮 Smart PLL Calculator</h3>
+            
+            <div class="error-message" id="calculatorError"></div>
+
+            <div class="form-group">
+                <label>Calculation Mode:</label>
+                <select id="calculationMode" onchange="toggleCalculationMode()">
+                    <option value="calculate">Calculate PLL from lux and time</option>
+                    <option value="predict">Calculate time to reach thresholds</option>
+                </select>
+            </div>
+
+            <div id="calculateMode">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="luxInput">Light Level (lux):</label>
+                        <input type="number" id="luxInput" placeholder="e.g., 1000" min="0.1" step="0.1" oninput="calculatePLL()">
+                        <div class="lux-presets">
+                            <button class="preset-btn" onclick="setLuxValue('luxInput', 1)">Moonlight</button>
+                            <button class="preset-btn" onclick="setLuxValue('luxInput', 50)">Home</button>
+                            <button class="preset-btn" onclick="setLuxValue('luxInput', 300)">Office</button>
+                            <button class="preset-btn" onclick="setLuxValue('luxInput', 1000)">Bright</button>
+                            <button class="preset-btn" onclick="setLuxValue('luxInput', 10000)">Daylight</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="timeInput">Exposure Time (minutes):</label>
+                        <input type="number" id="timeInput" placeholder="e.g., 60" min="0.1" step="0.1" oninput="calculatePLL()">
+                    </div>
+                </div>
+            </div>
+
+            <div id="predictMode" style="display: none;">
+                <div class="form-group">
+                    <label for="luxInputPredict">Light Level (lux):</label>
+                    <input type="number" id="luxInputPredict" placeholder="e.g., 1000" min="0.1" step="0.1" oninput="calculateTimeToThresholds()">
+                    <div class="lux-presets">
+                        <button class="preset-btn" onclick="setLuxValue('luxInputPredict', 1)">Moonlight</button>
+                        <button class="preset-btn" onclick="setLuxValue('luxInputPredict', 50)">Home</button>
+                        <button class="preset-btn" onclick="setLuxValue('luxInputPredict', 300)">Office</button>
+                        <button class="preset-btn" onclick="setLuxValue('luxInputPredict', 1000)">Bright</button>
+                        <button class="preset-btn" onclick="setLuxValue('luxInputPredict', 10000)">Daylight</button>
+                    </div>
+                </div>
+            </div>
+
+
+
+            <div id="calculatorResult"></div>
+        </div>
+
+        <div class="card">
+            <h3>⏱️ Live PLL Monitor</h3>
+            
+            <div class="error-message" id="timerError"></div>
+
+            <div class="form-group">
+                <label for="timerLux">Current Light Level (lux):</label>
+                <input type="number" id="timerLux" placeholder="Enter current lux level" min="0.1" step="0.1" value="" oninput="validateTimerLux()">
+                <div class="lux-presets">
+                    <button class="preset-btn" onclick="setLuxValue('timerLux', 1)">🌙 Moonlight (1)</button>
+                    <button class="preset-btn" onclick="setLuxValue('timerLux', 50)">🏠 Home (50)</button>
+                    <button class="preset-btn" onclick="setLuxValue('timerLux', 300)">🏢 Office (300)</button>
+                    <button class="preset-btn" onclick="setLuxValue('timerLux', 1000)">💡 Bright (1000)</button>
+                    <button class="preset-btn" onclick="setLuxValue('timerLux', 10000)">☀️ Daylight (10000)</button>
+                </div>
+            </div>
+
+            <div class="timer-display" id="timerDisplay">00:00:00</div>
+            
+            <div class="timer-controls">
+                <button class="btn" id="startBtn" onclick="startTimer()">▶️ Start</button>
+                <button class="btn btn-secondary" id="pauseBtn" onclick="pauseTimer()" disabled>⏸️ Pause</button>
+                <button class="btn btn-danger" onclick="resetTimer()">🔄 Reset</button>
+            </div>
+
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+
+            <div id="timerResult"></div>
+
+            <div class="stats-grid" id="statsGrid"></div>
+        </div>
+    </div>
+
+    <script>
+        let timerInterval = null;
+        let startTime = 0;
+        let elapsedTime = 0;
+        let isRunning = false;
+        let lastNotificationPLL = 0;
+        let sensitivityMultiplier = 1.0;
+        let sessionData = [];
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDarkModePreference();
+            requestNotificationPermission();
+            updateTimerDisplay();
+            validateInputs();
+        });
+
+        // Dark mode functionality
+        function toggleDarkMode() {
+            const currentTheme = document.body.dataset.theme;
+            const newTheme = currentTheme === 'dark' ? '' : 'dark';
+            document.body.dataset.theme = newTheme;
+            localStorage.setItem('darkMode', newTheme);
+        }
+
+        function loadDarkModePreference() {
+            const savedTheme = localStorage.getItem('darkMode');
+            if (savedTheme) {
+                document.body.dataset.theme = savedTheme;
+            }
+        }
+
+        // Enhanced notification system
+        function requestNotificationPermission() {
+            if ('Notification' in window) {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        showCustomNotification('Notifications Enabled! 🎉', 'You will now receive smart PLL alerts to protect your eyes.', 'success');
+                    } else if (permission === 'denied') {
+                        showCustomNotification('Notifications Blocked', 'Enable notifications in your browser settings for the best experience.', 'warning');
+                    }
+                });
+            } else {
+                showCustomNotification('Notifications Not Supported', 'Your browser does not support notifications.', 'warning');
+            }
+        }
+
+        function showCustomNotification(title, message, type = 'info') {
+            // Remove existing notifications
+            const existingNotifications = document.querySelectorAll('.notification');
+            existingNotifications.forEach(notif => notif.remove());
+
+            // Create new notification
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <strong style="font-size: 1.1em;">${title}</strong><br>
+                        <span style="opacity: 0.9;">${message}</span>
+                    </div>
+                    <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; font-size: 1.2em; cursor: pointer; opacity: 0.7;">×</button>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Auto-remove after 6 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.style.animation = 'slideIn 0.3s ease reverse';
+                    setTimeout(() => notification.remove(), 300);
+                }
+            }, 6000);
+
+            // Browser notification
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(title, {
+                    body: message,
+                    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTUuMDkgOC4yNkwyMiA5TDE3IDEzLjc0TDE4LjE4IDIxTDEyIDE3LjI3TDUuODIgMjFMNyAxMy43NEwyIDlMOC45MSA4LjI2TDEyIDJaIiBmaWxsPSIjRkZEQTAwIi8+Cjwvc3ZnPgo=',
+                    requireInteraction: type === 'critical'
+                });
+            }
+        }
+
+        // Enhanced sensitivity system
+        function updateSensitivity() {
+            sensitivityMultiplier = parseFloat(document.getElementById('sensitivitySlider').value);
+            document.getElementById('sensitivityValue').textContent = sensitivityMultiplier.toFixed(1);
+            
+            // Recalculate everything
+            calculatePLL();
+            calculateTimeToThresholds();
+            updateTimerDisplay();
+        }
+
+        // Improved PLL calculation with error handling
+        function calculatePLL(lux, minutes) {
+            try {
+                if (!lux || !minutes || lux <= 0 || minutes <= 0) return 0;
+                const result = Math.ln(lux + 1) * minutes * sensitivityMultiplier;
+                return isFinite(result) ? result : 0;
+            } catch (error) {
+                console.error('PLL calculation error:', error);
+                return 0;
+            }
+        }
+
+        function getPLLStatus(pll) {
+            const thresholds = [
+                { min: 500, class: 'pll-warning', status: '🚨 CRITICAL - Seek darkness immediately!', level: 'critical' },
+                { min: 300, class: 'pll-warning', status: '⚠️ WARNING - Generally uncomfortable', level: 'warning' },
+                { min: 200, class: 'pll-caution', status: '⚡ CAUTION - May be uncomfortable for sensitive individuals', level: 'caution' },
+                { min: 0, class: 'pll-safe', status: '✅ SAFE - Comfortable exposure level', level: 'safe' }
+            ];
+
+            return thresholds.find(threshold => pll >= threshold.min);
+        }
+
+        // Input validation
+        function validateInputs() {
+            const luxInput = document.getElementById('luxInput');
+            const timeInput = document.getElementById('timeInput');
+            const luxInputPredict = document.getElementById('luxInputPredict');
+            
+            [luxInput, timeInput, luxInputPredict].forEach(input => {
+                if (input) {
+                    input.addEventListener('input', function() {
+                        const value = parseFloat(this.value);
+                        if (value < 0) {
+                            this.value = '';
+                            showError('calculatorError', 'Values must be positive numbers');
+                        } else {
+                            hideError('calculatorError');
+                        }
+                    });
+                }
+            });
+        }
+
+        function validateTimerLux() {
+            const luxInput = document.getElementById('timerLux');
+            const value = parseFloat(luxInput.value);
+            
+            if (isNaN(value) || value <= 0) {
+                showError('timerError', 'Please enter a valid light level (lux) to start the timer');
+                document.getElementById('startBtn').disabled = true;
+                return false;
+            } else {
+                hideError('timerError');
+                document.getElementById('startBtn').disabled = false;
+                return true;
+            }
+        }
+
+        function showError(elementId, message) {
+            const errorDiv = document.getElementById(elementId);
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError(elementId) {
+            const errorDiv = document.getElementById(elementId);
+            errorDiv.style.display = 'none';
+        }
+
+        // Preset lux values
+        function setLuxValue(inputId, value) {
+            document.getElementById(inputId).value = value;
+            if (inputId === 'luxInput') {
+                calculatePLL();
+            } else if (inputId === 'luxInputPredict') {
+                calculateTimeToThresholds();
+            } else if (inputId === 'timerLux') {
+                validateTimerLux();
+                if (isRunning) updateTimerDisplay();
+            }
+        }
+
+        // Calculator mode toggle
+        function toggleCalculationMode() {
+            const mode = document.getElementById('calculationMode').value;
+            if (mode === 'calculate') {
+                document.getElementById('calculateMode').style.display = 'block';
+                document.getElementById('predictMode').style.display = 'none';
+                calculatePLL();
+            } else {
+                document.getElementById('calculateMode').style.display = 'none';
+                document.getElementById('predictMode').style.display = 'block';
+                calculateTimeToThresholds();
+            }
+        }
+
+        // Enhanced PLL calculation
+        function calculatePLL() {
+            const lux = parseFloat(document.getElementById('luxInput').value);
+            const minutes = parseFloat(document.getElementById('timeInput').value);
+            const resultDiv = document.getElementById('calculatorResult');
+
+            if (!lux || !minutes || lux <= 0 || minutes <= 0) {
+                resultDiv.innerHTML = '';
+                return;
+            }
+
+            const pll = calculatePLL(lux, minutes);
+            const status = getPLLStatus(pll);
+
+            const progressPercentage = Math.min((pll / 500) * 100, 100);
+
+            resultDiv.innerHTML = `
+                <div class="result">
+                    <div class="pll-value ${status.class}">${pll.toFixed(1)}</div>
+                    <div style="font-size: 1.2em; margin-bottom: 15px;"><strong>Perceptual Light Load</strong></div>
+                    <div style="margin-bottom: 15px; font-weight: 600; font-size: 1.1em;">${status.status}</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${progressPercentage}%"></div>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value">${lux.toLocaleString()}</div>
+                            <div class="stat-label">Lux Level</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${minutes}</div>
+                            <div class="stat-label">Minutes</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${sensitivityMultiplier}x</div>
+                            <div class="stat-label">Sensitivity</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Enhanced time to threshold calculations
+        function calculateTimeToThresholds() {
+            const lux = parseFloat(document.getElementById('luxInputPredict').value);
+            const resultDiv = document.getElementById('calculatorResult');
+
+            if (!lux || lux <= 0) {
+                resultDiv.innerHTML = '';
+                return;
+            }
+
+            const log10Lux = Math.log10(lux);
+            const thresholds = [
+                { value: 200, label: 'Caution', color: 'var(--warning-color)', icon: '⚡' },
+                { value: 300, label: 'Warning', color: 'var(--danger-color)', icon: '⚠️' },
+                { value: 500, label: 'Critical', color: '#8b0000', icon: '🚨' }
+            ];
+            
+            let html = '<div class="result"><h4 style="margin-bottom: 20px;">⏰ Time to reach PLL thresholds:</h4><div class="threshold-list">';
+            
+            thresholds.forEach(threshold => {
+                const adjustedThreshold = threshold.value / sensitivityMultiplier;
+                const minutes = adjustedThreshold / log10Lux;
+                
+                let timeDisplay, recommendation;
+                if (minutes < 1) {
+                    const seconds = Math.floor(minutes * 60);
+                    timeDisplay = `${seconds} seconds`;
+                    recommendation = 'Take breaks every few minutes';
+                } else if (minutes < 60) {
+                    const mins = Math.floor(minutes);
+                    const secs = Math.floor((minutes % 1) * 60);
+                    timeDisplay = `${mins}m ${secs}s`;
+                    recommendation = 'Monitor closely';
+                } else if (minutes < 1440) { // Less than 24 hours
+                    const hours = Math.floor(minutes / 60);
+                    const mins = Math.floor(minutes % 60);
+                    timeDisplay = `${hours}h ${mins}m`;
+                    recommendation = 'Safe for extended use';
+                } else {
+                    const days = Math.floor(minutes / 1440);
+                    const hours = Math.floor((minutes % 1440) / 60);
+                    timeDisplay = `${days}d ${hours}h`;
+                    recommendation = 'Very safe light level';
+                }
+                
+                html += `
+                    <div class="threshold-item">
+                        <div>
+                            <span class="status-indicator" style="background-color: ${threshold.color}"></span>
+                            <strong>${threshold.icon} PLL ${threshold.value} (${threshold.label})</strong>
+                            <br><small style="opacity: 0.7; margin-left: 22px;">${recommendation}</small>
+                        </div>
+                        <div style="text-align: right;">
+                            <strong style="font-size: 1.1em;">${timeDisplay}</strong>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div></div>';
+            resultDiv.innerHTML = html;
+        }
+
+        // Enhanced timer functionality
+        function startTimer() {
+            if (!validateTimerLux()) return;
+            
+            if (!isRunning) {
+                startTime = Date.now() - elapsedTime;
+                timerInterval = setInterval(updateTimerDisplay, 100);
+                isRunning = true;
+                
+                // Update button states
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('pauseBtn').disabled = false;
+                
+                // Track session start
+                const lux = parseFloat(document.getElementById('timerLux').value);
+                sessionData.push({
+                    timestamp: new Date(),
+                    action: 'start',
+                    lux: lux,
+                    pll: 0
+                });
+                
+                showCustomNotification('Timer Started! ⏱️', `Monitoring PLL at ${lux} lux. Stay alert for threshold notifications.`, 'success');
+            }
+        }
+
+        function pauseTimer() {
+            if (isRunning) {
+                clearInterval(timerInterval);
+                isRunning = false;
+                
+                // Update button states
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('pauseBtn').disabled = true;
+                
+                // Track session pause
+                const currentPLL = getCurrentPLL();
+                sessionData.push({
+                    timestamp: new Date(),
+                    action: 'pause',
+                    lux: parseFloat(document.getElementById('timerLux').value),
+                    pll: currentPLL,
+                    elapsed: elapsedTime
+                });
+                
+                showCustomNotification('Timer Paused ⏸️', `Session paused at PLL ${currentPLL.toFixed(1)}`, 'info');
+            }
+        }
+
+        function resetTimer() {
+            clearInterval(timerInterval);
+            elapsedTime = 0;
+            isRunning = false;
+            lastNotificationPLL = 0;
+            
+            // Update button states
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('pauseBtn').disabled = true;
+            
+            // Clear session data
+            if (sessionData.length > 0) {
+                const finalPLL = getCurrentPLL();
+                sessionData.push({
+                    timestamp: new Date(),
+                    action: 'reset',
+                    lux: parseFloat(document.getElementById('timerLux').value) || 0,
+                    pll: finalPLL,
+                    elapsed: elapsedTime
+                });
+            }
+            
+            updateTimerDisplay();
+            showCustomNotification('Timer Reset 🔄', 'Session data cleared. Ready for a new monitoring session.', 'info');
+        }
+
+        function getCurrentPLL() {
+            const lux = parseFloat(document.getElementById('timerLux').value) || 0;
+            const totalMinutes = elapsedTime / (1000 * 60);
+            return calculatePLL(lux, totalMinutes);
+        }
+
+        function updateTimerDisplay() {
+            if (isRunning) {
+                elapsedTime = Date.now() - startTime;
+            }
+
+            const totalSeconds = Math.floor(elapsedTime / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            document.getElementById('timerDisplay').textContent = 
+                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+            // Calculate current PLL
+            const lux = parseFloat(document.getElementById('timerLux').value) || 0;
+            const totalMinutes = elapsedTime / (1000 * 60);
+            
+            if (lux > 0 && totalMinutes > 0) {
+                const currentPLL = calculatePLL(lux, totalMinutes);
+                const status = getPLLStatus(currentPLL);
+
+                // Smart notification system with escalating alerts
+                if (currentPLL >= 200 && lastNotificationPLL < 200) {
+                    showCustomNotification('PLL Alert 📊', `Reached 200 PLL - Consider a break if you're light-sensitive.`, 'warning');
+                    lastNotificationPLL = 200;
+                } else if (currentPLL >= 300 && lastNotificationPLL < 300) {
+                    showCustomNotification('PLL Warning ⚠️', `Reached 300 PLL - Most people will find this uncomfortable.`, 'danger');
+                    lastNotificationPLL = 300;
+                } else if (currentPLL >= 500 && lastNotificationPLL < 500) {
+                    showCustomNotification('PLL Critical! 🚨', `Reached 500 PLL - Take a break in darkness immediately!`, 'critical');
+                    lastNotificationPLL = 500;
+                }
+
+                // Update progress bar
+                const progressPercentage = Math.min((currentPLL / 500) * 100, 100);
+                document.getElementById('progressFill').style.width = `${progressPercentage}%`;
+
+                // Calculate time remaining to thresholds
+                const log10Lux = Math.ln(lux + 1);
+                const timeToNext200 = (200 / sensitivityMultiplier) / log10Lux - totalMinutes;
+                const timeToNext300 = (300 / sensitivityMultiplier) / log10Lux - totalMinutes;
+                const timeToNext500 = (500 / sensitivityMultiplier) / log10Lux - totalMinutes;
+
+                // Display results
+                document.getElementById('timerResult').innerHTML = `
+                    <div class="result">
+                        <div class="pll-value ${status.class}">${currentPLL.toFixed(1)}</div>
+                        <div style="font-size: 1.2em; margin-bottom: 15px;"><strong>Current PLL</strong></div>
+                        <div style="margin-bottom: 15px; font-weight: 600; font-size: 1.1em;">${status.status}</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${progressPercentage}%"></div>
+                        </div>
+                    </div>
+                `;
+
+                // Update stats
+                const statsGrid = document.getElementById('statsGrid');
+                const exposureRate = currentPLL / totalMinutes;
+                const estimatedSafeTime = (200 / sensitivityMultiplier) / log10Lux;
+                
+                statsGrid.innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-value">${lux.toLocaleString()}</div>
+                        <div class="stat-label">Current Lux</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${totalMinutes.toFixed(1)}</div>
+                        <div class="stat-label">Minutes Exposed</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${exposureRate.toFixed(1)}</div>
+                        <div class="stat-label">PLL/Min Rate</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${Math.max(0, timeToNext200).toFixed(0)}m</div>
+                        <div class="stat-label">To Caution Zone</div>
+                    </div>
+                `;
+            } else {
+                document.getElementById('timerResult').innerHTML = '';
+                document.getElementById('progressFill').style.width = '0%';
+                document.getElementById('statsGrid').innerHTML = '';
+            }
+        }
+
+        // Data export functionality
+        function exportData() {
+            if (sessionData.length === 0) {
+                showCustomNotification('No Data to Export', 'Start a timer session first to generate exportable data.', 'warning');
+                return;
+            }
+
+            const exportData = {
+                exportDate: new Date().toISOString(),
+                sensitivityMultiplier: sensitivityMultiplier,
+                sessions: sessionData,
+                summary: {
+                    totalSessions: sessionData.filter(d => d.action === 'start').length,
+                    maxPLL: Math.max(...sessionData.map(d => d.pll || 0)),
+                    avgLux: sessionData.reduce((sum, d) => sum + (d.lux || 0), 0) / sessionData.length
+                }
+            };
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pll-data-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showCustomNotification('Data Exported! 📊', 'Your PLL session data has been downloaded as a JSON file.', 'success');
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key) {
+                    case ' ':
+                        e.preventDefault();
+                        if (isRunning) pauseTimer(); else startTimer();
+                        break;
+                    case 'r':
+                        e.preventDefault();
+                        resetTimer();
+                        break;
+                    case 'd':
+                        e.preventDefault();
+                        toggleDarkMode();
+                        break;
+                    case 'e':
+                        e.preventDefault();
+                        exportData();
+                        break;
+                }
+            }
+        });
+
+        // Auto-save timer state
+        setInterval(() => {
+            if (isRunning) {
+                localStorage.setItem('timerState', JSON.stringify({
+                    startTime: startTime,
+                    elapsedTime: elapsedTime,
+                    lux: document.getElementById('timerLux').value,
+                    isRunning: isRunning,
+                    lastNotificationPLL: lastNotificationPLL
+                }));
+            }
+        }, 5000);
+
+        // Restore timer state on page load
+        window.addEventListener('load', () => {
+            const savedState = localStorage.getItem('timerState');
+            if (savedState) {
+                try {
+                    const state = JSON.parse(savedState);
+                    if (state.isRunning && (Date.now() - state.startTime) < 24 * 60 * 60 * 1000) { // Less than 24 hours
+                        document.getElementById('timerLux').value = state.lux;
+                        elapsedTime = Date.now() - state.startTime;
+                        lastNotificationPLL = state.lastNotificationPLL;
+                        updateTimerDisplay();
+                        showCustomNotification('Timer Restored 🔄', 'Your previous session was automatically restored.', 'info');
+                    }
+                } catch (e) {
+                    console.log('Could not restore timer state');
+                }
+            }
+        });
+    </script>
+</body>
+</html>
