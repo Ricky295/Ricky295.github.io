@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grid Sticky Notes</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #f0f0f0;
+            overflow: hidden;
+        }
+
+        .controls {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .mode-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-right: 10px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 24px;
+            background: #ccc;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle-switch.active {
+            background: #4CAF50;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .toggle-switch.active .toggle-slider {
+            transform: translateX(26px);
+        }
+
+        .mode-label {
+            font-size: 12px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            background: #333;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #555;
+        }
+
+        .canvas {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: auto;
+            background-image: 
+                linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        .note {
+            position: absolute;
+            background: #ffff88;
+            border: 2px solid #e6e600;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            cursor: default;
+            transition: transform 0.2s, box-shadow 0.2s;
+            user-select: none;
+        }
+
+        .note.move-mode {
+            cursor: move;
+        }
+
+        .note.edit-mode {
+            cursor: text;
+        }
+
+        .note:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+        }
+
+        .note.dragging {
+            transform: rotate(5deg);
+            z-index: 999;
+        }
+
+        .note-content {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: transparent;
+            resize: none;
+            padding: 12px;
+            font-family: 'Arial', sans-serif;
+            font-size: 14px;
+            line-height: 1.4;
+            outline: none;
+            border-radius: 6px;
+            cursor: text;
+        }
+
+        .note-content.move-mode {
+            cursor: move;
+            pointer-events: none;
+        }
+
+        .note-handle {
+            position: absolute;
+            background: rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: background 0.2s;
+            z-index: 10;
+            display: none;
+        }
+
+        .note.move-mode .note-handle {
+            display: block;
+        }
+
+        .note-handle:hover {
+            background: rgba(0,0,0,0.3);
+        }
+
+        .note-handle.top, .note-handle.bottom {
+            left: 0;
+            right: 0;
+            height: 8px;
+        }
+
+        .note-handle.top {
+            top: -4px;
+        }
+
+        .note-handle.bottom {
+            bottom: -4px;
+        }
+
+        .note-handle.left, .note-handle.right {
+            top: 0;
+            bottom: 0;
+            width: 8px;
+        }
+
+        .note-handle.left {
+            left: -4px;
+        }
+
+        .note-handle.right {
+            right: -4px;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .modal h3 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .size-input {
+            margin: 10px;
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            width: 80px;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        .color-picker {
+            margin: 15px 0;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .color-option {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            border: 3px solid transparent;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .color-option.selected {
+            border-color: #333;
+        }
+
+        .delete-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #ff4444;
+            color: white;
+            border: none;
+            font-size: 12px;
+            cursor: pointer;
+            display: none;
+        }
+
+        .note.move-mode:hover .delete-btn {
+            display: block;
+        }
+
+        textarea {
+            font-family: inherit;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <div class="mode-toggle">
+            <span class="mode-label">Edit</span>
+            <div class="toggle-switch" id="modeToggle" onclick="toggleMode()">
+                <div class="toggle-slider"></div>
+            </div>
+            <span class="mode-label">Move</span>
+        </div>
+        <button class="btn" onclick="exportNotes()">Export</button>
+        <button class="btn" onclick="importNotes()">Import</button>
+        <button class="btn" onclick="clearAll()">Clear All</button>
+    </div>
+
+    <div class="canvas" id="canvas"></div>
+
+    <script>
+        const BLOCK_SIZE = 50; // 5cm represented as 50px
+        let notes = [];
+        let draggedNote = null;
+        let dragOffset = { x: 0, y: 0 };
+        let isMoveModeActive = false;
+
+        const colors = ['#ffff88', '#88ff88', '#ff8888', '#88ccff', '#ffaa88', '#dd88ff', '#88ffdd'];
+
+        function toggleMode() {
+            isMoveModeActive = !isMoveModeActive;
+            const toggle = document.getElementById('modeToggle');
+            const notes = document.querySelectorAll('.note');
+            const textareas = document.querySelectorAll('.note-content');
+            
+            if (isMoveModeActive) {
+                toggle.classList.add('active');
+                notes.forEach(note => {
+                    note.classList.remove('edit-mode');
+                    note.classList.add('move-mode');
+                });
+                textareas.forEach(textarea => {
+                    textarea.classList.add('move-mode');
+                });
+            } else {
+                toggle.classList.remove('active');
+                notes.forEach(note => {
+                    note.classList.remove('move-mode');
+                    note.classList.add('edit-mode');
+                });
+                textareas.forEach(textarea => {
+                    textarea.classList.remove('move-mode');
+                });
+            }
+        }
+
+        // Load notes from cookies on startup
+        function loadNotes() {
+            const saved = getCookie('sticky-notes');
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    notes = data.Notes || [];
+                    renderAllNotes();
+                } catch (e) {
+                    console.error('Error loading notes:', e);
+                }
+            } else {
+                // First time user - create initial note
+                showSizeModal(-1, null);
+            }
+        }
+
+        function saveNotes() {
+            const data = { Notes: notes };
+            setCookie('sticky-notes', JSON.stringify(data), 365);
+        }
+
+        function setCookie(name, value, days) {
+            const expires = new Date(Date.now() + days * 864e5).toUTCString();
+            document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/`;
+        }
+
+        function getCookie(name) {
+            return document.cookie.split('; ').reduce((r, v) => {
+                const parts = v.split('=');
+                return parts[0] === name ? decodeURIComponent(parts[1]) : r;
+            }, '');
+        }
+
+        function showSizeModal(attachToIndex, side) {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h3>Create New Note</h3>
+                    <div>
+                        Width: <input type="number" id="noteWidth" class="size-input" value="4" min="2" max="12">
+                        blocks
+                    </div>
+                    <div>
+                        Height: <input type="number" id="noteHeight" class="size-input" value="4" min="2" max="12">
+                        blocks
+                    </div>
+                    <div class="color-picker">
+                        ${colors.map((color, i) => 
+                            `<div class="color-option ${i === 0 ? 'selected' : ''}" 
+                                 style="background: ${color}" 
+                                 onclick="selectColor(this, '${color}')"></div>`
+                        ).join('')}
+                    </div>
+                    <div>
+                        <button class="btn" onclick="createNote(${attachToIndex}, '${side}')">Create</button>
+                        <button class="btn" onclick="closeModal()">Cancel</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            document.getElementById('noteWidth').focus();
+        }
+
+        function selectColor(element, color) {
+            document.querySelectorAll('.color-option').forEach(el => el.classList.remove('selected'));
+            element.classList.add('selected');
+            element.dataset.color = color;
+        }
+
+        function createNote(attachToIndex, side) {
+            const width = Math.max(2, Math.min(12, parseInt(document.getElementById('noteWidth').value) || 4));
+            const height = Math.max(2, Math.min(12, parseInt(document.getElementById('noteHeight').value) || 4));
+            const selectedColor = document.querySelector('.color-option.selected');
+            const color = selectedColor?.dataset.color || colors[0];
+
+            let position = [0, 0];
+
+            if (attachToIndex >= 0 && notes[attachToIndex]) {
+                const parentNote = notes[attachToIndex];
+                const px = parentNote.Position[0];
+                const py = parentNote.Position[1];
+                const pw = parentNote.Width;
+                const ph = parentNote.Height;
+
+                switch (side) {
+                    case 'top':
+                        position = [px, py - height];
+                        break;
+                    case 'bottom':
+                        position = [px, py + ph];
+                        break;
+                    case 'left':
+                        position = [px - width, py];
+                        break;
+                    case 'right':
+                        position = [px + pw, py];
+                        break;
+                }
+            }
+
+            const note = {
+                Width: width,
+                Height: height,
+                Position: position,
+                Color: color,
+                Text: ""
+            };
+
+            notes.push(note);
+            renderNote(note, notes.length - 1);
+            saveNotes();
+            closeModal();
+        }
+
+        function closeModal() {
+            const modal = document.querySelector('.modal');
+            if (modal) modal.remove();
+        }
+
+        function renderNote(note, index) {
+            const noteEl = document.createElement('div');
+            noteEl.className = isMoveModeActive ? 'note move-mode' : 'note edit-mode';
+            noteEl.style.left = `${note.Position[0] * BLOCK_SIZE + 100}px`;
+            noteEl.style.top = `${note.Position[1] * BLOCK_SIZE + 100}px`;
+            noteEl.style.width = `${note.Width * BLOCK_SIZE}px`;
+            noteEl.style.height = `${note.Height * BLOCK_SIZE}px`;
+            noteEl.style.background = note.Color;
+            noteEl.dataset.index = index;
+
+            const textareaClass = isMoveModeActive ? 'note-content move-mode' : 'note-content';
+            noteEl.innerHTML = `
+                <textarea class="${textareaClass}" placeholder="Type your note...">${note.Text}</textarea>
+                <div class="note-handle top" onclick="showSizeModal(${index}, 'top')"></div>
+                <div class="note-handle bottom" onclick="showSizeModal(${index}, 'bottom')"></div>
+                <div class="note-handle left" onclick="showSizeModal(${index}, 'left')"></div>
+                <div class="note-handle right" onclick="showSizeModal(${index}, 'right')"></div>
+                <button class="delete-btn" onclick="deleteNote(${index})">×</button>
+            `;
+
+            const textarea = noteEl.querySelector('.note-content');
+            textarea.addEventListener('input', (e) => {
+                notes[index].Text = e.target.value;
+                saveNotes();
+            });
+
+            // Only add drag functionality in move mode
+            noteEl.addEventListener('mousedown', (e) => {
+                if (isMoveModeActive) {
+                    startDrag(e);
+                }
+            });
+
+            document.getElementById('canvas').appendChild(noteEl);
+        }
+
+        function renderAllNotes() {
+            document.getElementById('canvas').innerHTML = '';
+            notes.forEach((note, index) => renderNote(note, index));
+        }
+
+        function deleteNote(index) {
+            if (confirm('Delete this note?')) {
+                notes.splice(index, 1);
+                renderAllNotes();
+                saveNotes();
+            }
+        }
+
+        function startDrag(e) {
+            if (e.target.classList.contains('note-handle') || e.target.classList.contains('delete-btn')) return;
+            
+            draggedNote = e.currentTarget;
+            draggedNote.classList.add('dragging');
+            
+            const rect = draggedNote.getBoundingClientRect();
+            dragOffset.x = e.clientX - rect.left;
+            dragOffset.y = e.clientY - rect.top;
+            
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', endDrag);
+            e.preventDefault();
+        }
+
+        function drag(e) {
+            if (!draggedNote) return;
+            
+            const x = e.clientX - dragOffset.x;
+            const y = e.clientY - dragOffset.y;
+            
+            draggedNote.style.left = `${x}px`;
+            draggedNote.style.top = `${y}px`;
+        }
+
+        function endDrag(e) {
+            if (!draggedNote) return;
+            
+            draggedNote.classList.remove('dragging');
+            
+            // Snap to grid
+            const rect = draggedNote.getBoundingClientRect();
+            const canvasRect = document.getElementById('canvas').getBoundingClientRect();
+            const relativeX = rect.left - canvasRect.left;
+            const relativeY = rect.top - canvasRect.top;
+            
+            const gridX = Math.round((relativeX - 100) / BLOCK_SIZE);
+            const gridY = Math.round((relativeY - 100) / BLOCK_SIZE);
+            
+            const index = parseInt(draggedNote.dataset.index);
+            notes[index].Position = [gridX, gridY];
+            
+            draggedNote.style.left = `${gridX * BLOCK_SIZE + 100}px`;
+            draggedNote.style.top = `${gridY * BLOCK_SIZE + 100}px`;
+            
+            saveNotes();
+            
+            draggedNote = null;
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', endDrag);
+        }
+
+        function exportNotes() {
+            const data = { Notes: notes };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'sticky-notes.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importNotes() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            if (data.Notes && Array.isArray(data.Notes)) {
+                                notes = data.Notes;
+                                renderAllNotes();
+                                saveNotes();
+                                alert('Notes imported successfully!');
+                            } else {
+                                alert('Invalid file format');
+                            }
+                        } catch (error) {
+                            alert('Error reading file');
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+            input.click();
+        }
+
+        function clearAll() {
+            if (confirm('Delete all notes? This cannot be undone.')) {
+                notes = [];
+                renderAllNotes();
+                saveNotes();
+            }
+        }
+
+        // Initialize with edit mode
+        loadNotes();
+        toggleMode(); // This will set it to edit mode (off state)
+
+        // Handle Enter key in modal inputs
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && document.querySelector('.modal')) {
+                const attachIndex = document.querySelector('.modal button[onclick*="createNote"]')?.onclick.toString().match(/createNote\(([^,]+)/)?.[1];
+                const side = document.querySelector('.modal button[onclick*="createNote"]')?.onclick.toString().match(/createNote\([^,]+,\s*'([^']+)'/)?.[1];
+                if (attachIndex !== undefined) {
+                    createNote(parseInt(attachIndex), side || null);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
