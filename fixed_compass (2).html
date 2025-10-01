@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Compass</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        
+        .setup-section {
+            display: block;
+        }
+        
+        .compass-section {
+            display: none;
+        }
+        
+        .method-selector {
+            margin-bottom: 25px;
+        }
+        
+        .method-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .method-btn {
+            padding: 15px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .method-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .method-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .input-method {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f7f9fc;
+            border-radius: 10px;
+        }
+        
+        .input-method.active {
+            display: block;
+        }
+        
+        .input-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 15px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+        
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        #map {
+            width: 100%;
+            height: 300px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .compass-display {
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .compass-circle {
+            width: 250px;
+            height: 250px;
+            margin: 0 auto 20px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .compass-circle.small {
+            width: 180px;
+            height: 180px;
+        }
+        
+        .compass-circle.large {
+            width: 320px;
+            height: 320px;
+        }
+        
+        .compass-inner {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            bottom: 10px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        
+        .compass-circle.modern {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.4);
+        }
+        
+        .compass-circle.modern .compass-inner {
+            background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+        }
+        
+        .compass-circle.minimal {
+            background: #333;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .compass-circle.minimal .compass-inner {
+            background: #fff;
+            top: 5px;
+            left: 5px;
+            right: 5px;
+            bottom: 5px;
+        }
+        
+        .compass-circle.retro {
+            background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);
+            box-shadow: 0 10px 30px rgba(139, 111, 71, 0.4), inset 0 2px 5px rgba(255,255,255,0.3);
+        }
+        
+        .compass-circle.retro .compass-inner {
+            background: radial-gradient(circle, #f5e6d3, #e8d4b8);
+        }
+        
+        .compass-arrow {
+            position: absolute;
+            width: 30px;
+            height: 200px;
+            transform-origin: 50% 50%;
+            transition: transform 0.3s ease-out;
+        }
+        
+        .compass-arrow::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-bottom: 100px solid #e74c3c;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+        
+        .compass-arrow::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 100px solid #333;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+        
+        .compass-center {
+            width: 20px;
+            height: 20px;
+            background: #333;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        
+        .distance-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 20px 0;
+        }
+        
+        .bearing-display {
+            font-size: 18px;
+            color: #666;
+            margin: 10px 0;
+        }
+        
+        .options-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #e0e0e0;
+        }
+        
+        .option-group {
+            margin-bottom: 20px;
+        }
+        
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            background: white;
+        }
+        
+        .coordinates-display {
+            background: #f7f9fc;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .error {
+            color: #e74c3c;
+            padding: 10px;
+            background: #ffe6e6;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧭 Location Compass</h1>
+        
+        <!-- Setup Section -->
+        <div class="setup-section" id="setupSection">
+            <div class="method-selector">
+                <label>Choose how to set destination:</label>
+                <div class="method-buttons">
+                    <button class="method-btn active" data-method="manual">📝 Manual Entry</button>
+                    <button class="method-btn" data-method="geolocation">📍 Use My Location</button>
+                    <button class="method-btn" data-method="map">🗺️ Pick on Map</button>
+                    <button class="method-btn" data-method="random">🎲 Random Location</button>
+                </div>
+            </div>
+            
+            <!-- Manual Input -->
+            <div class="input-method active" id="manualMethod">
+                <div class="input-group">
+                    <label>Latitude:</label>
+                    <input type="number" id="manualLat" step="0.0001" min="-90" max="90" placeholder="e.g., 40.7128">
+                </div>
+                <div class="input-group">
+                    <label>Longitude:</label>
+                    <input type="number" id="manualLon" step="0.0001" min="-180" max="180" placeholder="e.g., -74.0060">
+                </div>
+                <button class="btn" onclick="setManualCoordinates()">Set Destination</button>
+            </div>
+            
+            <!-- Geolocation -->
+            <div class="input-method" id="geolocationMethod">
+                <p style="margin-bottom: 15px; color: #666;">Use your current location as the destination.</p>
+                <button class="btn" onclick="useGeolocation()">Get My Location</button>
+                <div id="geoError"></div>
+            </div>
+            
+            <!-- Map Picker -->
+            <div class="input-method" id="mapMethod">
+                <p style="margin-bottom: 15px; color: #666;">Click on the map to select a destination.</p>
+                <div id="map"></div>
+                <button class="btn" id="setMapBtn" disabled onclick="setMapCoordinates()">Set Destination</button>
+            </div>
+            
+            <!-- Random Location -->
+            <div class="input-method" id="randomMethod">
+                <div class="input-group">
+                    <label>Radius (km):</label>
+                    <input type="number" id="randomRadius" value="100" min="1" max="20000" step="1">
+                </div>
+                <p style="margin-bottom: 15px; color: #666; font-size: 14px;">Generate a random point within the specified radius from your current location.</p>
+                <button class="btn" onclick="generateRandom()">Generate Random Location</button>
+                <div id="randomError"></div>
+            </div>
+        </div>
+        
+        <!-- Compass Section -->
+        <div class="compass-section" id="compassSection">
+            <div class="coordinates-display">
+                <strong>Destination:</strong><br>
+                <span id="destCoords">Loading...</span>
+            </div>
+            
+            <div class="options-section">
+                <div class="option-group">
+                    <label>Compass Mode:</label>
+                    <select id="compassMode" onchange="updateCompassMode()">
+                        <option value="no">No Compass</option>
+                        <option value="manual" selected>Manual (North Up)</option>
+                        <option value="auto">Auto (Device Compass)</option>
+                    </select>
+                </div>
+                
+                <div class="option-group">
+                    <label>Distance Display:</label>
+                    <select id="distanceMode" onchange="updateDistance()">
+                        <option value="no">No Distance</option>
+                        <option value="km" selected>Kilometers</option>
+                        <option value="miles">Miles</option>
+                    </select>
+                </div>
+                
+                <div class="option-group">
+                    <label>Compass Style:</label>
+                    <select id="compassStyle" onchange="updateCompassStyle()">
+                        <option value="classic" selected>Classic</option>
+                        <option value="modern">Modern</option>
+                        <option value="minimal">Minimal</option>
+                        <option value="retro">Retro</option>
+                    </select>
+                </div>
+                
+                <div class="option-group">
+                    <label>Compass Size:</label>
+                    <select id="compassSize" onchange="updateCompassSize()">
+                        <option value="small">Small</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="large">Large</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="compass-display">
+                <div class="compass-circle" id="compassCircle" style="display: none;">
+                    <div class="compass-inner">
+                        <div class="compass-arrow" id="compassArrow"></div>
+                        <div class="compass-center"></div>
+                    </div>
+                </div>
+                <div class="bearing-display" id="bearingDisplay"></div>
+                <div class="distance-display" id="distanceDisplay"></div>
+            </div>
+            
+            <button class="btn" onclick="resetApp()" style="background: #e74c3c;">Change Destination</button>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    
+    <script>
+        let targetLat, targetLon;
+        let currentLat, currentLon;
+        let map, marker;
+        let selectedMapLat, selectedMapLon;
+        let watchId;
+        let orientationActive = false;
+        
+        // Check URL parameters on load
+        window.onload = function() {
+            const params = new URLSearchParams(window.location.search);
+            const lat = parseFloat(params.get('lat'));
+            const lon = parseFloat(params.get('lon'));
+            
+            if (!isNaN(lat) && !isNaN(lon) && lat !== -999 && lon !== -999) {
+                targetLat = lat;
+                targetLon = lon;
+                showCompass();
+            }
+        };
+        
+        // Method selector
+        document.querySelectorAll('.method-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.input-method').forEach(m => m.classList.remove('active'));
+                
+                this.classList.add('active');
+                const method = this.getAttribute('data-method');
+                document.getElementById(method + 'Method').classList.add('active');
+                
+                if (method === 'map' && !map) {
+                    setTimeout(initMap, 100);
+                }
+            });
+        });
+        
+        function initMap() {
+            if (map) return;
+            
+            map = L.map('map').setView([20, 0], 2);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            
+            map.on('click', function(e) {
+                selectedMapLat = e.latlng.lat;
+                selectedMapLon = e.latlng.lng;
+                
+                if (marker) {
+                    map.removeLayer(marker);
+                }
+                
+                marker = L.marker([selectedMapLat, selectedMapLon]).addTo(map);
+                document.getElementById('setMapBtn').disabled = false;
+            });
+        }
+        
+        function setManualCoordinates() {
+            const lat = parseFloat(document.getElementById('manualLat').value);
+            const lon = parseFloat(document.getElementById('manualLon').value);
+            
+            if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+                alert('Please enter valid coordinates');
+                return;
+            }
+            
+            targetLat = lat;
+            targetLon = lon;
+            updateURL();
+            showCompass();
+        }
+        
+        function useGeolocation() {
+            const errorDiv = document.getElementById('geoError');
+            errorDiv.innerHTML = '';
+            
+            if (!navigator.geolocation) {
+                errorDiv.innerHTML = '<div class="error">Geolocation is not supported by your browser</div>';
+                return;
+            }
+            
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    targetLat = position.coords.latitude;
+                    targetLon = position.coords.longitude;
+                    updateURL();
+                    showCompass();
+                },
+                function(error) {
+                    errorDiv.innerHTML = '<div class="error">Error getting location: ' + error.message + '</div>';
+                }
+            );
+        }
+        
+        function setMapCoordinates() {
+            targetLat = selectedMapLat;
+            targetLon = selectedMapLon;
+            updateURL();
+            showCompass();
+        }
+        
+        function generateRandom() {
+            const errorDiv = document.getElementById('randomError');
+            errorDiv.innerHTML = '';
+            const radius = parseFloat(document.getElementById('randomRadius').value);
+            
+            if (!navigator.geolocation) {
+                errorDiv.innerHTML = '<div class="error">Geolocation is not supported by your browser</div>';
+                return;
+            }
+            
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    const centerLat = position.coords.latitude;
+                    const centerLon = position.coords.longitude;
+                    
+                    // Generate random point within radius
+                    const radiusInDegrees = radius / 111.32;
+                    const u = Math.random();
+                    const v = Math.random();
+                    const w = radiusInDegrees * Math.sqrt(u);
+                    const t = 2 * Math.PI * v;
+                    const x = w * Math.cos(t);
+                    const y = w * Math.sin(t);
+                    
+                    targetLat = centerLat + y;
+                    targetLon = centerLon + x / Math.cos(centerLat * Math.PI / 180);
+                    
+                    updateURL();
+                    showCompass();
+                },
+                function(error) {
+                    errorDiv.innerHTML = '<div class="error">Error getting location: ' + error.message + '</div>';
+                }
+            );
+        }
+        
+        function updateURL() {
+            const url = new URL(window.location);
+            url.searchParams.set('lat', targetLat.toFixed(6));
+            url.searchParams.set('lon', targetLon.toFixed(6));
+            window.history.pushState({}, '', url);
+        }
+        
+        function showCompass() {
+            document.getElementById('setupSection').style.display = 'none';
+            document.getElementById('compassSection').style.display = 'block';
+            document.getElementById('destCoords').textContent = 
+                `Lat: ${targetLat.toFixed(6)}, Lon: ${targetLon.toFixed(6)}`;
+            
+            initializeDefaults();
+            startTracking();
+        }
+        
+        function startTracking() {
+            if (navigator.geolocation) {
+                watchId = navigator.geolocation.watchPosition(
+                    function(position) {
+                        currentLat = position.coords.latitude;
+                        currentLon = position.coords.longitude;
+                        updateDistance();
+                        updateBearing();
+                    },
+                    function(error) {
+                        console.error('Error tracking position:', error);
+                    },
+                    { enableHighAccuracy: true, maximumAge: 1000 }
+                );
+            }
+        }
+        
+        function updateCompassMode() {
+            const mode = document.getElementById('compassMode').value;
+            const compassCircle = document.getElementById('compassCircle');
+            
+            if (mode === 'no') {
+                compassCircle.style.display = 'none';
+                stopOrientation();
+            } else {
+                compassCircle.style.display = 'block';
+                if (mode === 'auto') {
+                    startOrientation();
+                } else {
+                    stopOrientation();
+                    updateBearing();
+                }
+            }
+        }
+        
+        function startOrientation() {
+            if (orientationActive) return;
+            orientationActive = true;
+            
+            if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                            window.addEventListener('deviceorientation', handleOrientation, true);
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                window.addEventListener('deviceorientation', handleOrientation, true);
+            }
+        }
+        
+        function stopOrientation() {
+            if (!orientationActive) return;
+            orientationActive = false;
+            window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
+            window.removeEventListener('deviceorientation', handleOrientation, true);
+        }
+        
+        function handleOrientation(event) {
+            if (document.getElementById('compassMode').value !== 'auto') return;
+            
+            let heading = event.alpha;
+            if (event.webkitCompassHeading) {
+                heading = event.webkitCompassHeading;
+            } else if (event.absolute && heading !== null) {
+                heading = 360 - heading;
+            }
+            
+            if (heading !== null) {
+                updateBearing(heading);
+            }
+        }
+        
+        function calculateBearing(lat1, lon1, lat2, lon2) {
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const lat1Rad = lat1 * Math.PI / 180;
+            const lat2Rad = lat2 * Math.PI / 180;
+            
+            const y = Math.sin(dLon) * Math.cos(lat2Rad);
+            const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) -
+                      Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+            let bearing = Math.atan2(y, x) * 180 / Math.PI;
+            bearing = (bearing + 360) % 360;
+            return bearing;
+        }
+        
+        function updateBearing(deviceHeading) {
+            if (!currentLat || !currentLon) return;
+            
+            const bearing = calculateBearing(currentLat, currentLon, targetLat, targetLon);
+            document.getElementById('bearingDisplay').textContent = `Bearing: ${bearing.toFixed(0)}°`;
+            
+            const mode = document.getElementById('compassMode').value;
+            if (mode !== 'no') {
+                const arrow = document.getElementById('compassArrow');
+                if (mode === 'auto' && deviceHeading !== undefined) {
+                    const rotation = bearing - deviceHeading;
+                    arrow.style.transform = `rotate(${rotation}deg)`;
+                } else if (mode === 'manual') {
+                    arrow.style.transform = `rotate(${bearing}deg)`;
+                }
+            }
+        }
+        
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+        
+        function updateDistance() {
+            if (!currentLat || !currentLon) return;
+            
+            const mode = document.getElementById('distanceMode').value;
+            const display = document.getElementById('distanceDisplay');
+            
+            if (mode === 'no') {
+                display.textContent = '';
+                return;
+            }
+            
+            const distKm = calculateDistance(currentLat, currentLon, targetLat, targetLon);
+            
+            if (mode === 'km') {
+                display.textContent = `Distance: ${distKm.toFixed(2)} km`;
+            } else if (mode === 'miles') {
+                const distMiles = distKm * 0.621371;
+                display.textContent = `Distance: ${distMiles.toFixed(2)} mi`;
+            }
+        }
+        
+        function resetApp() {
+            document.getElementById('setupSection').style.display = 'block';
+            document.getElementById('compassSection').style.display = 'none';
+            
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            
+            stopOrientation();
+            
+            document.getElementById('compassMode').value = 'no';
+            document.getElementById('distanceMode').value = 'no';
+            document.getElementById('compassCircle').style.display = 'none';
+            
+            const url = new URL(window.location);
+            url.searchParams.delete('lat');
+            url.searchParams.delete('lon');
+            window.history.pushState({}, '', url);
+        }
+        
+        function updateCompassStyle() {
+            const style = document.getElementById('compassStyle').value;
+            const circle = document.getElementById('compassCircle');
+            circle.className = 'compass-circle ' + style;
+        }
+        
+        function updateCompassSize() {
+            const size = document.getElementById('compassSize').value;
+            const circle = document.getElementById('compassCircle');
+            circle.classList.remove('small', 'large');
+            if (size !== 'medium') {
+                circle.classList.add(size);
+            }
+        }
+        
+        // Initialize defaults when compass is shown
+        function initializeDefaults() {
+            document.getElementById('compassMode').value = 'manual';
+            document.getElementById('distanceMode').value = 'km';
+            updateCompassMode();
+            updateDistance();
+        }
+    </script>
+</body>
+</html>
