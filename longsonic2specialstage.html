@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sonic 2 Special Stage</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: linear-gradient(180deg, #1a4d8f 0%, #0a1f3d 100%);
+            width: 100vw;
+            height: 100vh;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #FFD700;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px #000;
+            z-index: 10;
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #FFF;
+            text-align: center;
+            z-index: 10;
+        }
+        .button {
+            background: #FFD700;
+            border: none;
+            padding: 10px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 5px;
+            border-radius: 5px;
+        }
+        .button:hover {
+            background: #FFA500;
+        }
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #FFD700;
+            font-size: 48px;
+            font-weight: bold;
+            text-shadow: 3px 3px 6px #000;
+            text-align: center;
+            z-index: 10;
+            display: none;
+        }
+        #splashScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            text-align: center;
+        }
+        #splashScreen h1 {
+            color: #FFD700;
+            font-size: 72px;
+            margin: 20px;
+            text-shadow: 4px 4px 8px #000;
+        }
+        #splashScreen p {
+            color: #FFF;
+            font-size: 36px;
+            margin: 10px;
+            text-shadow: 2px 2px 4px #000;
+        }
+        #splashScreen .instruction {
+            color: #00FF00;
+            font-size: 24px;
+            margin-top: 40px;
+            animation: blink 1.5s infinite;
+        }
+        @keyframes blink {
+            0%, 50%, 100% { opacity: 1; }
+            25%, 75% { opacity: 0.3; }
+        }
+    </style>
+</head>
+<body>
+    <div id="splashScreen" style="display: none;">
+        <h1 id="stageNumber">STAGE 1</h1>
+        <p id="ringGoal">COLLECT 0 RINGS</p>
+    </div>
+    <div id="ui">
+        <div>Rings: <span id="rings">0</span></div>
+        <div>Required: <span id="required">0</span></div>
+        <div>Distance: <span id="distance">0</span>m</div>
+        <div>Emeralds: <span id="emeralds">0</span></div>
+    </div>
+    <div id="message"></div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="controls">
+        <div>Use LEFT/RIGHT Arrow Keys to move</div>
+        <button class="button" onclick="resetGame()">Restart</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Parse URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const config = {
+            difficulty: Math.max(0, Math.min(1, parseFloat(urlParams.get('difficulty')) || 0.5)),
+            difficultyIncrease: Math.max(0, Math.min(0.99, parseFloat(urlParams.get('difficultyIncrease')) || 0.01)),
+            speed: Math.max(0, parseFloat(urlParams.get('speed')) || 3),
+            speedIncrease: Math.max(0, parseFloat(urlParams.get('speedIncrease')) || 0)
+        };
+        
+        // Make canvas responsive
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        let gameState = {
+            sonicX: 0,
+            sonicY: 0,
+            rings: 0,
+            requiredRings: 0,
+            distance: 0,
+            speed: config.speed,
+            baseSpeed: config.speed,
+            items: [],
+            gameOver: false,
+            chaosEmeralds: 0,
+            nextCheckpoint: 1100,
+            lastCheckpointPassed: false,
+            gameStarted: false,
+            currentStage: 1,
+            lastUpdateTime: null,
+            currentDifficulty: config.difficulty
+        };
+
+        let keys = {};
+
+        // Chunk patterns similar to Sonic 2
+        const chunkPatterns = [
+            // Line of rings down the center
+            { type: 'line_center', collectableRings: 5, items: [
+                { type: 'ring', x: 0, z: 0 },
+                { type: 'ring', x: 0, z: 3 },
+                { type: 'ring', x: 0, z: 6 },
+                { type: 'ring', x: 0, z: 9 },
+                { type: 'ring', x: 0, z: 12 }
+            ]},
+            // Line down the left
+            { type: 'line_left', collectableRings: 5, items: [
+                { type: 'ring', x: -2, z: 0 },
+                { type: 'ring', x: -2, z: 3 },
+                { type: 'ring', x: -2, z: 6 },
+                { type: 'ring', x: -2, z: 9 },
+                { type: 'ring', x: -2, z: 12 }
+            ]},
+            // Line down the right
+            { type: 'line_right', collectableRings: 5, items: [
+                { type: 'ring', x: 2, z: 0 },
+                { type: 'ring', x: 2, z: 3 },
+                { type: 'ring', x: 2, z: 6 },
+                { type: 'ring', x: 2, z: 9 },
+                { type: 'ring', x: 2, z: 12 }
+            ]},
+            // Zigzag pattern
+            { type: 'zigzag', collectableRings: 5, items: [
+                { type: 'ring', x: -2, z: 0 },
+                { type: 'ring', x: -1, z: 3 },
+                { type: 'ring', x: 0, z: 6 },
+                { type: 'ring', x: 1, z: 9 },
+                { type: 'ring', x: 2, z: 12 }
+            ]},
+            // Reverse zigzag
+            { type: 'zigzag_reverse', collectableRings: 5, items: [
+                { type: 'ring', x: 2, z: 0 },
+                { type: 'ring', x: 1, z: 3 },
+                { type: 'ring', x: 0, z: 6 },
+                { type: 'ring', x: -1, z: 9 },
+                { type: 'ring', x: -2, z: 12 }
+            ]},
+            // Wide spread
+            { type: 'spread', collectableRings: 1, items: [
+                { type: 'ring', x: -2.5, z: 0 },
+                { type: 'ring', x: -1.5, z: 0 },
+                { type: 'ring', x: 0, z: 0 },
+                { type: 'ring', x: 1.5, z: 0 },
+                { type: 'ring', x: 2.5, z: 0 }
+            ]},
+            // Arc pattern
+            { type: 'arc', collectableRings: 3, items: [
+                { type: 'ring', x: -2, z: 0 },
+                { type: 'ring', x: -1, z: 2 },
+                { type: 'ring', x: 0, z: 3 },
+                { type: 'ring', x: 1, z: 2 },
+                { type: 'ring', x: 2, z: 0 }
+            ]},
+            // Bomb cluster center
+            { type: 'bomb_center', collectableRings: 0, items: [
+                { type: 'bomb', x: -0.5, z: 0 },
+                { type: 'bomb', x: 0.5, z: 0 },
+                { type: 'bomb', x: 0, z: 3 }
+            ]},
+            // Bomb walls
+            { type: 'bomb_walls', collectableRings: 0, items: [
+                { type: 'bomb', x: -2.5, z: 0 },
+                { type: 'bomb', x: 2.5, z: 0 },
+                { type: 'bomb', x: -2.5, z: 5 },
+                { type: 'bomb', x: 2.5, z: 5 }
+            ]},
+            // Ring corridor with bomb walls
+            { type: 'corridor', collectableRings: 3, items: [
+                { type: 'bomb', x: -2.5, z: 0 },
+                { type: 'ring', x: 0, z: 2 },
+                { type: 'ring', x: 0, z: 5 },
+                { type: 'ring', x: 0, z: 8 },
+                { type: 'bomb', x: 2.5, z: 0 }
+            ]},
+            // Slalom pattern
+            { type: 'slalom', collectableRings: 2, items: [
+                { type: 'bomb', x: -2, z: 0 },
+                { type: 'ring', x: 1, z: 2 },
+                { type: 'bomb', x: 2, z: 5 },
+                { type: 'ring', x: -1, z: 7 },
+                { type: 'bomb', x: -2, z: 10 }
+            ]},
+            // Empty chunk for spacing
+            { type: 'empty', collectableRings: 0, items: [] }
+        ];
+
+        function generateSegment(startZ, endZ) {
+            const items = [];
+            let currentZ = startZ;
+            let collectableRings = 0;
+            
+            // Generate chunks throughout the segment
+            while (currentZ < endZ) {
+                // Pick a random chunk pattern
+                const pattern = chunkPatterns[Math.floor(Math.random() * chunkPatterns.length)];
+                
+                // Add to collectable rings count
+                collectableRings += pattern.collectableRings;
+                
+                // Add items from the pattern
+                pattern.items.forEach(item => {
+                    items.push({
+                        type: item.type,
+                        z: currentZ + item.z,
+                        x: item.x,
+                        collected: false
+                    });
+                });
+                
+                // Move to next chunk position
+                currentZ += 15 + Math.random() * 10;
+            }
+            
+            return { items, collectableRings };
+        }
+
+        function resetGame() {
+            // Generate initial 1000m segment (starting at 100m to leave breathing room)
+            const initialSegment = generateSegment(120, 1100);
+            
+            // Calculate required rings based on difficulty
+            const requiredRings = Math.floor((initialSegment.collectableRings * config.difficulty) / 10) * 10;
+            
+            gameState = {
+                sonicX: 0,
+                sonicY: 0,
+                rings: 0,
+                requiredRings: requiredRings,
+                distance: 0,
+                speed: config.speed,
+                baseSpeed: config.speed,
+                items: initialSegment.items,
+                gameOver: false,
+                chaosEmeralds: 0,
+                nextCheckpoint: 1100,
+                lastCheckpointPassed: false,
+                gameStarted: false,
+                currentStage: 1,
+                lastUpdateTime: null,
+                currentDifficulty: config.difficulty
+            };
+            
+            document.getElementById('message').style.display = 'none';
+            showSplashScreen();
+            gameLoop();
+        }
+
+        function showSplashScreen() {
+            const splash = document.getElementById('splashScreen');
+            const stageNum = document.getElementById('stageNumber');
+            const ringGoal = document.getElementById('ringGoal');
+            
+            stageNum.textContent = `STAGE ${gameState.currentStage}`;
+            ringGoal.textContent = `COLLECT ${gameState.requiredRings} RINGS`;
+            splash.style.display = 'flex';
+            
+            // Auto-hide after 2 seconds
+            setTimeout(() => {
+                hideSplashScreen();
+            }, 2000);
+        }
+
+        function hideSplashScreen() {
+            document.getElementById('splashScreen').style.display = 'none';
+        }
+
+        function extendStage() {
+            // Generate breathing room (100m empty)
+            const breathingStart = gameState.nextCheckpoint;
+            const breathingEnd = breathingStart + 100;
+            
+            // Generate next segment (1000m)
+            const segmentStart = breathingEnd;
+            const segmentEnd = segmentStart + 1000;
+            const newSegment = generateSegment(segmentStart, segmentEnd);
+            
+            // Add new items to the stage
+            gameState.items.push(...newSegment.items);
+            
+            // Increase difficulty for this stage
+            gameState.currentDifficulty = Math.min(1.0, gameState.currentDifficulty + config.difficultyIncrease);
+            
+            // Add required rings based on current difficulty
+            const additionalRequired = Math.floor((newSegment.collectableRings * gameState.currentDifficulty) / 10) * 10;
+            gameState.requiredRings += additionalRequired;
+            
+            // Update next checkpoint
+            gameState.nextCheckpoint = segmentEnd;
+            gameState.lastCheckpointPassed = false;
+            gameState.currentStage++;
+            
+            // Increase base speed and reset current speed
+            gameState.baseSpeed += config.speedIncrease;
+            gameState.speed = gameState.baseSpeed;
+            gameState.lastUpdateTime = performance.now();
+            
+            // Show emerald message then splash for next stage
+            showEmeraldMessage();
+            setTimeout(() => {
+                showSplashScreen();
+            }, 2000);
+        }
+
+        function showEmeraldMessage() {
+            const message = document.getElementById('message');
+            message.innerHTML = 'CHAOS EMERALD!<br><span style="font-size: 24px;">Stage Extended!</span>';
+            message.style.color = '#00FF00';
+            message.style.display = 'block';
+            
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 2000);
+        }
+
+        function drawHalfPipe() {
+            const segments = 20;
+            const depth = gameState.distance;
+            
+            for (let i = 0; i < segments; i++) {
+                const z = i * 10 + (depth % 10);
+                const scale = 1 / (1 + z * 0.05);
+                const y = canvas.height * 0.7;
+                
+                // Draw grid lines
+                ctx.strokeStyle = `rgba(0, 150, 255, ${scale * 0.5})`;
+                ctx.lineWidth = 2;
+                
+                // Horizontal line
+                ctx.beginPath();
+                const width = canvas.width * 0.6 * scale;
+                ctx.moveTo(canvas.width / 2 - width / 2, y - z * 2);
+                ctx.lineTo(canvas.width / 2 + width / 2, y - z * 2);
+                ctx.stroke();
+                
+                // Vertical lines
+                for (let j = -3; j <= 3; j++) {
+                    ctx.beginPath();
+                    const x = canvas.width / 2 + (j * width / 6);
+                    ctx.moveTo(x, y - z * 2);
+                    ctx.lineTo(x, y - (z + 10) * 2);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        function drawSonic() {
+            const x = canvas.width / 2 + gameState.sonicX * 80;
+            const y = canvas.height * 0.7;
+            
+            // Simple Sonic representation (blue circle)
+            ctx.fillStyle = '#0066FF';
+            ctx.beginPath();
+            ctx.arc(x, y, 20, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Eyes
+            ctx.fillStyle = '#FFF';
+            ctx.beginPath();
+            ctx.arc(x - 5, y - 5, 5, 0, Math.PI * 2);
+            ctx.arc(x + 5, y - 5, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawItems() {
+            gameState.items.forEach(item => {
+                if (item.collected) return;
+                
+                const relativeZ = item.z - gameState.distance;
+                if (relativeZ < 0 || relativeZ > 50) return;
+                
+                const scale = 1 / (1 + relativeZ * 0.05);
+                const x = canvas.width / 2 + item.x * 80 * scale;
+                const y = canvas.height * 0.7 - relativeZ * 2;
+                const size = 15 * scale;
+                
+                if (item.type === 'ring') {
+                    // Draw ring
+                    ctx.strokeStyle = '#FFD700';
+                    ctx.lineWidth = 3 * scale;
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+                    ctx.fill();
+                } else {
+                    // Draw bomb
+                    ctx.fillStyle = '#FF0000';
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(x - 2, y - size - 5 * scale, 4, 10 * scale);
+                }
+            });
+        }
+
+        function checkCollisions() {
+            const sonicX = canvas.width / 2 + gameState.sonicX * 80;
+            const sonicY = canvas.height * 0.7;
+            
+            gameState.items.forEach(item => {
+                if (item.collected) return;
+                
+                const relativeZ = item.z - gameState.distance;
+                if (relativeZ < 0 || relativeZ > 2) return;
+                
+                const scale = 1 / (1 + relativeZ * 0.05);
+                const x = canvas.width / 2 + item.x * 80 * scale;
+                const y = canvas.height * 0.7 - relativeZ * 2;
+                
+                const distance = Math.sqrt((sonicX - x) ** 2 + (sonicY - y) ** 2);
+                
+                if (distance < 25) {
+                    item.collected = true;
+                    if (item.type === 'ring') {
+                        gameState.rings++;
+                    } else {
+                        gameState.rings = Math.max(0, gameState.rings - 10);
+                    }
+                }
+            });
+        }
+
+        function update() {
+            if (gameState.gameOver) return;
+            
+            // Initialize lastUpdateTime on first update
+            if (gameState.lastUpdateTime === null) {
+                gameState.lastUpdateTime = performance.now();
+                return;
+            }
+            
+            // Calculate delta time
+            const currentTime = performance.now();
+            const deltaTime = (currentTime - gameState.lastUpdateTime) / 16.67; // Normalize to 60fps
+            gameState.lastUpdateTime = currentTime;
+            
+            // Move sonic
+            if (keys['ArrowLeft']) {
+                gameState.sonicX = Math.max(-3, gameState.sonicX - 0.1 * deltaTime);
+            }
+            if (keys['ArrowRight']) {
+                gameState.sonicX = Math.min(3, gameState.sonicX + 0.1 * deltaTime);
+            }
+            
+            // Move forward
+            gameState.distance += gameState.speed * 0.1 * deltaTime;
+            gameState.speed += 0.001 * deltaTime; // Gradually increase speed
+            
+            // Check collisions
+            checkCollisions();
+            
+            // Check if reached checkpoint
+            if (gameState.distance >= gameState.nextCheckpoint && !gameState.lastCheckpointPassed) {
+                if (gameState.rings >= gameState.requiredRings) {
+                    // Success! Add emerald and extend stage
+                    gameState.chaosEmeralds++;
+                    gameState.lastCheckpointPassed = true;
+                    extendStage();
+                } else {
+                    // Failed to meet requirement
+                    gameState.gameOver = true;
+                    const message = document.getElementById('message');
+                    message.innerHTML = 'STAGE FAILED!<br><span style="font-size: 24px;">Not enough rings!</span>';
+                    message.style.color = '#FF0000';
+                    message.style.display = 'block';
+                }
+            }
+            
+            // Update UI
+            document.getElementById('rings').textContent = gameState.rings;
+            document.getElementById('required').textContent = gameState.requiredRings;
+            document.getElementById('distance').textContent = Math.floor(gameState.distance);
+            document.getElementById('emeralds').textContent = gameState.chaosEmeralds;
+        }
+
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#000033';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw checkerboard background
+            ctx.fillStyle = '#001144';
+            const checkSize = 80;
+            for (let i = 0; i < Math.ceil(canvas.width / checkSize) + 1; i++) {
+                for (let j = 0; j < Math.ceil(canvas.height / checkSize) + 1; j++) {
+                    if ((i + j) % 2 === 0) {
+                        ctx.fillRect(i * checkSize, j * checkSize, checkSize, checkSize);
+                    }
+                }
+            }
+            
+            drawHalfPipe();
+            drawItems();
+            drawSonic();
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            if (!gameState.gameOver) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Keyboard controls
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // Start the game
+        resetGame();
+    </script>
+</body>
+</html>
