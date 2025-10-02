@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Dynamic Clock</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-image 1s ease-in-out; 
+            background-size: cover;
+            background-position: center;
+            background-color: #1f2937;
+        }
+        .clock-container {
+            backdrop-filter: blur(10px);
+            background-color: rgba(0, 0, 0, 0.4);
+            position: relative;
+        }
+        .shadow-text {
+            text-shadow: 0 4px 8px rgba(0, 0, 0, 0.8), 0 0 4px rgba(255, 255, 255, 0.3);
+        }
+        /* Custom style for settings panel transition */
+        .settings-panel-transition {
+            max-height: 0;
+            opacity: 0;
+            transition: max-height 0.5s ease-out, opacity 0.3s ease-out;
+            overflow: hidden;
+        }
+        .settings-panel-transition.open {
+            max-height: 500px; /* Sufficient height for content */
+            opacity: 1;
+            transition: max-height 0.5s ease-in, opacity 0.3s ease-in 0.2s;
+        }
+    </style>
+</head>
+<body id="app-body" class="flex items-center justify-center min-h-screen">
+
+    <div class="clock-container p-8 sm:p-12 md:p-16 rounded-3xl shadow-2xl max-w-lg w-full text-center">
+        <!-- Settings Toggle Button (Gear Icon) -->
+        <button id="settings-toggle" class="absolute top-4 right-4 p-2 text-white hover:text-indigo-400 transition duration-200 rounded-full bg-black/20 hover:bg-black/40 shadow-xl z-10">
+            <!-- Icon by lucide-react (Gear) -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.44a2 2 0 0 1-2 2H4.44a2 2 0 0 0-2 2v.44a2 2 0 0 1-2 2h-.44a2 2 0 0 0-2-2v-.44a2 2 0 0 1-2-2H2.44a2 2 0 0 0 2-2v-.44a2 2 0 0 1 2-2h.44a2 2 0 0 0 2-2v-.44a2 2 0 0 1 2-2h.44a2 2 0 0 0 2 2v.44a2 2 0 0 1 2 2H20.44a2 2 0 0 0 2-2v-.44a2 2 0 0 1 2-2h.44a2 2 0 0 0 2-2v-.44a2 2 0 0 1 2-2h-.44a2 2 0 0 0-2-2v-.44a2 2 0 0 1-2-2h-.44a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+        </button>
+
+        <!-- Time and Date Display -->
+        <h1 id="time-display" class="text-8xl sm:text-9xl font-extrabold text-white shadow-text transition-all duration-300">--:--</h1>
+        <p id="date-display" class="text-xl sm:text-2xl mt-4 text-gray-200 shadow-text font-medium"></p>
+        
+        <!-- Settings Panel -->
+        <div id="settings-panel" class="settings-panel-transition mt-6 bg-black/30 p-4 rounded-xl space-y-4">
+            <h2 class="text-lg font-semibold text-white/90 text-left border-b border-white/20 pb-2">Clock Settings</h2>
+            
+            <!-- Prompt Display (Status) -->
+            <p id="prompt-display" class="text-sm italic text-gray-300 min-h-6 text-left">Status: Waiting for new minute...</p>
+
+            <!-- API Keys Section -->
+            <div class="space-y-3 pt-2">
+                <p class="text-sm text-white/70 text-left">API Keys (Saved locally):</p>
+                <!-- Gemini Key -->
+                <input type="password" id="gemini-key-input" placeholder="Your Gemini API Key" 
+                       class="w-full px-4 py-2 rounded-xl text-center text-gray-900 bg-white/80 focus:ring-2 focus:ring-indigo-500 focus:outline-none placeholder-gray-500">
+                <a href="https://ai.google.dev/gemini-api/docs/api-key" target="_blank" class="text-xs text-indigo-300 hover:text-indigo-400 block text-right">Get Gemini API Key (Google AI Studio)</a>
+
+                <!-- OpenWeather Key -->
+                <input type="password" id="weather-key-input" placeholder="OpenWeather API Key (Optional)" 
+                       class="w-full px-4 py-2 rounded-xl text-center text-gray-900 bg-white/80 focus:ring-2 focus:ring-indigo-500 focus:outline-none placeholder-gray-500">
+                <p id="weather-status" class="text-xs text-left text-gray-400">Weather Status: Disabled (Enter OpenWeather API Key above)</p>
+            </div>
+
+            <!-- Feature Toggles -->
+            <div class="space-y-3 pt-2">
+                <!-- Time of Day Toggle -->
+                <div class="flex items-center justify-between">
+                    <label for="time-relation-toggle" class="text-sm text-white/90 cursor-pointer">Relate image to Time of Day (Night/Day)</label>
+                    <input type="checkbox" id="time-relation-toggle" class="form-checkbox h-5 w-5 text-indigo-600 rounded cursor-pointer">
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex flex-col space-y-4 pt-2">
+                <!-- Time Format Toggle -->
+                <button id="format-toggle" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-xl shadow-lg transition duration-200">
+                    Switch to 12-Hour Format
+                </button>
+
+                <!-- User Theme Input -->
+                <input type="text" id="theme-input" placeholder="Enter custom style theme (e.g., 'Watercolor')" 
+                       class="w-full px-4 py-2 rounded-xl text-center text-gray-900 bg-white/80 focus:ring-2 focus:ring-indigo-500 focus:outline-none placeholder-gray-500">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration and State ---
+        const GEMINI_TEXT_MODEL = "gemini-2.5-flash-preview-05-20"; 
+        const IMAGEN_MODEL = "gemini-2.5-flash-image-preview";
+        const apiKey = ""; // Environment API key
+
+        let lastMinute = -1;
+        let isGenerating = false;
+        let is24HourFormat = true;
+        const MAX_RETRIES = 3;
+
+        // State variables for keys and toggles
+        let userGeminiApiKey = "";
+        let openWeatherApiKey = "";
+        let relateTime = true;
+        const WEATHER_API_URL = "https://api.openweathermap.org/data/2.5/weather";
+        const DEFAULT_LAT = 45.50; // Milan, Italy latitude
+        const DEFAULT_LON = 9.19;  // Milan, Italy longitude
+        let lastTheme = ""; // Track last theme for regeneration logic
+
+        // DOM Elements
+        const body = document.getElementById('app-body');
+        const timeDisplay = document.getElementById('time-display');
+        const dateDisplay = document.getElementById('date-display');
+        const promptDisplay = document.getElementById('prompt-display');
+        const formatToggleButton = document.getElementById('format-toggle');
+        const themeInput = document.getElementById('theme-input');
+        const settingsToggle = document.getElementById('settings-toggle');
+        const settingsPanel = document.getElementById('settings-panel');
+        
+        // New DOM Elements for settings
+        const geminiKeyInput = document.getElementById('gemini-key-input');
+        const weatherKeyInput = document.getElementById('weather-key-input');
+        const timeRelationToggle = document.getElementById('time-relation-toggle');
+        const weatherStatusDisplay = document.getElementById('weather-status');
+
+        /**
+         * Helper to get the effective API Key. Prioritizes user's key if provided via localStorage.
+         */
+        function getEffectiveApiKey() {
+            // If the user provided a key via the input/localStorage, use that. Otherwise, use the environment key.
+            return userGeminiApiKey || apiKey; 
+        }
+
+        /**
+         * Utility function for reliable fetch with exponential backoff.
+         */
+        async function exponentialBackoffFetch(url, options, maxRetries = MAX_RETRIES) {
+            const effectiveApiKey = getEffectiveApiKey();
+            if (url.includes('generativelanguage.googleapis.com') && !effectiveApiKey) {
+                promptDisplay.textContent = "Error: Gemini API Key is missing. Please enter your key in settings.";
+                throw new Error("Gemini API Key missing.");
+            }
+
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        console.error(`Attempt ${i + 1} failed with status: ${response.status}`);
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return await response.json();
+                } catch (error) {
+                    console.error(`Attempt ${i + 1} failed:`, error);
+                    if (i === maxRetries - 1) throw error;
+
+                    const delay = Math.pow(2, i) * 1000 + (Math.random() * 1000);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        // --- Local Storage Management ---
+        function saveSettings() {
+            localStorage.setItem('geminiApiKey', geminiKeyInput.value.trim());
+            localStorage.setItem('openWeatherApiKey', weatherKeyInput.value.trim());
+            localStorage.setItem('relateTimeToggle', timeRelationToggle.checked);
+            localStorage.setItem('theme', themeInput.value.trim());
+            
+            // Update local state variables
+            userGeminiApiKey = geminiKeyInput.value.trim();
+            openWeatherApiKey = weatherKeyInput.value.trim();
+            relateTime = timeRelationToggle.checked;
+            lastTheme = themeInput.value.trim();
+
+            // Give feedback and re-run background update
+            promptDisplay.textContent = "Status: Settings saved. Updating background...";
+            // Update weather status display immediately based on the new key
+            if (openWeatherApiKey) {
+                weatherStatusDisplay.textContent = "Weather Status: Enabled, fetching...";
+            } else {
+                weatherStatusDisplay.textContent = "Weather Status: Disabled (Enter OpenWeather API Key above)";
+            }
+            updateClockAndBackground();
+        }
+
+        function loadSettings() {
+            userGeminiApiKey = localStorage.getItem('geminiApiKey') || "";
+            openWeatherApiKey = localStorage.getItem('openWeatherApiKey') || "";
+            
+            // NEW: Prompt for Gemini Key if both stored key and environment key are missing
+            if (!userGeminiApiKey && !apiKey) {
+                const promptedKey = prompt("Please enter your Gemini API Key to enable the dynamic backgrounds:");
+                if (promptedKey) {
+                    userGeminiApiKey = promptedKey.trim();
+                    localStorage.setItem('geminiApiKey', userGeminiApiKey); // Save it immediately
+                }
+            }
+            // END NEW
+
+            const storedRelateTime = localStorage.getItem('relateTimeToggle');
+            relateTime = storedRelateTime === null ? true : storedRelateTime === 'true'; 
+
+            geminiKeyInput.value = userGeminiApiKey;
+            weatherKeyInput.value = openWeatherApiKey;
+            timeRelationToggle.checked = relateTime;
+            themeInput.value = localStorage.getItem('theme') || "";
+            lastTheme = themeInput.value;
+
+
+            // Set initial weather status display
+            if (openWeatherApiKey) {
+                weatherStatusDisplay.textContent = "Weather Status: Enabled, fetching...";
+            } else {
+                weatherStatusDisplay.textContent = "Weather Status: Disabled (Enter OpenWeather API Key above)";
+            }
+        }
+
+        // --- Weather Functionality ---
+        async function fetchWeather() {
+            // Check if key is available before attempting fetch
+            if (!openWeatherApiKey) {
+                weatherStatusDisplay.textContent = "Weather Status: Disabled (Enter OpenWeather API Key above)";
+                return null;
+            }
+
+            try {
+                weatherStatusDisplay.textContent = "Weather Status: Enabled, fetching...";
+                // Using OpenWeather API
+                const url = `${WEATHER_API_URL}?lat=${DEFAULT_LAT}&lon=${DEFAULT_LON}&appid=${openWeatherApiKey}&units=metric`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error("OpenWeather API Error:", errorText);
+                    weatherStatusDisplay.textContent = "Weather Status: Key Invalid or API Error.";
+                    return null;
+                }
+
+                const data = await response.json();
+                const mainWeather = data.weather[0].main;
+                const temp = Math.round(data.main.temp);
+                const city = data.name;
+                
+                const weatherString = `The current weather in ${city} is ${mainWeather} with a temperature of ${temp}°C.`;
+                weatherStatusDisplay.textContent = `Weather Status: Live in ${city} (${mainWeather}, ${temp}°C)`;
+                return weatherString;
+
+            } catch (error) {
+                console.error("Weather fetching error:", error);
+                weatherStatusDisplay.textContent = "Weather Status: Error fetching data.";
+                return null;
+            }
+        }
+
+
+        /**
+         * Step 1: Generate a creative, time-based prompt for the image model.
+         */
+        async function generateImagePrompt(currentTimeString, weatherContext) {
+            
+            const userTheme = themeInput.value.trim();
+            const themeClause = userTheme ? `The image must be in a '${userTheme}' artistic style.` : "The artistic style must be different every time (e.g., cinematic photo, watercolor painting, minimalist vector art, abstract oil on canvas, 8-bit pixel art).";
+            
+            // Relate time of day per painting?
+            let timeOfDayContext = "";
+            if (relateTime) {
+                const now = new Date();
+                const hour = now.getHours();
+                if (hour >= 5 && hour < 12) {
+                    timeOfDayContext = "The scene must capture the feel of early morning light and fresh air (dawn to late morning).";
+                } else if (hour >= 12 && hour < 17) {
+                    timeOfDayContext = "The scene must capture the feel of bright midday light and energy.";
+                } else if (hour >= 17 && hour < 20) {
+                    timeOfDayContext = "The scene must capture the feel of sunset or dusk and warm evening colors.";
+                } else {
+                    timeOfDayContext = "The scene must capture the mood of nighttime, possibly with moonlight or neon lights.";
+                }
+            }
+
+            // Weather context
+            const weatherClause = weatherContext ? ` The mood must subtly reflect the following conditions: ${weatherContext}` : "";
+            
+            const systemPrompt = `You are a creative visual art director for a dynamic digital clock. Generate a single, highly descriptive, artistic prompt suitable for an AI image generator to create a unique, full-screen background. ${themeClause} Focus on color, mood, and light based on the time and weather. Keep the prompt concise, under 30 words.`;
+            const userQuery = `The current time is ${currentTimeString}. ${timeOfDayContext} ${weatherClause}`;
+
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+            };
+
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TEXT_MODEL}:generateContent?key=${getEffectiveApiKey()}`;
+
+            const result = await exponentialBackoffFetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const text = result?.candidates?.[0]?.content?.parts?.[0]?.text || "A stylized clock on a cosmic background, cinematic style.";
+            return text.trim();
+        }
+
+        /**
+         * Step 2: Generate the image using the prompt.
+         */
+        async function generateImage(prompt) {
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseModalities: ['TEXT', 'IMAGE']
+                },
+            };
+
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGEN_MODEL}:generateContent?key=${getEffectiveApiKey()}`;
+
+            const result = await exponentialBackoffFetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+            
+            if (!base64Data) {
+                const textOutput = result?.candidates?.[0]?.content?.parts?.[0]?.text || "No text output found.";
+                console.warn("Gemini Flash Image generated text instead of image:", textOutput);
+                throw new Error("Image generation failed. Model returned text only or no image data.");
+            }
+            return `data:image/png;base64,${base64Data}`;
+        }
+
+        /**
+         * Main function to update time and trigger background generation.
+         */
+        async function updateClockAndBackground() {
+            const now = new Date();
+            const currentMinute = now.getMinutes();
+
+            // Format time based on toggle state
+            const timeOptions = { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                hour12: !is24HourFormat 
+            };
+            const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+
+            const currentTimeString = now.toLocaleTimeString('en-US', timeOptions);
+            const currentDateString = now.toLocaleDateString('en-US', dateOptions);
+
+            timeDisplay.textContent = currentTimeString;
+            dateDisplay.textContent = currentDateString;
+
+            // Check if a new minute has started OR if it's the first run OR if theme changed
+            if (currentMinute !== lastMinute || lastMinute === -1 || themeInput.value.trim() !== lastTheme) {
+                lastMinute = currentMinute;
+                lastTheme = themeInput.value.trim(); 
+                if (!isGenerating) {
+                    await generateNewBackground(now);
+                }
+            }
+        }
+
+
+        /**
+         * Handles the click event for the 12h/24h format toggle.
+         */
+        function toggleTimeFormat() {
+            is24HourFormat = !is24HourFormat;
+            
+            // Update button text
+            formatToggleButton.textContent = is24HourFormat 
+                ? 'Switch to 12-Hour Format' 
+                : 'Switch to 24-Hour Format';
+
+            // Immediately update the time display (which also triggers background update if minute changes)
+            updateClockAndBackground();
+        }
+
+        /**
+         * Toggles the visibility of the settings panel using classes for CSS transition.
+         */
+        function toggleSettingsPanel() {
+            const isOpen = settingsPanel.classList.contains('open');
+            
+            if (!isOpen) {
+                // Show panel
+                settingsPanel.classList.add('open');
+            } else {
+                // Hide panel
+                settingsPanel.classList.remove('open');
+            }
+        }
+
+        /**
+         * Orchestrates the API calls to get a new background silently.
+         */
+        async function generateNewBackground(now) {
+            isGenerating = true;
+            promptDisplay.textContent = "Status: Asking Gemini for a background concept...";
+            
+            const currentTimeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: !is24HourFormat });
+
+            try {
+                // Fetch weather data only if the key is provided
+                const weatherContext = openWeatherApiKey ? await fetchWeather() : null;
+
+                // 1. Generate Prompt
+                const prompt = await generateImagePrompt(currentTimeString, weatherContext);
+                promptDisplay.textContent = `Prompt: "${prompt}" | Status: Generating image...`;
+
+                // 2. Generate Image
+                const imageUrl = await generateImage(prompt);
+
+                // 3. Update Background only after image is loaded
+                const img = new Image();
+                img.onload = () => {
+                    body.style.backgroundImage = `url('${imageUrl}')`;
+                    isGenerating = false;
+                    promptDisplay.textContent = `Prompt: "${prompt}"`; // Clear status and show final prompt
+                };
+                img.onerror = (e) => {
+                    throw new Error("Failed to load generated image.");
+                };
+                img.src = imageUrl;
+
+            } catch (error) {
+                console.error("Error generating background:", error);
+                isGenerating = false;
+                if (error.message.includes("Key missing")) {
+                     // Error message already set in exponentialBackoffFetch
+                } else {
+                    promptDisplay.textContent = "Error: Could not generate a new background. Retrying next minute.";
+                }
+            }
+        }
+
+        // Start the clock and background generator
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSettings(); // Load keys and toggles from localStorage, includes prompt for Gemini key if necessary
+
+            // Set initial button text based on default 24h format
+            formatToggleButton.textContent = is24HourFormat 
+                ? 'Switch to 12-Hour Format' 
+                : 'Switch to 24-Hour Format';
+                
+            // Event listeners for settings panel
+            settingsToggle.addEventListener('click', toggleSettingsPanel);
+            formatToggleButton.addEventListener('click', toggleTimeFormat);
+            
+            // Event listeners for saving settings on input/change
+            geminiKeyInput.addEventListener('input', saveSettings);
+            weatherKeyInput.addEventListener('input', saveSettings);
+            timeRelationToggle.addEventListener('change', saveSettings);
+            
+            // Trigger save on theme input change to update lastTheme and trigger regeneration
+            themeInput.addEventListener('input', saveSettings);
+
+            // Run once immediately
+            updateClockAndBackground();
+
+            // Update the clock display every second
+            setInterval(updateClockAndBackground, 1000);
+        });
+
+    </script>
+</body>
+</html>
