@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Samurai Sudoku Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            margin: 0 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        label {
+            font-size: 16px;
+            color: #333;
+        }
+        input[type="number"] {
+            margin-left: 5px;
+        }
+        #status {
+            margin: 10px 0;
+            font-weight: bold;
+            color: #666;
+        }
+        table {
+            border-collapse: collapse;
+            background: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        td {
+            width: 35px;
+            height: 35px;
+            text-align: center;
+            border: 1px solid #ddd;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        td.inactive {
+            background: #e0e0e0;
+            border: none;
+        }
+        td.given {
+            color: #000;
+            background: #fff;
+        }
+        td.editable {
+            background: #fffef0;
+        }
+        td div {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            outline: none;
+        }
+        td div[contenteditable="true"] {
+            cursor: text;
+        }
+        /* Thick borders for 3x3 blocks in each grid */
+        td:nth-child(3n):not(.inactive) {
+            border-right: 2px solid #333;
+        }
+        td:nth-child(9):not(.inactive) {
+            border-right: 3px solid #000;
+        }
+        tr:nth-child(3n) td:not(.inactive) {
+            border-bottom: 2px solid #333;
+        }
+        tr:nth-child(9) td:not(.inactive) {
+            border-bottom: 3px solid #000;
+        }
+
+        /* Print styles */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            .controls, #status {
+                display: none;
+            }
+            h1 {
+                font-size: 24px;
+                margin: 10px 0;
+            }
+            table {
+                box-shadow: none;
+                margin: 0 auto;
+            }
+            td {
+                width: 20px;
+                height: 20px;
+                font-size: 14px;
+            }
+            td.inactive {
+                background: #fff;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Samurai Sudoku Generator</h1>
+    <div class="controls">
+        <button id="generateBtn">Generate New Puzzle</button>
+        <button id="solveBtn">Show Solution</button>
+        <button id="printBtn">Print Puzzle</button>
+        <br><br>
+        <label for="candidatesInput">Target Clues (0-369): </label>
+        <input type="number" id="candidatesInput" min="0" max="369" value="150" style="width: 80px; padding: 5px; font-size: 16px;">
+    </div>
+    <div id="status">Click "Generate New Puzzle" to start</div>
+    <table id="sudokuTable"></table>
+
+    <script>
+        const SIZE = 21;
+        let currentPuzzle = [];
+        let currentSolution = [];
+        let isGenerating = false;
+
+        // Define which cells are active in the samurai pattern
+        const isActive = Array(SIZE).fill(0).map(() => Array(SIZE).fill(false));
+        for (let r = 0; r < SIZE; r++) {
+            for (let c = 0; c < SIZE; c++) {
+                const inTopLeft = r < 9 && c < 9;
+                const inTopRight = r < 9 && c >= 12;
+                const inCenter = r >= 6 && r < 15 && c >= 6 && c < 15;
+                const inBottomLeft = r >= 12 && c < 9;
+                const inBottomRight = r >= 12 && c >= 12;
+                isActive[r][c] = inTopLeft || inTopRight || inCenter || inBottomLeft || inBottomRight;
+            }
+        }
+
+        // Check if a number is valid at position
+        function isValid(grid, row, col, num) {
+            if (!isActive[row][col]) return false;
+
+            // Find which 9x9 grid(s) this cell belongs to
+            const grids = [];
+            if (row < 9 && col < 9) grids.push([0, 0]); // Top-left
+            if (row < 9 && col >= 12) grids.push([0, 12]); // Top-right
+            if (row >= 6 && row < 15 && col >= 6 && col < 15) grids.push([6, 6]); // Center
+            if (row >= 12 && col < 9) grids.push([12, 0]); // Bottom-left
+            if (row >= 12 && col >= 12) grids.push([12, 12]); // Bottom-right
+
+            for (const [gridR, gridC] of grids) {
+                // Check row within this 9x9
+                for (let c = gridC; c < gridC + 9; c++) {
+                    if (c !== col && grid[row][c] === num) return false;
+                }
+
+                // Check column within this 9x9
+                for (let r = gridR; r < gridR + 9; r++) {
+                    if (r !== row && grid[r][col] === num) return false;
+                }
+
+                // Check 3x3 box
+                const boxR = gridR + Math.floor((row - gridR) / 3) * 3;
+                const boxC = gridC + Math.floor((col - gridC) / 3) * 3;
+                for (let r = boxR; r < boxR + 3; r++) {
+                    for (let c = boxC; c < boxC + 3; c++) {
+                        if ((r !== row || c !== col) && grid[r][c] === num) return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        // Solve function with solution limit and randomization
+        function solve(grid, maxSolutions, progressCallback) {
+            const solutions = [];
+            let cellsFilled = 0;
+            
+            function backtrack(g) {
+                if (solutions.length >= maxSolutions) return;
+
+                // Find next empty cell (prioritize center grid)
+                let emptyCell = null;
+                // First pass: center grid
+                for (let r = 6; r < 15 && !emptyCell; r++) {
+                    for (let c = 6; c < 15 && !emptyCell; c++) {
+                        if (isActive[r][c] && g[r][c] === 0) {
+                            emptyCell = [r, c];
+                        }
+                    }
+                }
+                // Second pass: rest of grid
+                if (!emptyCell) {
+                    for (let r = 0; r < SIZE && !emptyCell; r++) {
+                        for (let c = 0; c < SIZE && !emptyCell; c++) {
+                            if (isActive[r][c] && g[r][c] === 0) {
+                                emptyCell = [r, c];
+                            }
+                        }
+                    }
+                }
+
+                if (!emptyCell) {
+                    solutions.push(g.map(row => [...row]));
+                    return;
+                }
+
+                const [row, col] = emptyCell;
+                const nums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+                // Randomize order
+                for (let i = nums.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [nums[i], nums[j]] = [nums[j], nums[i]];
+                }
+
+                for (const num of nums) {
+                    if (isValid(g, row, col, num)) {
+                        g[row][col] = num;
+                        cellsFilled++;
+                        if (progressCallback && cellsFilled % 10 === 0) {
+                            progressCallback(cellsFilled);
+                        }
+                        backtrack(g);
+                        if (solutions.length >= maxSolutions) return;
+                        g[row][col] = 0;
+                    }
+                }
+            }
+
+            const gridCopy = grid.map(row => [...row]);
+            backtrack(gridCopy);
+            return solutions;
+        }
+
+        // Remove candidates to create puzzle
+        async function removeCandidates(solution, targetCandidates, progressCallback) {
+            const isRemovable = isActive.map(row => [...row]);
+            let removableCells = 41 * 9;
+            let candidates = 41 * 9;
+            const puzzle = solution.map(row => [...row]);
+
+            const removableList = [];
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    if (isRemovable[r][c]) removableList.push([r, c]);
+                }
+            }
+
+            // Shuffle removable list
+            for (let i = removableList.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [removableList[i], removableList[j]] = [removableList[j], removableList[i]];
+            }
+
+            let idx = 0;
+            let updateCounter = 0;
+            while (candidates > targetCandidates && removableCells > 0 && idx < removableList.length) {
+                const [r, c] = removableList[idx];
+                idx++;
+
+                if (!isRemovable[r][c] || puzzle[r][c] === 0) {
+                    removableCells--;
+                    continue;
+                }
+
+                const temp = puzzle[r][c];
+                puzzle[r][c] = 0;
+
+                const solutions = solve(puzzle, 2);
+                if (solutions.length > 1) {
+                    puzzle[r][c] = temp; // Backtrack
+                } else {
+                    candidates--;
+                    updateCounter++;
+                    if (progressCallback && updateCounter % 3 === 0) {
+                        progressCallback(candidates, removableCells);
+                        // Allow UI to update every few iterations
+                        await new Promise(resolve => setTimeout(resolve, 0));
+                    }
+                }
+                removableCells--;
+                isRemovable[r][c] = false;
+            }
+
+            return puzzle;
+        }
+
+        // Create the table
+        function createTable() {
+            const table = document.getElementById('sudokuTable');
+            table.innerHTML = '';
+            
+            for (let r = 0; r < SIZE; r++) {
+                const tr = document.createElement('tr');
+                for (let c = 0; c < SIZE; c++) {
+                    const td = document.createElement('td');
+                    if (!isActive[r][c]) {
+                        td.classList.add('inactive');
+                    } else {
+                        const div = document.createElement('div');
+                        td.appendChild(div);
+                    }
+                    tr.appendChild(td);
+                }
+                table.appendChild(tr);
+            }
+        }
+
+        // Display puzzle
+        function displayPuzzle(puzzle) {
+            const table = document.getElementById('sudokuTable');
+            const rows = table.getElementsByTagName('tr');
+            
+            for (let r = 0; r < SIZE; r++) {
+                const cells = rows[r].getElementsByTagName('td');
+                for (let c = 0; c < SIZE; c++) {
+                    if (isActive[r][c]) {
+                        const div = cells[c].querySelector('div');
+                        if (puzzle[r][c] === 0) {
+                            div.textContent = '';
+                            div.contentEditable = 'true';
+                            cells[c].classList.remove('given');
+                            cells[c].classList.add('editable');
+                        } else {
+                            div.textContent = puzzle[r][c];
+                            div.contentEditable = 'false';
+                            cells[c].classList.add('given');
+                            cells[c].classList.remove('editable');
+                        }
+                    }
+                }
+            }
+        }
+
+        // Generate puzzle
+        async function generatePuzzle() {
+            if (isGenerating) return;
+            isGenerating = true;
+            
+            const targetCandidates = parseInt(document.getElementById('candidatesInput').value);
+            
+            document.getElementById('generateBtn').disabled = true;
+            document.getElementById('solveBtn').disabled = true;
+            document.getElementById('printBtn').disabled = true;
+            document.getElementById('status').textContent = 'Generating solution (0/369)';
+
+            // Use setTimeout to allow UI to update
+            setTimeout(() => {
+                const empty = Array(SIZE).fill(0).map(() => Array(SIZE).fill(0));
+                const solutions = solve(empty, 1, (filled) => {
+                    document.getElementById('status').textContent = `Generating solution (${filled}/369)`;
+                });
+                
+                if (solutions.length === 0) {
+                    document.getElementById('status').textContent = 'Failed to generate solution';
+                    isGenerating = false;
+                    document.getElementById('generateBtn').disabled = false;
+                    document.getElementById('solveBtn').disabled = false;
+                    document.getElementById('printBtn').disabled = false;
+                    return;
+                }
+
+                currentSolution = solutions[0];
+                document.getElementById('status').textContent = 'Removing candidates (369/369)';
+
+                setTimeout(async () => {
+                    currentPuzzle = await removeCandidates(currentSolution, targetCandidates, (remaining, removable) => {
+                        document.getElementById('status').textContent = `Removing candidates (${remaining}/${targetCandidates}) - remaining removable: ${removable}`;
+                    });
+                    
+                    // Count actual clues in puzzle
+                    let actualClues = 0;
+                    for (let r = 0; r < SIZE; r++) {
+                        for (let c = 0; c < SIZE; c++) {
+                            if (currentPuzzle[r][c] !== 0) actualClues++;
+                        }
+                    }
+                    
+                    displayPuzzle(currentPuzzle);
+                    document.getElementById('status').textContent = `Puzzle generated with ${actualClues} clues! Fill in the blanks.`;
+                    document.getElementById('generateBtn').disabled = false;
+                    document.getElementById('solveBtn').disabled = false;
+                    document.getElementById('printBtn').disabled = false;
+                    isGenerating = false;
+                }, 10);
+            }, 10);
+        }
+
+        // Show solution
+        function showSolution() {
+            if (currentSolution.length > 0) {
+                displayPuzzle(currentSolution);
+                document.getElementById('status').textContent = 'Solution displayed';
+            }
+        }
+
+        // Print puzzle
+        function printPuzzle() {
+            window.print();
+        }
+
+        // Initialize
+        createTable();
+        document.getElementById('generateBtn').addEventListener('click', generatePuzzle);
+        document.getElementById('solveBtn').addEventListener('click', showSolution);
+        document.getElementById('printBtn').addEventListener('click', printPuzzle);
+    </script>
+</body>
+</html>
