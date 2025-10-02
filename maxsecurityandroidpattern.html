@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Max Security Pattern Generator (8 Slopes)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117; /* Dark background */
+        }
+        #patternCanvas {
+            box-shadow: 0 10px 30px rgba(0, 255, 128, 0.2); /* Neon glow effect */
+            border-radius: 1.5rem;
+            background-color: #161b22;
+        }
+        .btn-generate {
+            background-image: linear-gradient(45deg, #00c6ff, #0072ff);
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+        }
+        .btn-generate:hover {
+            box-shadow: 0 0 20px rgba(0, 198, 255, 0.7);
+            transform: translateY(-2px);
+        }
+        /* Style for the unique moves list */
+        .slope-list li {
+            padding: 0.25rem 0.5rem;
+            margin: 0.25rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            background-color: rgba(33, 206, 128, 0.1);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-sm md:max-w-md lg:max-w-lg">
+        <h1 class="text-3xl font-bold text-center text-white mb-4">
+            Max Security Pattern Generator
+        </h1>
+        <p class="text-center text-gray-400 mb-6">
+            9 Points, 8 Steps, 8 Unique Non-Skipping Movements.
+        </p>
+
+        <!-- Canvas Container -->
+        <div class="relative flex justify-center items-center">
+            <canvas id="patternCanvas" width="300" height="300" class="w-full h-auto max-w-md"></canvas>
+            <div id="loading" class="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-80 rounded-3xl hidden">
+                <div class="text-green-400 text-lg font-semibold">Generating...</div>
+            </div>
+        </div>
+        
+        <!-- Controls -->
+        <div class="mt-8 flex flex-col items-center space-y-4">
+            <button id="generateBtn" class="btn-generate w-full py-3 rounded-xl text-white font-bold text-lg shadow-lg">
+                Generate Secure Pattern
+            </button>
+            <div id="errorMsg" class="text-red-400 text-sm text-center hidden"></div>
+        </div>
+
+        <!-- Pattern Details -->
+        <div class="mt-8 p-4 bg-gray-800 rounded-xl shadow-inner border border-gray-700">
+            <h2 class="text-xl font-bold text-green-400 mb-3">Generated Path & Slopes</h2>
+            <div id="pathDisplay" class="text-white text-lg font-mono break-all mb-4">Path: -</div>
+            <p class="text-sm text-gray-300 mb-2">Unique Slopes Used:</p>
+            <ul id="slopesUsedList" class="slope-list flex flex-wrap justify-center text-green-300">
+                <!-- Slopes will be injected here -->
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('patternCanvas');
+            const ctx = canvas.getContext('2d');
+            const generateBtn = document.getElementById('generateBtn');
+            const loadingDiv = document.getElementById('loading');
+            const pathDisplay = document.getElementById('pathDisplay');
+            const slopesUsedList = document.getElementById('slopesUsedList');
+            const errorMsg = document.getElementById('errorMsg');
+
+            const DOT_RADIUS = 15;
+            const DOT_COLOR = '#4CAF50';
+            const LINE_COLOR = '#00FFFF'; // Cyan
+            const LINE_WIDTH = 5;
+
+            // --- Grid Point Setup ---
+            const points = []; // Stores { x, y, id }
+            
+            // Helper function to map 1-9 ID to its grid position (R, C)
+            // (1,1) is top-left, (3,3) is bottom-right
+            const getGridCoords = (id) => {
+                const r = Math.ceil(id / 3); // Row (1-3)
+                const c = (id - 1) % 3 + 1; // Col (1-3)
+                return { r, c };
+            };
+
+            // Defines the 8 unique non-skip movement types based on user criteria (4 simple, 4 knight's)
+            const getSlopeType = (id1, id2) => {
+                const { r: r1, c: c1 } = getGridCoords(id1);
+                const { r: r2, c: c2 } = getGridCoords(id2);
+                
+                const dR = r2 - r1;
+                const dC = c2 - c1;
+                const absDR = Math.abs(dR);
+                const absDC = Math.abs(dC);
+
+                let type = null;
+                
+                // --- Disallow Skips (Straight line moves over 2 points, like 1->3, 1->9) ---
+                if (absDR === 2 && absDC === 0 || absDR === 0 && absDC === 2 || absDR === 2 && absDC === 2) {
+                    return null; 
+                }
+                
+                // --- Simple Moves (4 total directions, 2 unique types) ---
+                if (absDR === 1 && absDC === 0) type = 'V_SIMPLE';
+                else if (absDR === 0 && absDC === 1) type = 'H_SIMPLE';
+
+                // --- Diagonal Moves (4 total directions, 2 unique types) ---
+                else if (absDR === 1 && absDC === 1) {
+                    // Differentiate Main Diagonal (dR*dC > 0) from Anti-Diagonal (dR*dC < 0)
+                    if (dR * dC > 0) type = 'D_MAIN'; 
+                    else type = 'D_ANTI'; 
+                }
+
+                // --- Knight's Moves (8 total directions, 4 unique types) ---
+                else if (absDR === 2 && absDC === 1) { // Tall L-Shape
+                    // Differentiate based on horizontal direction
+                    if (dC > 0) type = 'K_TALL_RIGHT';
+                    else type = 'K_TALL_LEFT';
+                }
+                else if (absDR === 1 && absDC === 2) { // Wide L-Shape
+                    // Differentiate based on vertical direction
+                    if (dR > 0) type = 'K_WIDE_DOWN';
+                    else type = 'K_WIDE_UP';
+                }
+                
+                return type;
+            };
+
+            // --- Drawing Functions ---
+            const resizeCanvas = () => {
+                const size = canvas.clientWidth;
+                canvas.width = size;
+                canvas.height = size;
+
+                // Calculate points based on current canvas size
+                points.length = 0;
+                const spacing = canvas.width / 4;
+                
+                for (let r = 1; r <= 3; r++) {
+                    for (let c = 1; c <= 3; c++) {
+                        // Map grid (1-9) ID to its position
+                        const id = (r - 1) * 3 + c;
+                        points.push({
+                            x: c * spacing,
+                            y: r * spacing,
+                            id: id
+                        });
+                    }
+                }
+                drawGrid();
+            };
+
+            const drawGrid = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw all 9 dots
+                ctx.fillStyle = DOT_COLOR;
+                points.forEach(p => {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, DOT_RADIUS, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            };
+
+            const drawPattern = (path) => {
+                drawGrid(); // Redraw dots
+                if (path.length < 2) return;
+
+                ctx.strokeStyle = LINE_COLOR;
+                ctx.lineWidth = LINE_WIDTH;
+                ctx.lineCap = 'round';
+                ctx.shadowColor = 'rgba(0, 255, 255, 0.8)';
+                ctx.shadowBlur = 15;
+
+                ctx.beginPath();
+                
+                // Map the ID (1-9) path to the actual coordinates
+                const pathCoords = path.map(id => points.find(p => p.id === id));
+                
+                ctx.moveTo(pathCoords[0].x, pathCoords[0].y);
+
+                for (let i = 1; i < pathCoords.length; i++) {
+                    ctx.lineTo(pathCoords[i].x, pathCoords[i].y);
+                }
+                ctx.stroke();
+
+                // Clear shadow for drawing end-point rings
+                ctx.shadowBlur = 0;
+
+                // Draw pulsing rings around the points used in the path
+                pathCoords.forEach((p, index) => {
+                    ctx.beginPath();
+                    // Inner glow
+                    ctx.fillStyle = 'rgba(0, 255, 255, 0.5)';
+                    ctx.arc(p.x, p.y, DOT_RADIUS * 0.7, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Sequence number
+                    ctx.fillStyle = '#161b22';
+                    ctx.font = 'bold 12px Inter';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(index + 1, p.x, p.y);
+                });
+            };
+
+            // --- Generation Algorithm ---
+            const ALL_SLOPE_TYPES = ['V_SIMPLE', 'H_SIMPLE', 'D_MAIN', 'D_ANTI', 'K_TALL_RIGHT', 'K_TALL_LEFT', 'K_WIDE_UP', 'K_WIDE_DOWN'];
+            const ALL_POINTS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+            const generateMaxSecurityPattern = (maxRetries = 5000) => {
+                let bestPath = null;
+                let bestSlopes = 0;
+
+                for (let retry = 0; retry < maxRetries; retry++) {
+                    let path = [];
+                    let usedSlopes = new Set();
+                    let unvisited = [...ALL_POINTS];
+                    
+                    // Start at a random point
+                    let currentId = ALL_POINTS[Math.floor(Math.random() * ALL_POINTS.length)];
+
+                    path.push(currentId);
+                    unvisited.splice(unvisited.indexOf(currentId), 1);
+
+                    // Loop until 9 points are used
+                    while (path.length < 9) {
+                        
+                        let possibleMoves = [];
+
+                        unvisited.forEach(nextId => {
+                            const type = getSlopeType(currentId, nextId);
+                            // Only consider moves to unvisited points that are NOT skips (type != null)
+                            if (type) {
+                                possibleMoves.push({ nextId, type, isNew: !usedSlopes.has(type) });
+                            }
+                        });
+
+                        if (possibleMoves.length === 0) {
+                            // Stuck: no valid path to an unvisited point. Break and retry.
+                            break;
+                        }
+
+                        // Prioritization strategy:
+                        // 1. If we still need slopes AND we are not at the final step, prioritize a move that uses a new slope type.
+                        // 2. Otherwise, pick any valid move randomly.
+                        
+                        let prioritizedMoves = possibleMoves.filter(m => m.isNew);
+                        let nextMove;
+
+                        if (path.length < 8 && prioritizedMoves.length > 0) {
+                            // Randomly pick one of the beneficial moves
+                            nextMove = prioritizedMoves[Math.floor(Math.random() * prioritizedMoves.length)];
+                        } else {
+                            // Pick any valid move
+                            nextMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+                        }
+
+                        if (!nextMove) {
+                             // This should not happen, but as a safeguard
+                             break;
+                        }
+                        
+                        // Perform the move
+                        currentId = nextMove.nextId;
+                        path.push(currentId);
+                        usedSlopes.add(nextMove.type);
+                        unvisited.splice(unvisited.indexOf(currentId), 1);
+                    }
+
+                    // Check if this path meets the criteria: 9 points AND 8 unique slopes
+                    if (path.length === 9 && usedSlopes.size === 8) {
+                        return { path, slopes: Array.from(usedSlopes) };
+                    }
+                    
+                    // Track the best partial result just in case the full 8 slopes is impossible (though it shouldn't be)
+                    if (path.length === 9 && usedSlopes.size > bestSlopes) {
+                         bestSlopes = usedSlopes.size;
+                         bestPath = { path, slopes: Array.from(usedSlopes) };
+                    }
+                }
+                
+                // If max retries hit, return the best result found
+                return bestPath || null; 
+            };
+            
+            // --- UI Interaction ---
+            const handleGenerate = async () => {
+                generateBtn.disabled = true;
+                loadingDiv.classList.remove('hidden');
+                errorMsg.classList.add('hidden');
+                
+                await new Promise(resolve => setTimeout(resolve, 50)); 
+
+                const result = generateMaxSecurityPattern();
+                
+                loadingDiv.classList.add('hidden');
+                generateBtn.disabled = false;
+
+                if (result) {
+                    drawPattern(result.path);
+                    pathDisplay.textContent = `Path: ${result.path.join(' \u2192 ')}`;
+                    
+                    slopesUsedList.innerHTML = '';
+                    result.slopes.forEach(slope => {
+                        const li = document.createElement('li');
+                        li.textContent = slope.replace(/_/g, ' ');
+                        slopesUsedList.appendChild(li);
+                    });
+                    
+                    if (result.slopes.length < 8) {
+                        errorMsg.textContent = `Warning: Could only find a 9-point path using ${result.slopes.length} of the 8 required slopes after retries.`;
+                        errorMsg.classList.remove('hidden');
+                    }
+
+                } else {
+                    drawGrid();
+                    pathDisplay.textContent = 'Path: Generation Failed';
+                    slopesUsedList.innerHTML = '';
+                    errorMsg.textContent = 'Could not find a valid 9-point path meeting all 8 unique slope constraints. Try generating again.';
+                    errorMsg.classList.remove('hidden');
+                }
+            };
+
+            // --- Initialization ---
+            window.addEventListener('resize', resizeCanvas);
+            generateBtn.addEventListener('click', handleGenerate);
+
+            // Initial setup
+            resizeCanvas();
+            drawGrid(); 
+            pathDisplay.textContent = 'Path: Press "Generate" to create a complex pattern.';
+            
+            // Generate immediately on load for first presentation
+            handleGenerate();
+        });
+    </script>
+</body>
+</html>
+
