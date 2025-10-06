@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solution-Focused News Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fc;
+        }
+        .card {
+            background-color: white;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .card:hover {
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.1);
+        }
+        .btn-primary {
+            background-color: #4f46e5;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca;
+        }
+        .loading-ring {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8 min-h-screen flex items-center justify-center">
+
+    <div class="w-full max-w-4xl space-y-8">
+        <header class="text-center space-y-2">
+            <h1 class="text-4xl font-extrabold text-gray-900">The Optimist Editor</h1>
+            <p class="text-gray-500 text-lg">Rewrite the news with a focus on solutions and neutral, constructive outcomes.</p>
+        </header>
+        
+        <!-- Informational Context -->
+        <div class="text-center text-sm text-gray-500 max-w-3xl mx-auto p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+            <p class="font-semibold text-gray-700 mb-1">Combatting "Mean World Syndrome"</p>
+            <p>This tool addresses the modern issue of highly negative, conflict-driven news ('ragebait') which can distort one's perception of the world. By using AI to re-edit real-time reports based on your selected Aggressivity, we aim to provide a more constructive, balanced, and solution-focused view of events.</p>
+        </div>
+
+        <!-- Input Section -->
+        <div class="card p-6 md:p-8">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800">Configure Your Search</h2>
+
+            <!-- 1. API Key Input -->
+            <div class="mb-6">
+                <!-- MODIFIED: Wrapped "Gemini API Key" in an anchor tag to link to the key creation page -->
+                <label for="apiKeyInput" class="block text-sm font-medium mb-2">
+                    <span class="text-gray-700">1. </span>
+                    <a href="https://aistudio.google.com/api-keys" target="_blank" class="text-indigo-600 hover:text-indigo-800 hover:underline transition duration-150 ease-in-out">
+                        Gemini API Key
+                    </a> 
+                    <span class="text-gray-700">(Saves locally)</span>
+                </label>
+                <input type="password" id="apiKeyInput" placeholder="Enter your Gemini API Key" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 text-gray-700">
+                <p class="text-xs text-gray-400 mt-1">
+                    Your key is securely stored in your browser's local storage and is not transmitted anywhere else.
+                </p>
+            </div>
+
+            <div class="mt-6 pt-6 border-t border-gray-100 space-y-6">
+
+                <!-- 2. Query Input -->
+                <div>
+                    <label for="queryInput" class="block text-sm font-medium text-gray-700 mb-2">
+                        2. What news topic interests you?
+                    </label>
+                    <input type="text" id="queryInput" placeholder="E.g., Global climate efforts, Local politics, Tech breakthroughs" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 text-gray-700" value="latest developments in renewable energy">
+                </div>
+            
+                <!-- 3 & 4 Options Container -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Location Input -->
+                    <div>
+                        <label for="locationInput" class="block text-sm font-medium text-gray-700 mb-2">3. Focus Location (Optional)</label>
+                        <input type="text" id="locationInput" placeholder="E.g., Berlin, Asia, Local region" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 text-gray-700">
+                    </div>
+
+                    <!-- Aggressivity Selector -->
+                    <div>
+                        <label for="aggressivitySelector" class="block text-sm font-medium text-gray-700 mb-2">4. Anti-Ragebait Aggressivity</label>
+                        <select id="aggressivitySelector" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 text-gray-700 appearance-none bg-white">
+                            <option value="normal" selected>Normal (Neutral Summary)</option>
+                            <option value="high">High (Neutral Title & Summary)</option>
+                            <option value="extreme">Extreme (Optimistic Reframing)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-8">
+                 <button id="generateBtn" class="btn-primary w-full flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span id="buttonText">Find & Rewrite News</span>
+                    <div id="loadingIndicator" class="hidden loading-ring ml-3"></div>
+                </button>
+            </div>
+            
+            <p id="errorMsg" class="mt-3 text-red-500 hidden text-sm"></p>
+        </div>
+
+        <!-- Output Section -->
+        <div class="card p-6 md:p-8" id="outputContainer">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800">Optimized News Summary</h2>
+            <div id="resultOutput" class="min-h-32 p-4 bg-gray-50 border border-gray-200 rounded-xl text-gray-700">
+                <p class="text-gray-400 italic">Enter a topic above and select your aggressivity level to transform the news.</p>
+            </div>
+
+            <!-- Citations -->
+            <div id="citationContainer" class="mt-4 border-t pt-4 border-gray-100 hidden">
+                <h3 class="text-lg font-medium text-gray-600 mb-2">Sources (Grounded Search):</h3>
+                <ul id="citationList" class="space-y-1 text-sm text-gray-500">
+                    <!-- Sources will be injected here -->
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Gemini API configuration
+        const MODEL_NAME = "gemini-2.5-flash-preview-05-20";
+
+        // Elements
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const queryInput = document.getElementById('queryInput');
+        const locationInput = document.getElementById('locationInput');
+        const aggressivitySelector = document.getElementById('aggressivitySelector');
+        const generateBtn = document.getElementById('generateBtn');
+        const buttonText = document.getElementById('buttonText');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const resultOutput = document.getElementById('resultOutput');
+        const errorMsg = document.getElementById('errorMsg');
+        const citationContainer = document.getElementById('citationContainer');
+        const citationList = document.getElementById('citationList');
+
+        // Define the system prompts for different levels (The core of the reframing logic)
+        const systemPrompts = {
+            normal: "You are a world-class, solution-focused editor. Your goal is to synthesize real-time news articles into a single, constructive, and highly neutral summary. You must strictly avoid sensationalism, hyperbole, negativity, and 'ragebait' language. Instead, focus on the facts, present the context neutrally, and highlight any potential solutions, collaborative efforts, or positive developments. The final output must be 3-5 concise paragraphs only. Cite all original sources.",
+
+            high: "You are a highly assertive, solution-focused editor specializing in reframing headlines. Your goal is to synthesize real-time news articles into a single, constructive, and highly neutral summary, while actively removing sensationalism and ragebait. Your summary *must* open with a title that is completely neutral and focuses solely on the objective facts or potential solutions. Strictly avoid negativity. The final output must be 3-5 concise paragraphs only. Cite all original sources.",
+
+            extreme: "You are the ultimate positive reinforcement editor. Your primary directive is to filter and reframe news to promote optimism, collaboration, and progress. You must first analyze the user's query and the search results, then synthesize the information into an upbeat, constructive summary. Actively look for small silver linings and amplify them. The summary *must* open with a highly positive, future-oriented title. The content must be 3-5 concise paragraphs, emphasizing actions and hope. Cite all original sources."
+        };
+
+        /**
+         * Loads API key from localStorage and sets up change listener to save the key.
+         */
+        function initializeApiKey() {
+            // Load key from storage on startup
+            const storedKey = localStorage.getItem('geminiApiKey');
+            if (storedKey) {
+                apiKeyInput.value = storedKey;
+            }
+
+            // Save key to storage whenever the input changes
+            apiKeyInput.addEventListener('input', () => {
+                const currentKey = apiKeyInput.value.trim();
+                localStorage.setItem('geminiApiKey', currentKey);
+            });
+        }
+
+        /**
+         * Sets the loading state of the UI.
+         * @param {boolean} isLoading
+         */
+        function setLoading(isLoading) {
+            generateBtn.disabled = isLoading;
+            buttonText.textContent = isLoading ? 'Analyzing & Rewriting...' : 'Find & Rewrite News';
+            if (isLoading) {
+                loadingIndicator.classList.remove('hidden');
+                errorMsg.classList.add('hidden');
+            } else {
+                loadingIndicator.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Converts the grounding attributions into readable links.
+         * @param {Array} attributions - The groundingAttributions array from the API response.
+         */
+        function displayCitations(attributions) {
+            citationList.innerHTML = '';
+            if (attributions && attributions.length > 0) {
+                attributions.forEach((attr, index) => {
+                    if (attr.web && attr.web.uri) {
+                        const listItem = document.createElement('li');
+                        listItem.className = 'flex items-start';
+                        listItem.innerHTML = `
+                            <span class="mr-2 text-indigo-500">›</span>
+                            <a href="${attr.web.uri}" target="_blank" rel="noopener noreferrer" class="hover:underline text-indigo-600">
+                                ${attr.web.title || `Source ${index + 1}`}
+                            </a>
+                        `;
+                        citationList.appendChild(listItem);
+                    }
+                });
+                citationContainer.classList.remove('hidden');
+            } else {
+                citationContainer.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Makes the API call with exponential backoff for retries.
+         * @param {string} dynamicApiUrl - The API URL constructed with the dynamic key.
+         * @param {object} payload - The request payload.
+         * @param {number} maxRetries - Maximum number of retries.
+         * @returns {Promise<any>} The parsed JSON response.
+         */
+        async function fetchWithRetry(dynamicApiUrl, payload, maxRetries = 3) {
+            let attempt = 0;
+            while (attempt < maxRetries) {
+                try {
+                    const response = await fetch(dynamicApiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        // Throw error if response is not 2xx
+                        const errorBody = await response.json();
+                        throw new Error(`API returned status ${response.status}: ${JSON.stringify(errorBody)}`);
+                    }
+
+                    return await response.json();
+
+                } catch (error) {
+                    console.error(`Attempt ${attempt + 1} failed:`, error);
+                    attempt++;
+                    if (attempt >= maxRetries) {
+                        throw new Error("Failed to connect to the Gemini API after multiple retries.");
+                    }
+                    // Exponential backoff wait: 1s, 2s, 4s...
+                    const delay = Math.pow(2, attempt) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        /**
+         * Handles the generation process.
+         */
+        async function generateOptimizedNews() {
+            const userApiKey = apiKeyInput.value.trim();
+            const rawQuery = queryInput.value.trim();
+            const location = locationInput.value.trim();
+            const aggressivity = aggressivitySelector.value;
+            
+            // NOTE: If running inside Canvas, the key will be injected if userApiKey is blank.
+            // If running outside, it must be provided.
+            const dynamicApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${userApiKey}`;
+            
+            if (!rawQuery) {
+                errorMsg.textContent = "Please enter a news topic to search for.";
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+
+            setLoading(true);
+            resultOutput.innerHTML = '<p class="text-gray-500 italic">Searching, analyzing, and rewriting news for you...</p>';
+            citationContainer.classList.add('hidden');
+            errorMsg.classList.add('hidden');
+            
+            // Combine query and location for Google Search grounding
+            let userQuery = rawQuery;
+            if (location) {
+                userQuery = `${rawQuery} near ${location}`;
+            }
+
+            const selectedSystemPrompt = systemPrompts[aggressivity];
+
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                // MANDATORY: Use Google Search grounding to access real-time news
+                tools: [{ "google_search": {} }],
+                // CRITICAL: System instruction defines the model's persona and rules
+                systemInstruction: {
+                    parts: [{ text: selectedSystemPrompt }]
+                },
+            };
+            
+            console.log(`Sending query: "${userQuery}" with Aggressivity: ${aggressivity}`);
+            console.log("System Prompt used:", selectedSystemPrompt);
+
+
+            try {
+                const result = await fetchWithRetry(dynamicApiUrl, payload);
+                const candidate = result.candidates?.[0];
+
+                if (candidate && candidate.content?.parts?.[0]?.text) {
+                    const text = candidate.content.parts[0].text;
+                    // Format output: replace double newlines with paragraphs, single newlines with break lines
+                    resultOutput.innerHTML = `<div class="prose max-w-none">${text.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</div>`;
+
+                    // Extract and display grounding sources (citations)
+                    const groundingMetadata = candidate.groundingMetadata;
+                    let sources = [];
+                    if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                        sources = groundingMetadata.groundingAttributions;
+                    }
+                    displayCitations(sources);
+
+                } else {
+                    resultOutput.innerHTML = '<p class="text-red-500">Could not retrieve a valid summary. The model may have blocked the content based on its safety filters, or the search yielded no relevant results.</p>';
+                    citationContainer.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error("Final generation error:", error);
+                errorMsg.textContent = `Error: Failed to generate content. Please ensure your API key is correct and check the console for details.`;
+                errorMsg.classList.remove('hidden');
+                resultOutput.innerHTML = '<p class="text-gray-400 italic">Generation failed.</p>';
+                citationContainer.classList.add('hidden');
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        generateBtn.addEventListener('click', generateOptimizedNews);
+        queryInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                generateOptimizedNews();
+            }
+        });
+         locationInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                generateOptimizedNews();
+            }
+        });
+        apiKeyInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                generateOptimizedNews();
+            }
+        });
+
+        // Initialize API Key persistence on window load
+        window.onload = () => {
+             initializeApiKey();
+             console.log("Gemini Editor loaded. Ready to transform the news!");
+             console.log("System Instruction in use:", systemPrompts.normal);
+        };
+    </script>
+</body>
+</html>
