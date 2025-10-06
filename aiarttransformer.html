@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nano Banana AI Art Transformer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght{400;600;700}&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fc;
+        }
+        /* Make the main container take up most of the viewport height */
+        .main-grid {
+            min-height: 80vh;
+        }
+        #drawingCanvas {
+            border: 2px solid #3b82f6;
+            cursor: crosshair;
+            touch-action: none; /* Prevent scrolling/zooming while drawing */
+            background-color: white;
+            border-radius: 0.75rem; /* rounded-xl */
+        }
+        .container-card {
+            background-color: #ffffff;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border-radius: 1.5rem; /* rounded-3xl */
+            padding: 1.5rem;
+            display: flex; /* Flex container for internal layout */
+            flex-direction: column;
+        }
+        .color-btn {
+            width: 2rem;
+            height: 2rem;
+            border-radius: 9999px; /* rounded-full */
+            cursor: pointer;
+            border: 2px solid #ccc;
+            transition: all 0.1s ease-in-out;
+        }
+        #eraserBtn {
+            font-size: 1.25rem;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #e5e7eb;
+            color: #4b5563;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen flex items-center justify-center">
+
+    <!-- The main-grid ensures the two panels are equal and fill the screen space -->
+    <div class="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-2 gap-8 main-grid">
+        
+        <!-- Input Panel: Drawing and Prompt (Left 50%) -->
+        <div class="container-card">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">1. Draw Your Concept</h2>
+
+            <div class="mt-4">
+                <!-- API Key Input Field (UPDATED with Link and logic setup) -->
+                <div class="mb-5 p-3 bg-red-50/50 border border-red-300/80 rounded-xl">
+                    <label for="apiKeyInput" class="block text-sm font-semibold text-red-700 mb-1">
+                        0. 
+                        <!-- Link to AI Studio API Keys page -->
+                        <a href="https://aistudio.google.com/api-keys" target="_blank" class="underline hover:text-red-500 cursor-pointer">
+                            Gemini API Key
+                        </a>
+                        (Required to run externally)
+                    </label>
+                    <input type="password" id="apiKeyInput" class="w-full p-2 border border-red-400 rounded-lg focus:ring-red-500 focus:border-red-500" placeholder="Enter your Google Gemini API key here">
+                </div>
+            </div>
+
+            <!-- Drawing Canvas (flex-grow fills available space) -->
+            <canvas id="drawingCanvas" class="flex-grow w-full"></canvas>
+
+            <div class="mt-4">
+                <!-- Drawing Toolbar -->
+                <div class="flex items-center justify-center space-x-3 p-3 bg-gray-50 rounded-xl mb-4 shadow-inner">
+                    <span class="text-sm font-semibold text-gray-600 mr-2">Tools:</span>
+                    <!-- Color Picker Buttons -->
+                    <button class="color-btn ring-4 ring-offset-2 ring-blue-500" data-color="#333333" style="background-color: #333333;" title="Black Pen"></button>
+                    <button class="color-btn" data-color="#ef4444" style="background-color: #ef4444;" title="Red Pen"></button>
+                    <button class="color-btn" data-color="#22c55e" style="background-color: #22c55e;" title="Green Pen"></button>
+                    <button class="color-btn" data-color="#3b82f6" style="background-color: #3b82f6;" title="Blue Pen"></button>
+                    <!-- Eraser Button -->
+                    <button id="eraserBtn" title="Eraser (Thicker, White)">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                    <button id="clearBtn" class="px-4 text-sm text-gray-700 bg-white hover:bg-gray-100 font-semibold py-2 rounded-full transition shadow-md border border-gray-300">
+                        Clear All
+                    </button>
+                </div>
+                
+                <!-- Style Prompt and Generate Button -->
+                <div class="mb-3">
+                    <label for="stylePrompt" class="block text-sm font-medium text-gray-700 mb-1">2. Describe the Art Style (e.g., in the style of Van Gogh)</label>
+                    <input type="text" id="stylePrompt" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., in the style of Van Gogh, highly detailed watercolor, dramatic lighting" value="Transform this simple drawing into a beautiful, vibrant oil painting with visible, thick brush strokes and a masterpiece quality.">
+                </div>
+                
+                <button id="generateBtn" class="w-full text-white bg-blue-600 hover:bg-blue-700 font-semibold py-3 rounded-xl transition shadow-lg shadow-blue-500/50 transform hover:scale-[1.01]">
+                    Generate Art
+                </button>
+                <p id="loadingMessage" class="mt-4 text-center text-sm text-blue-600 hidden">
+                    Generating masterpiece...
+                </p>
+            </div>
+        </div>
+
+        <!-- Output Panel: Result (Right 50%) -->
+        <div class="container-card">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">3. AI Masterpiece Result</h2>
+            <div id="resultContainer" class="flex-grow flex items-center justify-center bg-gray-50 border border-gray-200 rounded-xl overflow-hidden p-4">
+                <img id="resultImage" class="max-w-full max-h-full object-contain rounded-lg shadow-xl" src="" alt="AI Generated Artwork" style="display: none;">
+                <p id="placeholderText" class="text-gray-500 text-center">Your transformed art will appear here once generated.</p>
+                <div id="errorMessage" class="text-red-600 text-center font-medium hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Global variables provided by the Canvas environment
+        const defaultApiKey = ""; 
+        // Base URL, the key will be appended dynamically
+        const API_BASE_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=`;
+        const API_KEY_STORAGE_KEY = 'gemini_art_api_key'; // Key for localStorage
+
+        // --- DOM Elements ---
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        const generateBtn = document.getElementById('generateBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const stylePromptInput = document.getElementById('stylePrompt');
+        const apiKeyInput = document.getElementById('apiKeyInput'); 
+        const resultImage = document.getElementById('resultImage');
+        const placeholderText = document.getElementById('placeholderText');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // --- Drawing State ---
+        let isDrawing = false;
+        let currentColor = '#333333';
+        let currentLineWidth = 15;
+        const ERASER_COLOR = '#FFFFFF'; // White to erase on white canvas
+        const ERASER_WIDTH = 30;
+
+        // --- LocalStorage Logic ---
+        
+        function loadApiKey() {
+            try {
+                const storedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
+                if (storedKey) {
+                    apiKeyInput.value = storedKey;
+                }
+            } catch (e) {
+                console.warn('Could not load API key from localStorage. Running in secure mode.', e);
+            }
+        }
+
+        function saveApiKey() {
+            try {
+                const key = apiKeyInput.value.trim();
+                if (key) {
+                    localStorage.setItem(API_KEY_STORAGE_KEY, key);
+                } else {
+                    localStorage.removeItem(API_KEY_STORAGE_KEY);
+                }
+            } catch (e) {
+                console.warn('Could not save API key to localStorage.', e);
+            }
+        }
+
+
+        // --- Drawing Tools Logic ---
+        
+        // Function to update the drawing tool properties
+        function changeTool(color, width) {
+            currentColor = color;
+            currentLineWidth = width;
+            ctx.strokeStyle = currentColor;
+            ctx.lineWidth = currentLineWidth;
+        }
+
+        // Set up canvas size on load and resize
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            // Use client dimensions for HiDPI buffer calculation
+            canvas.width = rect.width * (window.devicePixelRatio || 1);
+            canvas.height = rect.height * (window.devicePixelRatio || 1);
+            
+            // Apply scaling to the context for sharp lines
+            ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+            
+            // Reset drawing properties
+            ctx.lineCap = 'round';
+            changeTool(currentColor, currentLineWidth);
+            
+            // Clear and redraw background (important for when using devicePixelRatio)
+            clearCanvas(false); 
+        }
+
+        function clearCanvas(showPlaceholder = true) {
+            // Get unscaled dimensions
+            const unscaledWidth = canvas.width / (window.devicePixelRatio || 1);
+            const unscaledHeight = canvas.height / (window.devicePixelRatio || 1);
+            
+            // Fill with white to ensure a clean slate, especially if the eraser was used
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, unscaledWidth, unscaledHeight);
+            
+            // Reset output display
+            resultImage.style.display = 'none';
+            resultImage.src = '';
+            loadingMessage.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+            if (showPlaceholder) {
+                placeholderText.classList.remove('hidden');
+            }
+        }
+        
+        // Convert mouse/touch coordinates to canvas coordinates
+        function getCanvasCoordinates(event) {
+            const rect = canvas.getBoundingClientRect();
+            let clientX, clientY;
+
+            if (event.touches) {
+                clientX = event.touches[0].clientX;
+                clientY = event.touches[0].clientY;
+            } else {
+                clientX = event.clientX;
+                clientY = event.clientY;
+            }
+            
+            // Calculate coordinates relative to the canvas, accounting for scaling
+            const x = (clientX - rect.left) * (canvas.width / rect.width) / (window.devicePixelRatio || 1);
+            const y = (clientY - rect.top) * (canvas.height / rect.height) / (window.devicePixelRatio || 1);
+            
+            return { x, y };
+        }
+
+        function startDrawing(event) {
+            event.preventDefault(); 
+            isDrawing = true;
+            const { x, y } = getCanvasCoordinates(event);
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        function draw(event) {
+            if (!isDrawing) return;
+            event.preventDefault();
+            const { x, y } = getCanvasCoordinates(event);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+            ctx.closePath();
+        }
+
+        // Function to manage button styling (ring indicator for active tool)
+        function setActiveToolStyle(activeElement) {
+            document.querySelectorAll('.color-btn, #eraserBtn').forEach(btn => btn.classList.remove('ring-4', 'ring-offset-2', 'ring-blue-500'));
+            activeElement.classList.add('ring-4', 'ring-offset-2', 'ring-blue-500');
+        }
+
+        // Attach listeners for drawing and UI
+        window.addEventListener('load', () => {
+            resizeCanvas();
+            changeTool(currentColor, currentLineWidth); 
+            loadApiKey(); // Load stored key on startup
+        });
+        window.addEventListener('resize', resizeCanvas);
+        clearBtn.addEventListener('click', clearCanvas);
+        generateBtn.addEventListener('click', generateArt);
+        apiKeyInput.addEventListener('input', saveApiKey); // Save key whenever it changes
+
+        // Tool selection listeners
+        document.querySelectorAll('.color-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const color = button.getAttribute('data-color');
+                changeTool(color, 15); // Standard width for pen
+                setActiveToolStyle(button);
+            });
+        });
+
+        document.getElementById('eraserBtn').addEventListener('click', () => {
+            // Eraser uses the canvas background color (white) with a wider stroke
+            changeTool(ERASER_COLOR, ERASER_WIDTH);
+            setActiveToolStyle(document.getElementById('eraserBtn'));
+        });
+
+
+        // Mouse events
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        // Touch events
+        canvas.addEventListener('touchstart', startDrawing);
+        canvas.addEventListener('touchmove', draw);
+        canvas.addEventListener('touchend', stopDrawing);
+
+        // --- API Generation Logic ---
+
+        function getCanvasBase64() {
+            // Get data URL from canvas (defaults to image/png)
+            const dataURL = canvas.toDataURL('image/png');
+            // Extract the base64 part, removing the prefix
+            return dataURL.split(',')[1];
+        }
+
+        async function generateArt() {
+            const base64ImageData = getCanvasBase64();
+            const drawingPrompt = stylePromptInput.value.trim();
+            
+            // Get API Key from input field, falling back to the default empty string
+            const userApiKey = apiKeyInput.value.trim() || defaultApiKey;
+
+            if (!userApiKey) {
+                errorMessage.textContent = 'Please enter your Gemini API key to run outside the Canvas environment.';
+                errorMessage.classList.remove('hidden');
+                generateBtn.disabled = false;
+                loadingMessage.classList.add('hidden');
+                return;
+            }
+
+            if (!base64ImageData || base64ImageData.length < 100) {
+                errorMessage.textContent = 'Please draw something on the canvas before generating art.';
+                errorMessage.classList.remove('hidden');
+                return;
+            }
+
+            // Construct the dynamic API URL using the user-provided key
+            const apiUrlWithKey = `${API_BASE_URL}${userApiKey}`;
+
+
+            // Create a payload for Image-to-Image transformation
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: drawingPrompt },
+                        {
+                            inlineData: {
+                                mimeType: "image/png",
+                                data: base64ImageData
+                            }
+                        }
+                    ]
+                }],
+                generationConfig: {
+                    responseModalities: ['TEXT', 'IMAGE']
+                }
+            };
+
+            // UI Feedback
+            generateBtn.disabled = true;
+            loadingMessage.classList.remove('hidden');
+            placeholderText.classList.add('hidden');
+            resultImage.style.display = 'none';
+            errorMessage.classList.add('hidden');
+
+            const maxRetries = 5;
+            let currentRetry = 0;
+
+            const makeRequest = async () => {
+                try {
+                    const response = await fetch(apiUrlWithKey, { // <-- Use dynamic URL
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(`API Error: ${response.status} - ${errorData.error?.message || response.statusText}`);
+                    }
+
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+                    const base64Data = candidate?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+
+                    if (!base64Data) {
+                        throw new Error("No image data received from the API.");
+                    }
+
+                    // Success: Display the image
+                    resultImage.src = `data:image/png;base64,${base64Data}`;
+                    resultImage.style.display = 'block';
+
+                } catch (error) {
+                    console.error("Gemini API Error:", error);
+
+                    if (currentRetry < maxRetries) {
+                        const delay = Math.pow(2, currentRetry) * 1000;
+                        currentRetry++;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        return makeRequest(); // Retry
+                    } else {
+                        errorMessage.textContent = `Failed to generate art after ${maxRetries} tries. ${error.message}`;
+                        errorMessage.classList.remove('hidden');
+                    }
+                } finally {
+                    if (currentRetry >= maxRetries || resultImage.style.display === 'block' || errorMessage.classList.contains('hidden') === false) {
+                        generateBtn.disabled = false;
+                        loadingMessage.classList.add('hidden');
+                    }
+                }
+            };
+
+            await makeRequest();
+        }
+    </script>
+</body>
+</html>
