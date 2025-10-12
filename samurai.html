@@ -1,4 +1,11 @@
-<!DOCTYPE html>
+td div {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            outline: none;
+        }<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -166,20 +173,6 @@
         td.candidate-mode {
             font-size: 10px;
             color: var(--candidate-color);
-            line-height: 1.2;
-        }
-        td div {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            outline: none;
-        }
-        td.candidate-mode div {
-            padding: 2px;
-            flex-wrap: wrap;
-            font-size: 9px;
         }
         td div[contenteditable="true"] {
             cursor: text;
@@ -711,7 +704,22 @@
                             cells[c].classList.remove('given');
                             cells[c].classList.add('editable');
                             
-                            // Add input handler for candidate mode
+                            // Add keydown handler for 'c' key toggle
+                            div.addEventListener('keydown', function(e) {
+                                if (e.key === 'c' || e.key === 'C') {
+                                    e.preventDefault();
+                                    const cell = this.parentElement;
+                                    if (cell.classList.contains('candidate-mode')) {
+                                        cell.classList.remove('candidate-mode');
+                                        delete cellModes[`${r}-${c}`];
+                                    } else {
+                                        cell.classList.add('candidate-mode');
+                                        cellModes[`${r}-${c}`] = true;
+                                    }
+                                }
+                            });
+                            
+                            // Add input handler for auto-check
                             div.addEventListener('input', function(e) {
                                 handleCellInput(r, c, this);
                             });
@@ -729,25 +737,9 @@
         function handleCellInput(row, col, div) {
             const text = div.textContent.trim();
             const cell = div.parentElement;
-            const key = `${row}-${col}`;
             
-            // If empty, remove candidate mode
-            if (text === '') {
-                cell.classList.remove('candidate-mode');
-                delete cellModes[key];
-                return;
-            }
-            
-            // Check if it's a single digit 1-9
-            const singleNum = /^[1-9]$/.test(text);
-            
-            if (singleNum) {
-                // Single number mode
-                cell.classList.remove('candidate-mode');
-                delete cellModes[key];
-                div.textContent = text;
-                
-                // Auto-check when complete
+            // Auto-check when complete (only for non-candidate cells)
+            if (text !== '' && !cell.classList.contains('candidate-mode')) {
                 setTimeout(() => {
                     let isComplete = true;
                     const table = document.getElementById('sudokuTable');
@@ -768,14 +760,6 @@
                     }
                     if (isComplete) checkErrors();
                 }, 100);
-            } else {
-                // Multiple numbers = candidate mode
-                const candidates = text.match(/[1-9]/g) || [];
-                if (candidates.length > 0) {
-                    cell.classList.add('candidate-mode');
-                    cellModes[key] = true;
-                    div.textContent = candidates.join(' ');
-                }
             }
         }
 
