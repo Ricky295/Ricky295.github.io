@@ -5,33 +5,70 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Samurai Sudoku Generator</title>
     <style>
+        :root {
+            --bg-color: #f0f0f0;
+            --text-color: #333;
+            --card-bg: white;
+            --button-bg: #4CAF50;
+            --button-hover: #45a049;
+            --border-light: #ddd;
+            --border-dark: #000;
+            --inactive-bg: #e0e0e0;
+            --given-color: #000;
+            --user-color: #0066cc;
+            --error-bg: #ffcccc;
+            --candidate-color: #006400;
+        }
+
+        body.dark-mode {
+            --bg-color: #1a1a1a;
+            --text-color: #e0e0e0;
+            --card-bg: #2d2d2d;
+            --button-bg: #5a8f5c;
+            --button-hover: #4a7a4c;
+            --border-light: #444;
+            --border-dark: #666;
+            --inactive-bg: #1a1a1a;
+            --given-color: #e0e0e0;
+            --user-color: #66b3ff;
+            --error-bg: #4d1a1a;
+            --candidate-color: #90ee90;
+        }
+
         body {
             font-family: Arial, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
             padding: 20px;
-            background: #f0f0f0;
+            background: var(--bg-color);
+            color: var(--text-color);
+            transition: background 0.3s, color 0.3s;
         }
         h1 {
-            color: #333;
+            color: var(--text-color);
             margin-bottom: 20px;
         }
         .controls {
             margin-bottom: 20px;
+            text-align: center;
+        }
+        .control-row {
+            margin: 10px 0;
         }
         button {
             padding: 10px 20px;
             font-size: 16px;
             cursor: pointer;
-            background: #4CAF50;
+            background: var(--button-bg);
             color: white;
             border: none;
             border-radius: 4px;
             margin: 0 5px;
+            transition: background 0.3s;
         }
         button:hover {
-            background: #45a049;
+            background: var(--button-hover);
         }
         button:disabled {
             background: #ccc;
@@ -39,39 +76,97 @@
         }
         label {
             font-size: 16px;
-            color: #333;
+            color: var(--text-color);
         }
         input[type="number"] {
             margin-left: 5px;
+            background: var(--card-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-light);
+            padding: 5px;
+            font-size: 16px;
         }
         #status {
             margin: 10px 0;
             font-weight: bold;
             color: #666;
         }
+        .timer {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+            color: var(--text-color);
+        }
+        .difficulty-label {
+            display: inline-block;
+            padding: 5px 10px;
+            margin-left: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .diff-very-easy { background: #90EE90; color: #000; }
+        .diff-easy { background: #4CAF50; color: white; }
+        .diff-medium { background: #FFA500; color: white; }
+        .diff-hard { background: #FF6347; color: white; }
+        .diff-very-hard { background: #8B0000; color: white; }
+        .diff-extreme { background: #4B0082; color: white; }
+        
+        #puzzleContainer {
+            position: relative;
+        }
+        #pauseOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            font-size: 48px;
+            color: white;
+            font-weight: bold;
+        }
+        #pauseOverlay.active {
+            display: flex;
+        }
         table {
             border-collapse: collapse;
-            background: white;
+            background: var(--card-bg);
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: background 0.3s;
         }
         td {
             width: 35px;
             height: 35px;
             text-align: center;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-light);
             font-size: 18px;
             font-weight: bold;
+            transition: background 0.3s;
         }
         td.inactive {
-            background: #e0e0e0;
+            background: var(--inactive-bg);
             border: none;
         }
         td.given {
-            color: #000;
-            background: #fff;
+            color: var(--given-color);
+            background: var(--card-bg);
         }
         td.editable {
-            background: #fff;
+            background: var(--card-bg);
+            color: var(--user-color);
+        }
+        td.error {
+            background: var(--error-bg);
+        }
+        td.candidate-mode {
+            font-size: 10px;
+            color: var(--candidate-color);
+            line-height: 1.2;
         }
         td div {
             width: 100%;
@@ -81,45 +176,48 @@
             justify-content: center;
             outline: none;
         }
+        td.candidate-mode div {
+            padding: 2px;
+            flex-wrap: wrap;
+            font-size: 9px;
+        }
         td div[contenteditable="true"] {
             cursor: text;
         }
         /* Thick borders for 3x3 blocks */
-        /* Every 3rd column gets a thick right border */
         td:nth-child(3n):not(.inactive) {
-            border-right: 2px solid #000;
+            border-right: 2px solid var(--border-dark);
         }
-        /* Every 3rd row gets a thick bottom border */
         tr:nth-child(3n) td:not(.inactive) {
-            border-bottom: 2px solid #000;
+            border-bottom: 2px solid var(--border-dark);
         }
         
         /* Extra thick borders for 9x9 grid boundaries */
         td:nth-child(9):not(.inactive) {
-            border-right: 3px solid #000;
+            border-right: 3px solid var(--border-dark);
         }
         td:nth-child(18):not(.inactive) {
-            border-right: 3px solid #000;
+            border-right: 3px solid var(--border-dark);
         }
         tr:nth-child(9) td:not(.inactive) {
-            border-bottom: 3px solid #000;
+            border-bottom: 3px solid var(--border-dark);
         }
         tr:nth-child(18) td:not(.inactive) {
-            border-bottom: 3px solid #000;
+            border-bottom: 3px solid var(--border-dark);
         }
         
         /* Top and left borders for grids touching the edges */
         td:nth-child(1):not(.inactive) {
-            border-left: 3px solid #000;
+            border-left: 3px solid var(--border-dark);
         }
         td:nth-child(13):not(.inactive) {
-            border-left: 3px solid #000;
+            border-left: 3px solid var(--border-dark);
         }
         tr:nth-child(1) td:not(.inactive) {
-            border-top: 3px solid #000;
+            border-top: 3px solid var(--border-dark);
         }
         tr:nth-child(13) td:not(.inactive) {
-            border-top: 3px solid #000;
+            border-top: 3px solid var(--border-dark);
         }
 
         /* Print styles */
@@ -128,7 +226,7 @@
                 background: white;
                 padding: 0;
             }
-            .controls, #status {
+            .controls, #status, .timer, #pauseOverlay {
                 display: none;
             }
             h1 {
@@ -143,21 +241,16 @@
                 width: 20px;
                 height: 20px;
                 font-size: 14px;
-                border: 1px solid #000;
             }
             td.inactive {
                 background: #fff;
-                border: 1px solid #000;
             }
-            /* Thick borders for 3x3 blocks */
             td:nth-child(3n):not(.inactive) {
                 border-right: 2px solid #000;
             }
             tr:nth-child(3n) td:not(.inactive) {
                 border-bottom: 2px solid #000;
             }
-            
-            /* Extra thick borders for 9x9 grid boundaries */
             td:nth-child(9):not(.inactive) {
                 border-right: 3px solid #000;
             }
@@ -170,27 +263,55 @@
             tr:nth-child(18) td:not(.inactive) {
                 border-bottom: 3px solid #000;
             }
+            td:nth-child(1):not(.inactive) {
+                border-left: 3px solid #000;
+            }
+            td:nth-child(13):not(.inactive) {
+                border-left: 3px solid #000;
+            }
+            tr:nth-child(1) td:not(.inactive) {
+                border-top: 3px solid #000;
+            }
+            tr:nth-child(13) td:not(.inactive) {
+                border-top: 3px solid #000;
+            }
         }
     </style>
 </head>
 <body>
     <h1>Samurai Sudoku Generator</h1>
     <div class="controls">
-        <button id="generateBtn">Generate New Puzzle</button>
-        <button id="solveBtn">Show Solution</button>
-        <button id="printBtn">Print Puzzle</button>
-        <br><br>
-        <label for="candidatesInput">Target Clues (0-369): </label>
-        <input type="number" id="candidatesInput" min="0" max="369" value="150" style="width: 80px; padding: 5px; font-size: 16px;">
+        <div class="control-row">
+            <button id="generateBtn">Generate New Puzzle</button>
+            <button id="pauseBtn" disabled>Pause</button>
+            <button id="checkBtn" disabled>Check Errors</button>
+            <button id="hintBtn" disabled>Hint (Singles)</button>
+            <button id="solveBtn">Show Solution</button>
+            <button id="printBtn">Print Puzzle</button>
+            <button id="darkModeBtn">Toggle Dark Mode</button>
+        </div>
+        <div class="control-row">
+            <label for="candidatesInput">Target Clues (0-369): </label>
+            <input type="number" id="candidatesInput" min="0" max="369" value="150" style="width: 80px;">
+            <span id="difficultyLabel" class="difficulty-label"></span>
+        </div>
     </div>
+    <div class="timer" id="timer">00:00:00</div>
     <div id="status">Click "Generate New Puzzle" to start</div>
-    <table id="sudokuTable"></table>
+    <div id="puzzleContainer">
+        <div id="pauseOverlay">PAUSED</div>
+        <table id="sudokuTable"></table>
+    </div>
 
     <script>
         const SIZE = 21;
         let currentPuzzle = [];
         let currentSolution = [];
         let isGenerating = false;
+        let timerInterval = null;
+        let timerSeconds = 0;
+        let isPaused = false;
+        let cellModes = {}; // Track which cells are in candidate mode
 
         // Define which cells are active in the samurai pattern
         const isActive = Array(SIZE).fill(0).map(() => Array(SIZE).fill(false));
@@ -205,17 +326,85 @@
             }
         }
 
+        // Update difficulty label
+        function updateDifficultyLabel() {
+            const count = parseInt(document.getElementById('candidatesInput').value);
+            const label = document.getElementById('difficultyLabel');
+            
+            if (count >= 250) {
+                label.textContent = 'Very Easy';
+                label.className = 'difficulty-label diff-very-easy';
+            } else if (count >= 200) {
+                label.textContent = 'Easy';
+                label.className = 'difficulty-label diff-easy';
+            } else if (count >= 150) {
+                label.textContent = 'Medium';
+                label.className = 'difficulty-label diff-medium';
+            } else if (count >= 100) {
+                label.textContent = 'Hard';
+                label.className = 'difficulty-label diff-hard';
+            } else if (count >= 50) {
+                label.textContent = 'Very Hard';
+                label.className = 'difficulty-label diff-very-hard';
+            } else {
+                label.textContent = 'Extreme';
+                label.className = 'difficulty-label diff-extreme';
+            }
+        }
+
+        // Timer functions
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerSeconds = 0;
+            updateTimerDisplay();
+            timerInterval = setInterval(() => {
+                if (!isPaused) {
+                    timerSeconds++;
+                    updateTimerDisplay();
+                }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        }
+
+        function updateTimerDisplay() {
+            const hours = Math.floor(timerSeconds / 3600);
+            const minutes = Math.floor((timerSeconds % 3600) / 60);
+            const seconds = timerSeconds % 60;
+            document.getElementById('timer').textContent = 
+                `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            const overlay = document.getElementById('pauseOverlay');
+            const pauseBtn = document.getElementById('pauseBtn');
+            
+            if (isPaused) {
+                overlay.classList.add('active');
+                pauseBtn.textContent = 'Resume';
+            } else {
+                overlay.classList.remove('active');
+                pauseBtn.textContent = 'Pause';
+            }
+        }
+
         // Check if a number is valid at position
         function isValid(grid, row, col, num) {
             if (!isActive[row][col]) return false;
 
             // Find which 9x9 grid(s) this cell belongs to
             const grids = [];
-            if (row < 9 && col < 9) grids.push([0, 0]); // Top-left
-            if (row < 9 && col >= 12) grids.push([0, 12]); // Top-right
-            if (row >= 6 && row < 15 && col >= 6 && col < 15) grids.push([6, 6]); // Center
-            if (row >= 12 && col < 9) grids.push([12, 0]); // Bottom-left
-            if (row >= 12 && col >= 12) grids.push([12, 12]); // Bottom-right
+            if (row < 9 && col < 9) grids.push([0, 0]);
+            if (row < 9 && col >= 12) grids.push([0, 12]);
+            if (row >= 6 && row < 15 && col >= 6 && col < 15) grids.push([6, 6]);
+            if (row >= 12 && col < 9) grids.push([12, 0]);
+            if (row >= 12 && col >= 12) grids.push([12, 12]);
 
             for (const [gridR, gridC] of grids) {
                 // Check row within this 9x9
@@ -241,6 +430,144 @@
             return true;
         }
 
+        // Check for errors in current puzzle state
+        function checkErrors() {
+            const table = document.getElementById('sudokuTable');
+            const rows = table.getElementsByTagName('tr');
+            let hasErrors = false;
+            
+            // Build current grid state
+            const grid = Array(SIZE).fill(0).map(() => Array(SIZE).fill(0));
+            for (let r = 0; r < SIZE; r++) {
+                const cells = rows[r].getElementsByTagName('td');
+                for (let c = 0; c < SIZE; c++) {
+                    if (isActive[r][c]) {
+                        const div = cells[c].querySelector('div');
+                        const text = div.textContent.trim();
+                        if (text && !cells[c].classList.contains('candidate-mode')) {
+                            const num = parseInt(text);
+                            if (num >= 1 && num <= 9) {
+                                grid[r][c] = num;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Check each cell
+            for (let r = 0; r < SIZE; r++) {
+                const cells = rows[r].getElementsByTagName('td');
+                for (let c = 0; c < SIZE; c++) {
+                    if (isActive[r][c] && grid[r][c] !== 0) {
+                        const num = grid[r][c];
+                        grid[r][c] = 0; // Temporarily remove to check
+                        if (!isValid(grid, r, c, num)) {
+                            cells[c].classList.add('error');
+                            hasErrors = true;
+                        } else {
+                            cells[c].classList.remove('error');
+                        }
+                        grid[r][c] = num; // Restore
+                    } else if (isActive[r][c]) {
+                        cells[c].classList.remove('error');
+                    }
+                }
+            }
+
+            // Check if puzzle is complete
+            let isComplete = true;
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    if (isActive[r][c] && grid[r][c] === 0) {
+                        isComplete = false;
+                        break;
+                    }
+                }
+                if (!isComplete) break;
+            }
+
+            if (isComplete) {
+                if (hasErrors) {
+                    document.getElementById('status').textContent = 'Puzzle complete but has errors!';
+                } else {
+                    document.getElementById('status').textContent = `Congratulations! Solved in ${document.getElementById('timer').textContent}!`;
+                    stopTimer();
+                }
+            } else if (hasErrors) {
+                document.getElementById('status').textContent = 'Errors detected! Check highlighted cells.';
+            } else {
+                document.getElementById('status').textContent = 'No errors so far. Keep going!';
+            }
+        }
+
+        // Find naked singles (cells with only one possible value)
+        function findNakedSingles() {
+            const table = document.getElementById('sudokuTable');
+            const rows = table.getElementsByTagName('tr');
+            
+            // Build current grid state
+            const grid = Array(SIZE).fill(0).map(() => Array(SIZE).fill(0));
+            for (let r = 0; r < SIZE; r++) {
+                const cells = rows[r].getElementsByTagName('td');
+                for (let c = 0; c < SIZE; c++) {
+                    if (isActive[r][c]) {
+                        const div = cells[c].querySelector('div');
+                        const text = div.textContent.trim();
+                        if (text && !cells[c].classList.contains('candidate-mode')) {
+                            const num = parseInt(text);
+                            if (num >= 1 && num <= 9) {
+                                grid[r][c] = num;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Find empty cells with only one possibility
+            const singles = [];
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    if (isActive[r][c] && grid[r][c] === 0) {
+                        const possibleNums = [];
+                        for (let num = 1; num <= 9; num++) {
+                            if (isValid(grid, r, c, num)) {
+                                possibleNums.push(num);
+                            }
+                        }
+                        if (possibleNums.length === 1) {
+                            singles.push({r, c, num: possibleNums[0]});
+                        }
+                    }
+                }
+            }
+
+            return singles;
+        }
+
+        function giveHint() {
+            const singles = findNakedSingles();
+            if (singles.length === 0) {
+                document.getElementById('status').textContent = 'No naked singles found! Try other techniques.';
+                return;
+            }
+
+            // Pick a random single
+            const hint = singles[Math.floor(Math.random() * singles.length)];
+            const table = document.getElementById('sudokuTable');
+            const rows = table.getElementsByTagName('tr');
+            const cell = rows[hint.r].getElementsByTagName('td')[hint.c];
+            const div = cell.querySelector('div');
+            
+            div.textContent = hint.num;
+            cell.classList.remove('candidate-mode');
+            delete cellModes[`${hint.r}-${hint.c}`];
+            
+            document.getElementById('status').textContent = `Hint: Filled cell at row ${hint.r + 1}, column ${hint.c + 1}`;
+            
+            // Auto-check for completion
+            setTimeout(checkErrors, 100);
+        }
+
         // Solve function with solution limit and randomization
         function solve(grid, maxSolutions, progressCallback) {
             const solutions = [];
@@ -249,9 +576,7 @@
             function backtrack(g) {
                 if (solutions.length >= maxSolutions) return;
 
-                // Find next empty cell (prioritize center grid)
                 let emptyCell = null;
-                // First pass: center grid
                 for (let r = 6; r < 15 && !emptyCell; r++) {
                     for (let c = 6; c < 15 && !emptyCell; c++) {
                         if (isActive[r][c] && g[r][c] === 0) {
@@ -259,7 +584,6 @@
                         }
                     }
                 }
-                // Second pass: rest of grid
                 if (!emptyCell) {
                     for (let r = 0; r < SIZE && !emptyCell; r++) {
                         for (let c = 0; c < SIZE && !emptyCell; c++) {
@@ -277,7 +601,6 @@
 
                 const [row, col] = emptyCell;
                 const nums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-                // Randomize order
                 for (let i = nums.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
                     [nums[i], nums[j]] = [nums[j], nums[i]];
@@ -316,7 +639,6 @@
                 }
             }
 
-            // Shuffle removable list
             for (let i = removableList.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [removableList[i], removableList[j]] = [removableList[j], removableList[i]];
@@ -338,13 +660,12 @@
 
                 const solutions = solve(puzzle, 2);
                 if (solutions.length > 1) {
-                    puzzle[r][c] = temp; // Backtrack
+                    puzzle[r][c] = temp;
                 } else {
                     candidates--;
                     updateCounter++;
                     if (progressCallback && updateCounter % 3 === 0) {
                         progressCallback(candidates, removableCells);
-                        // Allow UI to update every few iterations
                         await new Promise(resolve => setTimeout(resolve, 0));
                     }
                 }
@@ -380,17 +701,25 @@
         function displayPuzzle(puzzle) {
             const table = document.getElementById('sudokuTable');
             const rows = table.getElementsByTagName('tr');
+            cellModes = {};
             
             for (let r = 0; r < SIZE; r++) {
                 const cells = rows[r].getElementsByTagName('td');
                 for (let c = 0; c < SIZE; c++) {
                     if (isActive[r][c]) {
                         const div = cells[c].querySelector('div');
+                        cells[c].classList.remove('error', 'candidate-mode');
+                        
                         if (puzzle[r][c] === 0) {
                             div.textContent = '';
                             div.contentEditable = 'true';
                             cells[c].classList.remove('given');
                             cells[c].classList.add('editable');
+                            
+                            // Add input handler for candidate mode
+                            div.addEventListener('input', function(e) {
+                                handleCellInput(r, c, this);
+                            });
                         } else {
                             div.textContent = puzzle[r][c];
                             div.contentEditable = 'false';
@@ -398,6 +727,59 @@
                             cells[c].classList.remove('editable');
                         }
                     }
+                }
+            }
+        }
+
+        function handleCellInput(row, col, div) {
+            const text = div.textContent.trim();
+            const cell = div.parentElement;
+            const key = `${row}-${col}`;
+            
+            // If empty, remove candidate mode
+            if (text === '') {
+                cell.classList.remove('candidate-mode');
+                delete cellModes[key];
+                return;
+            }
+            
+            // Check if it's a single digit 1-9
+            const singleNum = /^[1-9]$/.test(text);
+            
+            if (singleNum) {
+                // Single number mode
+                cell.classList.remove('candidate-mode');
+                delete cellModes[key];
+                div.textContent = text;
+                
+                // Auto-check when complete
+                setTimeout(() => {
+                    let isComplete = true;
+                    const table = document.getElementById('sudokuTable');
+                    const rows = table.getElementsByTagName('tr');
+                    for (let r = 0; r < SIZE; r++) {
+                        const cells = rows[r].getElementsByTagName('td');
+                        for (let c = 0; c < SIZE; c++) {
+                            if (isActive[r][c]) {
+                                const d = cells[c].querySelector('div');
+                                const t = d.textContent.trim();
+                                if (!t || cells[c].classList.contains('candidate-mode')) {
+                                    isComplete = false;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!isComplete) break;
+                    }
+                    if (isComplete) checkErrors();
+                }, 100);
+            } else {
+                // Multiple numbers = candidate mode
+                const candidates = text.match(/[1-9]/g) || [];
+                if (candidates.length > 0) {
+                    cell.classList.add('candidate-mode');
+                    cellModes[key] = true;
+                    div.textContent = candidates.join(' ');
                 }
             }
         }
@@ -410,11 +792,15 @@
             const targetCandidates = parseInt(document.getElementById('candidatesInput').value);
             
             document.getElementById('generateBtn').disabled = true;
+            document.getElementById('pauseBtn').disabled = true;
+            document.getElementById('checkBtn').disabled = true;
+            document.getElementById('hintBtn').disabled = true;
             document.getElementById('solveBtn').disabled = true;
             document.getElementById('printBtn').disabled = true;
             document.getElementById('status').textContent = 'Generating solution (0/369)';
 
-            // Use setTimeout to allow UI to update
+            stopTimer();
+
             setTimeout(() => {
                 const empty = Array(SIZE).fill(0).map(() => Array(SIZE).fill(0));
                 const solutions = solve(empty, 1, (filled) => {
@@ -438,7 +824,6 @@
                         document.getElementById('status').textContent = `Removing candidates (${remaining}/${targetCandidates}) - remaining removable: ${removable}`;
                     });
                     
-                    // Count actual clues in puzzle
                     let actualClues = 0;
                     for (let r = 0; r < SIZE; r++) {
                         for (let c = 0; c < SIZE; c++) {
@@ -449,31 +834,49 @@
                     displayPuzzle(currentPuzzle);
                     document.getElementById('status').textContent = `Puzzle generated with ${actualClues} clues! Fill in the blanks.`;
                     document.getElementById('generateBtn').disabled = false;
+                    document.getElementById('pauseBtn').disabled = false;
+                    document.getElementById('checkBtn').disabled = false;
+                    document.getElementById('hintBtn').disabled = false;
                     document.getElementById('solveBtn').disabled = false;
                     document.getElementById('printBtn').disabled = false;
                     isGenerating = false;
+                    
+                    startTimer();
+                    isPaused = false;
+                    document.getElementById('pauseOverlay').classList.remove('active');
+                    document.getElementById('pauseBtn').textContent = 'Pause';
                 }, 10);
             }, 10);
         }
 
-        // Show solution
         function showSolution() {
             if (currentSolution.length > 0) {
                 displayPuzzle(currentSolution);
                 document.getElementById('status').textContent = 'Solution displayed';
+                stopTimer();
             }
         }
 
-        // Print puzzle
         function printPuzzle() {
             window.print();
         }
 
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+        }
+
         // Initialize
         createTable();
+        updateDifficultyLabel();
+        
         document.getElementById('generateBtn').addEventListener('click', generatePuzzle);
         document.getElementById('solveBtn').addEventListener('click', showSolution);
         document.getElementById('printBtn').addEventListener('click', printPuzzle);
+        document.getElementById('pauseBtn').addEventListener('click', togglePause);
+        document.getElementById('checkBtn').addEventListener('click', checkErrors);
+        document.getElementById('hintBtn').addEventListener('click', giveHint);
+        document.getElementById('darkModeBtn').addEventListener('click', toggleDarkMode);
+        document.getElementById('candidatesInput').addEventListener('input', updateDifficultyLabel);
     </script>
 </body>
 </html>
