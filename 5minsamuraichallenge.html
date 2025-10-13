@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>5-Minute Samurai Sudoku Challenge</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .challenge-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .timer {
+            font-size: 28px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .score {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .progress-bar {
+            width: 200px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 5px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #FFD93D, #6BCF7F);
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            margin: 5px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.start-challenge {
+            background: linear-gradient(45deg, #6BCF7F, #4ECDC4);
+            font-size: 18px;
+            padding: 15px 30px;
+        }
+
+        button.stop-challenge {
+            background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+        }
+
+        .difficulty {
+            margin: 10px 0;
+        }
+
+        select {
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 2px solid #ddd;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+
+        .samurai-grid {
+            display: grid;
+            grid-template-columns: repeat(21, 25px);
+            grid-template-rows: repeat(21, 25px);
+            gap: 1px;
+            background-color: #333;
+            padding: 2px;
+            border-radius: 10px;
+            margin: 0 auto;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            width: fit-content;
+        }
+
+        .cell {
+            background-color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+            border: 1px solid #ddd;
+            transition: all 0.2s ease;
+        }
+
+        /* Thick borders for 3x3 regions */
+        .cell.thick-top { border-top: 3px solid #333; }
+        .cell.thick-bottom { border-bottom: 3px solid #333; }
+        .cell.thick-left { border-left: 3px solid #333; }
+        .cell.thick-right { border-right: 3px solid #333; }
+
+        .cell:hover {
+            background-color: #f0f8ff;
+        }
+
+        .cell.given {
+            background-color: #e8f4fd;
+            color: #2c3e50;
+        }
+
+        .cell.empty {
+            background-color: #f9f9f9;
+        }
+
+        .cell.invalid {
+            background-color: transparent;
+            border: none;
+        }
+
+        .cell.overlap {
+            background-color: #fff3cd;
+        }
+
+        .cell.overlap.given {
+            background-color: #ffeaa7;
+        }
+
+        .cell.user-input {
+            background-color: #e8f5e8;
+            color: #2d5016;
+        }
+
+        .cell.overlap.user-input {
+            background-color: #f4e890;
+            color: #6b4e00;
+        }
+
+        .cell.error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+
+        .status {
+            text-align: center;
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .loading {
+            color: #FF6B6B;
+            font-weight: bold;
+        }
+
+        .success {
+            color: #4ECDC4;
+            font-weight: bold;
+        }
+
+        .progress {
+            color: #f39c12;
+            font-weight: bold;
+        }
+
+        .challenge-complete {
+            background: linear-gradient(45deg, #6BCF7F, #4ECDC4);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            margin: 20px 0;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .challenge-failed {
+            background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            margin: 20px 0;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .final-score {
+            font-size: 32px;
+            font-weight: bold;
+            margin: 10px 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .stats {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .disabled-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            pointer-events: none;
+        }
+
+        .samurai-container {
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ 5-Minute Samurai Sudoku Challenge ⚡</h1>
+        
+        <div class="challenge-header">
+            <div class="timer-section">
+                <div class="timer" id="timer">5:00</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+            </div>
+            
+            <div class="score-section">
+                <div class="score">Score: <span id="current-score">0</span></div>
+                <div style="font-size: 14px;">Progress: <span id="completion">0%</span></div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <div class="difficulty">
+                <label for="difficulty">Difficulty:</label>
+                <select id="difficulty">
+                    <option value="easy">Easy (230 clues) - 1M points</option>
+                    <option value="medium" selected>Medium (200 clues) - 2M points</option>
+                    <option value="hard">Hard (180 clues) - 5M points</option>
+                    <option value="expert">Expert (150 clues) - 10M points</option>
+                </select>
+            </div>
+            
+            <div id="challenge-controls">
+                <button class="start-challenge" id="startBtn" onclick="startChallenge()">🚀 Start Challenge</button>
+                <button onclick="generatePractice()" id="practiceBtn">🏋️ Practice Mode</button>
+            </div>
+            
+            <div id="active-controls" style="display: none;">
+                <button class="stop-challenge" onclick="stopChallenge()">⏹️ Stop Challenge</button>
+                <button onclick="solvePuzzle()" id="solutionBtn">👁️ Show Solution</button>
+            </div>
+        </div>
+
+        <div class="stats" id="stats">
+            Ready for the ultimate Samurai challenge!
+        </div>
+
+        <div class="samurai-container" id="samurai-container">
+            <!-- Grid will be generated here -->
+        </div>
+
+        <div id="status" class="status">
+            Select difficulty and click "Start Challenge" for a timed puzzle, or "Practice Mode" for unlimited time!
+        </div>
+    </div>
+
+    <script>
+        let currentPuzzle = null;
+        let solution = null;
+        let originalGivens = null; // Track original clues separately
+        let isGenerating = false;
+        let challengeActive = false;
+        let startTime = null;
+        let timerInterval = null;
+
+        const GRID_SIZE = 9;
+        const SAMURAI_SIZE = 21;
+        const CHALLENGE_TIME = 5 * 60; // 5 minutes in seconds
+
+        const DIFFICULTY_SETTINGS = {
+            easy: { clues: 230, basePoints: 1000000 },
+            medium: { clues: 200, basePoints: 2000000 },
+            hard: { clues: 180, basePoints: 5000000 },
+            expert: { clues: 150, basePoints: 10000000 }
+        };
+
+        function createSamuraiGrid() {
+            const container = document.getElementById('samurai-container');
+            container.innerHTML = '';
+            
+            const grid = document.createElement('div');
+            grid.className = 'samurai-grid';
+            
+            // Create all cells
+            for (let row = 0; row < SAMURAI_SIZE; row++) {
+                for (let col = 0; col < SAMURAI_SIZE; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.id = `cell-${row}-${col}`;
+                    
+                    // Determine if this cell is part of a valid grid
+                    if (isValidSamuraiCell(row, col)) {
+                        if (isOverlapCell(row, col)) {
+                            cell.classList.add('overlap');
+                        }
+                        
+                        // Add thick borders for 3x3 regions
+                        addThickBorders(cell, row, col);
+                        
+                        cell.addEventListener('click', () => handleCellClick(row, col));
+                        cell.contentEditable = true;
+                        cell.addEventListener('input', (e) => handleCellInput(e, row, col));
+                        cell.addEventListener('keydown', (e) => handleKeyDown(e, row, col));
+                    } else {
+                        cell.classList.add('invalid');
+                    }
+                    
+                    grid.appendChild(cell);
+                }
+            }
+            
+            container.appendChild(grid);
+        }
+
+        function isValidSamuraiCell(row, col) {
+            // Top-left grid (0-8, 0-8)
+            if (row < 9 && col < 9) return true;
+            
+            // Top-right grid (0-8, 12-20)
+            if (row < 9 && col >= 12 && col < 21) return true;
+            
+            // Center grid (6-14, 6-14)
+            if (row >= 6 && row < 15 && col >= 6 && col < 15) return true;
+            
+            // Bottom-left grid (12-20, 0-8)
+            if (row >= 12 && row < 21 && col < 9) return true;
+            
+            // Bottom-right grid (12-20, 12-20)
+            if (row >= 12 && row < 21 && col >= 12 && col < 21) return true;
+            
+            return false;
+        }
+
+        function isOverlapCell(row, col) {
+            // Check if cell is in overlap regions (center grid corners)
+            const overlaps = [
+                // Top-left overlap with center
+                [row >= 6 && row < 9 && col >= 6 && col < 9],
+                // Top-right overlap with center  
+                [row >= 6 && row < 9 && col >= 12 && col < 15],
+                // Bottom-left overlap with center
+                [row >= 12 && row < 15 && col >= 6 && col < 9],
+                // Bottom-right overlap with center
+                [row >= 12 && row < 15 && col >= 12 && col < 15]
+            ];
+            
+            return overlaps.some(overlap => overlap[0]);
+        }
+
+        function addThickBorders(cell, row, col) {
+            // Get which grids this cell belongs to
+            const gridInfos = getGridInfo(row, col);
+            
+            for (const gridInfo of gridInfos) {
+                const localRow = gridInfo.localRow;
+                const localCol = gridInfo.localCol;
+                
+                // Add thick borders at 3x3 boundaries
+                // Top border of 3x3 boxes (rows 3, 6)
+                if (localRow === 3 || localRow === 6) {
+                    cell.classList.add('thick-top');
+                }
+                
+                // Bottom border of 3x3 boxes (rows 2, 5, 8)
+                if (localRow === 2 || localRow === 5 || localRow === 8) {
+                    cell.classList.add('thick-bottom');
+                }
+                
+                // Left border of 3x3 boxes (cols 3, 6)
+                if (localCol === 3 || localCol === 6) {
+                    cell.classList.add('thick-left');
+                }
+                
+                // Right border of 3x3 boxes (cols 2, 5, 8)
+                if (localCol === 2 || localCol === 5 || localCol === 8) {
+                    cell.classList.add('thick-right');
+                }
+            }
+        }
+
+        function getGridInfo(row, col) {
+            const grids = [];
+            
+            if (row < 9 && col < 9) {
+                grids.push({ grid: 'tl', localRow: row, localCol: col });
+            }
+            if (row < 9 && col >= 12 && col < 21) {
+                grids.push({ grid: 'tr', localRow: row, localCol: col - 12 });
+            }
+            if (row >= 6 && row < 15 && col >= 6 && col < 15) {
+                grids.push({ grid: 'center', localRow: row - 6, localCol: col - 6 });
+            }
+            if (row >= 12 && row < 21 && col < 9) {
+                grids.push({ grid: 'bl', localRow: row - 12, localCol: col });
+            }
+            if (row >= 12 && row < 21 && col >= 12 && col < 21) {
+                grids.push({ grid: 'br', localRow: row - 12, localCol: col - 12 });
+            }
+            
+            return grids;
+        }
+
+        // Challenge Management
+        function startChallenge() {
+            const difficulty = document.getElementById('difficulty').value;
+            challengeActive = true;
+            startTime = Date.now();
+            
+            // Update UI
+            document.getElementById('challenge-controls').style.display = 'none';
+            document.getElementById('active-controls').style.display = 'block';
+            
+            // Start timer
+            updateTimer();
+            timerInterval = setInterval(updateTimer, 1000);
+            
+            // Generate puzzle
+            generateChallengepuzzle(difficulty);
+        }
+
+        function stopChallenge() {
+            challengeActive = false;
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            
+            // Update UI
+            document.getElementById('challenge-controls').style.display = 'block';
+            document.getElementById('active-controls').style.display = 'none';
+            
+            // Reset timer display
+            document.getElementById('timer').textContent = '5:00';
+            document.getElementById('progress-fill').style.width = '0%';
+            document.getElementById('current-score').textContent = '0';
+            document.getElementById('completion').textContent = '0%';
+            
+            // Clear puzzle data
+            currentPuzzle = null;
+            solution = null;
+            originalGivens = null;
+            
+            setStatus('Challenge stopped. Ready for a new challenge!', 'progress');
+            updateStats('Select difficulty and start a new challenge!');
+        }
+
+        function updateTimer() {
+            if (!challengeActive || !startTime) return;
+            
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const remaining = Math.max(0, CHALLENGE_TIME - elapsed);
+            
+            const minutes = Math.floor(remaining / 60);
+            const seconds = remaining % 60;
+            document.getElementById('timer').textContent = 
+                `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            // Update progress bar (time remaining)
+            const progress = ((CHALLENGE_TIME - remaining) / CHALLENGE_TIME) * 100;
+            document.getElementById('progress-fill').style.width = `${progress}%`;
+            
+            // Update score
+            updateScore();
+            
+            if (remaining <= 0) {
+                endChallenge(false);
+            }
+        }
+
+        function updateScore() {
+            if (!challengeActive) return;
+            
+            const difficulty = document.getElementById('difficulty').value;
+            const settings = DIFFICULTY_SETTINGS[difficulty];
+            const completion = calculateCompletion();
+            
+            let score = 0;
+            if (completion === 100) {
+                // Full completion bonus with time multiplier
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                // Inverse time multiplier: faster = higher multiplier
+                // If you finish in 1/X of the time, you get X multiplier
+                const timeMultiplier = CHALLENGE_TIME / Math.max(elapsed, 1);
+                score = Math.floor(settings.basePoints * timeMultiplier);
+            } else {
+                // Partial completion - no penalty, just proportional
+                score = Math.floor(settings.basePoints * (completion / 100));
+            }
+            
+            document.getElementById('current-score').textContent = score.toLocaleString();
+            document.getElementById('completion').textContent = `${completion.toFixed(1)}%`;
+        }
+
+        function calculateCompletion() {
+            if (!originalGivens) return 0;
+            
+            let totalEmpty = 0;  // Total cells that need to be filled
+            let userFilled = 0;  // Cells filled by user
+            
+            for (let row = 0; row < SAMURAI_SIZE; row++) {
+                for (let col = 0; col < SAMURAI_SIZE; col++) {
+                    if (isValidSamuraiCell(row, col)) {
+                        const isGiven = originalGivens[row][col] !== 0; // Check original clues
+                        
+                        if (!isGiven) {
+                            // This cell needs to be filled by user
+                            totalEmpty++;
+                            
+                            const cell = document.getElementById(`cell-${row}-${col}`);
+                            if (cell && cell.textContent.trim() !== '') {
+                                userFilled++;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return totalEmpty > 0 ? (userFilled / totalEmpty) * 100 : 100;
+        }
+
+        function endChallenge(completed) {
+            challengeActive = false;
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            
+            const completion = calculateCompletion();
+            const difficulty = document.getElementById('difficulty').value;
+            const settings = DIFFICULTY_SETTINGS[difficulty];
+            
+            let finalScore = 0;
+            let message = '';
+            
+            if (completed && completion === 100) {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                // Inverse time multiplier: finish in 1/X of time = X multiplier
+                const timeMultiplier = CHALLENGE_TIME / Math.max(elapsed, 1);
+                finalScore = Math.floor(settings.basePoints * timeMultiplier);
+                
+                const elapsedMinutes = Math.floor(elapsed / 60);
+                const elapsedSeconds = elapsed % 60;
+                
+                message = `
+                    <div class="challenge-complete">
+                        <h2>🎉 CHALLENGE COMPLETED! 🎉</h2>
+                        <div class="final-score">${finalScore.toLocaleString()} points</div>
+                        <p>Difficulty: <strong>${difficulty.toUpperCase()}</strong></p>
+                        <p>Time: <strong>${elapsedMinutes}:${elapsedSeconds.toString().padStart(2, '0')}</strong></p>
+                        <p>Time Multiplier: <strong>${timeMultiplier.toFixed(2)}x</strong></p>
+                        <p><small>Base: ${settings.basePoints.toLocaleString()} × ${timeMultiplier.toFixed(2)}</small></p>
+                    </div>
+                `;
+            } else {
+                finalScore = Math.floor(settings.basePoints * (completion / 100));
+                
+                message = `
+                    <div class="challenge-failed">
+                        <h2>⏰ Time's Up! ⏰</h2>
+                        <div class="final-score">${finalScore.toLocaleString()} points</div>
+                        <p>Completion: <strong>${completion.toFixed(1)}%</strong></p>
+                        <p>Score: <strong>${settings.basePoints.toLocaleString()} × ${(completion / 100).toFixed(3)} = ${finalScore.toLocaleString()}</strong></p>
+                    </div>
+                `;
+            }
+            
+            // Update UI
+            document.getElementById('challenge-controls').style.display = 'block';
+            document.getElementById('active-controls').style.display = 'none';
+            document.getElementById('status').innerHTML = message;
+            
+            // Add overlay to disable further input
+            const overlay = document.createElement('div');
+            overlay.className = 'disabled-overlay';
+            document.getElementById('samurai-container').appendChild(overlay);
+        }
+
+        // Proper Puzzle Generation
+        async function generateChallengepuzzle(difficulty) {
+            setStatus('Generating challenge puzzle...', 'loading');
+            updateStats('Creating your timed challenge...');
+            
+            const targetClues = DIFFICULTY_SETTINGS[difficulty].clues;
+            
+            try {
+                // Step 1: Generate center grid
+                updateStats('Step 1: Generating center grid...');
+                const centerGrid = generateCenterGrid();
+                if (!centerGrid) throw new Error('Failed to generate center grid');
+                
+                // Step 2: Generate outer grids with constraints
+                updateStats('Step 2: Generating outer grids...');
+                const outerGrids = {
+                    tl: generateOuterGrid(centerGrid, 'tl'),
+                    tr: generateOuterGrid(centerGrid, 'tr'),
+                    bl: generateOuterGrid(centerGrid, 'bl'),
+                    br: generateOuterGrid(centerGrid, 'br')
+                };
+                
+                // Check all grids generated
+                for (const [corner, grid] of Object.entries(outerGrids)) {
+                    if (!grid) throw new Error(`Failed to generate ${corner} grid`);
+                }
+                
+                // Step 3: Combine grids
+                updateStats('Step 3: Combining grids...');
+                solution = combineSamuraiGrids(centerGrid, outerGrids);
+                
+                // Step 4: Create puzzle by removing clues (simplified for speed)
+                updateStats('Step 4: Creating puzzle...');
+                currentPuzzle = createPuzzleFromSolution(solution, targetClues);
+                
+                // Store original givens for completion tracking
+                originalGivens = JSON.parse(JSON.stringify(currentPuzzle));
+                
+                displaySamurai(currentPuzzle);
+                setStatus(`Challenge started! ${targetClues} clues, ${DIFFICULTY_SETTINGS[difficulty].basePoints.toLocaleString()} base points`, 'success');
+                updateStats(`Solve the puzzle in 5 minutes! Current progress: ${calculateCompletion().toFixed(1)}%`);
+                
+            } catch (error) {
+                setStatus(`Generation failed: ${error.message}`, 'loading');
+                updateStats('Try again or use Practice Mode');
+            }
+        }
+
+        function generatePractice() {
+            challengeActive = false;
+            const difficulty = document.getElementById('difficulty').value;
+            const targetClues = DIFFICULTY_SETTINGS[difficulty].clues;
+            
+            setStatus('Generating practice puzzle...', 'loading');
+            updateStats('Creating unlimited-time practice puzzle...');
+            
+            generateChallengepuzzle(difficulty).then(() => {
+                setStatus('Practice puzzle ready! No time limit.', 'success');
+                updateStats('Take your time and practice your Samurai skills!');
+            });
+        }
+
+        // Generate outer grid with center constraints
+        function generateOuterGrid(centerGrid, corner) {
+            const grid = Array(9).fill().map(() => Array(9).fill(0));
+            
+            // Fill the corner 3x3 from center grid
+            let centerCornerRow, centerCornerCol;
+            switch(corner) {
+                case 'tl': centerCornerRow = 0; centerCornerCol = 0; break;
+                case 'tr': centerCornerRow = 0; centerCornerCol = 6; break;
+                case 'bl': centerCornerRow = 6; centerCornerCol = 0; break;
+                case 'br': centerCornerRow = 6; centerCornerCol = 6; break;
+            }
+            
+            let outerCornerRow, outerCornerCol;
+            switch(corner) {
+                case 'tl': outerCornerRow = 6; outerCornerCol = 6; break;
+                case 'tr': outerCornerRow = 6; outerCornerCol = 0; break;
+                case 'bl': outerCornerRow = 0; outerCornerCol = 6; break;
+                case 'br': outerCornerRow = 0; outerCornerCol = 0; break;
+            }
+            
+            // Copy the overlapping 3x3 region
+            for (let r = 0; r < 3; r++) {
+                for (let c = 0; c < 3; c++) {
+                    grid[outerCornerRow + r][outerCornerCol + c] = 
+                        centerGrid[centerCornerRow + r][centerCornerCol + c];
+                }
+            }
+            
+            // Solve the rest
+            if (solveSudoku(grid)) {
+                return grid;
+            }
+            return null;
+        }
+
+        // Combine all grids into Samurai solution
+        function combineSamuraiGrids(centerGrid, outerGrids) {
+            const samurai = Array(SAMURAI_SIZE).fill().map(() => Array(SAMURAI_SIZE).fill(0));
+            
+            // Place center grid
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    samurai[6 + r][6 + c] = centerGrid[r][c];
+                }
+            }
+            
+            // Place outer grids
+            const positions = [
+                { grid: outerGrids.tl, startRow: 0, startCol: 0 },
+                { grid: outerGrids.tr, startRow: 0, startCol: 12 },
+                { grid: outerGrids.bl, startRow: 12, startCol: 0 },
+                { grid: outerGrids.br, startRow: 12, startCol: 12 }
+            ];
+
+            positions.forEach(pos => {
+                for (let r = 0; r < 9; r++) {
+                    for (let c = 0; c < 9; c++) {
+                        const samuraiRow = pos.startRow + r;
+                        const samuraiCol = pos.startCol + c;
+                        // Only fill if not already filled by center (avoid overwriting overlaps)
+                        if (samurai[samuraiRow][samuraiCol] === 0) {
+                            samurai[samuraiRow][samuraiCol] = pos.grid[r][c];
+                        }
+                    }
+                }
+            });
+            
+            return samurai;
+        }
+
+        // Create puzzle with uniqueness guarantee
+        function createPuzzleFromSolution(completeSolution, targetClues) {
+            const puzzle = JSON.parse(JSON.stringify(completeSolution));
+            
+            // Get all valid cells
+            const validCells = [];
+            for (let row = 0; row < SAMURAI_SIZE; row++) {
+                for (let col = 0; col < SAMURAI_SIZE; col++) {
+                    if (isValidSamuraiCell(row, col)) {
+                        validCells.push([row, col]);
+                    }
+                }
+            }
+            
+            // Create erasable tracking array
+            const erasable = [];
+            for (let row = 0; row < SAMURAI_SIZE; row++) {
+                erasable[row] = [];
+                for (let col = 0; col < SAMURAI_SIZE; col++) {
+                    erasable[row][col] = isValidSamuraiCell(row, col);
+                }
+            }
+            
+            let currentClues = validCells.length;
+            let attempts = 0;
+            const maxAttempts = Math.min(500, (currentClues - targetClues) * 2); // Limit for challenge mode
+            
+            updateStats(`Removing clues while maintaining uniqueness... (${currentClues} → ${targetClues})`);
+            
+            while (currentClues > targetClues && attempts < maxAttempts) {
+                attempts++;
+                
+                // Find random erasable cell
+                const erasableCells = [];
+                for (let row = 0; row < SAMURAI_SIZE; row++) {
+                    for (let col = 0; col < SAMURAI_SIZE; col++) {
+                        if (erasable[row][col] && puzzle[row][col] !== 0) {
+                            erasableCells.push([row, col]);
+                        }
+                    }
+                }
+                
+                if (erasableCells.length === 0) break;
+                
+                const [row, col] = erasableCells[Math.floor(Math.random() * erasableCells.length)];
+                const originalValue = puzzle[row][col];
+                
+                // Try removing this clue
+                puzzle[row][col] = 0;
+                
+                // Quick uniqueness check (limited to 2 solutions for speed)
+                const solutionCount = countSamuraiSolutions(puzzle, 2);
+                
+                if (solutionCount !== 1) {
+                    // Backtrack - multiple solutions found
+                    puzzle[row][col] = originalValue;
+                    erasable[row][col] = false; // Mark as non-erasable
+                } else {
+                    currentClues--;
+                }
+                
+                // Update progress periodically
+                if (attempts % 25 === 0) {
+                    updateStats(`Removing clues... ${currentClues} remaining (target: ${targetClues})`);
+                }
+            }
+            
+            updateStats(`Final puzzle: ${currentClues} clues (target: ${targetClues})`);
+            return puzzle;
+        }
+
+        // Count solutions up to maxSolutions (for uniqueness checking)
+        function countSamuraiSolutions(puzzle, maxSolutions = 2) {
+            const testPuzzle = JSON.parse(JSON.stringify(puzzle));
+            return countSolutionsRecursive(testPuzzle, 0, maxSolutions);
+        }
+
+        function countSolutionsRecursive(puzzle, solutionCount, maxSolutions) {
+            if (solutionCount >= maxSolutions) return solutionCount;
+            
+            // Find first empty cell
+            let emptyRow = -1, emptyCol = -1;
+            for (let row = 0; row < SAMURAI_SIZE && emptyRow === -1; row++) {
+                for (let col = 0; col < SAMURAI_SIZE; col++) {
+                    if (isValidSamuraiCell(row, col) && puzzle[row][col] === 0) {
+                        emptyRow = row;
+                        emptyCol = col;
+                        break;
+                    }
+                }
+            }
+            
+            if (emptyRow === -1) return solutionCount + 1; // Found a solution
+            
+            for (let num = 1; num <= 9; num++) {
+                if (isValidSamuraiMove(puzzle, emptyRow, emptyCol, num)) {
+                    puzzle[emptyRow][emptyCol] = num;
+                    solutionCount = countSolutionsRecursive(puzzle, solutionCount, maxSolutions);
+                    puzzle[emptyRow][emptyCol] = 0;
+                    
+                    if (solutionCount >= maxSolutions) break;
+                }
+            }
+            
+            return solutionCount;
+        }
+
+        function isValidSamuraiMove(puzzle, row, col, num) {
+            // Get which grids this cell belongs to
+            const gridInfos = getGridInfo(row, col);
+            
+            for (const info of gridInfos) {
+                if (!isValidSudokuMoveInSamurai(puzzle, row, col, num, info)) {
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+
+        function isValidSudokuMoveInSamurai(puzzle, row, col, num, gridInfo) {
+            // Convert samurai coordinates to grid coordinates based on grid type
+            let startRow, startCol;
+            switch(gridInfo.grid) {
+                case 'tl': startRow = 0; startCol = 0; break;
+                case 'tr': startRow = 0; startCol = 12; break;
+                case 'center': startRow = 6; startCol = 6; break;
+                case 'bl': startRow = 12; startCol = 0; break;
+                case 'br': startRow = 12; startCol = 12; break;
+            }
+            
+            const gridRow = gridInfo.localRow;
+            const gridCol = gridInfo.localCol;
+            
+            // Check row in this grid
+            for (let c = 0; c < 9; c++) {
+                const samuraiRow = startRow + gridRow;
+                const samuraiCol = startCol + c;
+                if (isValidSamuraiCell(samuraiRow, samuraiCol) && 
+                    puzzle[samuraiRow][samuraiCol] === num) {
+                    return false;
+                }
+            }
+            
+            // Check column in this grid
+            for (let r = 0; r < 9; r++) {
+                const samuraiRow = startRow + r;
+                const samuraiCol = startCol + gridCol;
+                if (isValidSamuraiCell(samuraiRow, samuraiCol) && 
+                    puzzle[samuraiRow][samuraiCol] === num) {
+                    return false;
+                }
+            }
+            
+            // Check 3x3 box in this grid
+            const boxRow = Math.floor(gridRow / 3) * 3;
+            const boxCol = Math.floor(gridCol / 3) * 3;
+            
+            for (let r = boxRow; r < boxRow + 3; r++) {
+                for (let c = boxCol; c < boxCol + 3; c++) {
+                    const samuraiRow = startRow + r;
+                    const samuraiCol = startCol + c;
+                    if (isValidSamuraiCell(samuraiRow, samuraiCol) && 
+                        puzzle[samuraiRow][samuraiCol] === num) {
+                        return false;
+                    }
+                }
+            }
+            
+            return true;
+        }
+
+        function displaySamurai(puzzle) {
+            for (let row = 0; row < SAMURAI_SIZE; row++) {
+                for (let col = 0; col < SAMURAI_SIZE; col++) {
+                    const cell = document.getElementById(`cell-${row}-${col}`);
+                    if (cell && isValidSamuraiCell(row, col)) {
+                        const value = puzzle[row][col];
+                        cell.textContent = value === 0 ? '' : value;
+                        
+                        // Preserve thick border classes
+                        const hasThickTop = cell.classList.contains('thick-top');
+                        const hasThickBottom = cell.classList.contains('thick-bottom');
+                        const hasThickLeft = cell.classList.contains('thick-left');
+                        const hasThickRight = cell.classList.contains('thick-right');
+                        
+                        let className = 'cell ';
+                        if (isOverlapCell(row, col)) {
+                            className += 'overlap ';
+                        }
+                        className += value === 0 ? 'empty' : 'given';
+                        
+                        // Re-add thick border classes
+                        if (hasThickTop) className += ' thick-top';
+                        if (hasThickBottom) className += ' thick-bottom';
+                        if (hasThickLeft) className += ' thick-left';
+                        if (hasThickRight) className += ' thick-right';
+                        
+                        cell.className = className;
+                        cell.contentEditable = value === 0 ? 'true' : 'false';
+                    }
+                }
+            }
+        }
+
+        function solvePuzzle() {
+            if (solution) {
+                displaySamurai(solution);
+                if (challengeActive) {
+                    endChallenge(true);
+                } else {
+                    setStatus('Solution displayed!', 'success');
+                }
+            } else {
+                setStatus('Generate a puzzle first!', 'loading');
+            }
+        }
+
+        function handleCellClick(row, col) {
+            const cell = document.getElementById(`cell-${row}-${col}`);
+            if (cell.classList.contains('given')) return;
+            cell.focus();
+        }
+
+        function handleCellInput(event, row, col) {
+            const value = event.target.textContent.replace(/\D/g, ''); // Remove non-digits
+            const numValue = parseInt(value);
+            
+            if (value === '' || isNaN(numValue) || numValue < 1 || numValue > 9) {
+                event.target.textContent = '';
+                updateCellStyle(event.target, row, col, 0);
+                return;
+            }
+            
+            event.target.textContent = numValue;
+            updateCellStyle(event.target, row, col, numValue);
+            
+            // Update puzzle state
+            if (currentPuzzle) {
+                currentPuzzle[row][col] = numValue;
+            }
+            
+            // Check if puzzle is complete
+            if (challengeActive && isPuzzleComplete()) {
+                endChallenge(true);
+            }
+        }
+
+        function handleKeyDown(event, row, col) {
+            if (event.key === 'Backspace' || event.key === 'Delete') {
+                event.preventDefault();
+                const cell = event.target;
+                if (!cell.classList.contains('given')) {
+                    cell.textContent = '';
+                    updateCellStyle(cell, row, col, 0);
+                    if (currentPuzzle) {
+                        currentPuzzle[row][col] = 0;
+                    }
+                }
+            } else if (event.key >= '1' && event.key <= '9') {
+                event.preventDefault();
+                const cell = event.target;
+                if (!cell.classList.contains('given')) {
+                    cell.textContent = event.key;
+                    updateCellStyle(cell, row, col, parseInt(event.key));
+                    if (currentPuzzle) {
+                        currentPuzzle[row][col] = parseInt(event.key);
+                    }
+                    
+                    // Check if puzzle is complete
+                    if (challengeActive && isPuzzleComplete()) {
+                        endChallenge(true);
+                    }
+                }
+            }
+        }
+
+        function updateCellStyle(cell, row, col, value) {
+            // Preserve thick border classes
+            const hasThickTop = cell.classList.contains('thick-top');
+            const hasThickBottom = cell.classList.contains('thick-bottom');
+            const hasThickLeft = cell.classList.contains('thick-left');
+            const hasThickRight = cell.classList.contains('thick-right');
+            
+            let className = 'cell ';
+            if (isOverlapCell(row, col)) {
+                className += 'overlap ';
+            }
+            
+            if (value === 0) {
+                className += 'empty';
+            } else {
+                // Check if this is a user input (not a given clue)
+                if (cell.classList.contains('given')) {
+                    className += 'given';
+                } else {
+                    // Check if user input matches solution
+                    if (solution && solution[row][col] !== value) {
+                        className += 'error'; // Red for wrong answers
+                    } else {
+                        className += 'user-input'; // Green for correct
+                    }
+                }
+            }
+            
+            // Re-add thick border classes
+            if (hasThickTop) className += ' thick-top';
+            if (hasThickBottom) className += ' thick-bottom';
+            if (hasThickLeft) className += ' thick-left';
+            if (hasThickRight) className += ' thick-right';
+            
+            cell.className = className;
+        }
+
+        function isPuzzleComplete() {
+            if (!originalGivens) return false;
+            
+            // Check if all user-fillable cells are filled
+            for (let row = 0; row < SAMURAI_SIZE; row++) {
+                for (let col = 0; col < SAMURAI_SIZE; col++) {
+                    if (isValidSamuraiCell(row, col)) {
+                        const isGiven = originalGivens[row][col] !== 0; // Check original clues
+                        
+                        if (!isGiven) {
+                            // This cell needs user input
+                            const cell = document.getElementById(`cell-${row}-${col}`);
+                            if (!cell || cell.textContent.trim() === '') {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        // Simplified Sudoku generation functions for demo
+        function generateCenterGrid() {
+            const grid = Array(9).fill().map(() => Array(9).fill(0));
+            if (solveSudoku(grid)) {
+                return grid;
+            }
+            return null;
+        }
+
+        function solveSudoku(grid) {
+            const empty = findEmpty(grid);
+            if (!empty) return true;
+            
+            const [row, col] = empty;
+            const numbers = shuffleArray([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            
+            for (const num of numbers) {
+                if (isValidSudokuMove(grid, row, col, num)) {
+                    grid[row][col] = num;
+                    
+                    if (solveSudoku(grid)) return true;
+                    
+                    grid[row][col] = 0;
+                }
+            }
+            
+            return false;
+        }
+
+        function findEmpty(grid) {
+            for (let row = 0; row < 9; row++) {
+                for (let col = 0; col < 9; col++) {
+                    if (grid[row][col] === 0) return [row, col];
+                }
+            }
+            return null;
+        }
+
+        function isValidSudokuMove(grid, row, col, num) {
+            // Check row
+            for (let c = 0; c < 9; c++) {
+                if (grid[row][c] === num) return false;
+            }
+            
+            // Check column
+            for (let r = 0; r < 9; r++) {
+                if (grid[r][col] === num) return false;
+            }
+            
+            // Check 3x3 box
+            const boxRow = Math.floor(row / 3) * 3;
+            const boxCol = Math.floor(col / 3) * 3;
+            
+            for (let r = boxRow; r < boxRow + 3; r++) {
+                for (let c = boxCol; c < boxCol + 3; c++) {
+                    if (grid[r][c] === num) return false;
+                }
+            }
+            
+            return true;
+        }
+
+        function shuffleArray(array) {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        function setStatus(message, type) {
+            const status = document.getElementById('status');
+            status.innerHTML = message;
+            status.className = `status ${type}`;
+        }
+
+        function updateStats(message) {
+            const stats = document.getElementById('stats');
+            stats.textContent = message;
+        }
+
+        // Initialize the grid on page load
+        createSamuraiGrid();
+    </script>
+</body>
+</html>
