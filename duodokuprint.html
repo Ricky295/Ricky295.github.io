@@ -2,10 +2,17 @@
 <html lang="en">
 <head>
   <script src="duodokusolver.js"></script>
+  <script src="duodokudifficulties.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sufufu Puzzle Printer</title>
   <style>
+    body {
+      position: relative;
+      min-height: 100vh;
+      padding-bottom: 80px;
+    }
+
     table {
       border-collapse: collapse;
       margin: 20px auto;
@@ -15,10 +22,9 @@
       border: 1px solid black;
       width: var(--cell-size);
       height: var(--cell-size);
-      font-size: calc(var(--cell-size) / 3); /* Adjust font size based on cell size */
+      font-size: calc(var(--cell-size) / 3);
     }
 
-    /* Add thicker borders to create bold 4x2 boxes */
     td:nth-child(4n) {
       border-right: 3px solid black;
     }
@@ -54,27 +60,146 @@
       font-size: 18px;
       font-weight: bold;
     }
+
+    .difficulty-indicator {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      font-size: 18px;
+      font-weight: bold;
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .difficulty-1 {
+      background-color: #28a745;
+      color: white;
+    }
+
+    .difficulty-2 {
+      background-color: #ffc107;
+      color: #212529;
+    }
+
+    .difficulty-3 {
+      background-color: #fd7e14;
+      color: white;
+    }
+
+    .difficulty-4 {
+      background-color: #dc3545;
+      color: white;
+    }
+
+    @media print {
+      .difficulty-indicator {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+      }
+    }
   </style>
 </head>
 <body>
   <h1 style="text-align: center;">Sufufu Puzzle</h1>
-  <table id="puzzleTable">
-    <!-- Table will be filled dynamically -->
-  </table>
+  <table id="puzzleTable"></table>
+
+  <div class="difficulty-indicator" id="difficulty-badge">Calculating...</div>
 
   <script>
-    // Function to extract the puzzle string and zoom parameter from the URL query string
     const urlParams = new URLSearchParams(window.location.search);
+
+    // Mock DuoDoKuGenerator class for compatibility
+    class DuoDoKuGenerator {
+      isNotDuplicated(row, col, value, grid) {
+        let rowCount = 0;
+        for (let c = 0; c < 8; c++) {
+          if (grid[row][c] === value) rowCount++;
+        }
+        if (rowCount >= 2) return false;
+
+        let colCount = 0;
+        for (let r = 0; r < 8; r++) {
+          if (grid[r][col] === value) colCount++;
+        }
+        if (colCount >= 2) return false;
+
+        const blockRow = Math.floor(row / 2) * 2;
+        const blockCol = Math.floor(col / 4) * 4;
+        let blockCount = 0;
+        for (let r = 0; r < 2; r++) {
+          for (let c = 0; c < 4; c++) {
+            if (grid[blockRow + r][blockCol + c] === value) blockCount++;
+          }
+        }
+        if (blockCount >= 2) return false;
+
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        for (const [dr, dc] of directions) {
+          const newRow = row + dr;
+          const newCol = col + dc;
+          if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 && grid[newRow][newCol] === value) {
+            return false;
+          }
+        }
+
+        return true;
+      }
+    }
 
     function getPuzzleFromURL() {
       return urlParams.get('puzzle') || '';
     }
 
     function getZoomFromURL() {
-      return parseInt(urlParams.get('zoom')) || 50; // Default to 50 if no zoom is provided
+      return parseInt(urlParams.get('zoom')) || 50;
     }
 
-    // Function to render the puzzle as an 8x8 table with editable cells
+    function convertToArray(puzzleString) {
+      let array = [];
+      if (puzzleString.length !== 64) {
+        return array;
+      }
+      for (let i = 0; i < puzzleString.length; i += 8) {
+        array.push(puzzleString.slice(i, i + 8).split('').map(Number));
+      }
+      return array;
+    }
+
+    function initializeCandidates() {
+      const candidates = [];
+      for (let r = 0; r < 8; r++) {
+        candidates[r] = [];
+        for (let c = 0; c < 8; c++) {
+          candidates[r][c] = [1, 2, 3, 4];
+        }
+      }
+      return candidates;
+    }
+
+    function calculateDifficulty(puzzleString) {
+      try {
+        const puzzleArray = convertToArray(puzzleString);
+        if (puzzleArray.length === 0) {
+          return null;
+        }
+
+        const gridCopy = puzzleArray.map(row => [...row]);
+        const candidatesCopy = initializeCandidates();
+        
+        const difficultyAnalyzer = new duodokudifficulties();
+        difficultyAnalyzer.refreshCandidates(gridCopy, candidatesCopy);
+        
+        const difficulty = difficultyAnalyzer.solve(gridCopy, candidatesCopy);
+        return difficulty;
+        
+      } catch (error) {
+        console.error('Error calculating difficulty:', error);
+        return null;
+      }
+    }
+
     function renderPuzzle() {
       const puzzleString = getPuzzleFromURL();
       const zoom = getZoomFromURL();
@@ -84,7 +209,6 @@
         return;
       }
 
-      // Set dynamic cell size and font size based on zoom value
       document.documentElement.style.setProperty('--cell-size', `${zoom}px`);
 
       const table = document.getElementById('puzzleTable');
@@ -96,24 +220,28 @@
           const cellValue = puzzleString[row * 8 + col];
           tableHTML += `<td>${cellValue == 0 ? "" : cellValue}</td>`;
         }
-        tableHTML += '</tr>'; // Close the row after finishing the columns
+        tableHTML += '</tr>';
       }
 
       table.innerHTML = tableHTML;
+
+      // Calculate and display difficulty
+      const difficulty = calculateDifficulty(puzzleString);
+      const difficultyBadge = document.getElementById('difficulty-badge');
+      
+      if (difficulty !== null) {
+        const difficultyNames = { 1: 'EASY', 2: 'MEDIUM', 3: 'HARD', 4: 'UNFAIR' };
+        const difficultyName = difficultyNames[difficulty] || difficulty;
+        
+        difficultyBadge.textContent = `Difficulty: ${difficultyName}`;
+        difficultyBadge.className = `difficulty-indicator difficulty-${difficulty}`;
+      } else {
+        difficultyBadge.textContent = 'Difficulty: Unknown';
+        difficultyBadge.className = 'difficulty-indicator';
+      }
     }
 
-    // Call renderPuzzle on page load
     renderPuzzle();
-
-    // Placeholder function for puzzle checking (add your logic)
-    function checkPuzzle() {
-      const feedbackElement = document.getElementById('feedback');
-      feedbackElement.innerHTML = 'Puzzle is being checked...';
-      // Implement the actual puzzle validation logic here
-    }
-
-    // Add event listener to the "Check Solution" button
-    document.getElementById('checkButton')?.addEventListener('click', checkPuzzle);
   </script>
 </body>
 </html>
