@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sufufu Puzzles to print</title>
+    <title>Sufufu Multi-Puzzle Printer</title>
+    <script src="duodokuapi.js"></script>
+    <script src="duodokusolver.js"></script>
+    <script src="duodokudifficulties.js"></script>
     <style>
         @media print {
             @page {
@@ -14,181 +17,935 @@
                 margin: 0;
                 padding: 0;
             }
-            .container {
+            .page-container {
                 page-break-after: always;
             }
-        }
-        
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-        }
-        .container {
-            max-width: 210mm; /* A4 width */
-            margin: 0 auto;
-        }
-        h1 {
-            font-size: 1.5em;
-            margin-bottom: 15px;
-        }
-        .grid-container {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr); /* 2 columns for better fit */
-            gap: 10px;
-            justify-content: center;
-            margin-bottom: 20px;
-        }
-        .grid td {
-            width: 25px;
-            height: 25px;
-            text-align: center;
-            font-size: 16px;
-            border: 1px solid #ccc;
-        }
-        .grid input {
-            width: 23px;
-            height: 23px;
-            text-align: center;
-            font-size: 16px;
-            border: none;
-        }
-        .puzzle-container {
-            text-align: center;
-            margin-bottom: 10px;
-        }
-        .instructions {
-            margin-top: 15px;
-            font-size: 1em;
-        }
-        td:nth-child(4n) {
-            border-right: 2px solid black;
-        }
-        td:nth-child(1) {
-            border-left: 2px solid black;
-        }
-        tr:nth-child(2n) td {
-            border-bottom: 2px solid black;
-        }
-        tr:nth-child(1) td {
-            border-top: 2px solid black;
-        }
-        /* Print button styling */
-        .print-button {
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            margin-bottom: 20px;
-        }
-        .print-button:hover {
-            background-color: #45a049;
-        }
-        /* Hide inputs when printing */
-        @media print {
-            input {
-                border: none !important;
+            .controls-section {
+                display: none;
             }
             .print-button {
                 display: none;
             }
         }
+        
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .controls-section {
+            max-width: 800px;
+            margin: 0 auto 30px;
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .controls-section h2 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .form-group select,
+        .form-group input[type="number"],
+        .form-group input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+
+        .form-group input[type="number"] {
+            width: auto;
+        }
+
+        .inline-inputs {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .inline-inputs > div {
+            flex: 1;
+        }
+
+        .print-button {
+            width: 100%;
+            padding: 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        .print-button:hover {
+            background-color: #45a049;
+        }
+
+        .print-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .generate-button {
+            width: 100%;
+            padding: 15px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            transition: background-color 0.3s;
+        }
+
+        .generate-button:hover {
+            background-color: #0b7dda;
+        }
+
+        .generate-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .status-message {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: bold;
+            display: none;
+        }
+
+        .status-generating {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .page-container {
+            max-width: 210mm;
+            margin: 0 auto 30px;
+            background: white;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .page-header h1 {
+            margin: 0 0 5px 0;
+            font-size: 1.8em;
+        }
+
+        .page-subtitle {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .grid-container {
+            display: grid;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .grid-2col {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .grid-3col {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .grid-1col {
+            grid-template-columns: 1fr;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .puzzle-container {
+            text-align: center;
+            position: relative;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #fafafa;
+        }
+
+        .puzzle-header {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+        }
+
+        .grid {
+            margin: 0 auto;
+            border-collapse: collapse;
+        }
+
+        .grid td {
+            width: 30px;
+            height: 30px;
+            text-align: center;
+            font-size: 16px;
+            border: 1px solid #999;
+            background: white;
+        }
+
+        .grid input {
+            width: 28px;
+            height: 28px;
+            text-align: center;
+            font-size: 16px;
+            border: none;
+            background: transparent;
+        }
+
+        .grid input[readonly] {
+            background-color: #f0f0f0;
+            font-weight: bold;
+        }
+
+        .grid td:nth-child(4n) {
+            border-right: 3px solid #333;
+        }
+
+        .grid td:nth-child(1) {
+            border-left: 3px solid #333;
+        }
+
+        .grid tr:nth-child(2n) td {
+            border-bottom: 3px solid #333;
+        }
+
+        .grid tr:nth-child(1) td {
+            border-top: 3px solid #333;
+        }
+
+        .difficulty-indicator {
+            margin-top: 8px;
+            font-size: 13px;
+            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .difficulty-1 {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .difficulty-2 {
+            background-color: #ffc107;
+            color: #212529;
+        }
+
+        .difficulty-3 {
+            background-color: #fd7e14;
+            color: white;
+        }
+
+        .difficulty-4 {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 5px;
+            border-left: 4px solid #2196F3;
+        }
+
+        .instructions h3 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .instructions p {
+            margin: 8px 0;
+            color: #555;
+        }
+
+        #puzzles-display {
+            display: none;
+        }
+
+        .hidden-input {
+            display: none;
+        }
+
+        .puzzle-setting-item {
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #f9f9f9;
+            border-radius: 5px;
+            border-left: 4px solid #2196F3;
+        }
+
+        .puzzle-setting-item h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+
+        .puzzle-setting-fields {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+
+        .puzzle-setting-fields > div {
+            flex: 1;
+        }
+
+        .puzzle-setting-fields label {
+            font-size: 14px;
+            font-weight: normal;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .puzzle-setting-fields select,
+        .puzzle-setting-fields input,
+        .puzzle-setting-fields textarea {
+            width: 100%;
+            padding: 6px;
+            font-size: 14px;
+        }
+
+        .puzzle-setting-fields textarea {
+            font-family: monospace;
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        @media print {
+            .grid {
+                break-inside: avoid;
+            }
+            .puzzle-container {
+                break-inside: avoid;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Sufufu Puzzles</h1>
+    <div class="controls-section">
+        <h2>Sufufu Multi-Puzzle Generator</h2>
         
-        <!-- Print button -->
-        <button class="print-button" onclick="window.print()">Print Puzzles</button>
+        <div id="status-message" class="status-message"></div>
 
-        <!-- Puzzle Grid -->
-        <div class="grid-container" id="grid-container">
-            <!-- Puzzles will be generated dynamically here -->
+        <div class="form-group">
+            <label for="generation-mode">Generation Mode:</label>
+            <select id="generation-mode" onchange="updateGenerationMode()">
+                <option value="per-puzzle" selected>Individual Puzzle Settings</option>
+                <option value="clues">All by Number of Clues</option>
+                <option value="difficulty">All by Difficulty Level</option>
+                <option value="string">From Puzzle Strings</option>
+            </select>
         </div>
 
-        <!-- Instructions Section -->
-        <div class="instructions">
-            <h3>How to Solve:</h3>
-            <p>Place the numbers 1-4 twice in each row, column, and 2x4 box.</p>
-            <p>Numbers of the same value cannot be orthogonally adjacent.</p>
+        <div id="clues-options" class="form-group" style="display: none;">
+            <label for="clue-count">Number of Clues (12-40):</label>
+            <input type="number" id="clue-count" min="12" max="40" value="30">
         </div>
+
+        <div id="difficulty-options" class="form-group" style="display: none;">
+            <label for="difficulty-level">Difficulty Level:</label>
+            <select id="difficulty-level">
+                <option value="1">Easy</option>
+                <option value="2">Medium</option>
+                <option value="3">Hard</option>
+                <option value="4">Challenging</option>
+            </select>
+        </div>
+
+        <div id="string-options" class="form-group" style="display: none;">
+            <label for="puzzle-strings">Puzzle Strings (one per line, 64 digits each):</label>
+            <textarea id="puzzle-strings" rows="6" style="width: 100%; padding: 10px; font-family: monospace; border: 2px solid #ddd; border-radius: 5px;"></textarea>
+        </div>
+
+        <div class="form-group" id="puzzle-count-group">
+            <label for="puzzle-count">Number of Puzzles:</label>
+            <input type="number" id="puzzle-count" min="1" max="12" value="6" onchange="updatePuzzleSettings()">
+        </div>
+
+        <div id="individual-settings">
+            <div id="puzzle-settings-container"></div>
+        </div>
+
+        <div class="form-group">
+            <label for="layout">Layout:</label>
+            <select id="layout">
+                <option value="2">2 columns</option>
+                <option value="3">3 columns</option>
+                <option value="1">1 column</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>
+                <input type="checkbox" id="show-difficulty" checked>
+                Show Difficulty on Each Puzzle
+            </label>
+        </div>
+
+        <div class="form-group">
+            <label>
+                <input type="checkbox" id="show-instructions" checked>
+                Show Instructions
+            </label>
+        </div>
+
+        <button class="generate-button" onclick="generatePuzzles()" id="generate-btn">Generate Puzzles</button>
+        <button class="print-button" onclick="window.print()" id="print-btn" disabled>Print Puzzles</button>
     </div>
 
-    <!-- External JS API for generating Dudooku puzzles -->
-    <script src="duodokuapi.js"></script>
+    <div id="puzzles-display"></div>
+
     <script>
-        // Function to create a grid for each puzzle using table
-        function createPuzzleGrid(puzzleString, index) {
-            const gridContainer = document.getElementById('grid-container'); 
-            const grid = document.createElement('div');
-            grid.classList.add('puzzle-container');
+        // Mock DuoDoKuGenerator class for compatibility
+        class DuoDoKuGenerator {
+            isNotDuplicated(row, col, value, grid) {
+                let rowCount = 0;
+                for (let c = 0; c < 8; c++) {
+                    if (grid[row][c] === value) rowCount++;
+                }
+                if (rowCount >= 2) return false;
+
+                let colCount = 0;
+                for (let r = 0; r < 8; r++) {
+                    if (grid[r][col] === value) colCount++;
+                }
+                if (colCount >= 2) return false;
+
+                const blockRow = Math.floor(row / 2) * 2;
+                const blockCol = Math.floor(col / 4) * 4;
+                let blockCount = 0;
+                for (let r = 0; r < 2; r++) {
+                    for (let c = 0; c < 4; c++) {
+                        if (grid[blockRow + r][blockCol + c] === value) blockCount++;
+                    }
+                }
+                if (blockCount >= 2) return false;
+
+                const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+                for (const [dr, dc] of directions) {
+                    const newRow = row + dr;
+                    const newCol = col + dc;
+                    if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 && grid[newRow][newCol] === value) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+        }
+
+        function updateGenerationMode() {
+            const mode = document.getElementById('generation-mode').value;
             
-            // Add puzzle number
-            const puzzleNumber = document.createElement('div');
-            puzzleNumber.textContent = `Puzzle ${index + 1}`;
-            puzzleNumber.style.fontWeight = 'bold';
-            puzzleNumber.style.marginBottom = '5px';
-            grid.appendChild(puzzleNumber);
+            document.getElementById('clues-options').style.display = mode === 'clues' ? 'block' : 'none';
+            document.getElementById('difficulty-options').style.display = mode === 'difficulty' ? 'block' : 'none';
+            document.getElementById('string-options').style.display = mode === 'string' ? 'block' : 'none';
+            document.getElementById('individual-settings').style.display = mode === 'per-puzzle' ? 'block' : 'none';
+            document.getElementById('puzzle-count-group').style.display = mode === 'string' ? 'none' : 'block';
+            
+            if (mode === 'per-puzzle') {
+                updatePuzzleSettings();
+            }
+        }
 
-            // Create a table for better structure
+        function updatePuzzleSettings() {
+            const mode = document.getElementById('generation-mode').value;
+            if (mode !== 'per-puzzle') return;
+            
+            const puzzleCount = parseInt(document.getElementById('puzzle-count').value);
+            const container = document.getElementById('puzzle-settings-container');
+            
+            container.innerHTML = '';
+            
+            for (let i = 0; i < puzzleCount; i++) {
+                const settingDiv = document.createElement('div');
+                settingDiv.className = 'puzzle-setting-item';
+                
+                const header = document.createElement('h4');
+                header.textContent = `Puzzle ${i + 1}`;
+                settingDiv.appendChild(header);
+                
+                const fields = document.createElement('div');
+                fields.className = 'puzzle-setting-fields';
+                
+                fields.innerHTML = `
+                    <div>
+                        <label>Generation Type:</label>
+                        <select class="puzzle-mode" data-index="${i}" onchange="updateIndividualPuzzleMode(${i})">
+                            <option value="clues">By Clues</option>
+                            <option value="difficulty">By Difficulty</option>
+                            <option value="string">From String</option>
+                        </select>
+                    </div>
+                    <div class="puzzle-mode-options" id="puzzle-options-${i}">
+                        <label>Number of Clues:</label>
+                        <input type="number" class="puzzle-clues" data-index="${i}" min="12" max="40" value="30">
+                    </div>
+                `;
+                
+                settingDiv.appendChild(fields);
+                container.appendChild(settingDiv);
+            }
+        }
+
+        function updateIndividualPuzzleMode(index) {
+            const modeSelect = document.querySelector(`.puzzle-mode[data-index="${index}"]`);
+            const optionsDiv = document.getElementById(`puzzle-options-${index}`);
+            const mode = modeSelect.value;
+            
+            if (mode === 'clues') {
+                optionsDiv.innerHTML = `
+                    <label>Number of Clues:</label>
+                    <input type="number" class="puzzle-clues" data-index="${index}" min="12" max="40" value="30">
+                `;
+            } else if (mode === 'difficulty') {
+                optionsDiv.innerHTML = `
+                    <label>Difficulty Level:</label>
+                    <select class="puzzle-difficulty" data-index="${index}">
+                        <option value="1">Easy</option>
+                        <option value="2">Medium</option>
+                        <option value="3" selected>Hard</option>
+                        <option value="4">Challenging</option>
+                    </select>
+                `;
+            } else if (mode === 'string') {
+                optionsDiv.innerHTML = `
+                    <label>Puzzle String (64 digits):</label>
+                    <textarea class="puzzle-string" data-index="${index}" placeholder="Enter 64-digit puzzle string"></textarea>
+                `;
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status-message');
+            statusDiv.textContent = message;
+            statusDiv.className = `status-message status-${type}`;
+            statusDiv.style.display = 'block';
+        }
+
+        function hideStatus() {
+            document.getElementById('status-message').style.display = 'none';
+        }
+
+        function convertToArray(puzzleString) {
+            let array = [];
+            if (puzzleString.length !== 64) return array;
+            for (let i = 0; i < puzzleString.length; i += 8) {
+                array.push(puzzleString.slice(i, i + 8).split('').map(Number));
+            }
+            return array;
+        }
+
+        function initializeCandidates() {
+            const candidates = [];
+            for (let r = 0; r < 8; r++) {
+                candidates[r] = [];
+                for (let c = 0; c < 8; c++) {
+                    candidates[r][c] = [1, 2, 3, 4];
+                }
+            }
+            return candidates;
+        }
+
+        function calculateDifficulty(puzzleString) {
+            try {
+                const puzzleArray = convertToArray(puzzleString);
+                if (puzzleArray.length === 0) return null;
+
+                const gridCopy = puzzleArray.map(row => [...row]);
+                const candidatesCopy = initializeCandidates();
+                
+                const difficultyAnalyzer = new duodokudifficulties();
+                difficultyAnalyzer.refreshCandidates(gridCopy, candidatesCopy);
+                
+                const difficulty = difficultyAnalyzer.solve(gridCopy, candidatesCopy);
+                return difficulty;
+            } catch (error) {
+                console.error('Error calculating difficulty:', error);
+                return null;
+            }
+        }
+
+        function deepCopy2D(arr) {
+            return arr.map(row => [...row]);
+        }
+
+        function countClues(puzzle) {
+            let count = 0;
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (puzzle[r][c] !== 0) count++;
+                }
+            }
+            return count;
+        }
+
+        function hasUniqueSolution(puzzle) {
+            const solver = new DuoDoKuSolver();
+            solver.enterPuzzle(puzzle);
+            return solver.hasUniqueSolution();
+        }
+
+        async function generateByDifficulty(targetDifficulty) {
+            const generator = new DuoDoKuGenerator();
+            const solver = new duodokudifficulties();
+            
+            generator.generateSeedPuzzle();
+            let solution = deepCopy2D(generator.mPuzzle);
+            let puzzle = deepCopy2D(solution);
+            
+            let removable = Array(8).fill(null).map(() => Array(8).fill(true));
+            let attempts = 0;
+            const maxAttempts = 8000;
+            let currentDifficulty = 1;
+            let backup = null;
+            let backupDifficulty = 1;
+            let bestPuzzle = deepCopy2D(puzzle);
+            let bestDifficulty = 1;
+            
+            const isChallengingTarget = (targetDifficulty === 4);
+            let challengingStopsLeft = 2;
+            let consecutiveFailures = 0;
+            
+            while (attempts < maxAttempts) {
+                attempts++;
+                
+                const removableCells = [];
+                for (let r = 0; r < 8; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        if (puzzle[r][c] !== 0 && removable[r][c]) {
+                            removableCells.push([r, c]);
+                        }
+                    }
+                }
+                
+                if (removableCells.length === 0) break;
+                
+                if (isChallengingTarget && consecutiveFailures >= challengingStopsLeft && bestDifficulty >= 3) {
+                    break;
+                }
+                
+                const randomIndex = Math.floor(Math.random() * removableCells.length);
+                const [r, c] = removableCells[randomIndex];
+                const originalValue = puzzle[r][c];
+                
+                removable[r][c] = false;
+                puzzle[r][c] = 0;
+                
+                const testPuzzle = deepCopy2D(puzzle);
+                const candidates = initializeCandidates();
+                solver.refreshCandidates(testPuzzle, candidates);
+                
+                const difficulty = solver.solve(testPuzzle, candidates);
+                const hasValidSolution = hasUniqueSolution(puzzle);
+                
+                if (hasValidSolution) {
+                    currentDifficulty = difficulty;
+                    consecutiveFailures = 0;
+                    
+                    if (isChallengingTarget) {
+                        if (difficulty >= bestDifficulty) {
+                            bestPuzzle = deepCopy2D(puzzle);
+                            bestDifficulty = difficulty;
+                        }
+                    } else {
+                        if (difficulty === targetDifficulty || 
+                            (bestDifficulty < targetDifficulty && difficulty > bestDifficulty) ||
+                            (bestDifficulty > targetDifficulty && difficulty < bestDifficulty && difficulty >= targetDifficulty)) {
+                            bestPuzzle = deepCopy2D(puzzle);
+                            bestDifficulty = difficulty;
+                        }
+                    }
+                    
+                    if (difficulty >= targetDifficulty || isChallengingTarget) {
+                        backup = deepCopy2D(puzzle);
+                        backupDifficulty = difficulty;
+                    }
+                } else {
+                    puzzle[r][c] = originalValue;
+                    consecutiveFailures++;
+                }
+                
+                if (attempts % 100 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1));
+                }
+                
+                if (!isChallengingTarget && bestDifficulty === targetDifficulty && countClues(bestPuzzle) < 35) {
+                    break;
+                }
+            }
+            
+            let finalPuzzle, finalDifficulty;
+            
+            if (isChallengingTarget) {
+                finalPuzzle = bestPuzzle;
+                finalDifficulty = bestDifficulty;
+            } else {
+                if (bestDifficulty === targetDifficulty) {
+                    finalPuzzle = bestPuzzle;
+                    finalDifficulty = bestDifficulty;
+                } else if (backup && backupDifficulty >= targetDifficulty) {
+                    finalPuzzle = backup;
+                    finalDifficulty = backupDifficulty;
+                } else {
+                    finalPuzzle = bestPuzzle;
+                    finalDifficulty = bestDifficulty;
+                }
+            }
+            
+            return { puzzle: finalPuzzle, difficulty: finalDifficulty };
+        }
+
+        function createPuzzleGrid(puzzleString, index) {
+            const showDifficulty = document.getElementById('show-difficulty').checked;
+            const difficulty = calculateDifficulty(puzzleString);
+            
+            const puzzleDiv = document.createElement('div');
+            puzzleDiv.className = 'puzzle-container';
+            
+            const header = document.createElement('div');
+            header.className = 'puzzle-header';
+            header.textContent = `Puzzle ${index + 1}`;
+            puzzleDiv.appendChild(header);
+
             const table = document.createElement('table');
-            table.classList.add('grid');
+            table.className = 'grid';
 
-            // Create the rows and cells for the puzzle
             for (let row = 0; row < 8; row++) {
-                const tr = document.createElement('tr'); // Table row
+                const tr = document.createElement('tr');
 
                 for (let col = 0; col < 8; col++) {
-                    const td = document.createElement('td'); // Table cell
+                    const td = document.createElement('td');
                     const cell = document.createElement('input');
                     cell.type = 'text';
                     cell.maxLength = 1;
-                    cell.value = puzzleString[row * 8 + col] !== '0' ? puzzleString[row * 8 + col] : ''; // Use '0' for blank cells
+                    const cellValue = puzzleString[row * 8 + col];
+                    cell.value = cellValue !== '0' ? cellValue : '';
                     
-                    // Make preset clues readonly with gray background
-                    if (puzzleString[row * 8 + col] !== '0') {
+                    if (cellValue !== '0') {
                         cell.readOnly = true;
-                        cell.style.backgroundColor = '#f0f0f0';
                     }
                     
-                    td.appendChild(cell); // Add input element to cell
-                    tr.appendChild(td); // Add cell to row
+                    td.appendChild(cell);
+                    tr.appendChild(td);
                 }
 
-                table.appendChild(tr); // Add row to table
+                table.appendChild(tr);
             }
 
-            grid.appendChild(table); // Add table to grid container
-            gridContainer.appendChild(grid); // Add grid to page
+            puzzleDiv.appendChild(table);
+
+            if (showDifficulty && difficulty !== null) {
+                const difficultyNames = { 1: 'EASY', 2: 'MEDIUM', 3: 'HARD', 4: 'UNFAIR' };
+                const difficultyName = difficultyNames[difficulty] || difficulty;
+                
+                const difficultyBadge = document.createElement('div');
+                difficultyBadge.className = `difficulty-indicator difficulty-${difficulty}`;
+                difficultyBadge.textContent = difficultyName;
+                puzzleDiv.appendChild(difficultyBadge);
+            }
+
+            return puzzleDiv;
         }
 
-        // Function to generate 6 random puzzles on page load
-        window.onload = function() {
-            const params = new URLSearchParams(window.location.search);
-            let clues = params.get("clues") ? params.get("clues").split(",") : [30, 30, 30, 30, 30, 30];
+        async function generatePuzzles() {
+            const mode = document.getElementById('generation-mode').value;
+            const layout = document.getElementById('layout').value;
+            const showInstructions = document.getElementById('show-instructions').checked;
             
-            for (let i = 0; i < 6; i++) {
-                let generator = new DuoDoKuGenerator();
+            const generateBtn = document.getElementById('generate-btn');
+            const printBtn = document.getElementById('print-btn');
+            
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Generating...';
+            printBtn.disabled = true;
+            
+            const display = document.getElementById('puzzles-display');
+            display.innerHTML = '';
+            display.style.display = 'block';
+            
+            try {
+                const pageContainer = document.createElement('div');
+                pageContainer.className = 'page-container';
                 
-                // Generate the solution first
-                generator.generateSeedPuzzle(); // generates the solution
-                let solution = generator.mPuzzle; // Access the solution
-
-                // Now generate the puzzle with missing clues (i.e., a solved puzzle with some numbers removed)
-                generator.generatePuzzle(parseInt(clues[i])); // Use clues parameter
-                let puzzle = generator.mPuzzle; // Access the generated puzzle with clues removed
-
-                // Flatten the puzzle and create a string without commas
-                let flatPuzzle = puzzle.flat(); // Flatten the nested array
-                let puzzleString = flatPuzzle.join(''); // Join the elements without commas
-
-                // Create the puzzle grid on the page
-                createPuzzleGrid(puzzleString, i);
+                const pageHeader = document.createElement('div');
+                pageHeader.className = 'page-header';
+                pageHeader.innerHTML = '<h1>Sufufu Puzzles</h1><div class="page-subtitle">sudoku-like game by Ricky295</div>';
+                pageContainer.appendChild(pageHeader);
+                
+                const gridContainer = document.createElement('div');
+                gridContainer.className = `grid-container grid-${layout}col`;
+                
+                let puzzleStrings = [];
+                let puzzleCount = 0;
+                
+                if (mode === 'string') {
+                    const strings = document.getElementById('puzzle-strings').value.split('\n');
+                    for (const str of strings) {
+                        const trimmed = str.trim();
+                        if (trimmed.length === 64) {
+                            puzzleStrings.push(trimmed);
+                        }
+                    }
+                    
+                    if (puzzleStrings.length === 0) {
+                        throw new Error('No valid puzzle strings found. Each string must be exactly 64 digits.');
+                    }
+                    puzzleCount = puzzleStrings.length;
+                } else if (mode === 'clues') {
+                    puzzleCount = parseInt(document.getElementById('puzzle-count').value);
+                    const clues = parseInt(document.getElementById('clue-count').value);
+                    showStatus(`Generating ${puzzleCount} puzzles with ${clues} clues...`, 'generating');
+                    
+                    for (let i = 0; i < puzzleCount; i++) {
+                        const generator = new DuoDoKuGenerator();
+                        generator.generateSeedPuzzle();
+                        generator.generatePuzzle(clues);
+                        const puzzleString = generator.mPuzzle.flat().join('');
+                        puzzleStrings.push(puzzleString);
+                        
+                        showStatus(`Generated ${i + 1}/${puzzleCount} puzzles...`, 'generating');
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                    }
+                } else if (mode === 'difficulty') {
+                    puzzleCount = parseInt(document.getElementById('puzzle-count').value);
+                    const difficulty = parseInt(document.getElementById('difficulty-level').value);
+                    const difficultyNames = { 1: 'Easy', 2: 'Medium', 3: 'Hard', 4: 'Challenging' };
+                    showStatus(`Generating ${puzzleCount} ${difficultyNames[difficulty]} puzzles...`, 'generating');
+                    
+                    for (let i = 0; i < puzzleCount; i++) {
+                        const result = await generateByDifficulty(difficulty);
+                        const puzzleString = result.puzzle.flat().join('');
+                        puzzleStrings.push(puzzleString);
+                        
+                        showStatus(`Generated ${i + 1}/${puzzleCount} puzzles...`, 'generating');
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                    }
+                } else if (mode === 'per-puzzle') {
+                    // Per-puzzle individual settings
+                    const modeSelects = document.querySelectorAll('.puzzle-mode');
+                    puzzleCount = modeSelects.length;
+                    showStatus(`Generating ${puzzleCount} puzzles with individual settings...`, 'generating');
+                    
+                    for (let i = 0; i < modeSelects.length; i++) {
+                        const puzzleMode = modeSelects[i].value;
+                        
+                        if (puzzleMode === 'clues') {
+                            const clues = parseInt(document.querySelector(`.puzzle-clues[data-index="${i}"]`).value);
+                            showStatus(`Generating puzzle ${i + 1}/${puzzleCount} (${clues} clues)...`, 'generating');
+                            
+                            const generator = new DuoDoKuGenerator();
+                            generator.generateSeedPuzzle();
+                            generator.generatePuzzle(clues);
+                            const puzzleString = generator.mPuzzle.flat().join('');
+                            puzzleStrings.push(puzzleString);
+                        } else if (puzzleMode === 'difficulty') {
+                            const difficulty = parseInt(document.querySelector(`.puzzle-difficulty[data-index="${i}"]`).value);
+                            const difficultyNames = { 1: 'Easy', 2: 'Medium', 3: 'Hard', 4: 'Challenging' };
+                            showStatus(`Generating puzzle ${i + 1}/${puzzleCount} (${difficultyNames[difficulty]})...`, 'generating');
+                            
+                            const result = await generateByDifficulty(difficulty);
+                            const puzzleString = result.puzzle.flat().join('');
+                            puzzleStrings.push(puzzleString);
+                        } else if (puzzleMode === 'string') {
+                            const puzzleString = document.querySelector(`.puzzle-string[data-index="${i}"]`).value.trim();
+                            if (puzzleString.length === 64) {
+                                showStatus(`Adding puzzle ${i + 1}/${puzzleCount} from string...`, 'generating');
+                                puzzleStrings.push(puzzleString);
+                            } else {
+                                throw new Error(`Puzzle ${i + 1}: Invalid puzzle string. Must be exactly 64 digits.`);
+                            }
+                        }
+                        
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                    }
+                }
+                
+                // Create puzzle grids
+                for (let i = 0; i < puzzleStrings.length; i++) {
+                    const puzzleGrid = createPuzzleGrid(puzzleStrings[i], i);
+                    gridContainer.appendChild(puzzleGrid);
+                }
+                
+                pageContainer.appendChild(gridContainer);
+                
+                // Add instructions if enabled
+                if (showInstructions) {
+                    const instructions = document.createElement('div');
+                    instructions.className = 'instructions';
+                    instructions.innerHTML = `
+                        <h3>How to Solve:</h3>
+                        <p>• Place the numbers 1-4 exactly twice in each row, column, and 2×4 box.</p>
+                        <p>• Numbers of the same value cannot be orthogonally adjacent (touching vertically or horizontally).</p>
+                    `;
+                    pageContainer.appendChild(instructions);
+                }
+                
+                display.appendChild(pageContainer);
+                
+                showStatus(`Successfully generated ${puzzleStrings.length} puzzles!`, 'success');
+                printBtn.disabled = false;
+                
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+                console.error('Generation error:', error);
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generate Puzzles';
             }
-        };
+        }
+
+        // Initialize
+        updateGenerationMode();
     </script>
 </body>
 </html>
