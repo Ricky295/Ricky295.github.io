@@ -423,6 +423,7 @@
             <div class="list-controls">
                 <button class="add-btn" onclick="openAddModal()">➕ Add</button>
                 <button class="modify-btn" onclick="openModifyModal()">✏️ Modify</button>
+                <button class="add-btn" onclick="openBulkAddModal()">📋 Bulk Add</button>
             </div>
             <div class="puzzle-items" id="puzzleItems">
                 <div class="empty-state">No puzzles yet. Click "Add" to get started!</div>
@@ -491,6 +492,23 @@
             <div class="modal-buttons">
                 <button class="modal-btn-primary" onclick="savePuzzle()">Save</button>
                 <button class="modal-btn-secondary" onclick="closeModifyModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Add Modal -->
+    <div id="bulkAddModal" class="modal">
+        <div class="modal-content">
+            <h2>Bulk Add Puzzles</h2>
+            <label for="bulkPuzzles">Paste Puzzles (one per line, 81 or 36 digits each):</label>
+            <textarea id="bulkPuzzles" placeholder="000260701...&#10;520000000...&#10;100004005..." style="height: 200px;"></textarea>
+            <p style="color: #6c757d; font-size: 14px; margin-top: -10px; margin-bottom: 15px;">
+                Supports both 9x9 (81 digits) and 6x6 (36 digits) puzzles mixed together
+            </p>
+
+            <div class="modal-buttons">
+                <button class="modal-btn-primary" onclick="bulkAddPuzzles()">Add All</button>
+                <button class="modal-btn-secondary" onclick="closeBulkAddModal()">Cancel</button>
             </div>
         </div>
     </div>
@@ -784,11 +802,69 @@
         window.onclick = function(event) {
             const addModal = document.getElementById('addModal');
             const modifyModal = document.getElementById('modifyModal');
+            const bulkAddModal = document.getElementById('bulkAddModal');
             if (event.target === addModal) {
                 closeAddModal();
             }
             if (event.target === modifyModal) {
                 closeModifyModal();
+            }
+            if (event.target === bulkAddModal) {
+                closeBulkAddModal();
+            }
+        }
+
+        function openBulkAddModal() {
+            document.getElementById('bulkAddModal').style.display = 'block';
+        }
+
+        function closeBulkAddModal() {
+            document.getElementById('bulkAddModal').style.display = 'none';
+            document.getElementById('bulkPuzzles').value = '';
+        }
+
+        function bulkAddPuzzles() {
+            const input = document.getElementById('bulkPuzzles').value.trim();
+            if (!input) {
+                alert('Please paste puzzle strings (one per line)');
+                return;
+            }
+
+            const lines = input.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            let imported = 0;
+            let errors = [];
+
+            lines.forEach((puzzleString, index) => {
+                const lineNum = index + 1;
+
+                if (puzzleString.length !== 81 && puzzleString.length !== 36) {
+                    errors.push(`Line ${lineNum}: Must be 81 or 36 digits (got ${puzzleString.length})`);
+                    return;
+                }
+
+                if (!/^[0-9.]+$/.test(puzzleString)) {
+                    errors.push(`Line ${lineNum}: Must contain only digits and dots`);
+                    return;
+                }
+
+                const preview = puzzleString.substring(0, 15) + (puzzleString.length > 15 ? '...' : '');
+                puzzles.push({
+                    type: 'imported',
+                    puzzle: puzzleString,
+                    info: preview
+                });
+                imported++;
+            });
+
+            closeBulkAddModal();
+            updatePuzzleList();
+            updateQRCode();
+            updateStats();
+
+            if (errors.length > 0) {
+                alert(`Imported ${imported} puzzles\n\nErrors:\n${errors.join('\n')}`);
+            } else {
+                alert(`Successfully imported ${imported} puzzles!`);
             }
         }
 
