@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Code Sudoku Generator</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -59,6 +59,40 @@
         .stat-label {
             color: #6c757d;
             font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .url-capacity {
+            margin-top: 10px;
+        }
+
+        .capacity-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .capacity-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            background: #28a745;
+        }
+
+        .capacity-fill.warning {
+            background: #ffc107;
+        }
+
+        .capacity-fill.danger {
+            background: #dc3545;
+        }
+
+        .capacity-text {
+            font-size: 0.85em;
+            color: #6c757d;
             margin-top: 5px;
         }
 
@@ -437,6 +471,7 @@
                 <button id="encryptedBtn" onclick="setMode('encrypted')">🔐 Encrypted Mode (Base64)</button>
             </div>
             <div id="qrcode"></div>
+            <canvas id="qrCanvas" style="display: none;"></canvas>
             <button class="download-btn" onclick="downloadQR()">💾 Download QR Code</button>
             <div class="url-display" id="urlDisplay">Add puzzles to generate QR code...</div>
         </div>
@@ -516,9 +551,16 @@
     <script src="sudoku.js"></script>
     <script src="sudoku6x6.js"></script>
     <script>
+        // Check if QRious library is loaded
+        if (typeof QRious === 'undefined') {
+            console.error('QRious library failed to load');
+            alert('QR Code library failed to load. Please refresh the page.');
+        }
+
         let puzzles = [];
         let currentMode = 'unencrypted';
         let selectedPuzzleIndex = -1;
+        let qr = null;
 
         function updateStats() {
             document.getElementById('puzzleCount').textContent = puzzles.length;
@@ -760,6 +802,7 @@
 
         function updateQRCode() {
             const qrContainer = document.getElementById('qrcode');
+            const qrCanvas = document.getElementById('qrCanvas');
             qrContainer.innerHTML = '';
 
             const url = generateURL();
@@ -769,14 +812,29 @@
                 return;
             }
 
-            new QRCode(qrContainer, {
-                text: url,
-                width: 256,
-                height: 256,
-                colorDark: "#000000",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.M
-            });
+            try {
+                if (typeof QRious === 'undefined') {
+                    qrContainer.innerHTML = '<div style="color: red; padding: 20px;">QR Code library not loaded. Please refresh the page.</div>';
+                    return;
+                }
+                
+                qr = new QRious({
+                    element: qrCanvas,
+                    value: url,
+                    size: 256,
+                    level: 'M'
+                });
+
+                // Display the QR code
+                const img = document.createElement('img');
+                img.src = qrCanvas.toDataURL();
+                img.style.border = '2px solid #dee2e6';
+                img.style.borderRadius = '8px';
+                qrContainer.appendChild(img);
+            } catch (error) {
+                console.error('QR Code generation error:', error);
+                qrContainer.innerHTML = '<div style="color: red; padding: 20px;">Error: ' + error.message + '</div>';
+            }
         }
 
         function downloadQR() {
@@ -785,17 +843,22 @@
                 return;
             }
 
-            const canvas = document.querySelector('#qrcode canvas');
-            if (!canvas) {
+            const qrCanvas = document.getElementById('qrCanvas');
+            if (!qrCanvas) {
                 alert('QR code not generated yet');
                 return;
             }
 
-            const url = canvas.toDataURL('image/png');
-            const link = document.createElement('a');
-            link.download = 'sudoku-qr-code.png';
-            link.href = url;
-            link.click();
+            try {
+                const url = qrCanvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.download = 'sudoku-qr-code.png';
+                link.href = url;
+                link.click();
+            } catch (error) {
+                console.error('Download error:', error);
+                alert('Error downloading QR code');
+            }
         }
 
         // Close modals when clicking outside
