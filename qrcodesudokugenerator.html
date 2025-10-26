@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Code Sudoku Generator</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodegen/1.8.0/qrcodegen.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -443,8 +443,14 @@
                 <div class="stat-label">Puzzles</div>
             </div>
             <div class="stat-box">
-                <div class="stat-value" id="urlLength">0</div>
+                <div class="stat-value" id="urlLength">0/2953</div>
                 <div class="stat-label">URL Length</div>
+                <div class="url-capacity">
+                    <div class="capacity-bar">
+                        <div class="capacity-fill" id="capacityFill" style="width: 0%"></div>
+                    </div>
+                    <div class="capacity-text" id="capacityText">0% capacity</div>
+                </div>
             </div>
             <div class="stat-box">
                 <div class="stat-value" id="qrMode">Unencrypted</div>
@@ -561,12 +567,46 @@
         let currentMode = 'unencrypted';
         let selectedPuzzleIndex = -1;
         let qr = null;
+        
+        // QR code URL length limits
+        const QR_MAX_LENGTH = 2953; // Maximum for QR Code Level M (15% error correction)
 
         function updateStats() {
             document.getElementById('puzzleCount').textContent = puzzles.length;
             const url = generateURL();
-            document.getElementById('urlLength').textContent = url.length;
+            const urlLength = url.length;
+            const percentage = (urlLength / QR_MAX_LENGTH * 100).toFixed(1);
+            
+            // Update URL length display
+            document.getElementById('urlLength').textContent = `${urlLength}/${QR_MAX_LENGTH}`;
+            
+            // Update capacity bar
+            const capacityFill = document.getElementById('capacityFill');
+            const capacityText = document.getElementById('capacityText');
+            
+            capacityFill.style.width = Math.min(percentage, 100) + '%';
+            capacityText.textContent = `${percentage}% capacity`;
+            
+            // Change color based on capacity
+            capacityFill.classList.remove('warning', 'danger');
+            if (percentage >= 90) {
+                capacityFill.classList.add('danger');
+            } else if (percentage >= 70) {
+                capacityFill.classList.add('warning');
+            }
+            
+            // Update mode display
             document.getElementById('qrMode').textContent = currentMode === 'unencrypted' ? 'Unencrypted' : 'Encrypted';
+            
+            // Warn if over capacity
+            if (urlLength > QR_MAX_LENGTH) {
+                capacityText.textContent = `⚠️ Over capacity by ${urlLength - QR_MAX_LENGTH} chars!`;
+                capacityText.style.color = '#dc3545';
+                capacityText.style.fontWeight = 'bold';
+            } else {
+                capacityText.style.color = '#6c757d';
+                capacityText.style.fontWeight = 'normal';
+            }
         }
 
         function setMode(mode) {
