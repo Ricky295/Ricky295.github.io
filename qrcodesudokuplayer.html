@@ -126,8 +126,8 @@
 
         .puzzle-list-items {
             display: flex;
+            flex-direction: column;
             gap: 8px;
-            flex-wrap: wrap;
         }
 
         .puzzle-list-item {
@@ -137,11 +137,11 @@
             border: 2px solid #e9ecef;
             cursor: pointer;
             transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
             font-weight: bold;
-            font-size: 1.1em;
+            font-size: 1em;
+            align-items: center;
         }
 
         body.night-mode .puzzle-list-item {
@@ -151,13 +151,13 @@
         }
 
         .puzzle-list-item:hover {
-            border-color: #667eea;
             background: #f0f2ff;
+            border-color: #667eea;
         }
 
         body.night-mode .puzzle-list-item:hover {
-            border-color: #9db4ff;
             background: #1a1a2e;
+            border-color: #9db4ff;
         }
 
         .puzzle-list-item.active {
@@ -173,35 +173,14 @@
         }
 
         .puzzle-list-item.completed {
-            background: #d4edda;
-            border-color: #28a745;
+            opacity: 0.85;
         }
 
-        body.night-mode .puzzle-list-item.completed {
-            background: #1e4d2b;
-            border-color: #28a745;
-        }
-
-        .puzzle-list-item.completed:hover {
-            background: #c3e6cb;
-        }
-
-        body.night-mode .puzzle-list-item.completed:hover {
-            background: #2d6a3f;
-        }
-
-        .puzzle-list-item.active.completed {
-            background: #28a745;
-            color: white;
-        }
-
-        body.night-mode .puzzle-list-item.active.completed {
-            background: #28a745;
-            color: white;
-        }
-
-        .puzzle-status {
-            font-size: 1em;
+        .puzzle-list-item.completed::after {
+            content: "✓";
+            margin-left: 8px;
+            color: #28a745;
+            font-weight: bold;
         }
 
         .game-panel {
@@ -607,7 +586,7 @@
         let puzzles = [];
         let currentPuzzleIndex = -1;
         let currentGrid = [];
-        let candidates = []; // Array to store candidates for each cell
+        let candidates = [];
         let givenCells = [];
         let selectedCell = -1;
         let puzzleSize = 9;
@@ -621,7 +600,6 @@
             localStorage.setItem('nightMode', nightMode);
         }
 
-        // Load night mode preference
         window.addEventListener('DOMContentLoaded', () => {
             const savedMode = localStorage.getItem('nightMode');
             if (savedMode === 'true') {
@@ -636,11 +614,9 @@
             let puzzleStrings = [];
             
             if (params.has('puzzles')) {
-                // Unencrypted mode
                 const puzzlesParam = params.get('puzzles');
                 puzzleStrings = puzzlesParam.split(',');
             } else if (params.has('base64')) {
-                // Encrypted mode
                 const base64 = params.get('base64');
                 try {
                     const decoded = atob(base64);
@@ -685,17 +661,39 @@
             const container = document.getElementById('puzzleListContainer');
             container.innerHTML = '';
 
+            // Add header
+            const header = document.createElement('div');
+            header.className = 'puzzle-list-item';
+            header.style.fontWeight = 'bold';
+            header.style.opacity = '0.7';
+            header.style.cursor = 'default';
+            header.innerHTML = '<span>#</span><span>Size</span><span>Info</span>';
+            container.appendChild(header);
+
             puzzles.forEach((puzzle, index) => {
                 const item = document.createElement('div');
                 item.className = 'puzzle-list-item';
                 if (index === currentPuzzleIndex) item.classList.add('active');
                 if (completed.has(index)) item.classList.add('completed');
-                
+
+                const clues = puzzle.split('').filter(c => c !== '.' && c !== '0').length;
+                const sizeLabel = (puzzle.length === 81) ? '9×9' : '6×6';
+                let infoDisplay = '';
+
+                if (puzzle.length === 36) {
+                    infoDisplay = `${clues} clues`;
+                } else {
+                    let difficulty = Math.max((50 - clues) / 8, (41 - clues) / 4);
+                    difficulty = Math.max(0, Math.min(4, difficulty));
+                    infoDisplay = difficulty.toFixed(2);
+                }
+
                 item.innerHTML = `
                     <span>${index + 1}</span>
-                    <span>${completed.has(index) ? '✓' : ''}</span>
+                    <span>${sizeLabel}</span>
+                    <span>${infoDisplay}</span>
                 `;
-                
+
                 item.onclick = () => loadPuzzle(index);
                 container.appendChild(item);
             });
@@ -790,7 +788,7 @@
             currentPuzzleIndex = -1;
             selectedCell = -1;
             document.getElementById('gameArea').innerHTML = '';
-            renderPuzzleList(); // Re-render list
+            renderPuzzleList();
         }
 
         function selectCell(index) {
@@ -803,17 +801,14 @@
             if (selectedCell === -1 || givenCells[selectedCell]) return;
             
             if (candidateMode && num !== '') {
-                // Toggle candidate
                 if (candidates[selectedCell].has(num)) {
                     candidates[selectedCell].delete(num);
                 } else {
                     candidates[selectedCell].add(num);
                 }
             } else {
-                // Place number or clear
                 currentGrid[selectedCell] = num.toString();
                 if (num !== '') {
-                    // Clear candidates when placing a number
                     candidates[selectedCell].clear();
                 }
             }
@@ -830,21 +825,14 @@
             const row = Math.floor(index / puzzleSize);
             const col = index % puzzleSize;
 
-            // Check row
             for (let c = 0; c < puzzleSize; c++) {
-                if (c !== col && currentGrid[row * puzzleSize + c] === value) {
-                    return true;
-                }
+                if (c !== col && currentGrid[row * puzzleSize + c] === value) return true;
             }
 
-            // Check column
             for (let r = 0; r < puzzleSize; r++) {
-                if (r !== row && currentGrid[r * puzzleSize + col] === value) {
-                    return true;
-                }
+                if (r !== row && currentGrid[r * puzzleSize + col] === value) return true;
             }
 
-            // Check box
             const boxRows = puzzleSize === 9 ? 3 : 3;
             const boxCols = puzzleSize === 9 ? 3 : 2;
             const boxStartRow = Math.floor(row / boxRows) * boxRows;
@@ -852,9 +840,7 @@
 
             for (let r = boxStartRow; r < boxStartRow + boxRows; r++) {
                 for (let c = boxStartCol; c < boxStartCol + boxCols; c++) {
-                    if ((r !== row || c !== col) && currentGrid[r * puzzleSize + c] === value) {
-                        return true;
-                    }
+                    if ((r !== row || c !== col) && currentGrid[r * puzzleSize + c] === value) return true;
                 }
             }
 
@@ -862,14 +848,10 @@
         }
 
         function checkCompletion() {
-            // Check if all cells are filled
             if (currentGrid.some(c => !c)) return false;
-
-            // Check for any conflicts
             for (let i = 0; i < currentGrid.length; i++) {
                 if (checkConflict(i, currentGrid[i])) return false;
             }
-
             return true;
         }
 
@@ -883,7 +865,6 @@
             } else {
                 const conflicts = currentGrid.filter((v, i) => v && checkConflict(i, v)).length;
                 const empty = currentGrid.filter(c => !c).length;
-                
                 if (empty > 0) {
                     alert(`Not complete yet! ${empty} cells remaining.`);
                 } else if (conflicts > 0) {
@@ -898,15 +879,11 @@
             }
         }
 
-        // Keyboard support
         document.addEventListener('keydown', (e) => {
             if (selectedCell === -1) return;
-
             if (e.key >= '1' && e.key <= '9') {
                 const num = parseInt(e.key);
-                if (num <= puzzleSize) {
-                    placeNumber(num);
-                }
+                if (num <= puzzleSize) placeNumber(num);
             } else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
                 placeNumber('');
             } else if (e.key === 'ArrowLeft' && selectedCell % puzzleSize > 0) {
@@ -920,7 +897,6 @@
             }
         });
 
-        // Initialize
         loadPuzzlesFromURL();
     </script>
 </body>
