@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>6x6 Sudoku Challenge</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .timer {
+            color: #e74c3c;
+        }
+
+        .sudoku-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 0;
+            margin: 20px auto;
+            width: fit-content;
+            border: 3px solid #333;
+            background: #333;
+        }
+
+        .cell {
+            width: 55px;
+            height: 55px;
+            border: 1px solid #999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3em;
+            font-weight: bold;
+            background: white;
+        }
+
+        .cell input {
+            width: 100%;
+            height: 100%;
+            border: none;
+            text-align: center;
+            font-size: 1.3em;
+            font-weight: bold;
+            outline: none;
+            background: transparent;
+        }
+
+        .cell.given {
+            background: #e8eaf6;
+            color: #333;
+        }
+
+        .cell.given input {
+            color: #333;
+        }
+
+        .cell.error {
+            background: #ffebee;
+        }
+
+        .cell:nth-child(3n) {
+            border-right: 3px solid #333;
+        }
+
+        .cell:nth-child(n+7):nth-child(-n+12),
+        .cell:nth-child(n+19):nth-child(-n+24) {
+            border-bottom: 3px solid #333;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 1em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .check-btn {
+            background: #667eea;
+            color: white;
+        }
+
+        .check-btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .reset-btn {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .reset-btn:hover {
+            background: #c0392b;
+            transform: translateY(-2px);
+        }
+
+        .message {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 1.1em;
+            font-weight: bold;
+            min-height: 30px;
+        }
+
+        .success {
+            color: #27ae60;
+        }
+
+        .error-msg {
+            color: #e74c3c;
+        }
+
+        .game-over {
+            color: #667eea;
+            font-size: 1.3em;
+        }
+
+        @media (max-width: 600px) {
+            .cell {
+                width: 45px;
+                height: 45px;
+                font-size: 1.1em;
+            }
+
+            .cell input {
+                font-size: 1.1em;
+            }
+
+            h1 {
+                font-size: 1.5em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⏱️ 6x6 Sudoku Challenge</h1>
+        
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-label">Current Clues</div>
+                <div class="stat-value" id="clues">35</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Time Left</div>
+                <div class="stat-value timer" id="timer">180</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Final Score</div>
+                <div class="stat-value" id="score">-</div>
+            </div>
+        </div>
+
+        <div class="sudoku-grid" id="grid"></div>
+
+        <div class="buttons">
+            <button class="check-btn" id="checkBtn">Check Solution</button>
+            <button class="reset-btn" id="resetBtn">Reset Puzzle</button>
+            <button class="reset-btn" id="resetGameBtn">Reset Game</button>
+        </div>
+
+        <div class="message" id="message"></div>
+    </div>
+
+    <script>
+        let currentClues = 35; // Start with most cells filled (out of 36 total)
+        let timeLeft = 180;
+        let timerInterval = null;
+        let gameOver = false;
+        let solution = [];
+        let puzzle = [];
+        let givenCells = [];
+
+        function generateSolution() {
+            const grid = Array(6).fill(null).map(() => Array(6).fill(0));
+            
+            function isValid(grid, row, col, num) {
+                // Check row and column
+                for (let x = 0; x < 6; x++) {
+                    if (grid[row][x] === num || grid[x][col] === num) {
+                        return false;
+                    }
+                }
+                
+                // Check 2x3 box
+                const startRow = Math.floor(row / 2) * 2;
+                const startCol = Math.floor(col / 3) * 3;
+                for (let i = 0; i < 2; i++) {
+                    for (let j = 0; j < 3; j++) {
+                        if (grid[i + startRow][j + startCol] === num) {
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+
+            function fillGrid(grid) {
+                for (let row = 0; row < 6; row++) {
+                    for (let col = 0; col < 6; col++) {
+                        if (grid[row][col] === 0) {
+                            const numbers = [1,2,3,4,5,6].sort(() => Math.random() - 0.5);
+                            for (let num of numbers) {
+                                if (isValid(grid, row, col, num)) {
+                                    grid[row][col] = num;
+                                    if (fillGrid(grid)) {
+                                        return true;
+                                    }
+                                    grid[row][col] = 0;
+                                }
+                            }
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+
+            fillGrid(grid);
+            return grid;
+        }
+
+        function createPuzzle(solution, clues) {
+            const puzzle = solution.map(row => [...row]);
+            const positions = [];
+            for (let i = 0; i < 6; i++) {
+                for (let j = 0; j < 6; j++) {
+                    positions.push([i, j]);
+                }
+            }
+            
+            positions.sort(() => Math.random() - 0.5);
+            const cellsToRemove = 36 - clues;
+            
+            // Remove cells one at a time and check uniqueness
+            let removed = 0;
+            for (let i = 0; i < positions.length && removed < cellsToRemove; i++) {
+                const [row, col] = positions[i];
+                const temp = puzzle[row][col];
+                puzzle[row][col] = 0;
+                
+                // Check if puzzle still has unique solution
+                if (hasUniqueSolution(puzzle)) {
+                    removed++;
+                } else {
+                    // Restore the cell if it creates multiple solutions
+                    puzzle[row][col] = temp;
+                }
+            }
+            
+            return puzzle;
+        }
+
+        function hasUniqueSolution(puzzle) {
+            const testGrid = puzzle.map(row => [...row]);
+            let solutionCount = 0;
+            
+            function isValid(grid, row, col, num) {
+                for (let x = 0; x < 6; x++) {
+                    if (grid[row][x] === num || grid[x][col] === num) {
+                        return false;
+                    }
+                }
+                
+                const startRow = Math.floor(row / 2) * 2;
+                const startCol = Math.floor(col / 3) * 3;
+                for (let i = 0; i < 2; i++) {
+                    for (let j = 0; j < 3; j++) {
+                        if (grid[i + startRow][j + startCol] === num) {
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+            
+            function countSolutions(grid) {
+                if (solutionCount > 1) return; // Early exit if multiple solutions found
+                
+                for (let row = 0; row < 6; row++) {
+                    for (let col = 0; col < 6; col++) {
+                        if (grid[row][col] === 0) {
+                            for (let num = 1; num <= 6; num++) {
+                                if (isValid(grid, row, col, num)) {
+                                    grid[row][col] = num;
+                                    countSolutions(grid);
+                                    grid[row][col] = 0;
+                                }
+                            }
+                            return;
+                        }
+                    }
+                }
+                solutionCount++;
+            }
+            
+            countSolutions(testGrid);
+            return solutionCount === 1;
+        }
+
+        function renderGrid() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            givenCells = [];
+            
+            for (let i = 0; i < 6; i++) {
+                for (let j = 0; j < 6; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    
+                    if (puzzle[i][j] !== 0) {
+                        cell.classList.add('given');
+                        cell.textContent = puzzle[i][j];
+                        givenCells.push({ row: i, col: j });
+                    } else {
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.maxLength = 1;
+                        input.dataset.row = i;
+                        input.dataset.col = j;
+                        input.addEventListener('input', (e) => {
+                            const val = e.target.value;
+                            if (val && (val < '1' || val > '6')) {
+                                e.target.value = '';
+                            }
+                        });
+                        cell.appendChild(input);
+                    }
+                    
+                    grid.appendChild(cell);
+                }
+            }
+        }
+
+        function checkSolution() {
+            if (gameOver) return;
+            
+            const inputs = document.querySelectorAll('.cell input');
+            let allFilled = true;
+            let allCorrect = true;
+            
+            inputs.forEach(input => {
+                const row = parseInt(input.dataset.row);
+                const col = parseInt(input.dataset.col);
+                const value = parseInt(input.value);
+                
+                input.parentElement.classList.remove('error');
+                
+                if (!value) {
+                    allFilled = false;
+                } else if (value !== solution[row][col]) {
+                    allCorrect = false;
+                    input.parentElement.classList.add('error');
+                }
+            });
+            
+            const messageEl = document.getElementById('message');
+            
+            if (!allFilled) {
+                messageEl.textContent = 'Please fill all cells!';
+                messageEl.className = 'message error-msg';
+                return;
+            }
+            
+            if (allCorrect) {
+                messageEl.textContent = '✓ Correct! Moving to next level...';
+                messageEl.className = 'message success';
+                
+                setTimeout(() => {
+                    if (currentClues > 8) { // Minimum clues for 6x6 is around 8
+                        currentClues--;
+                        loadNewPuzzle();
+                        messageEl.textContent = '';
+                    } else {
+                        endGame(true);
+                    }
+                }, 1);
+            } else {
+                messageEl.textContent = '✗ Some cells are incorrect!';
+                messageEl.className = 'message error-msg';
+            }
+        }
+
+        function loadNewPuzzle() {
+            solution = generateSolution();
+            puzzle = createPuzzle(solution, currentClues);
+            renderGrid();
+            document.getElementById('clues').textContent = currentClues;
+        }
+
+        function resetPuzzle() {
+            renderGrid();
+            document.getElementById('message').textContent = '';
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.classList.remove('error');
+            });
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer').textContent = timeLeft;
+                
+                if (timeLeft <= 0) {
+                    endGame(false);
+                }
+            }, 1000);
+        }
+
+        function endGame(completed) {
+            gameOver = true;
+            clearInterval(timerInterval);
+            
+            const messageEl = document.getElementById('message');
+            const scoreEl = document.getElementById('score');
+            
+            if (completed) {
+                messageEl.textContent = '🎉 Amazing! You completed all puzzles!';
+                messageEl.className = 'message game-over success';
+                scoreEl.textContent = '8';
+            } else {
+                messageEl.textContent = '⏰ Time\'s up! Game Over';
+                messageEl.className = 'message game-over';
+                scoreEl.textContent = currentClues;
+            }
+            
+            document.getElementById('checkBtn').disabled = true;
+        }
+
+        function initGame() {
+            currentClues = 35;
+            timeLeft = 180;
+            gameOver = false;
+            document.getElementById('clues').textContent = currentClues;
+            document.getElementById('timer').textContent = timeLeft;
+            loadNewPuzzle();
+            startTimer();
+        }
+
+        document.getElementById('checkBtn').addEventListener('click', checkSolution);
+        document.getElementById('resetBtn').addEventListener('click', resetPuzzle);
+        document.getElementById('resetGameBtn').addEventListener('click', () => {
+            // Clear timer
+            clearInterval(timerInterval);
+            
+            // Reset UI
+            document.getElementById('score').textContent = '-';
+            document.getElementById('message').textContent = '';
+            document.getElementById('checkBtn').disabled = false;
+            
+            // Initialize fresh game
+            initGame();
+        });
+
+        // Initialize game
+        initGame();
+    </script>
+</body>
+</html>
