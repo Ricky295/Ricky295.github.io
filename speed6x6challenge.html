@@ -211,6 +211,10 @@
                 <div class="stat-value timer" id="timer">180</div>
             </div>
             <div class="stat">
+                <div class="stat-label">Answers/min</div>
+                <div class="stat-value" id="speed">0.0</div>
+            </div>
+            <div class="stat">
                 <div class="stat-label">Final Score</div>
                 <div class="stat-value" id="score">-</div>
             </div>
@@ -235,6 +239,8 @@
         let solution = [];
         let puzzle = [];
         let givenCells = [];
+        let totalCorrectClues = 0;
+        let speedInterval = null;
 
         function generateSolution() {
             const grid = Array(6).fill(null).map(() => Array(6).fill(0));
@@ -387,6 +393,13 @@
                             const val = e.target.value;
                             if (val && (val < '1' || val > '6')) {
                                 e.target.value = '';
+                            } else if (val) {
+                                // Check if this clue is correct
+                                const row = parseInt(e.target.dataset.row);
+                                const col = parseInt(e.target.dataset.col);
+                                if (parseInt(val) === solution[row][col]) {
+                                    totalCorrectClues++;
+                                }
                             }
                         });
                         cell.appendChild(input);
@@ -428,18 +441,14 @@
             }
             
             if (allCorrect) {
-                messageEl.textContent = '✓ Correct! Moving to next level...';
-                messageEl.className = 'message success';
+                messageEl.textContent = '';
                 
-                setTimeout(() => {
-                    if (currentClues > 8) { // Minimum clues for 6x6 is around 8
-                        currentClues--;
-                        loadNewPuzzle();
-                        messageEl.textContent = '';
-                    } else {
-                        endGame(true);
-                    }
-                }, 1);
+                if (currentClues > 8) {
+                    currentClues--;
+                    loadNewPuzzle();
+                } else {
+                    endGame(true);
+                }
             } else {
                 messageEl.textContent = '✗ Some cells are incorrect!';
                 messageEl.className = 'message error-msg';
@@ -470,11 +479,20 @@
                     endGame(false);
                 }
             }, 1000);
+            
+            // Update speed display every frame
+            speedInterval = setInterval(() => {
+                const elapsed = 180 - timeLeft;
+                const minutes = elapsed / 60;
+                const speed = minutes > 0 ? (totalCorrectClues / minutes).toFixed(1) : '0.0';
+                document.getElementById('speed').textContent = speed;
+            }, 16); // ~60fps
         }
 
         function endGame(completed) {
             gameOver = true;
             clearInterval(timerInterval);
+            clearInterval(speedInterval);
             
             const messageEl = document.getElementById('message');
             const scoreEl = document.getElementById('score');
@@ -496,8 +514,10 @@
             currentClues = 35;
             timeLeft = 180;
             gameOver = false;
+            totalCorrectClues = 0;
             document.getElementById('clues').textContent = currentClues;
             document.getElementById('timer').textContent = timeLeft;
+            document.getElementById('speed').textContent = '0.0';
             loadNewPuzzle();
             startTimer();
         }
@@ -505,8 +525,9 @@
         document.getElementById('checkBtn').addEventListener('click', checkSolution);
         document.getElementById('resetBtn').addEventListener('click', resetPuzzle);
         document.getElementById('resetGameBtn').addEventListener('click', () => {
-            // Clear timer
+            // Clear timers
             clearInterval(timerInterval);
+            clearInterval(speedInterval);
             
             // Reset UI
             document.getElementById('score').textContent = '-';
