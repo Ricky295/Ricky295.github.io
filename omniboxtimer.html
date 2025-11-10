@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Omnibox Timer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      padding: 30px;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 30px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: background 0.2s;
+    }
+
+    .btn:hover {
+      background: #5568d3;
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      padding: 6px 12px;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+
+    .add-form {
+      background: #f9fafb;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .add-form.active {
+      display: block;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    th {
+      background: #f9fafb;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    tr:hover {
+      background: #f9fafb;
+    }
+
+    .expired {
+      color: #ef4444;
+      font-weight: 600;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #6b7280;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h1>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        Omnibox Timer
+      </h1>
+      <button class="btn" onclick="toggleAddForm()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        Add Timer
+      </button>
+    </div>
+
+    <div class="add-form" id="addForm">
+      <div class="form-group">
+        <label>Timer Name</label>
+        <input type="text" id="timerName" placeholder="e.g., Meeting, Birthday, Deadline">
+      </div>
+
+      <div class="form-group">
+        <label>Time</label>
+        <input type="text" id="timeInput" placeholder="e.g., 5h, 30m, 1h 30m, 90, 2025-12-25">
+        <div class="hint">
+          Enter duration (5h, 30m, 1h 30m) or just minutes (90), or a date (2025-12-25 14:30)
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Auto-delete after expiry (minutes, 0 = never)</label>
+        <input type="number" id="autoDelete" min="0" value="10">
+      </div>
+
+      <div class="form-actions">
+        <button class="btn" onclick="addTimer()">Create Timer</button>
+        <button class="btn" style="background: #6b7280;" onclick="toggleAddForm()">Cancel</button>
+      </div>
+    </div>
+
+    <div id="timersContainer"></div>
+  </div>
+
+  <script>
+    let timers = [];
+    let updateInterval;
+
+    // Load timers from localStorage
+    function loadTimers() {
+      const stored = localStorage.getItem('omnibox-timers');
+      if (stored) {
+        timers = JSON.parse(stored);
+      }
+    }
+
+    // Save timers to localStorage
+    function saveTimers() {
+      localStorage.setItem('omnibox-timers', JSON.stringify(timers));
+    }
+
+    function toggleAddForm() {
+      const form = document.getElementById('addForm');
+      form.classList.toggle('active');
+    }
+
+    function parseTimeInput(input) {
+      input = input.trim();
+      
+      // Try to parse as a date first
+      const datePatterns = [
+        /^\d{4}-\d{2}-\d{2}/, // 2025-12-25
+        /^\d{2}\/\d{2}\/\d{4}/, // 12/25/2025
+      ];
+      
+      for (let pattern of datePatterns) {
+        if (pattern.test(input)) {
+          const date = new Date(input);
+          if (!isNaN(date.getTime())) {
+            return date.getTime();
+          }
+        }
+      }
+      
+      // Parse as duration
+      let totalMinutes = 0;
+      
+      // Check for hour patterns (5h, 5 hours, 5 h)
+      const hourMatch = input.match(/(\d+)\s*(?:h|hour|hours)/i);
+      if (hourMatch) {
+        totalMinutes += parseInt(hourMatch[1]) * 60;
+      }
+      
+      // Check for minute patterns (30m, 30 minutes, 30 min)
+      const minuteMatch = input.match(/(\d+)\s*(?:m|min|minute|minutes)(?!o)/i);
+      if (minuteMatch) {
+        totalMinutes += parseInt(minuteMatch[1]);
+      }
+      
+      // Check for day patterns (2d, 2 days)
+      const dayMatch = input.match(/(\d+)\s*(?:d|day|days)/i);
+      if (dayMatch) {
+        totalMinutes += parseInt(dayMatch[1]) * 24 * 60;
+      }
+      
+      // If no units found, treat as plain number (default to minutes)
+      if (totalMinutes === 0 && /^\d+$/.test(input)) {
+        totalMinutes = parseInt(input);
+      }
+      
+      if (totalMinutes > 0) {
+        return Date.now() + (totalMinutes * 60 * 1000);
+      }
+      
+      return null;
+    }
+
+    function addTimer() {
+      const name = document.getElementById('timerName').value.trim();
+      if (!name) {
+        alert('Please enter a timer name');
+        return;
+      }
+
+      const timeInput = document.getElementById('timeInput').value.trim();
+      const endTime = parseTimeInput(timeInput);
+      
+      if (!endTime) {
+        alert('Please enter a valid time (e.g., 5h, 30m, 1h 30m, 90, or 2025-12-25)');
+        return;
+      }
+
+      const autoDelete = parseInt(document.getElementById('autoDelete').value) || 0;
+
+      timers.push({
+        id: Date.now(),
+        name,
+        endTime,
+        autoDelete,
+        createdAt: Date.now()
+      });
+
+      saveTimers();
+      renderTimers();
+      toggleAddForm();
+      
+      // Reset form
+      document.getElementById('timerName').value = '';
+      document.getElementById('timeInput').value = '';
+      document.getElementById('autoDelete').value = '10';
+    }
+
+    function deleteTimer(id) {
+      timers = timers.filter(t => t.id !== id);
+      saveTimers();
+      renderTimers();
+    }
+
+    function formatTimeRemaining(endTime) {
+      const now = Date.now();
+      const diff = endTime - now;
+
+      if (diff <= 0) {
+        return '<span class="expired">EXPIRED</span>';
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      if (days > 0) {
+        return `${days} day${days !== 1 ? 's' : ''}`;
+      } else if (hours > 0) {
+        return `${hours} hour${hours !== 1 ? 's' : ''}`;
+      } else if (minutes > 0) {
+        return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+      } else {
+        return `${seconds} second${seconds !== 1 ? 's' : ''}`;
+      }
+    }
+
+    function renderTimers() {
+      const container = document.getElementById('timersContainer');
+      
+      // Auto-delete expired timers
+      const now = Date.now();
+      timers = timers.filter(timer => {
+        if (timer.autoDelete > 0) {
+          const deleteTime = timer.endTime + (timer.autoDelete * 60 * 1000);
+          return now < deleteTime;
+        }
+        return true;
+      });
+      saveTimers();
+
+      if (timers.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 20px;">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <h3>No timers yet</h3>
+            <p>Click "Add Timer" to create your first timer</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Target Date</th>
+              <th>Time Remaining</th>
+              <th>Auto-Delete</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${timers.map(timer => `
+              <tr>
+                <td>${timer.name}</td>
+                <td>${new Date(timer.endTime).toLocaleString()}</td>
+                <td>${formatTimeRemaining(timer.endTime)}</td>
+                <td>${timer.autoDelete > 0 ? `${timer.autoDelete} min` : 'Never'}</td>
+                <td>
+                  <button class="btn btn-danger" onclick="deleteTimer(${timer.id})">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                  </button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function init() {
+      loadTimers();
+      renderTimers();
+      updateInterval = setInterval(renderTimers, 1000);
+    }
+
+    // Initialize on load
+    init();
+  </script>
+</body>
+</html>
