@@ -168,7 +168,7 @@
         <label>Time</label>
         <input type="text" id="timeInput" placeholder="e.g., 5h, 30m, 1h 30m, 90, 2025-12-25">
         <div class="hint">
-          Enter duration (5h, 30m, 1h 30m) or just minutes (90), or a date (2025-12-25 14:30)
+          Examples: 5h, 30m, 90s, 1d 5h 30m, tomorrow, next friday, in 2 hours, 3pm, 2025-12-25 14:30
         </div>
       </div>
 
@@ -209,10 +209,105 @@
     }
 
     function parseTimeInput(input) {
-      input = input.trim();
+      input = input.trim().toLowerCase();
+      const now = new Date();
       
-      // Try to parse as a date first
+      // Handle "in X" format (in 5 minutes, in 2 hours, etc.)
+      const inMatch = input.match(/^in\s+(.+)$/i);
+      if (inMatch) {
+        input = inMatch[1].trim();
+      }
+      
+      // Handle relative day keywords
+      if (input === 'tomorrow') {
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(9, 0, 0, 0); // Default to 9 AM
+        return tomorrow.getTime();
+      }
+      
+      // Handle "next [day]" format
+      const nextDayMatch = input.match(/^next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i);
+      if (nextDayMatch) {
+        const targetDay = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+          .indexOf(nextDayMatch[1].toLowerCase());
+        const currentDay = now.getDay();
+        let daysToAdd = targetDay - currentDay;
+        if (daysToAdd <= 0) daysToAdd += 7;
+        
+        const nextDate = new Date(now);
+        nextDate.setDate(nextDate.getDate() + daysToAdd);
+        nextDate.setHours(9, 0, 0, 0);
+        return nextDate.getTime();
+      }
+      
+      // Handle "X from now" format (2 weeks from now, 3 days from now)
+      const fromNowMatch = input.match(/^(\d+)\s+(second|minute|hour|day|week|month)s?\s+from\s+now$/i);
+      if (fromNowMatch) {
+        const amount = parseInt(fromNowMatch[1]);
+        const unit = fromNowMatch[2].toLowerCase();
+        const multipliers = {
+          second: 1000,
+          minute: 60 * 1000,
+          hour: 60 * 60 * 1000,
+          day: 24 * 60 * 60 * 1000,
+          week: 7 * 24 * 60 * 60 * 1000,
+          month: 30 * 24 * 60 * 60 * 1000
+        };
+        return now.getTime() + (amount * multipliers[unit]);
+      }
+      
+      // Handle time of day (3pm, 15:30, 3:30pm)
+      const timeMatch = input.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+      if (timeMatch) {
+        let hours = parseInt(timeMatch[1]);
+        const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+        const period = timeMatch[3] ? timeMatch[3].toLowerCase() : null;
+        
+        if (period === 'pm' && hours < 12) hours += 12;
+        if (period === 'am' && hours === 12) hours = 0;
+        
+        const targetTime = new Date(now);
+        targetTime.setHours(hours, minutes, 0, 0);
+        
+        // If time has passed today, set for tomorrow
+        if (targetTime <= now) {
+          targetTime.setDate(targetTime.getDate() + 1);
+        }
+        
+        return targetTime.getTime();
+      }
+      
+      // Handle "tomorrow at [time]" or "next [day] at [time]"
+      const atTimeMatch = input.match(/^(tomorrow|next\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\s+at\s+(.+)$/i);
+      if (atTimeMatch) {
+        const dateStr = atTimeMatch[1];
+        const timeStr = atTimeMatch[2];
+        
+        // Get the base date
+        const baseDate = parseTimeInput(dateStr);
+        if (baseDate) {
+          const baseDateObj = new Date(baseDate);
+          
+          // Parse the time
+          const timeMatch2 = timeStr.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+          if (timeMatch2) {
+            let hours = parseInt(timeMatch2[1]);
+            const minutes = timeMatch2[2] ? parseInt(timeMatch2[2]) : 0;
+            const period = timeMatch2[3] ? timeMatch2[3].toLowerCase() : null;
+            
+            if (period === 'pm' && hours < 12) hours += 12;
+            if (period === 'am' && hours === 12) hours = 0;
+            
+            baseDateObj.setHours(hours, minutes, 0, 0);
+            return baseDateObj.getTime();
+          }
+        }
+      }
+      
+      // Try to parse as ISO 8601 or standard date
       const datePatterns = [
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/, // ISO 8601: 2025-12-25T14:30:00
         /^\d{4}-\d{2}-\d{2}/, // 2025-12-25
         /^\d{2}\/\d{2}\/\d{4}/, // 12/25/2025
       ];
@@ -226,34 +321,61 @@
         }
       }
       
-      // Parse as duration
-      let totalMinutes = 0;
+      // Parse as duration with multiple units
+      let totalSeconds = 0;
+      
+      // Check for day patterns (2d, 2 days)
+      const dayMatch = input.match(/(\d+)\s*(?:d|day|days)(?![a-z])/gi);
+      if (dayMatch) {
+        dayMatch.forEach(match => {
+          const num = parseInt(match.match(/\d+/)[0]);
+          totalSeconds += num * 24 * 60 * 60;
+        });
+      }
+      
+      // Check for week patterns (2w, 2 weeks)
+      const weekMatch = input.match(/(\d+)\s*(?:w|week|weeks)(?![a-z])/gi);
+      if (weekMatch) {
+        weekMatch.forEach(match => {
+          const num = parseInt(match.match(/\d+/)[0]);
+          totalSeconds += num * 7 * 24 * 60 * 60;
+        });
+      }
       
       // Check for hour patterns (5h, 5 hours, 5 h)
-      const hourMatch = input.match(/(\d+)\s*(?:h|hour|hours)/i);
+      const hourMatch = input.match(/(\d+)\s*(?:h|hour|hours)(?![a-z])/gi);
       if (hourMatch) {
-        totalMinutes += parseInt(hourMatch[1]) * 60;
+        hourMatch.forEach(match => {
+          const num = parseInt(match.match(/\d+/)[0]);
+          totalSeconds += num * 60 * 60;
+        });
       }
       
       // Check for minute patterns (30m, 30 minutes, 30 min)
-      const minuteMatch = input.match(/(\d+)\s*(?:m|min|minute|minutes)(?!o)/i);
+      const minuteMatch = input.match(/(\d+)\s*(?:m|min|minute|minutes)(?![a-z])/gi);
       if (minuteMatch) {
-        totalMinutes += parseInt(minuteMatch[1]);
+        minuteMatch.forEach(match => {
+          const num = parseInt(match.match(/\d+/)[0]);
+          totalSeconds += num * 60;
+        });
       }
       
-      // Check for day patterns (2d, 2 days)
-      const dayMatch = input.match(/(\d+)\s*(?:d|day|days)/i);
-      if (dayMatch) {
-        totalMinutes += parseInt(dayMatch[1]) * 24 * 60;
+      // Check for second patterns (30s, 30 seconds, 30 sec)
+      const secondMatch = input.match(/(\d+)\s*(?:s|sec|second|seconds)(?![a-z])/gi);
+      if (secondMatch) {
+        secondMatch.forEach(match => {
+          const num = parseInt(match.match(/\d+/)[0]);
+          totalSeconds += num;
+        });
       }
       
       // If no units found, treat as plain number (default to minutes)
-      if (totalMinutes === 0 && /^\d+$/.test(input)) {
-        totalMinutes = parseInt(input);
+      if (totalSeconds === 0 && /^\d+$/.test(input)) {
+        totalSeconds = parseInt(input) * 60;
       }
       
-      if (totalMinutes > 0) {
-        return Date.now() + (totalMinutes * 60 * 1000);
+      if (totalSeconds > 0) {
+        return Date.now() + (totalSeconds * 1000);
       }
       
       return null;
@@ -270,7 +392,7 @@
       const endTime = parseTimeInput(timeInput);
       
       if (!endTime) {
-        alert('Please enter a valid time (e.g., 5h, 30m, 1h 30m, 90, or 2025-12-25)');
+        alert('Please enter a valid time\n\nExamples:\n• Duration: 5h, 30m, 90s, 1d 5h 30m\n• Relative: tomorrow, next friday, in 2 hours\n• Time: 3pm, 15:30, tomorrow at 3pm\n• Date: 2025-12-25, 2025-12-25T14:30');
         return;
       }
 
