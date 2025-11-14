@@ -1,903 +1,575 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR Code Sudoku Player</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-            transition: background 0.3s ease;
-        }
-
-        body.night-mode {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            padding: 30px;
-            transition: background 0.3s ease, color 0.3s ease;
-        }
-
-        body.night-mode .container {
-            background: #0f3460;
-            color: #e9ecef;
-        }
-
-        h1 {
-            text-align: center;
-            color: #667eea;
-            margin-bottom: 30px;
-            font-size: 2.5em;
-            transition: color 0.3s ease;
-        }
-
-        body.night-mode h1 {
-            color: #9db4ff;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-
-        .stat-box {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-            border: 2px solid #e9ecef;
-            transition: background 0.3s ease, border-color 0.3s ease;
-        }
-
-        body.night-mode .stat-box {
-            background: #16213e;
-            border-color: #1a1a2e;
-        }
-
-        .stat-value {
-            font-size: 2em;
-            font-weight: bold;
-            color: #667eea;
-            transition: color 0.3s ease;
-        }
-
-        body.night-mode .stat-value {
-            color: #9db4ff;
-        }
-
-        .stat-label {
-            color: #6c757d;
-            font-size: 0.9em;
-            margin-top: 5px;
-            transition: color 0.3s ease;
-        }
-
-        body.night-mode .stat-label {
-            color: #adb5bd;
-        }
-
-        .main-content {
-            display: flex;
-            flex-direction: column;
-            gap: 30px;
-        }
-
-        .puzzle-list-panel {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 20px;
-            border: 2px solid #e9ecef;
-            transition: background 0.3s ease, border-color 0.3s ease;
-        }
-
-        body.night-mode .puzzle-list-panel {
-            background: #16213e;
-            border-color: #1a1a2e;
-        }
-
-        .puzzle-list-panel h2 {
-            color: #495057;
-            margin-bottom: 15px;
-            font-size: 1.3em;
-            transition: color 0.3s ease;
-        }
-
-        body.night-mode .puzzle-list-panel h2 {
-            color: #e9ecef;
-        }
-
-        .puzzle-list-items {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .puzzle-list-item {
-            padding: 12px 16px;
-            background: white;
-            border-radius: 8px;
-            border: 2px solid #e9ecef;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            font-weight: bold;
-            font-size: 1em;
-            align-items: center;
-        }
-
-        body.night-mode .puzzle-list-item {
-            background: #0f3460;
-            border-color: #1a1a2e;
-            color: #e9ecef;
-        }
-
-        .puzzle-list-item:hover {
-            background: #f0f2ff;
-            border-color: #667eea;
-        }
-
-        body.night-mode .puzzle-list-item:hover {
-            background: #1a1a2e;
-            border-color: #9db4ff;
-        }
-
-        .puzzle-list-item.active {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-
-        body.night-mode .puzzle-list-item.active {
-            background: #9db4ff;
-            color: #0f3460;
-            border-color: #9db4ff;
-        }
-
-        .puzzle-list-item.completed {
-            opacity: 0.85;
-        }
-
-        .puzzle-list-item.completed::after {
-            content: "✓";
-            margin-left: 8px;
-            color: #28a745;
-            font-weight: bold;
-        }
-
-        .game-panel {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .game-controls {
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
-        .game-controls button {
-            padding: 12px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-
-        .btn-night-toggle {
-            background: #ffc107;
-            color: #000;
-        }
-
-        .btn-night-toggle:hover {
-            background: #ffb300;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(255, 193, 7, 0.4);
-        }
-
-        body.night-mode .btn-night-toggle {
-            background: #6c757d;
-            color: white;
-        }
-
-        body.night-mode .btn-night-toggle:hover {
-            background: #5a6268;
-        }
-
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #5568d3;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-success {
-            background: #28a745;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #218838;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
-        }
-
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background: #5a6268;
-        }
-
-        .btn-back {
-            background: #dc3545;
-            color: white;
-        }
-
-        .btn-back:hover {
-            background: #c82333;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
-        }
-
-        .sudoku-grid {
-            display: grid;
-            gap: 0;
-            background: #2c3e50;
-            padding: 4px;
-            border-radius: 8px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-            margin-bottom: 20px;
-            transition: background 0.3s ease;
-            max-width: 100%;
-            width: fit-content;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        body.night-mode .sudoku-grid {
-            background: #1a1a2e;
-        }
-
-        .sudoku-grid.size-9x9 {
-            grid-template-columns: repeat(9, 50px);
-            grid-template-rows: repeat(9, 50px);
-        }
-
-        .sudoku-grid.size-6x6 {
-            grid-template-columns: repeat(6, 60px);
-            grid-template-rows: repeat(6, 60px);
-        }
-
-        .sudoku-cell {
-            background: white;
-            border: 1px solid #ddd;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.2s;
-            position: relative;
-        }
-
-        body.night-mode .sudoku-cell {
-            background: #16213e;
-            border-color: #0f3460;
-            color: #e9ecef;
-        }
-
-        .sudoku-cell .main-number {
-            font-size: 24px;
-            font-weight: bold;
-        }
-
-        .sudoku-cell .candidates {
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            right: 2px;
-            bottom: 2px;
-            display: grid;
-            font-size: 10px;
-            font-weight: normal;
-            color: #667eea;
-            transition: color 0.3s ease;
-        }
-
-        body.night-mode .sudoku-cell .candidates {
-            color: #9db4ff;
-        }
-
-        .sudoku-grid.size-9x9 .candidates {
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(3, 1fr);
-        }
-
-        .sudoku-grid.size-6x6 .candidates {
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(2, 1fr);
-        }
-
-        .candidate-num {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .sudoku-cell:hover:not(.given):not(.conflict) {
-            background: #e7e9ff;
-        }
-
-        body.night-mode .sudoku-cell:hover:not(.given):not(.conflict) {
-            background: #1a1a2e;
-        }
-
-        .sudoku-cell.selected {
-            background: #ffd700;
-        }
-
-        body.night-mode .sudoku-cell.selected {
-            background: #ffc107;
-            color: #000;
-        }
-
-        body.night-mode .sudoku-cell.selected .candidates {
-            color: #667eea;
-        }
-
-        .sudoku-cell.given {
-            background: #e9ecef;
-            color: #2c3e50;
-            cursor: default;
-        }
-
-        body.night-mode .sudoku-cell.given {
-            background: #0a1929;
-            color: #9db4ff;
-        }
-
-        .sudoku-cell.conflict {
-            background: #ffebee;
-            color: #dc3545;
-        }
-
-        body.night-mode .sudoku-cell.conflict {
-            background: #4d1f1f;
-            color: #ff6b6b;
-        }
-
-        .sudoku-grid.size-9x9 .sudoku-cell:nth-child(9n+3),
-        .sudoku-grid.size-9x9 .sudoku-cell:nth-child(9n+6) {
-            border-right: 3px solid #2c3e50;
-        }
-
-        .sudoku-grid.size-9x9 .sudoku-cell:nth-child(n+19):nth-child(-n+27),
-        .sudoku-grid.size-9x9 .sudoku-cell:nth-child(n+46):nth-child(-n+54) {
-            border-bottom: 3px solid #2c3e50;
-        }
-
-        .sudoku-grid.size-6x6 .sudoku-cell:nth-child(6n+3) {
-            border-right: 3px solid #2c3e50;
-        }
-
-        .sudoku-grid.size-6x6 .sudoku-cell:nth-child(n+7):nth-child(-n+12),
-        .sudoku-grid.size-6x6 .sudoku-cell:nth-child(n+19):nth-child(-n+24) {
-            border-bottom: 3px solid #2c3e50;
-        }
-
-        .number-pad {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .number-pad button {
-            width: 60px;
-            height: 60px;
-            border: 2px solid #dee2e6;
-            border-radius: 8px;
-            background: white;
-            font-size: 20px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        body.night-mode .number-pad button {
-            background: #16213e;
-            border-color: #1a1a2e;
-            color: #e9ecef;
-        }
-
-        .number-pad button.wide {
-            width: 128px;
-        }
-
-        .number-pad button:hover {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        body.night-mode .number-pad button:hover {
-            background: #9db4ff;
-            color: #0f3460;
-            border-color: #9db4ff;
-        }
-
-        .empty-state {
-            text-align: center;
-            color: #6c757d;
-            padding: 60px 20px;
-            font-size: 18px;
-            transition: color 0.3s ease;
-        }
-
-        body.night-mode .empty-state {
-            color: #adb5bd;
-        }
-
-        .empty-state .icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-        }
-
-        .victory-message {
-            text-align: center;
-            padding: 30px;
-            background: #d4edda;
-            border: 3px solid #28a745;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            transition: background 0.3s ease, border-color 0.3s ease;
-        }
-
-        body.night-mode .victory-message {
-            background: #1e4d2b;
-            border-color: #28a745;
-        }
-
-        .victory-message h2 {
-            color: #155724;
-            font-size: 2em;
-            margin-bottom: 10px;
-            transition: color 0.3s ease;
-        }
-
-        body.night-mode .victory-message h2 {
-            color: #8ce99a;
-        }
-
-        .victory-message p {
-            color: #155724;
-            font-size: 1.2em;
-            transition: color 0.3s ease;
-        }
-
-        body.night-mode .victory-message p {
-            color: #8ce99a;
-        }
-
-        @media (max-width: 1024px) {
-            .stats {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        @media (max-width: 768px) {
-            .stats {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            .sudoku-grid.size-9x9 {
-                grid-template-columns: repeat(9, 40px);
-                grid-template-rows: repeat(9, 40px);
-            }
-
-            .sudoku-grid.size-6x6 {
-                grid-template-columns: repeat(6, 50px);
-                grid-template-rows: repeat(6, 50px);
-            }
-
-            .sudoku-cell {
-                font-size: 20px;
-            }
-
-            .number-pad button {
-                padding: 12px;
-                font-size: 18px;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Omnibox Timer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      padding: 30px;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 30px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: background 0.2s;
+    }
+
+    .btn:hover {
+      background: #5568d3;
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      padding: 6px 12px;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+
+    .add-form {
+      background: #f9fafb;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .add-form.active {
+      display: block;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    th {
+      background: #f9fafb;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    tr:hover {
+      background: #f9fafb;
+    }
+
+    .expired {
+      color: #ef4444;
+      font-weight: 600;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #6b7280;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎮 QR Code Sudoku Player</h1>
-
-        <div class="stats">
-            <div class="stat-box">
-                <div class="stat-value" id="totalPuzzles">0</div>
-                <div class="stat-label">Total Puzzles</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-value" id="completedCount">0</div>
-                <div class="stat-label">Completed</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-value" id="currentPuzzleNum">-</div>
-                <div class="stat-label">Current Puzzle</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-value" id="puzzleSize">-</div>
-                <div class="stat-label">Size</div>
-            </div>
-        </div>
-
-        <div class="main-content">
-            <div class="puzzle-list-panel">
-                <h2>Puzzle Pack</h2>
-                <div id="puzzleListContainer" class="puzzle-list-items"></div>
-            </div>
-
-            <div class="game-panel">
-                <div id="gameArea"></div>
-            </div>
-        </div>
+  <div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h1>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        Omnibox Timer
+      </h1>
+      <button class="btn" onclick="toggleAddForm()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        Add Timer
+      </button>
     </div>
 
-    <script>
-        let puzzles = [];
-        let currentPuzzleIndex = -1;
-        let currentGrid = [];
-        let candidates = [];
-        let givenCells = [];
-        let selectedCell = -1;
-        let puzzleSize = 9;
-        let completed = new Set();
-        let candidateMode = false;
-        let nightMode = false;
+    <div class="add-form" id="addForm">
+      <div class="form-group">
+        <label>Timer Name</label>
+        <input type="text" id="timerName" placeholder="e.g., Meeting, Birthday, Deadline">
+      </div>
 
-        function toggleNightMode() {
-            nightMode = !nightMode;
-            document.body.classList.toggle('night-mode', nightMode);
-            localStorage.setItem('nightMode', nightMode);
-        }
+      <div class="form-group">
+        <label>Time</label>
+        <input type="text" id="timeInput" placeholder="e.g., 5h, 30m, 1h 30m, 90, 2025-12-25">
+        <div class="hint">
+          Examples: 5h, 30m, 90s, 1d 5h 30m, tomorrow, next friday, in 2 hours, 3pm, 2025-12-25 14:30
+        </div>
+      </div>
 
-        window.addEventListener('DOMContentLoaded', () => {
-            const savedMode = localStorage.getItem('nightMode');
-            if (savedMode === 'true') {
-                nightMode = true;
-                document.body.classList.add('night-mode');
-            }
+      <div class="form-group">
+        <label>Auto-delete after expiry (minutes, 0 = never)</label>
+        <input type="number" id="autoDelete" min="0" value="10">
+      </div>
+
+      <div class="form-actions">
+        <button class="btn" onclick="addTimer()">Create Timer</button>
+        <button class="btn" style="background: #6b7280;" onclick="toggleAddForm()">Cancel</button>
+      </div>
+    </div>
+
+    <div id="timersContainer"></div>
+  </div>
+
+  <script>
+    let timers = [];
+    let updateInterval;
+    let notifiedTimers = new Set();
+
+    // Request notification permission on load
+    function requestNotificationPermission() {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+
+    // Send notification for expired timer
+    function sendNotification(timer) {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const notification = new Notification('⏰ Timer Expired!', {
+          body: `${timer.name} has finished`,
+          icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="%23667eea"/><circle cx="50" cy="50" r="35" fill="white"/><line x1="50" y1="50" x2="50" y2="25" stroke="%23667eea" stroke-width="3"/><line x1="50" y1="50" x2="65" y2="50" stroke="%23667eea" stroke-width="3"/></svg>',
+          tag: `timer-${timer.id}`,
+          requireInteraction: true
         });
 
-        function loadPuzzlesFromURL() {
-            const params = new URLSearchParams(window.location.search);
+        // Play sound (simple beep)
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.5);
+
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+      }
+    }
+
+    // Load timers from localStorage
+    function loadTimers() {
+      const stored = localStorage.getItem('omnibox-timers');
+      if (stored) {
+        timers = JSON.parse(stored);
+      }
+    }
+
+    // Save timers to localStorage
+    function saveTimers() {
+      localStorage.setItem('omnibox-timers', JSON.stringify(timers));
+    }
+
+    function toggleAddForm() {
+      const form = document.getElementById('addForm');
+      form.classList.toggle('active');
+    }
+
+    function parseTimeInput(input) {
+      input = input.trim().toLowerCase();
+      const now = new Date();
+      
+      // Handle "in X" format (in 5 minutes, in 2 hours, etc.)
+      const inMatch = input.match(/^in\s+(.+)$/i);
+      if (inMatch) {
+        input = inMatch[1].trim();
+      }
+      
+      // Handle relative day keywords
+      if (input === 'tomorrow') {
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(9, 0, 0, 0); // Default to 9 AM
+        return tomorrow.getTime();
+      }
+      
+      // Handle "next [day]" format
+      const nextDayMatch = input.match(/^next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i);
+      if (nextDayMatch) {
+        const targetDay = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+          .indexOf(nextDayMatch[1].toLowerCase());
+        const currentDay = now.getDay();
+        let daysToAdd = targetDay - currentDay;
+        if (daysToAdd <= 0) daysToAdd += 7;
+        
+        const nextDate = new Date(now);
+        nextDate.setDate(nextDate.getDate() + daysToAdd);
+        nextDate.setHours(9, 0, 0, 0);
+        return nextDate.getTime();
+      }
+      
+      // Handle "X from now" format (2 weeks from now, 3 days from now)
+      const fromNowMatch = input.match(/^(\d+)\s+(second|minute|hour|day|week|month)s?\s+from\s+now$/i);
+      if (fromNowMatch) {
+        const amount = parseInt(fromNowMatch[1]);
+        const unit = fromNowMatch[2].toLowerCase();
+        const multipliers = {
+          second: 1000,
+          minute: 60 * 1000,
+          hour: 60 * 60 * 1000,
+          day: 24 * 60 * 60 * 1000,
+          week: 7 * 24 * 60 * 60 * 1000,
+          month: 30 * 24 * 60 * 60 * 1000
+        };
+        return now.getTime() + (amount * multipliers[unit]);
+      }
+      
+      // Handle time of day (3pm, 15:30, 3:30pm)
+      const timeMatch = input.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+      if (timeMatch) {
+        let hours = parseInt(timeMatch[1]);
+        const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+        const period = timeMatch[3] ? timeMatch[3].toLowerCase() : null;
+        
+        if (period === 'pm' && hours < 12) hours += 12;
+        if (period === 'am' && hours === 12) hours = 0;
+        
+        const targetTime = new Date(now);
+        targetTime.setHours(hours, minutes, 0, 0);
+        
+        // If time has passed today, set for tomorrow
+        if (targetTime <= now) {
+          targetTime.setDate(targetTime.getDate() + 1);
+        }
+        
+        return targetTime.getTime();
+      }
+      
+      // Handle "tomorrow at [time]" or "next [day] at [time]"
+      const atTimeMatch = input.match(/^(tomorrow|next\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\s+at\s+(.+)$/i);
+      if (atTimeMatch) {
+        const dateStr = atTimeMatch[1];
+        const timeStr = atTimeMatch[2];
+        
+        // Get the base date
+        const baseDate = parseTimeInput(dateStr);
+        if (baseDate) {
+          const baseDateObj = new Date(baseDate);
+          
+          // Parse the time
+          const timeMatch2 = timeStr.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+          if (timeMatch2) {
+            let hours = parseInt(timeMatch2[1]);
+            const minutes = timeMatch2[2] ? parseInt(timeMatch2[2]) : 0;
+            const period = timeMatch2[3] ? timeMatch2[3].toLowerCase() : null;
             
-            let puzzleStrings = [];
+            if (period === 'pm' && hours < 12) hours += 12;
+            if (period === 'am' && hours === 12) hours = 0;
             
-            if (params.has('puzzles')) {
-                const puzzlesParam = params.get('puzzles');
-                puzzleStrings = puzzlesParam.split(',');
-            } else if (params.has('base64')) {
-                const base64 = params.get('base64');
-                try {
-                    const decoded = atob(base64);
-                    puzzleStrings = decoded.split(',');
-                } catch (error) {
-                    console.error('Failed to decode base64:', error);
-                    alert('Failed to decode puzzle data');
-                    return;
-                }
-            }
-
-            puzzles = puzzleStrings.filter(p => p.length === 81 || p.length === 36);
-            
-            if (puzzles.length === 0) {
-                showEmptyState();
-            } else {
-                updateStats();
-                renderPuzzleList();
-                loadPuzzle(0);
-            }
+            baseDateObj.setHours(hours, minutes, 0, 0);
+            return baseDateObj.getTime();
+          }
         }
-
-        function showEmptyState() {
-            const gameArea = document.getElementById('gameArea');
-            gameArea.innerHTML = `
-                <div class="empty-state">
-                    <div class="icon">📱</div>
-                    <h2>No Puzzles Loaded</h2>
-                    <p>Scan a QR code from the generator to play puzzles!</p>
-                </div>
-            `;
+      }
+      
+      // Try to parse as ISO 8601 or standard date
+      const datePatterns = [
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/, // ISO 8601: 2025-12-25T14:30:00
+        /^\d{4}-\d{2}-\d{2}/, // 2025-12-25
+        /^\d{2}\/\d{2}\/\d{4}/, // 12/25/2025
+      ];
+      
+      for (let pattern of datePatterns) {
+        if (pattern.test(input)) {
+          const date = new Date(input);
+          if (!isNaN(date.getTime())) {
+            return date.getTime();
+          }
         }
+      }
+      
+      // Parse as duration with multiple units
+      let totalSeconds = 0;
+      
+      // Check for day patterns (2d, 2 days)
+      const dayMatch = input.match(/(\d+)\s*(?:d|day|days)(?![a-z])/gi);
+      if (dayMatch) {
+        dayMatch.forEach(match => {
+          const num = parseInt(match.match(/\d+/)[0]);
+          totalSeconds += num * 24 * 60 * 60;
+        });
+      }
+      
+      // Check for week patterns (2w, 2 weeks)
+      const weekMatch = input.match(/(\d+)\s*(?:w|week|weeks)(?![a-z])/gi);
+      if (weekMatch) {
+        weekMatch.forEach(match => {
+          const num = parseInt(match.match(/\d+/)[0]);
+          totalSeconds += num * 7 * 24 * 60 * 60;
+        });
+      }
+      
+      // Check for hour patterns (5h, 5 hours, 5 h)
+      const hourMatch = input.match(/(\d+)\s*(?:h|hour|hours)(?![a-z])/gi);
+      if (hourMatch) {
+        hourMatch.forEach(match => {
+          const num = parseInt(match.match(/\d+/)[0]);
+          totalSeconds += num * 60 * 60;
+        });
+      }
+      
+      // Check for minute patterns (30m, 30 minutes, 30 min)
+      const minuteMatch = input.match(/(\d+)\s*(?:m|min|minute|minutes)(?![a-z])/gi);
+      if (minuteMatch) {
+        minuteMatch.forEach(match => {
+          const num = parseInt(match.match(/\d+/)[0]);
+          totalSeconds += num * 60;
+        });
+      }
+      
+      // Check for second patterns (30s, 30 seconds, 30 sec)
+      const secondMatch = input.match(/(\d+)\s*(?:s|sec|second|seconds)(?![a-z])/gi);
+      if (secondMatch) {
+        secondMatch.forEach(match => {
+          const num = parseInt(match.match(/\d+/)[0]);
+          totalSeconds += num;
+        });
+      }
+      
+      // If no units found, treat as plain number (default to minutes)
+      if (totalSeconds === 0 && /^\d+$/.test(input)) {
+        totalSeconds = parseInt(input) * 60;
+      }
+      
+      if (totalSeconds > 0) {
+        return Date.now() + (totalSeconds * 1000);
+      }
+      
+      return null;
+    }
 
-        function updateStats() {
-            document.getElementById('totalPuzzles').textContent = puzzles.length;
-            document.getElementById('completedCount').textContent = completed.size;
-            document.getElementById('currentPuzzleNum').textContent = currentPuzzleIndex >= 0 ? (currentPuzzleIndex + 1) : '-';
-            document.getElementById('puzzleSize').textContent = puzzleSize === 9 ? '9×9' : '6×6';
+    function addTimer() {
+      const name = document.getElementById('timerName').value.trim();
+      if (!name) {
+        alert('Please enter a timer name');
+        return;
+      }
+
+      const timeInput = document.getElementById('timeInput').value.trim();
+      const endTime = parseTimeInput(timeInput);
+      
+      if (!endTime) {
+        alert('Please enter a valid time\n\nExamples:\n• Duration: 5h, 30m, 90s, 1d 5h 30m\n• Relative: tomorrow, next friday, in 2 hours\n• Time: 3pm, 15:30, tomorrow at 3pm\n• Date: 2025-12-25, 2025-12-25T14:30');
+        return;
+      }
+
+      const autoDelete = parseInt(document.getElementById('autoDelete').value) || 0;
+
+      timers.push({
+        id: Date.now(),
+        name,
+        endTime,
+        autoDelete,
+        createdAt: Date.now()
+      });
+
+      saveTimers();
+      renderTimers();
+      toggleAddForm();
+      
+      // Reset form
+      document.getElementById('timerName').value = '';
+      document.getElementById('timeInput').value = '';
+      document.getElementById('autoDelete').value = '10';
+    }
+
+    function deleteTimer(id) {
+      timers = timers.filter(t => t.id !== id);
+      notifiedTimers.delete(id);
+      saveTimers();
+      renderTimers();
+    }
+
+    function formatTimeRemaining(endTime) {
+      const now = Date.now();
+      const diff = endTime - now;
+
+      if (diff <= 0) {
+        return '<span class="expired">EXPIRED</span>';
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      if (days > 0) {
+        return `${days} day${days !== 1 ? 's' : ''}`;
+      } else if (hours > 0) {
+        return `${hours} hour${hours !== 1 ? 's' : ''}`;
+      } else if (minutes > 0) {
+        return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+      } else {
+        return `${seconds} second${seconds !== 1 ? 's' : ''}`;
+      }
+    }
+
+    function renderTimers() {
+      const container = document.getElementById('timersContainer');
+      
+      // Check for newly expired timers and send notifications
+      const now = Date.now();
+      timers.forEach(timer => {
+        if (timer.endTime <= now && !notifiedTimers.has(timer.id)) {
+          sendNotification(timer);
+          notifiedTimers.add(timer.id);
         }
-
-        function renderPuzzleList() {
-            const container = document.getElementById('puzzleListContainer');
-            container.innerHTML = '';
-
-            // Add header
-            const header = document.createElement('div');
-            header.className = 'puzzle-list-item';
-            header.style.fontWeight = 'bold';
-            header.style.opacity = '0.7';
-            header.style.cursor = 'default';
-            header.innerHTML = '<span>#</span><span>Size</span><span>Info</span>';
-            container.appendChild(header);
-
-            puzzles.forEach((puzzle, index) => {
-                const item = document.createElement('div');
-                item.className = 'puzzle-list-item';
-                if (index === currentPuzzleIndex) item.classList.add('active');
-                if (completed.has(index)) item.classList.add('completed');
-
-                const clues = puzzle.split('').filter(c => c !== '.' && c !== '0').length;
-                const sizeLabel = (puzzle.length === 81) ? '9×9' : '6×6';
-                let infoDisplay = '';
-
-                if (puzzle.length === 36) {
-                    infoDisplay = `${clues} clues`;
-                } else {
-                    let difficulty = Math.max((50 - clues) / 8, (41 - clues) / 4);
-                    difficulty = Math.max(0, Math.min(4, difficulty));
-                    infoDisplay = difficulty.toFixed(2);
-                }
-
-                item.innerHTML = `
-                    <span>${index + 1}</span>
-                    <span>${sizeLabel}</span>
-                    <span>${infoDisplay}</span>
-                `;
-
-                item.onclick = () => loadPuzzle(index);
-                container.appendChild(item);
-            });
-        }
-
-        function loadPuzzle(index) {
-            if (index < 0 || index >= puzzles.length) return;
-
-            currentPuzzleIndex = index;
-            const puzzle = puzzles[index];
-            puzzleSize = puzzle.length === 81 ? 9 : 6;
-            
-            currentGrid = puzzle.split('').map(c => c === '.' || c === '0' ? '' : c);
-            candidates = Array(puzzleSize * puzzleSize).fill(null).map(() => new Set());
-            givenCells = currentGrid.map((c, i) => c !== '');
-            selectedCell = -1;
-
-            updateStats();
-            renderPuzzleList();
-            renderGame();
-        }
-
-        function renderGame() {
-            const gameArea = document.getElementById('gameArea');
-            const isCompleted = checkCompletion();
-
-            let html = '';
-
-            if (isCompleted) {
-                html += `
-                    <div class="victory-message">
-                        <h2>🎉 Puzzle Complete!</h2>
-                        <p>Great job solving puzzle ${currentPuzzleIndex + 1}!</p>
-                    </div>
-                `;
-            }
-
-            html += `
-                <div class="game-controls">
-                    <button class="btn-secondary" onclick="loadPuzzle(${currentPuzzleIndex - 1})" ${currentPuzzleIndex === 0 ? 'disabled' : ''}>⬅️ Previous</button>
-                    <button class="btn-night-toggle" onclick="toggleNightMode()">
-                        ${nightMode ? '☀️ Day Mode' : '🌙 Night Mode'}
-                    </button>
-                    <button class="btn-primary" onclick="candidateMode = !candidateMode; renderGame()">
-                        ${candidateMode ? '🔢 Normal Mode' : '📝 Candidate Mode'}
-                    </button>
-                    <button class="btn-primary" onclick="resetPuzzle()">🔄 Reset</button>
-                    <button class="btn-success" onclick="checkSolution()">✓ Check</button>
-                    <button class="btn-secondary" onclick="loadPuzzle(${currentPuzzleIndex + 1})" ${currentPuzzleIndex === puzzles.length - 1 ? 'disabled' : ''}>Next ➡️</button>
-                    <button class="btn-back" onclick="showPuzzleList()">🔙 Back to List</button>
-                </div>
-            `;
-
-            html += `<div class="sudoku-grid size-${puzzleSize}x${puzzleSize}">`;
-            for (let i = 0; i < puzzleSize * puzzleSize; i++) {
-                const value = currentGrid[i];
-                const isGiven = givenCells[i];
-                const isSelected = i === selectedCell;
-                const hasConflict = !isGiven && value && checkConflict(i, value);
-
-                let cellClass = 'sudoku-cell';
-                if (isGiven) cellClass += ' given';
-                if (isSelected) cellClass += ' selected';
-                if (hasConflict) cellClass += ' conflict';
-
-                let cellContent = '';
-                if (value) {
-                    cellContent = `<span class="main-number">${value}</span>`;
-                } else if (candidates[i].size > 0) {
-                    cellContent = '<div class="candidates">';
-                    for (let n = 1; n <= puzzleSize; n++) {
-                        cellContent += `<div class="candidate-num">${candidates[i].has(n) ? n : ''}</div>`;
-                    }
-                    cellContent += '</div>';
-                }
-
-                html += `<div class="${cellClass}" onclick="selectCell(${i})">${cellContent}</div>`;
-            }
-            html += `</div>`;
-
-            html += `<div class="number-pad">`;
-            for (let i = 1; i <= puzzleSize; i++) {
-                html += `<button onclick="placeNumber(${i})">${i}</button>`;
-            }
-            html += `<button class="wide" onclick="placeNumber('')">Clear</button>`;
-            html += `</div>`;
-
-            gameArea.innerHTML = html;
-        }
-
-        function showPuzzleList() {
-            currentPuzzleIndex = -1;
-            selectedCell = -1;
-            document.getElementById('gameArea').innerHTML = '';
-            renderPuzzleList();
-        }
-
-        function selectCell(index) {
-            if (givenCells[index]) return;
-            selectedCell = index;
-            renderGame();
-        }
-
-        function placeNumber(num) {
-            if (selectedCell === -1 || givenCells[selectedCell]) return;
-            
-            if (candidateMode && num !== '') {
-                if (candidates[selectedCell].has(num)) {
-                    candidates[selectedCell].delete(num);
-                } else {
-                    candidates[selectedCell].add(num);
-                }
-            } else {
-                currentGrid[selectedCell] = num.toString();
-                if (num !== '') {
-                    candidates[selectedCell].clear();
-                }
-            }
-            
-            if (checkCompletion()) {
-                completed.add(currentPuzzleIndex);
-                updateStats();
-            }
-            
-            renderGame();
-        }
-
-        function checkConflict(index, value) {
-            const row = Math.floor(index / puzzleSize);
-            const col = index % puzzleSize;
-
-            for (let c = 0; c < puzzleSize; c++) {
-                if (c !== col && currentGrid[row * puzzleSize + c] === value) return true;
-            }
-
-            for (let r = 0; r < puzzleSize; r++) {
-                if (r !== row && currentGrid[r * puzzleSize + col] === value) return true;
-            }
-
-            const boxRows = puzzleSize === 9 ? 3 : 3;
-            const boxCols = puzzleSize === 9 ? 3 : 2;
-            const boxStartRow = Math.floor(row / boxRows) * boxRows;
-            const boxStartCol = Math.floor(col / boxCols) * boxCols;
-
-            for (let r = boxStartRow; r < boxStartRow + boxRows; r++) {
-                for (let c = boxStartCol; c < boxStartCol + boxCols; c++) {
-                    if ((r !== row || c !== col) && currentGrid[r * puzzleSize + c] === value) return true;
-                }
-            }
-
+      });
+      
+      // Auto-delete expired timers
+      timers = timers.filter(timer => {
+        if (timer.autoDelete > 0) {
+          const deleteTime = timer.endTime + (timer.autoDelete * 60 * 1000);
+          if (now >= deleteTime) {
+            notifiedTimers.delete(timer.id);
             return false;
+          }
         }
+        return true;
+      });
+      saveTimers();
 
-        function checkCompletion() {
-            if (currentGrid.some(c => !c)) return false;
-            for (let i = 0; i < currentGrid.length; i++) {
-                if (checkConflict(i, currentGrid[i])) return false;
-            }
-            return true;
-        }
+      if (timers.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 20px;">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <h3>No timers yet</h3>
+            <p>Click "Add Timer" to create your first timer</p>
+          </div>
+        `;
+        return;
+      }
 
-        function checkSolution() {
-            if (checkCompletion()) {
-                completed.add(currentPuzzleIndex);
-                updateStats();
-                renderPuzzleList();
-                renderGame();
-                alert('🎉 Congratulations! The puzzle is solved correctly!');
-            } else {
-                const conflicts = currentGrid.filter((v, i) => v && checkConflict(i, v)).length;
-                const empty = currentGrid.filter(c => !c).length;
-                if (empty > 0) {
-                    alert(`Not complete yet! ${empty} cells remaining.`);
-                } else if (conflicts > 0) {
-                    alert(`There are conflicts in the solution. Check the highlighted cells.`);
-                }
-            }
-        }
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Target Date</th>
+              <th>Time Remaining</th>
+              <th>Auto-Delete</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${timers.map(timer => `
+              <tr>
+                <td>${timer.name}</td>
+                <td>${new Date(timer.endTime).toLocaleString()}</td>
+                <td>${formatTimeRemaining(timer.endTime)}</td>
+                <td>${timer.autoDelete > 0 ? `${timer.autoDelete} min` : 'Never'}</td>
+                <td>
+                  <button class="btn btn-danger" onclick="deleteTimer(${timer.id})">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                  </button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
 
-        function resetPuzzle() {
-            if (confirm('Reset this puzzle to the beginning?')) {
-                loadPuzzle(currentPuzzleIndex);
-            }
-        }
+    function init() {
+      loadTimers();
+      renderTimers();
+      requestNotificationPermission();
+      updateInterval = setInterval(renderTimers, 1000);
+    }
 
-        document.addEventListener('keydown', (e) => {
-            if (selectedCell === -1) return;
-            if (e.key >= '1' && e.key <= '9') {
-                const num = parseInt(e.key);
-                if (num <= puzzleSize) placeNumber(num);
-            } else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
-                placeNumber('');
-            } else if (e.key === 'ArrowLeft' && selectedCell % puzzleSize > 0) {
-                selectCell(selectedCell - 1);
-            } else if (e.key === 'ArrowRight' && selectedCell % puzzleSize < puzzleSize - 1) {
-                selectCell(selectedCell + 1);
-            } else if (e.key === 'ArrowUp' && selectedCell >= puzzleSize) {
-                selectCell(selectedCell - puzzleSize);
-            } else if (e.key === 'ArrowDown' && selectedCell < puzzleSize * (puzzleSize - 1)) {
-                selectCell(selectedCell + puzzleSize);
-            }
-        });
-
-        loadPuzzlesFromURL();
-    </script>
+    // Initialize on load
+    init();
+  </script>
 </body>
 </html>
