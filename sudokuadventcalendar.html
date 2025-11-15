@@ -122,11 +122,15 @@
         }
 
         .sudoku-cell.selected {
+            background: #bbdefb !important;
+        }
+
+        .sudoku-cell.highlighted-region {
             background: #e3f2fd !important;
         }
 
-        .sudoku-cell.highlighted {
-            background: #fff3cd !important;
+        .sudoku-cell.highlighted-same {
+            background: #ffe0b2 !important;
         }
 
         .sudoku-cell:nth-child(3n) {
@@ -381,8 +385,9 @@
             "W-Wing": "w-wing",
             "BUG+1": "bug-plus-one",
             "X-Chains": "x-chain",
-            "The Grand Finale": "", //unsure if to leave it blank or to do x-chains
+            "The Grand Finale": "x-chain"
         };
+        
         let PUZZLE_DATA = null;
         let currentPuzzle = null;
         let initialGrid = [];
@@ -401,6 +406,7 @@
                 const response = await fetch('puzzles.json');
                 PUZZLE_DATA = await response.json();
                 initializeApp();
+                setupKeyboardControls();
             } catch (error) {
                 console.error('Error loading puzzles:', error);
                 document.getElementById('content').innerHTML = `
@@ -411,6 +417,66 @@
                     </div>
                 `;
             }
+        }
+
+        function setupKeyboardControls() {
+            document.addEventListener('keydown', (e) => {
+                if (!currentPuzzle) return;
+
+                // Number keys 1-9
+                if (e.key >= '1' && e.key <= '9') {
+                    e.preventDefault();
+                    placeNumber(parseInt(e.key));
+                }
+                // Backspace or Delete to clear
+                else if (e.key === 'Backspace' || e.key === 'Delete') {
+                    e.preventDefault();
+                    clearCell();
+                }
+                // Arrow keys for navigation
+                else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                    e.preventDefault();
+                    navigateCell(e.key);
+                }
+                // P or Space to toggle pencil mode
+                else if (e.key === 'p' || e.key === 'P' || e.key === ' ') {
+                    e.preventDefault();
+                    setMode(!isPencilMode);
+                }
+            });
+        }
+
+        function navigateCell(direction) {
+            if (selectedCell === null) {
+                selectedCell = 0;
+                highlightedNumber = null;
+                renderGrid();
+                return;
+            }
+
+            const row = Math.floor(selectedCell / 9);
+            const col = selectedCell % 9;
+            let newRow = row;
+            let newCol = col;
+
+            switch (direction) {
+                case 'ArrowUp':
+                    newRow = row > 0 ? row - 1 : 8;
+                    break;
+                case 'ArrowDown':
+                    newRow = row < 8 ? row + 1 : 0;
+                    break;
+                case 'ArrowLeft':
+                    newCol = col > 0 ? col - 1 : 8;
+                    break;
+                case 'ArrowRight':
+                    newCol = col < 8 ? col + 1 : 0;
+                    break;
+            }
+
+            selectedCell = newRow * 9 + newCol;
+            highlightedNumber = null;
+            renderGrid();
         }
 
         function getURLParams() {
@@ -474,20 +540,13 @@
             return dayNum <= currentDate.day && dayNum <= 24;
         }
 
-        function getTechniqueSlug(name) {
-            return name.toLowerCase()
-                .replace(/\s*\([^)]*\)/g, '')
-                .replace(/\s+/g, '-')
-                .replace(/-+/g, '-')
-                .trim();
-        }
-
         function loadPuzzle(year, day) {
             const puzzleArray = PUZZLE_DATA[year];
             if (!puzzleArray || day < 1 || day > puzzleArray.length) return;
 
             const [puzzleString, solutionString, staffTime] = puzzleArray[day - 1];
-            const puzzleName = PUZZLE_DATA.names[day - 1];
+            const puzzleName = TECHNIQUE_NAMES[day - 1];
+            const puzzleSlug = TECHNIQUE_SLUGS[puzzleName];
 
             currentPuzzle = { 
                 year, 
@@ -495,7 +554,7 @@
                 name: puzzleName,
                 solution: solutionString.split('').map(c => parseInt(c)),
                 staffTime: staffTime,
-                slug: getTechniqueSlug(puzzleName)
+                slug: puzzleSlug
             };
             
             initialGrid = puzzleString.split('').map(c => c === '0' ? 0 : parseInt(c));
@@ -570,20 +629,48 @@
             const grid = document.getElementById('sudokuGrid');
             grid.innerHTML = '';
 
+            // Calculate highlighting regions
+            let highlightRow = null;
+            let highlightCol = null;
+            let highlightBox = null;
+            
+            if (selectedCell !== null) {
+                highlightRow = Math.floor(selectedCell / 9);
+                highlightCol = selectedCell % 9;
+                highlightBox = Math.floor(highlightRow / 3) * 3 + Math.floor(highlightCol / 3);
+            }
+
             for (let i = 0; i < 81; i++) {
                 const cell = document.createElement('div');
                 cell.className = 'sudoku-cell';
                 cell.dataset.index = i;
 
+                const row = Math.floor(i / 9);
+                const col = i % 9;
+                const box = Math.floor(row / 3) * 3 + Math.floor(col / 3);
+
+                // Apply highlighting for selected cell's region
+                if (selectedCell !== null && i !== selectedCell) {
+                    if (row === highlightRow || col === highlightCol || box === highlightBox) {
+                        cell.classList.add('highlighted-region');
+                    }
+                }
+
                 if (initialGrid[i] !== 0) {
                     cell.textContent = initialGrid[i];
                     cell.classList.add('given');
+                    
+                    // Highlight same numbers
+                    if (highlightedNumber === initialGrid[i]) {
+                        cell.classList.add('highlighted-same');
+                    }
                 } else if (playerGrid[i] !== 0) {
                     cell.textContent = playerGrid[i];
                     cell.classList.add('filled');
                     
+                    // Highlight same numbers
                     if (highlightedNumber === playerGrid[i]) {
-                        cell.classList.add('highlighted');
+                        cell.classList.add('highlighted-same');
                     }
                 } else if (candidates[i].length > 0) {
                     const candDiv = document.createElement('div');
@@ -817,9 +904,9 @@
             let targetDate;
 
             if (now.getMonth() === 11) {
-                targetDate = new Date(now.getFullYear() - 1, 11, 1);
-            } else {
                 targetDate = new Date(now.getFullYear(), 11, 1);
+            } else {
+                targetDate = new Date(now.getFullYear() + 1, 11, 1);
             }
 
             content.innerHTML = `
