@@ -125,12 +125,18 @@
             background: #bbdefb !important;
         }
 
-        .sudoku-cell.highlighted-region {
-            background: #e3f2fd !important;
+        .sudoku-cell.highlighted-same {
+            background: #fff3cd !important;
         }
 
-        .sudoku-cell.highlighted-same {
-            background: #ffe0b2 !important;
+        .sudoku-cell.conflict {
+            background: #ffcdd2 !important;
+            color: #d32f2f !important;
+        }
+
+        .sudoku-cell.error {
+            background: #ef5350 !important;
+            color: white !important;
         }
 
         .sudoku-cell:nth-child(3n) {
@@ -340,6 +346,25 @@
             margin: 15px 0;
         }
 
+        .completion-penalties {
+            font-size: 0.95em;
+            color: #666;
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .perfect-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
         .rating-gold { color: #FFD700; }
         .rating-silver { color: #C0C0C0; }
         .rating-bronze { color: #CD7F32; }
@@ -516,6 +541,7 @@
         let timerInterval = null;
         let hintsUsed = 0;
         let wrongChecks = 0;
+        let errorCells = new Set();
 
         // Load puzzles from JSON file
         async function loadPuzzleData() {
@@ -681,6 +707,9 @@
             isPencilMode = false;
             highlightedNumber = null;
             startTime = Date.now();
+            hintsUsed = 0;
+            wrongChecks = 0;
+            errorCells = new Set();
 
             renderPuzzle();
             startTimer();
@@ -746,15 +775,14 @@
             const grid = document.getElementById('sudokuGrid');
             grid.innerHTML = '';
 
-            // Calculate highlighting regions
-            let highlightRow = null;
-            let highlightCol = null;
-            let highlightBox = null;
-            
-            if (selectedCell !== null) {
-                highlightRow = Math.floor(selectedCell / 9);
-                highlightCol = selectedCell % 9;
-                highlightBox = Math.floor(highlightRow / 3) * 3 + Math.floor(highlightCol / 3);
+            // Check for conflicts in real-time
+            const conflicts = new Set();
+            for (let i = 0; i < 81; i++) {
+                if (playerGrid[i] !== 0 && initialGrid[i] === 0) {
+                    if (hasConflict(i)) {
+                        conflicts.add(i);
+                    }
+                }
             }
 
             for (let i = 0; i < 81; i++) {
@@ -762,33 +790,12 @@
                 cell.className = 'sudoku-cell';
                 cell.dataset.index = i;
 
-                const row = Math.floor(i / 9);
-                const col = i % 9;
-                const box = Math.floor(row / 3) * 3 + Math.floor(col / 3);
-
-                // Apply highlighting for selected cell's region
-                if (selectedCell !== null && i !== selectedCell) {
-                    if (row === highlightRow || col === highlightCol || box === highlightBox) {
-                        cell.classList.add('highlighted-region');
-                    }
-                }
-
                 if (initialGrid[i] !== 0) {
                     cell.textContent = initialGrid[i];
                     cell.classList.add('given');
-                    
-                    // Highlight same numbers
-                    if (highlightedNumber === initialGrid[i]) {
-                        cell.classList.add('highlighted-same');
-                    }
                 } else if (playerGrid[i] !== 0) {
                     cell.textContent = playerGrid[i];
                     cell.classList.add('filled');
-                    
-                    // Highlight same numbers
-                    if (highlightedNumber === playerGrid[i]) {
-                        cell.classList.add('highlighted-same');
-                    }
                 } else if (candidates[i].length > 0) {
                     const candDiv = document.createElement('div');
                     candDiv.className = 'candidates';
@@ -800,13 +807,78 @@
                     cell.appendChild(candDiv);
                 }
 
+                // Apply styles in priority order (lowest to highest)
+                // 1. Selected cell
                 if (selectedCell === i) {
                     cell.classList.add('selected');
+                }
+
+                // 2. Same number highlighting
+                const cellValue = initialGrid[i] !== 0 ? initialGrid[i] : playerGrid[i];
+                if (highlightedNumber !== null && cellValue === highlightedNumber) {
+                    cell.classList.add('highlighted-same');
+                }
+
+                // 3. Conflicts (light red) - only for player-filled cells
+                if (playerGrid[i] !== 0 && initialGrid[i] === 0 && conflicts.has(i)) {
+                    cell.classList.add('conflict');
+                }
+
+                // 4. Errors from check solution (dark red) - highest priority
+                if (errorCells.has(i)) {
+                    cell.classList.add('error');
                 }
 
                 cell.addEventListener('click', () => handleCellClick(i));
                 grid.appendChild(cell);
             }
+        }
+
+        function hasConflict(cellIndex) {
+            const value = playerGrid[cellIndex];
+            if (value === 0) return false;
+
+            const row = Math.floor(cellIndex / 9);
+            const col = cellIndex % 9;
+            const boxRow = Math.floor(row / 3) * 3;
+            const boxCol = Math.floor(col / 3) * 3;
+
+            // Check row
+            for (let c = 0; c < 9; c++) {
+                const idx = row * 9 + c;
+                if (idx !== cellIndex && playerGrid[idx] === value) {
+                    return true;
+                }
+                if (idx !== cellIndex && initialGrid[idx] === value) {
+                    return true;
+                }
+            }
+
+            // Check column
+            for (let r = 0; r < 9; r++) {
+                const idx = r * 9 + col;
+                if (idx !== cellIndex && playerGrid[idx] === value) {
+                    return true;
+                }
+                if (idx !== cellIndex && initialGrid[idx] === value) {
+                    return true;
+                }
+            }
+
+            // Check box
+            for (let r = 0; r < 3; r++) {
+                for (let c = 0; c < 3; c++) {
+                    const idx = (boxRow + r) * 9 + (boxCol + c);
+                    if (idx !== cellIndex && playerGrid[idx] === value) {
+                        return true;
+                    }
+                    if (idx !== cellIndex && initialGrid[idx] === value) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         function handleCellClick(index) {
@@ -861,6 +933,9 @@
                 playerGrid[selectedCell] = num;
                 candidates[selectedCell] = [];
                 
+                // Clear error marking when user changes the cell
+                errorCells.delete(selectedCell);
+                
                 // Auto-remove candidates from related cells
                 removeCandidatesForNumber(selectedCell, num);
             }
@@ -874,6 +949,7 @@
 
             playerGrid[selectedCell] = 0;
             candidates[selectedCell] = [];
+            errorCells.delete(selectedCell);
             renderGrid();
             hideMessage();
         }
@@ -915,16 +991,21 @@
         }
 
         function checkSolution() {
+            errorCells.clear();
+            
             if (playerGrid.includes(0)) {
                 showMessage('Puzzle is not complete yet!', 'error');
                 return;
             }
 
             let correct = true;
+            const errors = [];
+            
             for (let i = 0; i < 81; i++) {
                 if (playerGrid[i] !== currentPuzzle.solution[i]) {
                     correct = false;
-                    break;
+                    errorCells.add(i);
+                    errors.push(i);
                 }
             }
 
@@ -933,13 +1014,21 @@
                 const elapsed = Math.floor((Date.now() - startTime) / 1000);
                 showCompletionModal(elapsed);
             } else {
-                showMessage('❌ There are some mistakes. Keep trying!', 'error');
+                wrongChecks++;
+                renderGrid();
+                showMessage(`❌ ${errors.length} mistake${errors.length > 1 ? 's' : ''} found - highlighted in red (+15s penalty)`, 'error');
             }
         }
 
-        function showCompletionModal(elapsed) {
+        function showCompletionModal(baseTime) {
+            const hintPenalty = hintsUsed * 30;
+            const checkPenalty = wrongChecks * 15;
+            const totalPenalty = hintPenalty + checkPenalty;
+            const finalTime = baseTime + totalPenalty;
+            
             const staffTime = currentPuzzle.staffTime;
-            const ratio = elapsed / staffTime;
+            const ratio = finalTime / staffTime;
+            const isPerfect = hintsUsed === 0 && wrongChecks === 0;
             
             let star, rating, ratingClass;
             if (ratio <= 1.0) {
@@ -960,10 +1049,29 @@
                 ratingClass = 'rating-complete';
             }
 
-            const minutes = Math.floor(elapsed / 60);
-            const seconds = elapsed % 60;
+            const baseMin = Math.floor(baseTime / 60);
+            const baseSec = baseTime % 60;
+            const finalMin = Math.floor(finalTime / 60);
+            const finalSec = finalTime % 60;
             const staffMin = Math.floor(staffTime / 60);
             const staffSec = staffTime % 60;
+
+            let penaltyHTML = '';
+            if (totalPenalty > 0) {
+                penaltyHTML = `
+                    <div class="completion-penalties">
+                        Base Time: ${baseMin}:${baseSec.toString().padStart(2, '0')}<br>
+                        ${hintsUsed > 0 ? `Hints: ${hintsUsed} (+${hintPenalty}s)<br>` : ''}
+                        ${wrongChecks > 0 ? `Wrong Checks: ${wrongChecks} (+${checkPenalty}s)<br>` : ''}
+                        <strong>Total Penalties: +${totalPenalty}s</strong>
+                    </div>
+                `;
+            }
+
+            let perfectBadge = '';
+            if (isPerfect) {
+                perfectBadge = '<div class="perfect-badge">⭐ Perfect Solve!</div>';
+            }
 
             // Create modal
             const modal = document.createElement('div');
@@ -973,12 +1081,14 @@
                     <div class="completion-star">${star}</div>
                     <div class="completion-title">Puzzle Complete!</div>
                     <div class="completion-time">
-                        Your Time: ${minutes}:${seconds.toString().padStart(2, '0')}
+                        Final Time: ${finalMin}:${finalSec.toString().padStart(2, '0')}
                     </div>
+                    ${penaltyHTML}
                     <div class="completion-score">
                         Staff Time: ${staffMin}:${staffSec.toString().padStart(2, '0')}
                     </div>
                     <div class="completion-rating ${ratingClass}">${rating}</div>
+                    ${perfectBadge}
                     <button class="completion-button" onclick="closeCompletionModal()">Continue</button>
                 </div>
             `;
@@ -987,8 +1097,8 @@
             // Show modal with animation
             setTimeout(() => modal.classList.add('show'), 10);
             
-            // Add confetti for gold performance
-            if (ratio <= 1.0) {
+            // Add confetti for gold performance or perfect solve
+            if (ratio <= 1.0 || isPerfect) {
                 createConfetti();
             }
         }
@@ -1030,12 +1140,13 @@
                 return;
             }
 
+            hintsUsed++;
             const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
             const correctNumber = currentPuzzle.solution[randomCell];
             const row = Math.floor(randomCell / 9) + 1;
             const col = (randomCell % 9) + 1;
             
-            showMessage(`Hint: The number in row ${row}, column ${col} is ${correctNumber}`, 'success');
+            showMessage(`Hint: The number in row ${row}, column ${col} is ${correctNumber} (+30s penalty)`, 'success');
         }
 
         function learnTechnique() {
@@ -1050,6 +1161,9 @@
             highlightedNumber = null;
             isPencilMode = false;
             startTime = Date.now();
+            hintsUsed = 0;
+            wrongChecks = 0;
+            errorCells = new Set();
             setMode(false);
             renderGrid();
             hideMessage();
