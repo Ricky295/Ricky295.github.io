@@ -283,6 +283,121 @@
             display: block;
         }
 
+        .completion-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .completion-modal.show {
+            display: flex;
+        }
+
+        .completion-content {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 400px;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        .completion-star {
+            font-size: 5em;
+            margin: 20px 0;
+            animation: starPop 0.6s ease-out;
+        }
+
+        .completion-title {
+            font-size: 2em;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .completion-time {
+            font-size: 1.5em;
+            color: #333;
+            margin: 15px 0;
+        }
+
+        .completion-score {
+            font-size: 1.2em;
+            color: #666;
+            margin: 10px 0;
+        }
+
+        .completion-rating {
+            font-size: 1.3em;
+            font-weight: bold;
+            margin: 15px 0;
+        }
+
+        .rating-gold { color: #FFD700; }
+        .rating-silver { color: #C0C0C0; }
+        .rating-bronze { color: #CD7F32; }
+        .rating-complete { color: #667eea; }
+
+        .completion-button {
+            margin-top: 20px;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        .completion-button:hover {
+            background: #764ba2;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideIn {
+            from { 
+                transform: translateY(-50px) scale(0.9);
+                opacity: 0;
+            }
+            to { 
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes starPop {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .confetti {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            background: #667eea;
+            position: absolute;
+            animation: confettiFall 3s linear;
+        }
+
+        @keyframes confettiFall {
+            to {
+                transform: translateY(100vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
         .locked {
             text-align: center;
             padding: 30px;
@@ -399,6 +514,8 @@
         let highlightedNumber = null;
         let startTime = null;
         let timerInterval = null;
+        let hintsUsed = 0;
+        let wrongChecks = 0;
 
         // Load puzzles from JSON file
         async function loadPuzzleData() {
@@ -814,11 +931,89 @@
             if (correct) {
                 if (timerInterval) clearInterval(timerInterval);
                 const elapsed = Math.floor((Date.now() - startTime) / 1000);
-                const minutes = Math.floor(elapsed / 60);
-                const seconds = elapsed % 60;
-                showMessage(`🎉 Congratulations! Completed in ${minutes}:${seconds.toString().padStart(2, '0')}`, 'success');
+                showCompletionModal(elapsed);
             } else {
                 showMessage('❌ There are some mistakes. Keep trying!', 'error');
+            }
+        }
+
+        function showCompletionModal(elapsed) {
+            const staffTime = currentPuzzle.staffTime;
+            const ratio = elapsed / staffTime;
+            
+            let star, rating, ratingClass;
+            if (ratio <= 1.0) {
+                star = '🥇';
+                rating = 'Excellent!';
+                ratingClass = 'rating-gold';
+            } else if (ratio <= 1.5) {
+                star = '🥈';
+                rating = 'Great!';
+                ratingClass = 'rating-silver';
+            } else if (ratio <= 2.0) {
+                star = '🥉';
+                rating = 'Good Job!';
+                ratingClass = 'rating-bronze';
+            } else {
+                star = '✅';
+                rating = 'Completed!';
+                ratingClass = 'rating-complete';
+            }
+
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            const staffMin = Math.floor(staffTime / 60);
+            const staffSec = staffTime % 60;
+
+            // Create modal
+            const modal = document.createElement('div');
+            modal.className = 'completion-modal';
+            modal.innerHTML = `
+                <div class="completion-content">
+                    <div class="completion-star">${star}</div>
+                    <div class="completion-title">Puzzle Complete!</div>
+                    <div class="completion-time">
+                        Your Time: ${minutes}:${seconds.toString().padStart(2, '0')}
+                    </div>
+                    <div class="completion-score">
+                        Staff Time: ${staffMin}:${staffSec.toString().padStart(2, '0')}
+                    </div>
+                    <div class="completion-rating ${ratingClass}">${rating}</div>
+                    <button class="completion-button" onclick="closeCompletionModal()">Continue</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            // Show modal with animation
+            setTimeout(() => modal.classList.add('show'), 10);
+            
+            // Add confetti for gold performance
+            if (ratio <= 1.0) {
+                createConfetti();
+            }
+        }
+
+        function closeCompletionModal() {
+            const modal = document.querySelector('.completion-modal');
+            if (modal) {
+                modal.classList.remove('show');
+                setTimeout(() => modal.remove(), 300);
+            }
+        }
+
+        function createConfetti() {
+            const colors = ['#667eea', '#764ba2', '#FFD700', '#FF6B6B', '#4ECDC4', '#95E1D3'];
+            for (let i = 0; i < 50; i++) {
+                setTimeout(() => {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'confetti';
+                    confetti.style.left = Math.random() * 100 + '%';
+                    confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+                    confetti.style.animationDelay = Math.random() * 0.5 + 's';
+                    document.body.appendChild(confetti);
+                    
+                    setTimeout(() => confetti.remove(), 3000);
+                }, i * 30);
             }
         }
 
