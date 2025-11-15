@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku Advent Calendar</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .puzzle-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .puzzle-info h2 {
+            color: #764ba2;
+            margin-bottom: 10px;
+        }
+
+        .puzzle-info .day {
+            font-size: 3em;
+            font-weight: bold;
+            color: #667eea;
+            margin: 10px 0;
+        }
+
+        .timer-display {
+            font-size: 1.5em;
+            color: #667eea;
+            margin-top: 10px;
+        }
+
+        .countdown {
+            text-align: center;
+            padding: 30px;
+        }
+
+        .countdown h2 {
+            color: #764ba2;
+            margin-bottom: 20px;
+        }
+
+        .countdown-timer {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #667eea;
+            margin: 20px 0;
+        }
+
+        .sudoku-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 0;
+            width: 100%;
+            aspect-ratio: 1;
+            margin: 20px auto;
+            border: 3px solid #333;
+            background: #333;
+        }
+
+        .sudoku-cell {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            font-weight: bold;
+            background: white;
+            border: 1px solid #ddd;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .sudoku-cell.given {
+            background: #f0f0f0;
+            color: #333;
+            cursor: default;
+        }
+
+        .sudoku-cell.filled {
+            color: #667eea;
+        }
+
+        .sudoku-cell.selected {
+            background: #e3f2fd !important;
+        }
+
+        .sudoku-cell.highlighted {
+            background: #fff3cd !important;
+        }
+
+        .sudoku-cell:nth-child(3n) {
+            border-right: 2px solid #333;
+        }
+
+        .sudoku-cell:nth-child(n+19):nth-child(-n+27),
+        .sudoku-cell:nth-child(n+46):nth-child(-n+54) {
+            border-bottom: 2px solid #333;
+        }
+
+        .candidates {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            width: 100%;
+            height: 100%;
+            font-size: 0.35em;
+            font-weight: normal;
+            color: #999;
+            padding: 2px;
+        }
+
+        .candidates span {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mode-toggle {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            justify-content: center;
+        }
+
+        .mode-toggle button {
+            padding: 10px 20px;
+            font-size: 1em;
+            font-weight: bold;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            flex: 1;
+        }
+
+        .mode-toggle button.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .controls button {
+            padding: 15px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .controls button:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .action-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .action-buttons button {
+            padding: 15px;
+            font-size: 1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-check {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-check:hover {
+            background: #218838;
+        }
+
+        .btn-reset {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-reset:hover {
+            background: #c82333;
+        }
+
+        .btn-hint {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .btn-hint:hover {
+            background: #e0a800;
+        }
+
+        .btn-learn {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .btn-learn:hover {
+            background: #138496;
+        }
+
+        .message {
+            text-align: center;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 10px;
+            font-weight: bold;
+            display: none;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+
+        .locked {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+        }
+
+        .locked-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+
+        .unlock-section {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .unlock-section input {
+            padding: 10px;
+            font-size: 1em;
+            border: 2px solid #667eea;
+            border-radius: 5px;
+            width: 200px;
+            margin-right: 10px;
+        }
+
+        .unlock-section button {
+            padding: 10px 20px;
+            font-size: 1em;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .unlock-section button:hover {
+            background: #764ba2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎄 Sudoku Advent 🎄</h1>
+        <div class="subtitle">25 Days of Sudoku Techniques</div>
+        
+        <div id="content"></div>
+    </div>
+
+    <script>
+        const SECRET_KEY = "do7'eggs";
+        let PUZZLE_DATA = null;
+        let currentPuzzle = null;
+        let initialGrid = [];
+        let playerGrid = [];
+        let candidates = [];
+        let selectedCell = null;
+        let isUnlocked = false;
+        let isPencilMode = false;
+        let highlightedNumber = null;
+        let startTime = null;
+        let timerInterval = null;
+
+        // Load puzzles from JSON file
+        async function loadPuzzleData() {
+            try {
+                const response = await fetch('puzzles.json');
+                PUZZLE_DATA = await response.json();
+                initializeApp();
+            } catch (error) {
+                console.error('Error loading puzzles:', error);
+                document.getElementById('content').innerHTML = `
+                    <div class="locked">
+                        <div class="locked-icon">❌</div>
+                        <h2>Error Loading Puzzles</h2>
+                        <p>Please make sure puzzles.json is in the same directory.</p>
+                    </div>
+                `;
+            }
+        }
+
+        function getURLParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                year: params.get('year'),
+                day: params.get('day'),
+                key: params.get('key')
+            };
+        }
+
+        function getCurrentDate() {
+            const now = new Date();
+            return {
+                year: now.getFullYear(),
+                month: now.getMonth() + 1,
+                day: now.getDate()
+            };
+        }
+
+        function initializeApp() {
+            const urlParams = getURLParams();
+            const currentDate = getCurrentDate();
+
+            if (urlParams.key === SECRET_KEY) {
+                isUnlocked = true;
+            }
+
+            if (urlParams.year && urlParams.day) {
+                const year = urlParams.year;
+                const day = parseInt(urlParams.day);
+                
+                if (canAccessPuzzle(year, day, currentDate)) {
+                    loadPuzzle(year, day);
+                    return;
+                } else {
+                    showLockedMessage(year, day);
+                    return;
+                }
+            }
+
+            if (currentDate.month === 12 && currentDate.day >= 1 && currentDate.day <= 24) {
+                loadPuzzle(currentDate.year.toString(), currentDate.day);
+            } else if (currentDate.month === 12 && currentDate.day === 25) {
+                showCongratulations();
+            } else {
+                showCountdown();
+            }
+        }
+
+        function canAccessPuzzle(year, day, currentDate) {
+            if (isUnlocked) return true;
+            
+            const yearNum = parseInt(year);
+            const dayNum = parseInt(day);
+            
+            if (currentDate.month !== 12) return false;
+            if (yearNum < currentDate.year) return true;
+            if (yearNum > currentDate.year) return false;
+            
+            return dayNum <= currentDate.day && dayNum <= 24;
+        }
+
+        function getTechniqueSlug(name) {
+            return name.toLowerCase()
+                .replace(/\s*\([^)]*\)/g, '')
+                .replace(/\s+/g, '-')
+                .replace(/-+/g, '-')
+                .trim();
+        }
+
+        function loadPuzzle(year, day) {
+            const puzzleArray = PUZZLE_DATA[year];
+            if (!puzzleArray || day < 1 || day > puzzleArray.length) return;
+
+            const [puzzleString, solutionString, staffTime] = puzzleArray[day - 1];
+            const puzzleName = PUZZLE_DATA.names[day - 1];
+
+            currentPuzzle = { 
+                year, 
+                day, 
+                name: puzzleName,
+                solution: solutionString.split('').map(c => parseInt(c)),
+                staffTime: staffTime,
+                slug: getTechniqueSlug(puzzleName)
+            };
+            
+            initialGrid = puzzleString.split('').map(c => c === '0' ? 0 : parseInt(c));
+            playerGrid = [...initialGrid];
+            candidates = Array(81).fill(null).map(() => []);
+            selectedCell = null;
+            isPencilMode = false;
+            highlightedNumber = null;
+            startTime = Date.now();
+
+            renderPuzzle();
+            startTimer();
+        }
+
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            
+            timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                
+                const timerEl = document.getElementById('timer');
+                if (timerEl) {
+                    const staffMin = Math.floor(currentPuzzle.staffTime / 60);
+                    const staffSec = currentPuzzle.staffTime % 60;
+                    timerEl.textContent = `Time: ${minutes}:${seconds.toString().padStart(2, '0')} | Staff: ${staffMin}:${staffSec.toString().padStart(2, '0')}`;
+                }
+            }, 1000);
+        }
+
+        function renderPuzzle() {
+            const content = document.getElementById('content');
+            content.innerHTML = `
+                <div class="puzzle-info">
+                    <h2>December ${currentPuzzle.day}, ${currentPuzzle.year}</h2>
+                    <div class="day">Day ${currentPuzzle.day}</div>
+                    <p><strong>${currentPuzzle.name}</strong></p>
+                    <div class="timer-display" id="timer">Time: 0:00</div>
+                </div>
+                
+                <div class="mode-toggle">
+                    <button id="numberMode" class="active" onclick="setMode(false)">✏️ Number</button>
+                    <button id="pencilMode" onclick="setMode(true)">📝 Pencil</button>
+                </div>
+                
+                <div class="sudoku-grid" id="sudokuGrid"></div>
+                
+                <div class="controls" id="controls"></div>
+                
+                <div class="action-buttons">
+                    <button class="btn-check" onclick="checkSolution()">Check Solution</button>
+                    <button class="btn-hint" onclick="getHint()">Hint</button>
+                    <button class="btn-learn" onclick="learnTechnique()">Learn Technique</button>
+                    <button class="btn-reset" onclick="resetPuzzle()">Reset</button>
+                </div>
+                
+                <div class="message" id="message"></div>
+            `;
+
+            renderGrid();
+            renderControls();
+        }
+
+        function setMode(pencil) {
+            isPencilMode = pencil;
+            document.getElementById('numberMode').classList.toggle('active', !pencil);
+            document.getElementById('pencilMode').classList.toggle('active', pencil);
+        }
+
+        function renderGrid() {
+            const grid = document.getElementById('sudokuGrid');
+            grid.innerHTML = '';
+
+            for (let i = 0; i < 81; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'sudoku-cell';
+                cell.dataset.index = i;
+
+                if (initialGrid[i] !== 0) {
+                    cell.textContent = initialGrid[i];
+                    cell.classList.add('given');
+                } else if (playerGrid[i] !== 0) {
+                    cell.textContent = playerGrid[i];
+                    cell.classList.add('filled');
+                    
+                    if (highlightedNumber === playerGrid[i]) {
+                        cell.classList.add('highlighted');
+                    }
+                } else if (candidates[i].length > 0) {
+                    const candDiv = document.createElement('div');
+                    candDiv.className = 'candidates';
+                    for (let n = 1; n <= 9; n++) {
+                        const span = document.createElement('span');
+                        span.textContent = candidates[i].includes(n) ? n : '';
+                        candDiv.appendChild(span);
+                    }
+                    cell.appendChild(candDiv);
+                }
+
+                if (selectedCell === i) {
+                    cell.classList.add('selected');
+                }
+
+                cell.addEventListener('click', () => handleCellClick(i));
+                grid.appendChild(cell);
+            }
+        }
+
+        function handleCellClick(index) {
+            if (initialGrid[index] !== 0) {
+                // Clicking a given number - highlight all instances
+                highlightedNumber = initialGrid[index];
+                selectedCell = null;
+            } else if (playerGrid[index] !== 0) {
+                // Clicking a filled cell - highlight all instances
+                highlightedNumber = playerGrid[index];
+                selectedCell = null;
+            } else {
+                // Clicking empty cell - select it
+                selectedCell = index;
+                highlightedNumber = null;
+            }
+            
+            renderGrid();
+        }
+
+        function renderControls() {
+            const controls = document.getElementById('controls');
+            controls.innerHTML = '';
+
+            for (let i = 1; i <= 9; i++) {
+                const btn = document.createElement('button');
+                btn.textContent = i;
+                btn.onclick = () => placeNumber(i);
+                controls.appendChild(btn);
+            }
+
+            const clearBtn = document.createElement('button');
+            clearBtn.textContent = 'Clear';
+            clearBtn.onclick = () => clearCell();
+            controls.appendChild(clearBtn);
+        }
+
+        function placeNumber(num) {
+            if (selectedCell === null || initialGrid[selectedCell] !== 0) return;
+
+            if (isPencilMode) {
+                // Toggle candidate
+                const idx = candidates[selectedCell].indexOf(num);
+                if (idx > -1) {
+                    candidates[selectedCell].splice(idx, 1);
+                } else {
+                    candidates[selectedCell].push(num);
+                    candidates[selectedCell].sort();
+                }
+            } else {
+                // Place number
+                playerGrid[selectedCell] = num;
+                candidates[selectedCell] = [];
+                
+                // Auto-remove candidates from related cells
+                removeCandidatesForNumber(selectedCell, num);
+            }
+
+            renderGrid();
+            hideMessage();
+        }
+
+        function clearCell() {
+            if (selectedCell === null || initialGrid[selectedCell] !== 0) return;
+
+            playerGrid[selectedCell] = 0;
+            candidates[selectedCell] = [];
+            renderGrid();
+            hideMessage();
+        }
+
+        function removeCandidatesForNumber(cellIndex, num) {
+            const row = Math.floor(cellIndex / 9);
+            const col = cellIndex % 9;
+            const boxRow = Math.floor(row / 3) * 3;
+            const boxCol = Math.floor(col / 3) * 3;
+
+            // Remove from row
+            for (let c = 0; c < 9; c++) {
+                const idx = row * 9 + c;
+                if (idx !== cellIndex) {
+                    const candIdx = candidates[idx].indexOf(num);
+                    if (candIdx > -1) candidates[idx].splice(candIdx, 1);
+                }
+            }
+
+            // Remove from column
+            for (let r = 0; r < 9; r++) {
+                const idx = r * 9 + col;
+                if (idx !== cellIndex) {
+                    const candIdx = candidates[idx].indexOf(num);
+                    if (candIdx > -1) candidates[idx].splice(candIdx, 1);
+                }
+            }
+
+            // Remove from box
+            for (let r = 0; r < 3; r++) {
+                for (let c = 0; c < 3; c++) {
+                    const idx = (boxRow + r) * 9 + (boxCol + c);
+                    if (idx !== cellIndex) {
+                        const candIdx = candidates[idx].indexOf(num);
+                        if (candIdx > -1) candidates[idx].splice(candIdx, 1);
+                    }
+                }
+            }
+        }
+
+        function checkSolution() {
+            if (playerGrid.includes(0)) {
+                showMessage('Puzzle is not complete yet!', 'error');
+                return;
+            }
+
+            let correct = true;
+            for (let i = 0; i < 81; i++) {
+                if (playerGrid[i] !== currentPuzzle.solution[i]) {
+                    correct = false;
+                    break;
+                }
+            }
+
+            if (correct) {
+                if (timerInterval) clearInterval(timerInterval);
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                showMessage(`🎉 Congratulations! Completed in ${minutes}:${seconds.toString().padStart(2, '0')}`, 'success');
+            } else {
+                showMessage('❌ There are some mistakes. Keep trying!', 'error');
+            }
+        }
+
+        function getHint() {
+            const emptyCells = [];
+            for (let i = 0; i < 81; i++) {
+                if (playerGrid[i] === 0) {
+                    emptyCells.push(i);
+                }
+            }
+
+            if (emptyCells.length === 0) {
+                showMessage('Puzzle is already complete!', 'error');
+                return;
+            }
+
+            const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            const correctNumber = currentPuzzle.solution[randomCell];
+            const row = Math.floor(randomCell / 9) + 1;
+            const col = (randomCell % 9) + 1;
+            
+            showMessage(`Hint: The number in row ${row}, column ${col} is ${correctNumber}`, 'success');
+        }
+
+        function learnTechnique() {
+            const url = `https://sudoku.coach/en/learn/${currentPuzzle.slug}`;
+            window.open(url, '_blank');
+        }
+
+        function resetPuzzle() {
+            playerGrid = [...initialGrid];
+            candidates = Array(81).fill(null).map(() => []);
+            selectedCell = null;
+            highlightedNumber = null;
+            isPencilMode = false;
+            startTime = Date.now();
+            setMode(false);
+            renderGrid();
+            hideMessage();
+        }
+
+        function showMessage(text, type) {
+            const message = document.getElementById('message');
+            message.textContent = text;
+            message.className = `message ${type}`;
+        }
+
+        function hideMessage() {
+            const message = document.getElementById('message');
+            if (message) message.style.display = 'none';
+        }
+
+        function showLockedMessage(year, day) {
+            const content = document.getElementById('content');
+            content.innerHTML = `
+                <div class="locked">
+                    <div class="locked-icon">🔒</div>
+                    <h2>Puzzle Locked</h2>
+                    <p>This puzzle will be available on December ${day}, ${year}</p>
+                    <div class="unlock-section">
+                        <p style="margin-bottom: 10px;">Have a secret key?</p>
+                        <input type="text" id="keyInput" placeholder="Enter key">
+                        <button onclick="tryUnlock('${year}', ${day})">Unlock</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function tryUnlock(year, day) {
+            const input = document.getElementById('keyInput');
+            if (input.value === SECRET_KEY) {
+                const url = new URL(window.location);
+                url.searchParams.set('key', SECRET_KEY);
+                window.location.href = url.toString();
+            } else {
+                showMessage('Incorrect key!', 'error');
+            }
+        }
+
+        function showCountdown() {
+            const content = document.getElementById('content');
+            const now = new Date();
+            let targetDate;
+
+            if (now.getMonth() === 11) {
+                targetDate = new Date(now.getFullYear(), 11, 1);
+            } else {
+                targetDate = new Date(now.getFullYear() + 1, 11, 1);
+            }
+
+            content.innerHTML = `
+                <div class="countdown">
+                    <div class="locked-icon">🔒</div>
+                    <h2>Advent Calendar Starts Soon!</h2>
+                    <p>Come back on December 1st for the first puzzle</p>
+                    <div class="countdown-timer" id="countdownTimer"></div>
+                </div>
+            `;
+
+            function updateTimer() {
+                const now = new Date();
+                const diff = targetDate - now;
+
+                if (diff <= 0) {
+                    location.reload();
+                    return;
+                }
+
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+                document.getElementById('countdownTimer').textContent = 
+                    `${days}d ${hours}h ${minutes}m ${seconds}s`;
+            }
+
+            updateTimer();
+            setInterval(updateTimer, 1000);
+        }
+
+        function showCongratulations() {
+            const content = document.getElementById('content');
+            content.innerHTML = `
+                <div class="countdown">
+                    <div class="locked-icon">🎄</div>
+                    <h2>Merry Christmas!</h2>
+                    <p>Thank you for completing all 24 days of Sudoku techniques!</p>
+                    <p style="margin-top: 20px;">See you next year! 🎅</p>
+                </div>
+            `;
+        }
+
+        loadPuzzleData();
+    </script>
+</body>
+</html>
