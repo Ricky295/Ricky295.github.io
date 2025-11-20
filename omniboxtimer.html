@@ -189,6 +189,49 @@
   <script>
     let timers = [];
     let updateInterval;
+    let notifiedTimers = new Set();
+
+    // Check and request notification permissions
+    async function checkNotificationPermission() {
+      if (!('Notification' in window)) {
+        console.log('This browser does not support notifications');
+        return false;
+      }
+
+      if (Notification.permission === 'granted') {
+        return true;
+      }
+
+      if (Notification.permission !== 'denied') {
+        const permission = await Notification.requestPermission();
+        return permission === 'granted';
+      }
+
+      return false;
+    }
+
+    // Send notification for expired timer
+    function sendNotification(timer) {
+      if (notifiedTimers.has(timer.id)) {
+        return; // Already notified for this timer
+      }
+
+      if (Notification.permission === 'granted') {
+        const notification = new Notification('⏰ Timer Expired!', {
+          body: `"${timer.name}" has finished`,
+          icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="rgb(239,68,68)" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+          tag: `timer-${timer.id}`,
+          requireInteraction: false
+        });
+
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+
+        notifiedTimers.add(timer.id);
+      }
+    }
 
     // Load timers from localStorage
     function loadTimers() {
@@ -257,25 +300,29 @@
         return now.getTime() + (amount * multipliers[unit]);
       }
       
-      // Handle time of day (3pm, 15:30, 3:30pm)
+      // Handle time of day (3pm, 15:30, 3:30pm) - but NOT plain numbers without am/pm
       const timeMatch = input.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
       if (timeMatch) {
-        let hours = parseInt(timeMatch[1]);
-        const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
         const period = timeMatch[3] ? timeMatch[3].toLowerCase() : null;
         
-        if (period === 'pm' && hours < 12) hours += 12;
-        if (period === 'am' && hours === 12) hours = 0;
-        
-        const targetTime = new Date(now);
-        targetTime.setHours(hours, minutes, 0, 0);
-        
-        // If time has passed today, set for tomorrow
-        if (targetTime <= now) {
-          targetTime.setDate(targetTime.getDate() + 1);
+        // Only treat as time of day if it has am/pm OR has a colon (like 15:30)
+        if (period || timeMatch[2]) {
+          let hours = parseInt(timeMatch[1]);
+          const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+          
+          if (period === 'pm' && hours < 12) hours += 12;
+          if (period === 'am' && hours === 12) hours = 0;
+          
+          const targetTime = new Date(now);
+          targetTime.setHours(hours, minutes, 0, 0);
+          
+          // If time has passed today, set for tomorrow
+          if (targetTime <= now) {
+            targetTime.setDate(targetTime.getDate() + 1);
+          }
+          
+          return targetTime.getTime();
         }
-        
-        return targetTime.getTime();
       }
       
       // Handle "tomorrow at [time]" or "next [day] at [time]"
@@ -460,6 +507,13 @@
       });
       saveTimers();
 
+      // Check for expired timers and send notifications
+      timers.forEach(timer => {
+        if (timer.endTime <= now) {
+          sendNotification(timer);
+        }
+      });
+
       if (timers.length === 0) {
         container.innerHTML = `
           <div class="empty-state">
@@ -510,6 +564,7 @@
     function init() {
       loadTimers();
       renderTimers();
+      checkNotificationPermission();
       updateInterval = setInterval(renderTimers, 1000);
     }
 
