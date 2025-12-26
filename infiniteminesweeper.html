@@ -56,7 +56,7 @@
             cursor: grab;
         }
 
-        .game-container:active {
+        .game-container.dragging {
             cursor: grabbing;
         }
 
@@ -89,7 +89,6 @@
             background: #ecf0f1;
             border-color: #bdc3c7;
             color: #2c3e50;
-            cursor: grab;
         }
 
         .cell.revealed:hover {
@@ -126,19 +125,13 @@
         .cell-6 { color: #e67e22; }
         .cell-7 { color: #2c3e50; }
         .cell-8 { color: #95a5a6; }
-
-        .chunk-border {
-            position: absolute;
-            border: 1px dashed rgba(52, 152, 219, 0.3);
-            pointer-events: none;
-        }
     </style>
 </head>
 <body>
     <div class="ui">
         <div class="score">Cells Discovered: <span id="score">0</span></div>
-        <div class="status" id="status">Playing - Left Click: Reveal | Right Click: Flag | Drag: Click revealed cells</div>
-        <div class="controls">Drag to move | Chunks: <span id="chunk-count">1</span></div>
+        <div class="status" id="status">Playing - Left Click: Reveal | Right Click: Flag | Drag: Pan Around</div>
+        <div class="controls">Drag anywhere to move | Chunks: <span id="chunk-count">1</span></div>
     </div>
     
     <div class="game-container" id="gameContainer">
@@ -148,22 +141,23 @@
     <script>
         class InfiniteMinesweeper {
             constructor() {
-                this.board = new Map(); // Stores cell data by "x,y" key
-                this.chunks = new Map(); // Stores generated chunks by "chunkX,chunkY" key
-                this.chunkSize = 16; // 16x16 cells per chunk
-                this.mineRatio = 0.15; // 15% chance of mine
-                this.cellSize = 28; // Including border
+                this.board = new Map();
+                this.chunks = new Map();
+                this.chunkSize = 16;
+                this.mineRatio = 0.15;
+                this.cellSize = 28;
                 
                 this.score = 0;
                 this.gameOver = false;
-                this.gameWon = false;
                 
                 // View state
                 this.viewX = 0;
                 this.viewY = 0;
                 this.isDragging = false;
-                this.lastMouseX = 0;
-                this.lastMouseY = 0;
+                this.dragStartX = 0;
+                this.dragStartY = 0;
+                this.dragThreshold = 5; // pixels to move before considering it a drag
+                this.hasDragged = false;
                 
                 this.gameBoard = document.getElementById('gameBoard');
                 this.gameContainer = document.getElementById('gameContainer');
@@ -177,37 +171,53 @@
             }
             
             initializeGame() {
-                // Generate initial chunk around origin
                 this.generateChunk(0, 0);
                 this.updateView();
             }
             
             setupEventListeners() {
-                // Mouse events for dragging - now only from revealed cells
+                // Mouse down on container starts potential drag
                 this.gameContainer.addEventListener('mousedown', (e) => {
-                    e.preventDefault(); // Prevent default drag behavior
+                    if (e.button === 0) { // Left click
+                        this.isDragging = true;
+                        this.hasDragged = false;
+                        this.dragStartX = e.clientX;
+                        this.dragStartY = e.clientY;
+                        this.gameContainer.classList.add('dragging');
+                    }
                 });
                 
+                // Mouse move handles dragging
                 document.addEventListener('mousemove', (e) => {
                     if (this.isDragging) {
-                        const deltaX = e.clientX - this.lastMouseX;
-                        const deltaY = e.clientY - this.lastMouseY;
+                        const deltaX = e.clientX - this.dragStartX;
+                        const deltaY = e.clientY - this.dragStartY;
+                        
+                        // Check if we've moved enough to be considered dragging
+                        if (Math.abs(deltaX) > this.dragThreshold || Math.abs(deltaY) > this.dragThreshold) {
+                            this.hasDragged = true;
+                        }
                         
                         this.viewX += deltaX;
                         this.viewY += deltaY;
                         
-                        this.lastMouseX = e.clientX;
-                        this.lastMouseY = e.clientY;
+                        this.dragStartX = e.clientX;
+                        this.dragStartY = e.clientY;
                         
                         this.updateView();
-                        e.preventDefault();
                     }
                 });
                 
+                // Mouse up ends drag
                 document.addEventListener('mouseup', (e) => {
                     if (e.button === 0) {
                         this.isDragging = false;
-                        this.gameContainer.style.cursor = 'default';
+                        this.gameContainer.classList.remove('dragging');
+                        
+                        // Reset hasDragged after a short delay to allow click events to check it
+                        setTimeout(() => {
+                            this.hasDragged = false;
+                        }, 50);
                     }
                 });
                 
@@ -221,7 +231,6 @@
                 const chunkKey = `${chunkX},${chunkY}`;
                 if (this.chunks.has(chunkKey)) return;
                 
-                // Create chunk data
                 const chunk = {
                     x: chunkX,
                     y: chunkY,
@@ -230,7 +239,6 @@
                 
                 this.chunks.set(chunkKey, chunk);
                 
-                // Generate cells for this chunk
                 for (let x = 0; x < this.chunkSize; x++) {
                     for (let y = 0; y < this.chunkSize; y++) {
                         const worldX = chunkX * this.chunkSize + x;
@@ -238,7 +246,6 @@
                         const cellKey = `${worldX},${worldY}`;
                         
                         if (!this.board.has(cellKey)) {
-                            // Use seeded random based on position for consistent generation
                             const isMine = this.seededRandom(worldX, worldY) < this.mineRatio;
                             
                             this.board.set(cellKey, {
@@ -258,7 +265,6 @@
             }
             
             seededRandom(x, y) {
-                // Simple hash function for consistent pseudo-random values
                 let seed = ((x * 73856093) ^ (y * 19349663)) % 1000000;
                 seed = (seed * 9301 + 49297) % 233280;
                 return seed / 233280;
@@ -275,7 +281,6 @@
                         if (cell && !cell.isMine) {
                             let mineCount = 0;
                             
-                            // Check all 8 neighbors
                             for (let dx = -1; dx <= 1; dx++) {
                                 for (let dy = -1; dy <= 1; dy++) {
                                     if (dx === 0 && dy === 0) continue;
@@ -284,10 +289,8 @@
                                     const neighborY = worldY + dy;
                                     const neighborKey = `${neighborX},${neighborY}`;
                                     
-                                    // Check if neighbor exists, generate it if not
                                     let neighbor = this.board.get(neighborKey);
                                     if (!neighbor) {
-                                        // Generate single cell without recursive chunk generation
                                         const isMine = this.seededRandom(neighborX, neighborY) < this.mineRatio;
                                         neighbor = {
                                             x: neighborX,
@@ -314,75 +317,53 @@
             }
             
             updateView() {
-                // Calculate visible area
                 const containerRect = this.gameContainer.getBoundingClientRect();
                 const visibleLeft = -this.viewX;
                 const visibleTop = -this.viewY;
                 const visibleRight = visibleLeft + containerRect.width;
                 const visibleBottom = visibleTop + containerRect.height;
                 
-                // Calculate which chunks we need
-                const leftChunk = Math.floor(visibleLeft / (this.chunkSize * this.cellSize));
-                const rightChunk = Math.ceil(visibleRight / (this.chunkSize * this.cellSize));
-                const topChunk = Math.floor(visibleTop / (this.chunkSize * this.cellSize));
-                const bottomChunk = Math.ceil(visibleBottom / (this.chunkSize * this.cellSize));
+                const leftChunk = Math.floor(visibleLeft / (this.chunkSize * this.cellSize)) - 1;
+                const rightChunk = Math.ceil(visibleRight / (this.chunkSize * this.cellSize)) + 1;
+                const topChunk = Math.floor(visibleTop / (this.chunkSize * this.cellSize)) - 1;
+                const bottomChunk = Math.ceil(visibleBottom / (this.chunkSize * this.cellSize)) + 1;
                 
-                // Generate needed chunks
                 for (let chunkX = leftChunk; chunkX <= rightChunk; chunkX++) {
                     for (let chunkY = topChunk; chunkY <= bottomChunk; chunkY++) {
                         this.generateChunk(chunkX, chunkY);
-                    }
-                }
-                
-                // Calculate neighbor mines for newly generated chunks
-                for (let chunkX = leftChunk; chunkX <= rightChunk; chunkX++) {
-                    for (let chunkY = topChunk; chunkY <= bottomChunk; chunkY++) {
                         this.calculateNeighborMines(chunkX, chunkY);
                     }
                 }
                 
-                // Update board transform
                 this.gameBoard.style.transform = `translate(${this.viewX}px, ${this.viewY}px)`;
-                
-                // Update visible cells
                 this.updateVisibleCells(visibleLeft, visibleTop, visibleRight, visibleBottom);
             }
             
             updateVisibleCells(left, top, right, bottom) {
-                // Remove cells that are no longer visible
-                const elementsToRemove = [];
+                const buffer = this.cellSize * 5;
+                
+                // Remove off-screen cells
                 for (let [cellKey, cell] of this.board) {
                     if (cell.element) {
                         const cellLeft = cell.x * this.cellSize;
                         const cellTop = cell.y * this.cellSize;
-                        const cellRight = cellLeft + this.cellSize;
-                        const cellBottom = cellTop + this.cellSize;
                         
-                        if (cellRight < left || cellLeft > right || 
-                            cellBottom < top || cellTop > bottom) {
-                            elementsToRemove.push(cellKey);
+                        if (cellLeft < left - buffer || cellLeft > right + buffer || 
+                            cellTop < top - buffer || cellTop > bottom + buffer) {
+                            cell.element.remove();
+                            cell.element = null;
                         }
                     }
                 }
                 
-                elementsToRemove.forEach(cellKey => {
-                    const cell = this.board.get(cellKey);
-                    if (cell.element) {
-                        cell.element.remove();
-                        cell.element = null;
-                    }
-                });
-                
-                // Add visible cells that don't have elements
+                // Add visible cells
                 for (let [cellKey, cell] of this.board) {
                     if (!cell.element) {
                         const cellLeft = cell.x * this.cellSize;
                         const cellTop = cell.y * this.cellSize;
-                        const cellRight = cellLeft + this.cellSize;
-                        const cellBottom = cellTop + this.cellSize;
                         
-                        if (cellRight >= left && cellLeft <= right && 
-                            cellBottom >= top && cellTop <= bottom) {
+                        if (cellLeft >= left - buffer && cellLeft <= right + buffer && 
+                            cellTop >= top - buffer && cellTop <= bottom + buffer) {
                             this.createCellElement(cell);
                         }
                     }
@@ -395,25 +376,10 @@
                 element.style.left = (cell.x * this.cellSize) + 'px';
                 element.style.top = (cell.y * this.cellSize) + 'px';
                 
-                element.addEventListener('mousedown', (e) => {
-                    if (e.button === 0) { // Left click
-                        e.stopPropagation();
-                        
-                        if (cell.isRevealed && !this.gameOver) {
-                            // Start dragging from revealed cells
-                            this.isDragging = true;
-                            this.lastMouseX = e.clientX;
-                            this.lastMouseY = e.clientY;
-                            this.gameContainer.style.cursor = 'grabbing';
-                            e.preventDefault();
-                        }
-                    }
-                });
-                
                 element.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    if (!this.isDragging && !this.gameOver && !cell.isRevealed) {
-                        // Only reveal if not dragging and cell is not revealed
+                    // Only process click if we didn't drag
+                    if (!this.hasDragged && !this.gameOver && !cell.isRevealed && !cell.isFlagged) {
                         this.revealCell(cell);
                     }
                 });
@@ -421,7 +387,7 @@
                 element.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (!this.isDragging && !this.gameOver) {
+                    if (!this.hasDragged && !this.gameOver) {
                         this.flagCell(cell);
                     }
                 });
@@ -467,7 +433,6 @@
                         cell.element.classList.add('mine-exploded');
                     }
                 } else {
-                    // Auto-reveal empty neighbors
                     if (cell.neighborMines === 0) {
                         this.revealNeighbors(cell, depth);
                     }
@@ -485,7 +450,6 @@
                         const neighborY = cell.y + dy;
                         const neighborKey = `${neighborX},${neighborY}`;
                         
-                        // Generate neighbor chunk if needed
                         const neighborChunkX = Math.floor(neighborX / this.chunkSize);
                         const neighborChunkY = Math.floor(neighborY / this.chunkSize);
                         this.generateChunk(neighborChunkX, neighborChunkY);
@@ -506,13 +470,10 @@
             }
             
             gameLoop() {
-                // Update view periodically
-                this.updateView();
                 requestAnimationFrame(() => this.gameLoop());
             }
         }
         
-        // Start the game
         window.addEventListener('load', () => {
             new InfiniteMinesweeper();
         });
