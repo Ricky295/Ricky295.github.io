@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Journey Monitor</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 2em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0,0,0,0.15);
+        }
+        #startBtn {
+            background: #10b981;
+            color: white;
+        }
+        #startBtn:disabled {
+            background: #6b7280;
+            cursor: not-allowed;
+            transform: none;
+        }
+        #stopBtn {
+            background: #ef4444;
+            color: white;
+        }
+        #stopBtn:disabled {
+            background: #6b7280;
+            cursor: not-allowed;
+            transform: none;
+        }
+        #resetBtn {
+            background: #f59e0b;
+            color: white;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+        .stat-unit {
+            font-size: 16px;
+            color: #6b7280;
+            margin-left: 4px;
+        }
+        #map {
+            height: 500px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .status {
+            text-align: center;
+            color: white;
+            margin-bottom: 15px;
+            font-size: 14px;
+            padding: 10px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+        }
+        .status.active {
+            background: rgba(16, 185, 129, 0.3);
+        }
+        .status.inactive {
+            background: rgba(107, 114, 128, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚗 Journey Monitor</h1>
+        
+        <div class="status" id="status">Click Start to begin tracking</div>
+        
+        <div class="controls">
+            <button id="startBtn">Start Journey</button>
+            <button id="stopBtn" disabled>Stop Journey</button>
+            <button id="resetBtn">Reset</button>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Current Speed</div>
+                <div class="stat-value">
+                    <span id="currentSpeed">0</span>
+                    <span class="stat-unit">km/h</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Average Speed</div>
+                <div class="stat-value">
+                    <span id="avgSpeed">0</span>
+                    <span class="stat-unit">km/h</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Max Speed</div>
+                <div class="stat-value">
+                    <span id="maxSpeed">0</span>
+                    <span class="stat-unit">km/h</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Distance</div>
+                <div class="stat-value">
+                    <span id="distance">0.00</span>
+                    <span class="stat-unit">km</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Journey Time</div>
+                <div class="stat-value">
+                    <span id="time">00:00:00</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Altitude</div>
+                <div class="stat-value">
+                    <span id="altitude">--</span>
+                    <span class="stat-unit">m</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="map"></div>
+    </div>
+
+    <script>
+        let map, marker, polyline;
+        let tracking = false;
+        let watchId = null;
+        let startTime = null;
+        let totalDistance = 0;
+        let maxSpeed = 0;
+        let speedReadings = [];
+        let lastPosition = null;
+        let pathCoordinates = [];
+        let timerInterval = null;
+
+        // Initialize map
+        map = L.map('map').setView([45.4642, 9.1900], 13); // Default to Milan
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const statusEl = document.getElementById('status');
+
+        // Calculate distance between two points using Haversine formula
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Earth's radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function updateTimer() {
+            if (!startTime) return;
+            const elapsed = Date.now() - startTime;
+            const hours = Math.floor(elapsed / 3600000);
+            const minutes = Math.floor((elapsed % 3600000) / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+            document.getElementById('time').textContent = 
+                `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function updatePosition(position) {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            const speed = position.coords.speed; // m/s
+            const altitude = position.coords.altitude;
+
+            // Update map
+            if (!marker) {
+                marker = L.marker([lat, lon]).addTo(map);
+                map.setView([lat, lon], 15);
+            } else {
+                marker.setLatLng([lat, lon]);
+            }
+
+            // Update path
+            pathCoordinates.push([lat, lon]);
+            if (polyline) {
+                polyline.setLatLngs(pathCoordinates);
+            } else {
+                polyline = L.polyline(pathCoordinates, {color: 'blue', weight: 4}).addTo(map);
+            }
+
+            // Calculate distance
+            if (lastPosition) {
+                const dist = calculateDistance(
+                    lastPosition.lat, lastPosition.lon, lat, lon
+                );
+                totalDistance += dist;
+                document.getElementById('distance').textContent = totalDistance.toFixed(2);
+            }
+
+            // Update speed (convert m/s to km/h)
+            const speedKmh = speed !== null ? (speed * 3.6) : 0;
+            document.getElementById('currentSpeed').textContent = Math.max(0, speedKmh).toFixed(1);
+
+            if (speedKmh > 0) {
+                speedReadings.push(speedKmh);
+                
+                // Update max speed
+                if (speedKmh > maxSpeed) {
+                    maxSpeed = speedKmh;
+                    document.getElementById('maxSpeed').textContent = maxSpeed.toFixed(1);
+                }
+
+                // Update average speed
+                const avgSpeed = speedReadings.reduce((a, b) => a + b, 0) / speedReadings.length;
+                document.getElementById('avgSpeed').textContent = avgSpeed.toFixed(1);
+            }
+
+            // Update altitude
+            if (altitude !== null) {
+                document.getElementById('altitude').textContent = altitude.toFixed(0);
+            }
+
+            lastPosition = { lat, lon };
+        }
+
+        function handleError(error) {
+            console.error('Geolocation error:', error);
+            statusEl.textContent = `Error: ${error.message}`;
+            statusEl.className = 'status inactive';
+        }
+
+        startBtn.addEventListener('click', () => {
+            if (!navigator.geolocation) {
+                alert('Geolocation is not supported by your browser');
+                return;
+            }
+
+            tracking = true;
+            startTime = Date.now();
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            statusEl.textContent = 'Journey in progress...';
+            statusEl.className = 'status active';
+
+            timerInterval = setInterval(updateTimer, 1000);
+
+            watchId = navigator.geolocation.watchPosition(
+                updatePosition,
+                handleError,
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 0,
+                    timeout: 5000
+                }
+            );
+        });
+
+        stopBtn.addEventListener('click', () => {
+            tracking = false;
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            statusEl.textContent = 'Journey stopped';
+            statusEl.className = 'status inactive';
+
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            // Stop tracking if active
+            if (tracking) {
+                stopBtn.click();
+            }
+
+            // Reset all data
+            startTime = null;
+            totalDistance = 0;
+            maxSpeed = 0;
+            speedReadings = [];
+            lastPosition = null;
+            pathCoordinates = [];
+
+            // Clear map
+            if (marker) {
+                map.removeLayer(marker);
+                marker = null;
+            }
+            if (polyline) {
+                map.removeLayer(polyline);
+                polyline = null;
+            }
+
+            // Reset displays
+            document.getElementById('currentSpeed').textContent = '0';
+            document.getElementById('avgSpeed').textContent = '0';
+            document.getElementById('maxSpeed').textContent = '0';
+            document.getElementById('distance').textContent = '0.00';
+            document.getElementById('time').textContent = '00:00:00';
+            document.getElementById('altitude').textContent = '--';
+            statusEl.textContent = 'Click Start to begin tracking';
+            statusEl.className = 'status inactive';
+
+            // Reset map view
+            map.setView([45.4642, 9.1900], 13);
+        });
+    </script>
+</body>
+</html>
