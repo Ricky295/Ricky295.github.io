@@ -465,6 +465,8 @@
 
         // Replace the generateDuodoku function in your duodokumain.html with this:
 
+// Replace the generateDuodoku function in your duodokumain.html with this:
+
 async function generateDuodoku(targetDifficulty, useMinimalClues = false) {
     return new Promise((resolve) => {
         const generator = new DuoDoKuGenerator();
@@ -539,23 +541,26 @@ async function generateDuodoku(targetDifficulty, useMinimalClues = false) {
                 // Now we have a minimal clues puzzle
                 let minimalPuzzle = deepCopy2D(puzzle);
                 
+                // Check the difficulty of the minimal puzzle
+                let testPuzzle = deepCopy2D(minimalPuzzle);
+                let candidates = initializeCandidates(testPuzzle);
+                solver.refreshCandidates(testPuzzle, candidates);
+                let currentDiff = solver.solve(testPuzzle, candidates);
+                
                 if (useMinimalClues) {
                     // For minimal mode, check if this puzzle meets target difficulty
-                    const testPuzzle = deepCopy2D(minimalPuzzle);
-                    const candidates = initializeCandidates(testPuzzle);
-                    solver.refreshCandidates(testPuzzle, candidates);
-                    const difficulty = solver.solve(testPuzzle, candidates);
-                    
-                    if (difficulty === targetDifficulty) {
+                    if (currentDiff === targetDifficulty) {
                         runBestPuzzle = minimalPuzzle;
-                        runBestDifficulty = difficulty;
+                        runBestDifficulty = currentDiff;
                     } else if (runBestPuzzle === null || 
-                               Math.abs(difficulty - targetDifficulty) < Math.abs(runBestDifficulty - targetDifficulty)) {
+                               Math.abs(currentDiff - targetDifficulty) < Math.abs(runBestDifficulty - targetDifficulty)) {
                         runBestPuzzle = minimalPuzzle;
-                        runBestDifficulty = difficulty;
+                        runBestDifficulty = currentDiff;
                     }
                 } else {
                     // Normal mode: Start adding clues back with 80% probability
+                    // BUT only add clues that keep the same difficulty
+                    
                     // Collect all empty cells
                     const emptyCells = [];
                     for (let r = 0; r < 8; r++) {
@@ -573,6 +578,7 @@ async function generateDuodoku(targetDifficulty, useMinimalClues = false) {
                     }
                     
                     // Add clues back with 80% probability to continue
+                    // AND only if it keeps the same difficulty
                     for (let i = 0; i < emptyCells.length; i++) {
                         const [r, c] = emptyCells[i];
                         
@@ -581,30 +587,44 @@ async function generateDuodoku(targetDifficulty, useMinimalClues = false) {
                             break;
                         }
                         
-                        // Add the clue back from solution
+                        // Try adding the clue back from solution
                         minimalPuzzle[r][c] = solution[r][c];
+                        
+                        // Check if this changes the difficulty
+                        testPuzzle = deepCopy2D(minimalPuzzle);
+                        candidates = initializeCandidates(testPuzzle);
+                        solver.refreshCandidates(testPuzzle, candidates);
+                        const newDiff = solver.solve(testPuzzle, candidates);
+                        
+                        if (newDiff !== currentDiff) {
+                            // Adding this clue changed the difficulty, so remove it
+                            minimalPuzzle[r][c] = 0;
+                        } else {
+                            // Difficulty stayed the same, keep the clue
+                            currentDiff = newDiff;
+                        }
                         
                         // Update status every few additions
                         if (i % 5 === 0) {
                             await new Promise(resolve => setTimeout(resolve, 1));
-                            const statusMsg = `Adding clues... (${countClues(minimalPuzzle)} clues)`;
+                            const statusMsg = `Adding clues... (${countClues(minimalPuzzle)} clues, difficulty: ${currentDiff})`;
                             showStatus(statusMsg, 'generating');
                         }
                     }
                     
-                    // Check difficulty of final puzzle
-                    const testPuzzle = deepCopy2D(minimalPuzzle);
-                    const candidates = initializeCandidates(testPuzzle);
+                    // Final check of difficulty
+                    testPuzzle = deepCopy2D(minimalPuzzle);
+                    candidates = initializeCandidates(testPuzzle);
                     solver.refreshCandidates(testPuzzle, candidates);
-                    const difficulty = solver.solve(testPuzzle, candidates);
+                    const finalDiff = solver.solve(testPuzzle, candidates);
                     
-                    if (difficulty === targetDifficulty) {
+                    if (finalDiff === targetDifficulty) {
                         runBestPuzzle = minimalPuzzle;
-                        runBestDifficulty = difficulty;
+                        runBestDifficulty = finalDiff;
                     } else if (runBestPuzzle === null || 
-                               Math.abs(difficulty - targetDifficulty) < Math.abs(runBestDifficulty - targetDifficulty)) {
+                               Math.abs(finalDiff - targetDifficulty) < Math.abs(runBestDifficulty - targetDifficulty)) {
                         runBestPuzzle = minimalPuzzle;
-                        runBestDifficulty = difficulty;
+                        runBestDifficulty = finalDiff;
                     }
                 }
                 
