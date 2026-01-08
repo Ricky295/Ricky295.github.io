@@ -86,6 +86,7 @@
             font-size: 1.3em;
             font-weight: bold;
             background: white;
+            cursor: pointer;
         }
 
         .cell input {
@@ -97,19 +98,27 @@
             font-weight: bold;
             outline: none;
             background: transparent;
+            cursor: pointer;
         }
 
         .cell.given {
             background: #e8eaf6;
             color: #333;
+            cursor: default;
         }
 
         .cell.given input {
             color: #333;
+            cursor: default;
         }
 
         .cell.error {
             background: #ff3f3f;
+        }
+
+        .cell.selected {
+            background: #fff9c4;
+            outline: 3px solid #667eea;
         }
 
         .cell:nth-child(3n) {
@@ -119,6 +128,46 @@
         .cell:nth-child(n+7):nth-child(-n+12),
         .cell:nth-child(n+19):nth-child(-n+24) {
             border-bottom: 3px solid #333;
+        }
+
+        .keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 20px auto;
+            max-width: 300px;
+        }
+
+        .keypad-btn {
+            padding: 15px;
+            font-size: 1.5em;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            background: white;
+            color: #667eea;
+            transition: all 0.2s;
+        }
+
+        .keypad-btn:hover {
+            background: #667eea;
+            color: white;
+            transform: scale(1.05);
+        }
+
+        .keypad-btn:active {
+            transform: scale(0.95);
+        }
+
+        .keypad-btn.clear {
+            background: #e74c3c;
+            color: white;
+            border-color: #e74c3c;
+        }
+
+        .keypad-btn.clear:hover {
+            background: #c0392b;
         }
 
         .buttons {
@@ -194,6 +243,15 @@
             h1 {
                 font-size: 1.5em;
             }
+
+            .stats {
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            .stat {
+                flex: 1 1 40%;
+            }
         }
     </style>
 </head>
@@ -222,6 +280,16 @@
 
         <div class="sudoku-grid" id="grid"></div>
 
+        <div class="keypad" id="keypad">
+            <button class="keypad-btn" data-value="1">1</button>
+            <button class="keypad-btn" data-value="2">2</button>
+            <button class="keypad-btn" data-value="3">3</button>
+            <button class="keypad-btn" data-value="4">4</button>
+            <button class="keypad-btn" data-value="5">5</button>
+            <button class="keypad-btn" data-value="6">6</button>
+            <button class="keypad-btn clear" data-value="">Clear</button>
+        </div>
+
         <div class="buttons">
             <button class="check-btn" id="checkBtn">Check Solution</button>
             <button class="reset-btn" id="resetBtn">Reset Puzzle</button>
@@ -232,7 +300,8 @@
     </div>
 
     <script>
-        let currentClues = 35; // Start with most cells filled (out of 36 total)
+        let currentClues = 35;
+        let initialTime = 180;
         let timeLeft = 180;
         let timerInterval = null;
         let gameOver = false;
@@ -241,19 +310,31 @@
         let givenCells = [];
         let totalCorrectClues = 0;
         let speedInterval = null;
+        let selectedCell = null;
+
+        // Parse URL parameter for time
+        function getTimeFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            const timeParam = params.get('s');
+            if (timeParam) {
+                const time = parseInt(timeParam);
+                if (!isNaN(time) && time > 0) {
+                    return time;
+                }
+            }
+            return 180; // default
+        }
 
         function generateSolution() {
             const grid = Array(6).fill(null).map(() => Array(6).fill(0));
             
             function isValid(grid, row, col, num) {
-                // Check row and column
                 for (let x = 0; x < 6; x++) {
                     if (grid[row][x] === num || grid[x][col] === num) {
                         return false;
                     }
                 }
                 
-                // Check 2x3 box
                 const startRow = Math.floor(row / 2) * 2;
                 const startCol = Math.floor(col / 3) * 3;
                 for (let i = 0; i < 2; i++) {
@@ -303,18 +384,15 @@
             positions.sort(() => Math.random() - 0.5);
             const cellsToRemove = 36 - clues;
             
-            // Remove cells one at a time and check uniqueness
             let removed = 0;
             for (let i = 0; i < positions.length && removed < cellsToRemove; i++) {
                 const [row, col] = positions[i];
                 const temp = puzzle[row][col];
                 puzzle[row][col] = 0;
                 
-                // Check if puzzle still has unique solution
                 if (hasUniqueSolution(puzzle)) {
                     removed++;
                 } else {
-                    // Restore the cell if it creates multiple solutions
                     puzzle[row][col] = temp;
                 }
             }
@@ -346,7 +424,7 @@
             }
             
             function countSolutions(grid) {
-                if (solutionCount > 1) return; // Early exit if multiple solutions found
+                if (solutionCount > 1) return;
                 
                 for (let row = 0; row < 6; row++) {
                     for (let col = 0; col < 6; col++) {
@@ -373,6 +451,7 @@
             const grid = document.getElementById('grid');
             grid.innerHTML = '';
             givenCells = [];
+            selectedCell = null;
             
             for (let i = 0; i < 6; i++) {
                 for (let j = 0; j < 6; j++) {
@@ -389,12 +468,17 @@
                         input.maxLength = 1;
                         input.dataset.row = i;
                         input.dataset.col = j;
+                        input.readOnly = true; // Make readonly for keypad use
+                        
+                        input.addEventListener('click', (e) => {
+                            selectCell(e.target);
+                        });
+                        
                         input.addEventListener('input', (e) => {
                             const val = e.target.value;
                             if (val && (val < '1' || val > '6')) {
                                 e.target.value = '';
                             } else if (val) {
-                                // Check if this clue is correct
                                 const row = parseInt(e.target.dataset.row);
                                 const col = parseInt(e.target.dataset.col);
                                 if (parseInt(val) === solution[row][col]) {
@@ -402,12 +486,35 @@
                                 }
                             }
                         });
+                        
                         cell.appendChild(input);
                     }
                     
                     grid.appendChild(cell);
                 }
             }
+        }
+
+        function selectCell(input) {
+            // Remove previous selection
+            if (selectedCell) {
+                selectedCell.parentElement.classList.remove('selected');
+            }
+            
+            // Set new selection
+            selectedCell = input;
+            selectedCell.parentElement.classList.add('selected');
+        }
+
+        function handleKeypadClick(value) {
+            if (!selectedCell || gameOver) return;
+            
+            const oldValue = selectedCell.value;
+            selectedCell.value = value;
+            
+            // Trigger input event to handle validation and tracking
+            const event = new Event('input', { bubbles: true });
+            selectedCell.dispatchEvent(event);
         }
 
         function checkSolution() {
@@ -480,13 +587,12 @@
                 }
             }, 1000);
             
-            // Update speed display every frame
             speedInterval = setInterval(() => {
-                const elapsed = 180 - timeLeft;
+                const elapsed = initialTime - timeLeft;
                 const minutes = elapsed / 60;
                 const speed = minutes > 0 ? (totalCorrectClues / minutes).toFixed(1) : '0.0';
                 document.getElementById('speed').textContent = speed;
-            }, 16); // ~60fps
+            }, 16);
         }
 
         function endGame(completed) {
@@ -511,8 +617,9 @@
         }
 
         function initGame() {
+            initialTime = getTimeFromURL();
             currentClues = 35;
-            timeLeft = 180;
+            timeLeft = initialTime;
             gameOver = false;
             totalCorrectClues = 0;
             document.getElementById('clues').textContent = currentClues;
@@ -522,20 +629,37 @@
             startTimer();
         }
 
+        // Event listeners
         document.getElementById('checkBtn').addEventListener('click', checkSolution);
         document.getElementById('resetBtn').addEventListener('click', resetPuzzle);
         document.getElementById('resetGameBtn').addEventListener('click', () => {
-            // Clear timers
             clearInterval(timerInterval);
             clearInterval(speedInterval);
             
-            // Reset UI
             document.getElementById('score').textContent = '-';
             document.getElementById('message').textContent = '';
             document.getElementById('checkBtn').disabled = false;
             
-            // Initialize fresh game
             initGame();
+        });
+
+        // Keypad event listeners
+        document.querySelectorAll('.keypad-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const value = btn.dataset.value;
+                handleKeypadClick(value);
+            });
+        });
+
+        // Keyboard support for desktop users
+        document.addEventListener('keydown', (e) => {
+            if (!selectedCell || gameOver) return;
+            
+            if (e.key >= '1' && e.key <= '6') {
+                handleKeypadClick(e.key);
+            } else if (e.key === 'Backspace' || e.key === 'Delete') {
+                handleKeypadClick('');
+            }
         });
 
         // Initialize game
