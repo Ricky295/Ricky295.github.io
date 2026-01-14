@@ -155,13 +155,11 @@
             font-weight: bold;
             background: white;
             color: #667eea;
-            transition: all 0.2s;
         }
 
         .keypad-btn:hover {
             background: #667eea;
             color: white;
-            transform: scale(1.05);
         }
 
         .keypad-btn:active {
@@ -193,7 +191,6 @@
             border-radius: 8px;
             cursor: pointer;
             font-weight: bold;
-            transition: all 0.3s;
         }
 
         .check-btn {
@@ -203,7 +200,6 @@
 
         .check-btn:hover {
             background: #5568d3;
-            transform: translateY(-2px);
         }
 
         .reset-btn {
@@ -213,7 +209,6 @@
 
         .reset-btn:hover {
             background: #c0392b;
-            transform: translateY(-2px);
         }
 
         .start-btn {
@@ -276,6 +271,7 @@
             padding: 20px;
             border-radius: 10px;
             margin: 20px 0;
+            text-align: left;
         }
 
         .stat-row {
@@ -287,6 +283,38 @@
 
         .stat-row:last-child {
             border-bottom: none;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 0.95em;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: right;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #333;
+        }
+
+        td {
+            color: #666;
+        }
+
+        th:first-child, td:first-child {
+            text-align: left;
+        }
+
+        tr.total-row {
+            font-weight: bold;
+            background: #e8eaf6;
         }
 
         .hidden {
@@ -315,6 +343,14 @@
 
             .stat {
                 flex: 1 1 40%;
+            }
+
+            table {
+                font-size: 0.85em;
+            }
+
+            th, td {
+                padding: 8px;
             }
         }
     </style>
@@ -369,20 +405,17 @@
         <div id="completionScreen" class="hidden completion-screen">
             <h2>🎉 Challenge Complete!</h2>
             <div class="final-time" id="finalTime">00:00.0</div>
-            <div class="completion-stats">
-                <div class="stat-row">
-                    <span>Total Puzzles Solved:</span>
-                    <span id="totalPuzzles">28</span>
-                </div>
-                <div class="stat-row">
-                    <span>Average Time per Puzzle:</span>
-                    <span id="avgTime">0.0s</span>
-                </div>
-                <div class="stat-row">
-                    <span>Difficulty Range:</span>
-                    <span>35 → 8 clues</span>
-                </div>
-            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Clues</th>
+                        <th>Time (s)</th>
+                        <th>Answers/min</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsTable">
+                </tbody>
+            </table>
             <button class="start-btn" onclick="resetGame()">Try Again</button>
         </div>
     </div>
@@ -395,6 +428,7 @@
         let puzzle = [];
         let selectedCell = null;
         let puzzlesSolved = 0;
+        let puzzleStats = [];
 
         function generateSolution() {
             const grid = Array(6).fill(null).map(() => Array(6).fill(0));
@@ -469,6 +503,18 @@
             }
             
             return puzzle;
+        }
+
+        function countClues(puzzle) {
+            let count = 0;
+            for (let i = 0; i < 6; i++) {
+                for (let j = 0; j < 6; j++) {
+                    if (puzzle[i][j] !== 0) {
+                        count++;
+                    }
+                }
+            }
+            return count;
         }
 
         function hasUniqueSolution(puzzle) {
@@ -606,16 +652,24 @@
             if (allCorrect) {
                 messageEl.textContent = '✓ Correct!';
                 messageEl.className = 'message success';
+                
+                const puzzleTime = (Date.now() - startTime) / 1000;
+                const answersPerMin = (36 / puzzleTime) * 60;
+                puzzleStats.push({
+                    clues: currentClues,
+                    time: puzzleTime,
+                    answersPerMin: answersPerMin
+                });
+                
                 puzzlesSolved++;
                 
-                setTimeout(() => {
-                    if (currentClues > 8) {
-                        currentClues--;
-                        loadNewPuzzle();
-                    } else {
-                        endGame();
-                    }
-                }, 500);
+                if (currentClues > 8) {
+                    currentClues--;
+                    startTime = Date.now();
+                    loadNewPuzzle();
+                } else {
+                    endGame();
+                }
             } else {
                 messageEl.textContent = '✗ Some cells are incorrect!';
                 messageEl.className = 'message error-msg';
@@ -625,6 +679,16 @@
         function loadNewPuzzle() {
             solution = generateSolution();
             puzzle = createPuzzle(solution, currentClues);
+            
+            let actualClues = countClues(puzzle);
+            let attempts = 0;
+            while (actualClues !== currentClues && attempts < 50) {
+                solution = generateSolution();
+                puzzle = createPuzzle(solution, currentClues);
+                actualClues = countClues(puzzle);
+                attempts++;
+            }
+            
             renderGrid();
             document.getElementById('clues').textContent = currentClues;
             document.getElementById('progress').textContent = `${puzzlesSolved + 1}/28`;
@@ -656,6 +720,7 @@
             document.getElementById('gameScreen').classList.remove('hidden');
             currentClues = 35;
             puzzlesSolved = 0;
+            puzzleStats = [];
             startTime = Date.now();
             startTimer();
             loadNewPuzzle();
@@ -663,17 +728,39 @@
 
         function endGame() {
             clearInterval(timerInterval);
-            const totalTime = Date.now() - startTime;
-            const seconds = totalTime / 1000;
-            const mins = Math.floor(seconds / 60);
-            const secs = (seconds % 60).toFixed(1);
+            const totalTime = puzzleStats.reduce((sum, p) => sum + p.time, 0);
+            const totalAnswersPerMin = puzzleStats.reduce((sum, p) => sum + p.answersPerMin, 0);
+            const avgAnswersPerMin = totalAnswersPerMin / puzzleStats.length;
             
             document.getElementById('gameScreen').classList.add('hidden');
             document.getElementById('completionScreen').classList.remove('hidden');
+            
+            const mins = Math.floor(totalTime / 60);
+            const secs = (totalTime % 60).toFixed(1);
             document.getElementById('finalTime').textContent = 
                 `${String(mins).padStart(2, '0')}:${String(secs).padStart(4, '0')}`;
-            document.getElementById('totalPuzzles').textContent = puzzlesSolved;
-            document.getElementById('avgTime').textContent = (seconds / puzzlesSolved).toFixed(1) + 's';
+            
+            const tbody = document.getElementById('resultsTable');
+            tbody.innerHTML = '';
+            
+            puzzleStats.forEach(stat => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${stat.clues}</td>
+                    <td>${stat.time.toFixed(1)}</td>
+                    <td>${stat.answersPerMin.toFixed(1)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            const totalRow = document.createElement('tr');
+            totalRow.className = 'total-row';
+            totalRow.innerHTML = `
+                <td>Total</td>
+                <td>${totalTime.toFixed(1)}</td>
+                <td>${avgAnswersPerMin.toFixed(1)}</td>
+            `;
+            tbody.appendChild(totalRow);
         }
 
         function resetGame() {
