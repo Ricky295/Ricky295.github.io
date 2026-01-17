@@ -853,11 +853,8 @@
                 }
             }
 
-        function generatePuzzle(minNoOfClues) {
+            generatePuzzle(minNoOfClues) {
                 this.buildCompletePuzzle(0, 0);
-                
-                // Store complete solution BEFORE removing clues
-                const solution = this.mPuzzle.map(row => [...row]);
                 
                 this.removable = Array.from({ length: 12 }, () => Array(12).fill(true));
                 let removedCount = 0;
@@ -896,9 +893,6 @@
                 }
 
                 console.log(`Final puzzle generated with ${144 - removedCount} clues (target was ${minNoOfClues})`);
-                
-                // Return the solution
-                return solution;
             }
         }
 
@@ -935,35 +929,6 @@
             }
         }
 
-        function solvePuzzle(puzzleGrid) {
-            const solver = new SutoriGenerator();
-            const gridCopy = puzzleGrid.map(row => [...row]);
-            
-            function solve(r, c) {
-                if (r === 12) return true;
-                
-                const nextR = c === 11 ? r + 1 : r;
-                const nextC = c === 11 ? 0 : c + 1;
-                
-                if (gridCopy[r][c] !== 0) {
-                    return solve(nextR, nextC);
-                }
-                
-                for (let num = 1; num <= 4; num++) {
-                    if (solver.isNotDuplicated(r, c, num, gridCopy)) {
-                        gridCopy[r][c] = num;
-                        if (solve(nextR, nextC)) return true;
-                        gridCopy[r][c] = 0;
-                    }
-                }
-                
-                return false;
-            }
-            
-            solve(0, 0);
-            return gridCopy;
-        }
-
         function generateSutori() {
             const clues = parseInt(document.getElementById("clueRange").value);
             
@@ -973,7 +938,7 @@
             
             setTimeout(() => {
                 const generator = new SutoriGenerator();
-                completeSolution = generator.generatePuzzle(clues);
+                generator.generatePuzzle(clues);
                 
                 const puzzleString = generator.mPuzzle.flat().join('');
                 currentPuzzleString = puzzleString;
@@ -1378,19 +1343,64 @@
                 }
             }
             
-            // Check each cell against the solution
+            // Check each cell
             for (let r = 0; r < 12; r++) {
                 for (let c = 0; c < 12; c++) {
                     const cell = document.getElementById('puzzleTable').rows[r].cells[c].querySelector('.cell-div');
                     const userVal = grid[r][c];
-                    const correctVal = completeSolution[r][c];
+                    const isOriginal = cell.dataset.original === '1';
                     
                     if (userVal === 0) {
                         incomplete++;
-                    } else if (userVal !== correctVal) {
-                        // Wrong answer - highlight in red
-                        cell.style.backgroundColor = '#ffcccc';
-                        incorrect++;
+                    } else if (!isOriginal) {
+                        // Check if this user-entered value violates any rules
+                        let isInvalid = false;
+                        
+                        // Check row - count this digit in the row
+                        let rowCount = 0;
+                        for (let col = 0; col < 12; col++) {
+                            if (grid[r][col] === userVal) rowCount++;
+                        }
+                        if (rowCount > 3) isInvalid = true;
+                        
+                        // Check column - count this digit in the column
+                        let colCount = 0;
+                        for (let row = 0; row < 12; row++) {
+                            if (grid[row][c] === userVal) colCount++;
+                        }
+                        if (colCount > 3) isInvalid = true;
+                        
+                        // Check 4x3 block - count this digit in the block
+                        const blockStartRow = Math.floor(r / 3) * 3;
+                        const blockStartCol = Math.floor(c / 4) * 4;
+                        let blockCount = 0;
+                        for (let br = blockStartRow; br < blockStartRow + 3; br++) {
+                            for (let bc = blockStartCol; bc < blockStartCol + 4; bc++) {
+                                if (grid[br][bc] === userVal) blockCount++;
+                            }
+                        }
+                        if (blockCount > 3) isInvalid = true;
+                        
+                        // Check adjacency - no same digits touching orthogonally
+                        const neighbors = [
+                            [r - 1, c], // up
+                            [r + 1, c], // down
+                            [r, c - 1], // left
+                            [r, c + 1]  // right
+                        ];
+                        for (const [nr, nc] of neighbors) {
+                            if (nr >= 0 && nr < 12 && nc >= 0 && nc < 12) {
+                                if (grid[nr][nc] === userVal) {
+                                    isInvalid = true;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (isInvalid) {
+                            cell.style.backgroundColor = '#ffcccc';
+                            incorrect++;
+                        }
                     }
                 }
             }
@@ -1398,17 +1408,22 @@
             const feedbackElement = document.getElementById('feedback');
             if (incorrect === 0) {
                 if (incomplete === 0) {
-                    feedbackElement.textContent = 'Correct! Well done!';
-                    feedbackElement.style.color = 'green';
-                    if (timerInterval) {
-                        clearInterval(timerInterval);
+                    if (isPuzzleCompleteAndCorrect()) {
+                        feedbackElement.textContent = 'Congratulations! Puzzle solved correctly!';
+                        feedbackElement.style.color = 'green';
+                        if (timerInterval) {
+                            clearInterval(timerInterval);
+                        }
+                    } else {
+                        feedbackElement.textContent = 'All cells filled, but solution may not be complete. Double-check your work!';
+                        feedbackElement.style.color = 'orange';
                     }
                 } else {
-                    feedbackElement.textContent = `So far so good, you still have ${incomplete} digits to go!`;
+                    feedbackElement.textContent = `Looking good! ${incomplete} cells remaining.`;
                     feedbackElement.style.color = 'green';
                 }
             } else {
-                feedbackElement.textContent = 'Incorrect. Highlighted cells are wrong.';
+                feedbackElement.textContent = `${incorrect} user entries violate the rules (highlighted in red).`;
                 feedbackElement.style.color = 'red';
             }
             
@@ -1511,14 +1526,6 @@
                 document.getElementById('zoomInput').value = zoomFromUrl;
             }
             currentPuzzleString = puzzleFromUrl;
-            
-            // Parse the puzzle and solve it to get the solution
-            const puzzleGrid = [];
-            for (let i = 0; i < puzzleFromUrl.length; i += 12) {
-                puzzleGrid.push(puzzleFromUrl.slice(i, i + 12).split('').map(Number));
-            }
-            completeSolution = solvePuzzle(puzzleGrid);
-            
             document.getElementById('main-menu').style.display = 'none';
             document.getElementById('game-area').style.display = 'block';
             renderPuzzle(puzzleFromUrl);
