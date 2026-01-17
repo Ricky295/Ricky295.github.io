@@ -853,8 +853,11 @@
                 }
             }
 
-            generatePuzzle(minNoOfClues) {
+        function generatePuzzle(minNoOfClues) {
                 this.buildCompletePuzzle(0, 0);
+                
+                // Store complete solution BEFORE removing clues
+                const solution = this.mPuzzle.map(row => [...row]);
                 
                 this.removable = Array.from({ length: 12 }, () => Array(12).fill(true));
                 let removedCount = 0;
@@ -893,6 +896,9 @@
                 }
 
                 console.log(`Final puzzle generated with ${144 - removedCount} clues (target was ${minNoOfClues})`);
+                
+                // Return the solution
+                return solution;
             }
         }
 
@@ -929,6 +935,35 @@
             }
         }
 
+        function solvePuzzle(puzzleGrid) {
+            const solver = new SutoriGenerator();
+            const gridCopy = puzzleGrid.map(row => [...row]);
+            
+            function solve(r, c) {
+                if (r === 12) return true;
+                
+                const nextR = c === 11 ? r + 1 : r;
+                const nextC = c === 11 ? 0 : c + 1;
+                
+                if (gridCopy[r][c] !== 0) {
+                    return solve(nextR, nextC);
+                }
+                
+                for (let num = 1; num <= 4; num++) {
+                    if (solver.isNotDuplicated(r, c, num, gridCopy)) {
+                        gridCopy[r][c] = num;
+                        if (solve(nextR, nextC)) return true;
+                        gridCopy[r][c] = 0;
+                    }
+                }
+                
+                return false;
+            }
+            
+            solve(0, 0);
+            return gridCopy;
+        }
+
         function generateSutori() {
             const clues = parseInt(document.getElementById("clueRange").value);
             
@@ -938,7 +973,7 @@
             
             setTimeout(() => {
                 const generator = new SutoriGenerator();
-                generator.generatePuzzle(clues);
+                completeSolution = generator.generatePuzzle(clues);
                 
                 const puzzleString = generator.mPuzzle.flat().join('');
                 currentPuzzleString = puzzleString;
@@ -1334,8 +1369,8 @@
         function checkPuzzle() {
             let incomplete = 0;
             let incorrect = 0;
-            const generator = new SutoriGenerator();
             
+            // Clear all previous highlights
             for (let r = 0; r < 12; r++) {
                 for (let c = 0; c < 12; c++) {
                     const cell = document.getElementById('puzzleTable').rows[r].cells[c].querySelector('.cell-div');
@@ -1343,22 +1378,19 @@
                 }
             }
             
+            // Check each cell against the solution
             for (let r = 0; r < 12; r++) {
                 for (let c = 0; c < 12; c++) {
                     const cell = document.getElementById('puzzleTable').rows[r].cells[c].querySelector('.cell-div');
                     const userVal = grid[r][c];
-                    const isOriginal = cell.dataset.original === '1';
+                    const correctVal = completeSolution[r][c];
                     
                     if (userVal === 0) {
                         incomplete++;
-                    } else if (!isOriginal) {
-                        const tempGrid = grid.map(row => [...row]);
-                        tempGrid[r][c] = 0;
-                        
-                        if (!generator.isNotDuplicated(r, c, userVal, tempGrid)) {
-                            cell.style.backgroundColor = '#ffcccc';
-                            incorrect++;
-                        }
+                    } else if (userVal !== correctVal) {
+                        // Wrong answer - highlight in red
+                        cell.style.backgroundColor = '#ffcccc';
+                        incorrect++;
                     }
                 }
             }
@@ -1366,22 +1398,17 @@
             const feedbackElement = document.getElementById('feedback');
             if (incorrect === 0) {
                 if (incomplete === 0) {
-                    if (isPuzzleCompleteAndCorrect()) {
-                        feedbackElement.textContent = 'Congratulations! Puzzle solved correctly!';
-                        feedbackElement.style.color = 'green';
-                        if (timerInterval) {
-                            clearInterval(timerInterval);
-                        }
-                    } else {
-                        feedbackElement.textContent = 'All cells filled, but solution may not be complete. Double-check your work!';
-                        feedbackElement.style.color = 'orange';
+                    feedbackElement.textContent = 'Correct! Well done!';
+                    feedbackElement.style.color = 'green';
+                    if (timerInterval) {
+                        clearInterval(timerInterval);
                     }
                 } else {
-                    feedbackElement.textContent = `Looking good! ${incomplete} cells remaining.`;
+                    feedbackElement.textContent = `So far so good, you still have ${incomplete} digits to go!`;
                     feedbackElement.style.color = 'green';
                 }
             } else {
-                feedbackElement.textContent = `${incorrect} user entries violate the rules (highlighted in red).`;
+                feedbackElement.textContent = 'Incorrect. Highlighted cells are wrong.';
                 feedbackElement.style.color = 'red';
             }
             
@@ -1484,6 +1511,14 @@
                 document.getElementById('zoomInput').value = zoomFromUrl;
             }
             currentPuzzleString = puzzleFromUrl;
+            
+            // Parse the puzzle and solve it to get the solution
+            const puzzleGrid = [];
+            for (let i = 0; i < puzzleFromUrl.length; i += 12) {
+                puzzleGrid.push(puzzleFromUrl.slice(i, i + 12).split('').map(Number));
+            }
+            completeSolution = solvePuzzle(puzzleGrid);
+            
             document.getElementById('main-menu').style.display = 'none';
             document.getElementById('game-area').style.display = 'block';
             renderPuzzle(puzzleFromUrl);
