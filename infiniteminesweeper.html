@@ -38,12 +38,40 @@
 
         .status {
             font-size: 16px;
-            color: #e74c3c;
+            color: #2ecc71;
         }
 
         .controls {
             font-size: 14px;
             color: #95a5a6;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .mode-toggle {
+            background: #34495e;
+            border: 2px solid #3498db;
+            color: #ecf0f1;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .mode-toggle:hover {
+            background: #3498db;
+            transform: scale(1.05);
+        }
+
+        .mode-toggle.chaos {
+            border-color: #e74c3c;
+        }
+
+        .mode-toggle.chaos:hover {
+            background: #e74c3c;
         }
 
         .game-container {
@@ -89,6 +117,7 @@
             background: #ecf0f1;
             border-color: #bdc3c7;
             color: #2c3e50;
+            cursor: pointer;
         }
 
         .cell.revealed:hover {
@@ -130,8 +159,11 @@
 <body>
     <div class="ui">
         <div class="score">Cells Discovered: <span id="score">0</span></div>
-        <div class="status" id="status">Playing - Left Click: Reveal | Right Click: Flag | Drag: Pan Around</div>
-        <div class="controls">Drag anywhere to move | Chunks: <span id="chunk-count">1</span></div>
+        <div class="status" id="status">Click revealed numbers to chord! | Left Click: Reveal | Right Click: Flag | Drag: Pan</div>
+        <div class="controls">
+            <button class="mode-toggle" id="modeToggle">Mode: Random</button>
+            <span>Chunks: <span id="chunk-count">1</span></span>
+        </div>
     </div>
     
     <div class="game-container" id="gameContainer">
@@ -141,7 +173,7 @@
     <script>
         class InfiniteMinesweeper {
             constructor() {
-                this.board = new Map();
+                this.board = new Map(); // Stores all generated cells with their state
                 this.chunks = new Map();
                 this.chunkSize = 16;
                 this.mineRatio = 0.15;
@@ -149,6 +181,9 @@
                 
                 this.score = 0;
                 this.gameOver = false;
+                this.firstClick = true;
+                this.safeZone = new Set();
+                this.chaosMode = false;
                 
                 // View state
                 this.viewX = 0;
@@ -156,7 +191,7 @@
                 this.isDragging = false;
                 this.dragStartX = 0;
                 this.dragStartY = 0;
-                this.dragThreshold = 5; // pixels to move before considering it a drag
+                this.dragThreshold = 5;
                 this.hasDragged = false;
                 
                 this.gameBoard = document.getElementById('gameBoard');
@@ -164,6 +199,7 @@
                 this.scoreElement = document.getElementById('score');
                 this.statusElement = document.getElementById('status');
                 this.chunkCountElement = document.getElementById('chunk-count');
+                this.modeToggle = document.getElementById('modeToggle');
                 
                 this.initializeGame();
                 this.setupEventListeners();
@@ -176,9 +212,8 @@
             }
             
             setupEventListeners() {
-                // Mouse down on container starts potential drag
                 this.gameContainer.addEventListener('mousedown', (e) => {
-                    if (e.button === 0) { // Left click
+                    if (e.button === 0) {
                         this.isDragging = true;
                         this.hasDragged = false;
                         this.dragStartX = e.clientX;
@@ -187,13 +222,11 @@
                     }
                 });
                 
-                // Mouse move handles dragging
                 document.addEventListener('mousemove', (e) => {
                     if (this.isDragging) {
                         const deltaX = e.clientX - this.dragStartX;
                         const deltaY = e.clientY - this.dragStartY;
                         
-                        // Check if we've moved enough to be considered dragging
                         if (Math.abs(deltaX) > this.dragThreshold || Math.abs(deltaY) > this.dragThreshold) {
                             this.hasDragged = true;
                         }
@@ -208,23 +241,90 @@
                     }
                 });
                 
-                // Mouse up ends drag
                 document.addEventListener('mouseup', (e) => {
                     if (e.button === 0) {
                         this.isDragging = false;
                         this.gameContainer.classList.remove('dragging');
                         
-                        // Reset hasDragged after a short delay to allow click events to check it
                         setTimeout(() => {
                             this.hasDragged = false;
                         }, 50);
                     }
                 });
                 
-                // Prevent context menu
                 this.gameContainer.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
                 });
+
+                this.modeToggle.addEventListener('click', () => {
+                    this.chaosMode = !this.chaosMode;
+                    if (this.chaosMode) {
+                        this.modeToggle.textContent = 'Mode: Chaos';
+                        this.modeToggle.classList.add('chaos');
+                    } else {
+                        this.modeToggle.textContent = 'Mode: Random';
+                        this.modeToggle.classList.remove('chaos');
+                    }
+                    this.resetGame();
+                });
+            }
+
+            resetGame() {
+                // Clear the board
+                for (let [cellKey, cell] of this.board) {
+                    if (cell.element) {
+                        cell.element.remove();
+                    }
+                }
+                this.board.clear();
+                this.chunks.clear();
+                this.safeZone.clear();
+                
+                // Reset game state
+                this.score = 0;
+                this.gameOver = false;
+                this.firstClick = true;
+                this.scoreElement.textContent = '0';
+                this.statusElement.textContent = 'Click revealed numbers to chord! | Left Click: Reveal | Right Click: Flag | Drag: Pan';
+                this.statusElement.style.color = '#2ecc71';
+                
+                // Reinitialize
+                this.initializeGame();
+            }
+            
+            // Get or create a cell - this is where we use randomness ONCE per cell
+            getOrCreateCell(worldX, worldY) {
+                const cellKey = `${worldX},${worldY}`;
+                let cell = this.board.get(cellKey);
+                
+                if (!cell) {
+                    const isSafe = this.safeZone.has(cellKey);
+                    let isMine;
+                    
+                    if (isSafe) {
+                        isMine = false;
+                    } else if (this.chaosMode) {
+                        // Chaos mode - use the buggy hash
+                        isMine = this.chaosRandom(worldX, worldY) < this.mineRatio;
+                    } else {
+                        // Random mode - use actual Math.random()
+                        isMine = Math.random() < this.mineRatio;
+                    }
+                    
+                    cell = {
+                        x: worldX,
+                        y: worldY,
+                        isMine: isMine,
+                        isRevealed: false,
+                        isFlagged: false,
+                        neighborMines: 0,
+                        element: null
+                    };
+                    
+                    this.board.set(cellKey, cell);
+                }
+                
+                return cell;
             }
             
             generateChunk(chunkX, chunkY) {
@@ -239,32 +339,20 @@
                 
                 this.chunks.set(chunkKey, chunk);
                 
+                // Generate all cells in this chunk
                 for (let x = 0; x < this.chunkSize; x++) {
                     for (let y = 0; y < this.chunkSize; y++) {
                         const worldX = chunkX * this.chunkSize + x;
                         const worldY = chunkY * this.chunkSize + y;
-                        const cellKey = `${worldX},${worldY}`;
-                        
-                        if (!this.board.has(cellKey)) {
-                            const isMine = this.seededRandom(worldX, worldY) < this.mineRatio;
-                            
-                            this.board.set(cellKey, {
-                                x: worldX,
-                                y: worldY,
-                                isMine: isMine,
-                                isRevealed: false,
-                                isFlagged: false,
-                                neighborMines: 0,
-                                element: null
-                            });
-                        }
+                        this.getOrCreateCell(worldX, worldY);
                     }
                 }
                 
                 this.chunkCountElement.textContent = this.chunks.size;
             }
             
-            seededRandom(x, y) {
+            // The old "chaos" random that creates patterns (only used in chaos mode)
+            chaosRandom(x, y) {
                 let seed = ((x * 73856093) ^ (y * 19349663)) % 1000000;
                 seed = (seed * 9301 + 49297) % 233280;
                 return seed / 233280;
@@ -275,10 +363,9 @@
                     for (let y = 0; y < this.chunkSize; y++) {
                         const worldX = chunkX * this.chunkSize + x;
                         const worldY = chunkY * this.chunkSize + y;
-                        const cellKey = `${worldX},${worldY}`;
-                        const cell = this.board.get(cellKey);
+                        const cell = this.getOrCreateCell(worldX, worldY);
                         
-                        if (cell && !cell.isMine) {
+                        if (!cell.isMine) {
                             let mineCount = 0;
                             
                             for (let dx = -1; dx <= 1; dx++) {
@@ -287,22 +374,7 @@
                                     
                                     const neighborX = worldX + dx;
                                     const neighborY = worldY + dy;
-                                    const neighborKey = `${neighborX},${neighborY}`;
-                                    
-                                    let neighbor = this.board.get(neighborKey);
-                                    if (!neighbor) {
-                                        const isMine = this.seededRandom(neighborX, neighborY) < this.mineRatio;
-                                        neighbor = {
-                                            x: neighborX,
-                                            y: neighborY,
-                                            isMine: isMine,
-                                            isRevealed: false,
-                                            isFlagged: false,
-                                            neighborMines: 0,
-                                            element: null
-                                        };
-                                        this.board.set(neighborKey, neighbor);
-                                    }
+                                    const neighbor = this.getOrCreateCell(neighborX, neighborY);
                                     
                                     if (neighbor.isMine) {
                                         mineCount++;
@@ -342,7 +414,6 @@
             updateVisibleCells(left, top, right, bottom) {
                 const buffer = this.cellSize * 5;
                 
-                // Remove off-screen cells
                 for (let [cellKey, cell] of this.board) {
                     if (cell.element) {
                         const cellLeft = cell.x * this.cellSize;
@@ -356,7 +427,6 @@
                     }
                 }
                 
-                // Add visible cells
                 for (let [cellKey, cell] of this.board) {
                     if (!cell.element) {
                         const cellLeft = cell.x * this.cellSize;
@@ -378,9 +448,18 @@
                 
                 element.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    // Only process click if we didn't drag
-                    if (!this.hasDragged && !this.gameOver && !cell.isRevealed && !cell.isFlagged) {
-                        this.revealCell(cell);
+                    if (!this.hasDragged && !this.gameOver) {
+                        if (!cell.isRevealed && !cell.isFlagged) {
+                            // Normal click - reveal cell
+                            if (this.firstClick) {
+                                this.makeFirstClickSafe(cell);
+                                this.firstClick = false;
+                            }
+                            this.revealCell(cell);
+                        } else if (cell.isRevealed && cell.neighborMines > 0) {
+                            // Chord click - reveal neighbors if flags match
+                            this.chordCell(cell);
+                        }
                     }
                 });
                 
@@ -395,6 +474,61 @@
                 this.updateCellDisplay(cell, element);
                 cell.element = element;
                 this.gameBoard.appendChild(element);
+            }
+            
+            chordCell(cell) {
+                // Count flagged neighbors
+                let flaggedCount = 0;
+                const neighbors = [];
+                
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        if (dx === 0 && dy === 0) continue;
+                        
+                        const neighborX = cell.x + dx;
+                        const neighborY = cell.y + dy;
+                        const neighbor = this.getOrCreateCell(neighborX, neighborY);
+                        
+                        neighbors.push(neighbor);
+                        if (neighbor.isFlagged) {
+                            flaggedCount++;
+                        }
+                    }
+                }
+                
+                // If flagged count matches neighbor mines, reveal all unflagged neighbors
+                if (flaggedCount === cell.neighborMines) {
+                    for (const neighbor of neighbors) {
+                        if (!neighbor.isFlagged && !neighbor.isRevealed) {
+                            this.revealCell(neighbor);
+                        }
+                    }
+                }
+            }
+            
+            makeFirstClickSafe(cell) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        const safeX = cell.x + dx;
+                        const safeY = cell.y + dy;
+                        const safeKey = `${safeX},${safeY}`;
+                        this.safeZone.add(safeKey);
+                        
+                        const existingCell = this.getOrCreateCell(safeX, safeY);
+                        if (existingCell.isMine) {
+                            existingCell.isMine = false;
+                        }
+                    }
+                }
+                
+                const chunkX = Math.floor(cell.x / this.chunkSize);
+                const chunkY = Math.floor(cell.y / this.chunkSize);
+                
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        this.calculateNeighborMines(chunkX + dx, chunkY + dy);
+                    }
+                }
             }
             
             updateCellDisplay(cell, element = cell.element) {
@@ -427,7 +561,7 @@
                 
                 if (cell.isMine) {
                     this.gameOver = true;
-                    this.statusElement.textContent = '💥 Game Over! Refresh to play again';
+                    this.statusElement.textContent = '💥 Game Over! Click mode button to restart';
                     this.statusElement.style.color = '#e74c3c';
                     if (cell.element) {
                         cell.element.classList.add('mine-exploded');
@@ -448,14 +582,13 @@
                         
                         const neighborX = cell.x + dx;
                         const neighborY = cell.y + dy;
-                        const neighborKey = `${neighborX},${neighborY}`;
                         
                         const neighborChunkX = Math.floor(neighborX / this.chunkSize);
                         const neighborChunkY = Math.floor(neighborY / this.chunkSize);
                         this.generateChunk(neighborChunkX, neighborChunkY);
                         
-                        const neighbor = this.board.get(neighborKey);
-                        if (neighbor && !neighbor.isRevealed && !neighbor.isFlagged) {
+                        const neighbor = this.getOrCreateCell(neighborX, neighborY);
+                        if (!neighbor.isRevealed && !neighbor.isFlagged) {
                             this.revealCell(neighbor, depth + 1);
                         }
                     }
