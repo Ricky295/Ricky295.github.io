@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chronos Canvas: Nano Banana Time-Art</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); }
+        .art-container { aspect-ratio: 1 / 1; max-width: 600px; margin: 0 auto; }
+        .shimmer {
+            background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+        }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- Settings Overlay -->
+    <div id="settings-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 hidden">
+        <div class="glass p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <h2 class="text-2xl font-semibold mb-6">Settings</h2>
+            
+            <label class="block text-sm font-medium mb-2 text-slate-400">Gemini API Key</label>
+            <input type="password" id="api-key-input" placeholder="Paste your key here..." 
+                class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mb-6 focus:ring-2 focus:ring-blue-500 outline-none">
+
+            <label class="block text-sm font-medium mb-2 text-slate-400">Refresh Interval</label>
+            <select id="interval-input" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mb-8 outline-none">
+                <option value="60">1 Hour (Safest)</option>
+                <option value="30">30 Minutes</option>
+                <option value="15" selected>15 Minutes (Default)</option>
+                <option value="5">5 Minutes (Paid Tier)</option>
+                <option value="1">1 Minute (Extreme)</option>
+            </select>
+
+            <div class="flex gap-4">
+                <button onclick="saveSettings()" class="flex-1 bg-blue-600 hover:bg-blue-500 p-3 rounded-xl font-semibold transition">Save & Apply</button>
+                <button onclick="toggleSettings()" class="flex-1 bg-slate-700 hover:bg-slate-600 p-3 rounded-xl transition">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main UI -->
+    <div class="w-full max-w-4xl text-center">
+        <header class="mb-8">
+            <h1 class="text-4xl font-light tracking-tight text-white mb-2">Chronos <span class="font-bold text-blue-400">Canvas</span></h1>
+            <p id="time-display" class="text-xl text-slate-400 tabular-nums">Loading time...</p>
+        </header>
+
+        <div class="art-container relative rounded-3xl overflow-hidden shadow-2xl border border-white/5">
+            <!-- Loading State -->
+            <div id="loader" class="absolute inset-0 shimmer flex flex-col items-center justify-center z-10 hidden">
+                <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p id="status-text" class="text-sm font-medium text-blue-300">Generating latest slice...</p>
+            </div>
+            
+            <!-- Error Message -->
+            <div id="error-box" class="absolute inset-0 bg-red-950/40 backdrop-blur-md flex flex-col items-center justify-center z-20 hidden p-6">
+                <p class="text-red-400 font-bold mb-2">API Error</p>
+                <p id="error-msg" class="text-sm text-slate-300 mb-4">No API Key configured.</p>
+                <button onclick="toggleSettings()" class="text-xs bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full transition">Fix in Settings</button>
+            </div>
+
+            <!-- Image -->
+            <img id="canvas-img" src="" alt="Time Artwork" class="w-full h-full object-cover hidden">
+            <div id="placeholder" class="w-full h-full bg-slate-800 flex items-center justify-center italic text-slate-500">
+                Setup API Key to start the generation
+            </div>
+        </div>
+
+        <footer class="mt-8 flex justify-between items-center px-4">
+            <div class="text-left">
+                <p id="slice-tag" class="text-xs uppercase tracking-widest text-slate-500">Slice: --:--</p>
+                <p id="countdown" class="text-xs text-slate-400 mt-1 italic">Next update in: --:--</p>
+            </div>
+            <button onclick="toggleSettings()" class="glass p-3 rounded-full hover:bg-white/10 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+        </footer>
+    </div>
+
+    <script>
+        let state = {
+            apiKey: localStorage.getItem('nano_banana_key') || '',
+            interval: parseInt(localStorage.getItem('nano_banana_interval')) || 15,
+            lastSlice: '',
+            nextUpdateTime: 0,
+            isGenerating: false
+        };
+
+        const DOM = {
+            modal: document.getElementById('settings-modal'),
+            apiKeyInput: document.getElementById('api-key-input'),
+            intervalInput: document.getElementById('interval-input'),
+            timeDisplay: document.getElementById('time-display'),
+            loader: document.getElementById('loader'),
+            canvasImg: document.getElementById('canvas-img'),
+            placeholder: document.getElementById('placeholder'),
+            errorBox: document.getElementById('error-box'),
+            errorMsg: document.getElementById('error-msg'),
+            sliceTag: document.getElementById('slice-tag'),
+            countdown: document.getElementById('countdown'),
+            status: document.getElementById('status-text')
+        };
+
+        function toggleSettings() {
+            DOM.modal.classList.toggle('hidden');
+            DOM.apiKeyInput.value = state.apiKey;
+            DOM.intervalInput.value = state.interval;
+        }
+
+        function saveSettings() {
+            state.apiKey = DOM.apiKeyInput.value.trim();
+            state.interval = parseInt(DOM.intervalInput.value);
+            localStorage.setItem('nano_banana_key', state.apiKey);
+            localStorage.setItem('nano_banana_interval', state.interval);
+            toggleSettings();
+            checkAndGenerate(true);
+        }
+
+        function getCurrentSlice() {
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const sliceMinutes = Math.floor(minutes / state.interval) * state.interval;
+            return `${hours.toString().padStart(2, '0')}:${sliceMinutes.toString().padStart(2, '0')}`;
+        }
+
+        function updateClock() {
+            const now = new Date();
+            DOM.timeDisplay.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            const remaining = Math.max(0, state.nextUpdateTime - Date.now());
+            if (remaining > 0) {
+                const mins = Math.floor(remaining / 60000);
+                const secs = Math.floor((remaining % 60000) / 1000);
+                DOM.countdown.textContent = `Next update in: ${mins}m ${secs}s`;
+            } else {
+                DOM.countdown.textContent = `Awaiting next slice...`;
+                checkAndGenerate();
+            }
+        }
+
+        async function generateArtwork(timeStr) {
+            if (!state.apiKey) {
+                showError("API Key missing. Click settings to add one.");
+                return;
+            }
+
+            state.isGenerating = true;
+            DOM.loader.classList.remove('hidden');
+            DOM.errorBox.classList.add('hidden');
+            DOM.status.textContent = "Nano Banana is imagining " + timeStr + "...";
+
+            const prompt = `A highly detailed, cinematic landscape artwork representing the exact atmospheric mood of ${timeStr}. Use lighting, weather, and color theory typical of this time of day. High resolution, professional composition, 8k.`;
+
+            try {
+                const result = await callGeminiWithRetry(prompt);
+                if (result) {
+                    DOM.canvasImg.src = result;
+                    DOM.canvasImg.classList.remove('hidden');
+                    DOM.placeholder.classList.add('hidden');
+                    state.lastSlice = timeStr;
+                    DOM.sliceTag.textContent = `Slice: ${timeStr}`;
+                }
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                DOM.loader.classList.add('hidden');
+                state.isGenerating = false;
+                // Set next update timestamp
+                const now = new Date();
+                const nextTarget = new Date(now.getTime() + (state.interval * 60000));
+                // Align to slice boundary
+                nextTarget.setSeconds(0);
+                nextTarget.setMilliseconds(0);
+                state.nextUpdateTime = nextTarget.getTime();
+            }
+        }
+
+        async function callGeminiWithRetry(prompt, retries = 5) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${state.apiKey}`;
+            const payload = {
+                instances: [{ prompt: prompt }],
+                parameters: { sampleCount: 1 }
+            };
+
+            for (let i = 0; i <= retries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.status === 429) throw new Error("RATE_LIMIT");
+                    if (!response.ok) {
+                        const data = await response.json();
+                        throw new Error(data.error?.message || "Generation failed");
+                    }
+
+                    const data = await response.json();
+                    return `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+
+                } catch (err) {
+                    if (err.message === "RATE_LIMIT" && i < retries) {
+                        const delay = Math.pow(2, i) * 1000 + (Math.random() * 500);
+                        DOM.status.textContent = `Rate limited. Retrying in ${Math.round(delay/1000)}s...`;
+                        await new Promise(r => setTimeout(r, delay));
+                        continue;
+                    }
+                    throw err;
+                }
+            }
+        }
+
+        function showError(msg) {
+            DOM.errorMsg.textContent = msg;
+            DOM.errorBox.classList.remove('hidden');
+        }
+
+        function checkAndGenerate(force = false) {
+            if (state.isGenerating) return;
+            const currentSlice = getCurrentSlice();
+            if (force || currentSlice !== state.lastSlice) {
+                generateArtwork(currentSlice);
+            }
+        }
+
+        // Init
+        setInterval(updateClock, 1000);
+        checkAndGenerate();
+        
+        // Initial setup for empty key
+        if (!state.apiKey) {
+            toggleSettings();
+        }
+    </script>
+</body>
+</html>
