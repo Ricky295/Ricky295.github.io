@@ -463,196 +463,135 @@
             return solver.hasUniqueSolution();
         }
 
-        // Replace the generateDuodoku function in your duodokumain.html with this:
-
-// Replace the generateDuodoku function in your duodokumain.html with this:
-
-async function generateDuodoku(targetDifficulty, useMinimalClues = false) {
-    return new Promise((resolve) => {
-        const generator = new DuoDoKuGenerator();
-        const solver = new duodokudifficulties();
-        
-        // Generate a complete solution
-        generator.generateSeedPuzzle();
-        let solution = deepCopy2D(generator.mPuzzle);
-        let puzzle = deepCopy2D(solution);
-        
-        // Create removability matrix
-        let removable = Array(8).fill(null).map(() => Array(8).fill(true));
-        let attempts = 0;
-        let currentDifficulty = Difficulty.EASY;
-        let bestPuzzle = null;
-        let bestDifficulty = null;
-        
-        const processGeneration = async () => {
-            // Keep trying until we get the exact target difficulty
-            while (bestDifficulty !== targetDifficulty) {
-                // Reset for new attempt
-                puzzle = deepCopy2D(solution);
-                removable = Array(8).fill(null).map(() => Array(8).fill(true));
-                attempts = 0;
-                const maxAttemptsPerRun = 10000;
-                let runBestPuzzle = null;
-                let runBestDifficulty = null;
+        async function generateDuodoku(targetDifficulty, useMinimalClues = false) {
+            return new Promise((resolve) => {
+                const generator = new DuoDoKuGenerator();
+                const solver = new duodokudifficulties();
                 
-                // First, create a minimal clues puzzle
-                while (attempts < maxAttemptsPerRun) {
-                    attempts++;
-                    
-                    // Find removable cells
-                    const removableCells = [];
-                    for (let r = 0; r < 8; r++) {
-                        for (let c = 0; c < 8; c++) {
-                            if (puzzle[r][c] !== 0 && removable[r][c]) {
-                                removableCells.push([r, c]);
-                            }
-                        }
-                    }
-                    
-                    if (removableCells.length === 0) break;
-                    
-                    // Try to remove a random cell
-                    const randomIndex = Math.floor(Math.random() * removableCells.length);
-                    const [r, c] = removableCells[randomIndex];
-                    const originalValue = puzzle[r][c];
-                    
-                    // Mark this cell as no longer removable
-                    removable[r][c] = false;
-                    
-                    // Try removing the cell
-                    puzzle[r][c] = 0;
-                    
-                    // Check if puzzle still has solution
-                    const hasValidSolution = hasUniqueSolution(puzzle);
-                    
-                    if (!hasValidSolution) {
-                        // Invalid removal - restore the cell
-                        puzzle[r][c] = originalValue;
-                    }
-                    
-                    // Update status periodically
-                    if (attempts % 100 === 0) {
-                        await new Promise(resolve => setTimeout(resolve, 1));
-                        const statusMsg = `Creating minimal puzzle... (${countClues(puzzle)} clues)`;
-                        showStatus(statusMsg, 'generating');
-                    }
-                }
+                // Generate a complete solution
+                generator.generateSeedPuzzle();
+                let solution = deepCopy2D(generator.mPuzzle);
+                let puzzle = deepCopy2D(solution);
                 
-                // Now we have a minimal clues puzzle
-                let minimalPuzzle = deepCopy2D(puzzle);
+                // Create removability matrix
+                let removable = Array(8).fill(null).map(() => Array(8).fill(true));
+                let attempts = 0;
+                let currentDifficulty = Difficulty.EASY;
+                let bestPuzzle = null;
+                let bestDifficulty = null;
                 
-                // Check the difficulty of the minimal puzzle
-                let testPuzzle = deepCopy2D(minimalPuzzle);
-                let candidates = initializeCandidates(testPuzzle);
-                solver.refreshCandidates(testPuzzle, candidates);
-                let currentDiff = solver.solve(testPuzzle, candidates);
-                
-                if (useMinimalClues) {
-                    // For minimal mode, check if this puzzle meets target difficulty
-                    if (currentDiff === targetDifficulty) {
-                        runBestPuzzle = minimalPuzzle;
-                        runBestDifficulty = currentDiff;
-                    } else if (runBestPuzzle === null || 
-                               Math.abs(currentDiff - targetDifficulty) < Math.abs(runBestDifficulty - targetDifficulty)) {
-                        runBestPuzzle = minimalPuzzle;
-                        runBestDifficulty = currentDiff;
-                    }
-                } else {
-                    // Normal mode: Start adding clues back with 80% probability
-                    // BUT only add clues that keep the same difficulty
-                    
-                    // Collect all empty cells
-                    const emptyCells = [];
-                    for (let r = 0; r < 8; r++) {
-                        for (let c = 0; c < 8; c++) {
-                            if (minimalPuzzle[r][c] === 0) {
-                                emptyCells.push([r, c]);
-                            }
-                        }
-                    }
-                    
-                    // Shuffle empty cells for random addition
-                    for (let i = emptyCells.length - 1; i > 0; i--) {
-                        const j = Math.floor(Math.random() * (i + 1));
-                        [emptyCells[i], emptyCells[j]] = [emptyCells[j], emptyCells[i]];
-                    }
-                    
-                    // Add clues back with 80% probability to continue
-                    // AND only if it keeps the same difficulty
-                    for (let i = 0; i < emptyCells.length; i++) {
-                        const [r, c] = emptyCells[i];
+                const processGeneration = async () => {
+                    // Keep trying until we get the exact target difficulty
+                    while (bestDifficulty !== targetDifficulty) {
+                        // Reset for new attempt
+                        puzzle = deepCopy2D(solution);
+                        removable = Array(8).fill(null).map(() => Array(8).fill(true));
+                        attempts = 0;
+                        const maxAttemptsPerRun = 10000;
+                        let runBestPuzzle = null;
+                        let runBestDifficulty = null;
                         
-                        // 20% chance to stop adding clues
-                        if (Math.random() < 0.2) {
+                        while (attempts < maxAttemptsPerRun) {
+                            attempts++;
+                            
+                            // Find removable cells
+                            const removableCells = [];
+                            for (let r = 0; r < 8; r++) {
+                                for (let c = 0; c < 8; c++) {
+                                    if (puzzle[r][c] !== 0 && removable[r][c]) {
+                                        removableCells.push([r, c]);
+                                    }
+                                }
+                            }
+                            
+                            if (removableCells.length === 0) break;
+                            
+                            // Try to remove a random cell
+                            const randomIndex = Math.floor(Math.random() * removableCells.length);
+                            const [r, c] = removableCells[randomIndex];
+                            const originalValue = puzzle[r][c];
+                            
+                            // Mark this cell as no longer removable
+                            removable[r][c] = false;
+                            
+                            // Try removing the cell
+                            puzzle[r][c] = 0;
+                            
+                            // Check if puzzle still has solution and get difficulty
+                            const testPuzzle = deepCopy2D(puzzle);
+                            const candidates = initializeCandidates(testPuzzle);
+                            solver.refreshCandidates(testPuzzle, candidates);
+                            
+                            const difficulty = solver.solve(testPuzzle, candidates);
+                            const hasValidSolution = hasUniqueSolution(puzzle);
+                            
+                            if (hasValidSolution) {
+                                currentDifficulty = difficulty;
+                                
+                                // For minimal clues mode
+                                if (useMinimalClues) {
+                                    // Keep removing if we haven't exceeded target difficulty
+                                    if (difficulty <= targetDifficulty) {
+                                        runBestPuzzle = deepCopy2D(puzzle);
+                                        runBestDifficulty = difficulty;
+                                    } else {
+                                        // Exceeded target, restore and stop
+                                        puzzle[r][c] = originalValue;
+                                        break;
+                                    }
+                                } else {
+                                    // Normal mode - keep best match to target
+                                    if (difficulty === targetDifficulty) {
+                                        runBestPuzzle = deepCopy2D(puzzle);
+                                        runBestDifficulty = difficulty;
+                                        break; // Found exact match
+                                    } else {
+                                        // Update best if this is closer to target or first valid puzzle
+                                        if (runBestPuzzle === null || 
+                                            Math.abs(difficulty - targetDifficulty) < Math.abs(runBestDifficulty - targetDifficulty)) {
+                                            runBestPuzzle = deepCopy2D(puzzle);
+                                            runBestDifficulty = difficulty;
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Invalid removal - restore the cell
+                                puzzle[r][c] = originalValue;
+                            }
+                            
+                            // Update status periodically
+                            if (attempts % 100 === 0) {
+                                await new Promise(resolve => setTimeout(resolve, 1));
+                                const statusMsg = `Generating... (${countClues(puzzle)} clues, current: ${currentDifficulty}, target: ${targetDifficulty})`;
+                                showStatus(statusMsg, 'generating');
+                            }
+                        }
+                        
+                        // Update overall best
+                        if (runBestPuzzle !== null && 
+                            (bestPuzzle === null || 
+                             runBestDifficulty === targetDifficulty || 
+                             Math.abs(runBestDifficulty - targetDifficulty) < Math.abs(bestDifficulty - targetDifficulty))) {
+                            bestPuzzle = runBestPuzzle;
+                            bestDifficulty = runBestDifficulty;
+                        }
+                        
+                        // If we found exact target, we're done
+                        if (bestDifficulty === targetDifficulty) {
                             break;
                         }
                         
-                        // Try adding the clue back from solution
-                        minimalPuzzle[r][c] = solution[r][c];
-                        
-                        // Check if this changes the difficulty
-                        testPuzzle = deepCopy2D(minimalPuzzle);
-                        candidates = initializeCandidates(testPuzzle);
-                        solver.refreshCandidates(testPuzzle, candidates);
-                        const newDiff = solver.solve(testPuzzle, candidates);
-                        
-                        if (newDiff !== currentDiff) {
-                            // Adding this clue changed the difficulty, so remove it
-                            minimalPuzzle[r][c] = 0;
-                        } else {
-                            // Difficulty stayed the same, keep the clue
-                            currentDiff = newDiff;
-                        }
-                        
-                        // Update status every few additions
-                        if (i % 5 === 0) {
-                            await new Promise(resolve => setTimeout(resolve, 1));
-                            const statusMsg = `Adding clues... (${countClues(minimalPuzzle)} clues, difficulty: ${currentDiff})`;
-                            showStatus(statusMsg, 'generating');
-                        }
+                        // Otherwise, try again
+                        showStatus(`Attempt complete. Best so far: ${bestDifficulty}. Retrying for exact target...`, 'generating');
+                        await new Promise(resolve => setTimeout(resolve, 100));
                     }
                     
-                    // Final check of difficulty
-                    testPuzzle = deepCopy2D(minimalPuzzle);
-                    candidates = initializeCandidates(testPuzzle);
-                    solver.refreshCandidates(testPuzzle, candidates);
-                    const finalDiff = solver.solve(testPuzzle, candidates);
-                    
-                    if (finalDiff === targetDifficulty) {
-                        runBestPuzzle = minimalPuzzle;
-                        runBestDifficulty = finalDiff;
-                    } else if (runBestPuzzle === null || 
-                               Math.abs(finalDiff - targetDifficulty) < Math.abs(runBestDifficulty - targetDifficulty)) {
-                        runBestPuzzle = minimalPuzzle;
-                        runBestDifficulty = finalDiff;
-                    }
-                }
+                    resolve({ puzzle: bestPuzzle, difficulty: bestDifficulty });
+                };
                 
-                // Update overall best
-                if (runBestPuzzle !== null && 
-                    (bestPuzzle === null || 
-                     runBestDifficulty === targetDifficulty || 
-                     Math.abs(runBestDifficulty - targetDifficulty) < Math.abs(bestDifficulty - targetDifficulty))) {
-                    bestPuzzle = runBestPuzzle;
-                    bestDifficulty = runBestDifficulty;
-                }
-                
-                // If we found exact target, we're done
-                if (bestDifficulty === targetDifficulty) {
-                    break;
-                }
-                
-                // Otherwise, try again
-                showStatus(`Attempt complete. Best so far: ${bestDifficulty}. Retrying for exact target...`, 'generating');
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
-            
-            resolve({ puzzle: bestPuzzle, difficulty: bestDifficulty });
-        };
-        
-        processGeneration();
-    });
-}
+                processGeneration();
+            });
+        }
         
         function generateCustomDuodoku() {
             const generator = new DuoDoKuGenerator();
@@ -714,7 +653,15 @@ async function generateDuodoku(targetDifficulty, useMinimalClues = false) {
         }
         
         function printDuodokus() {
-            window.location.href = "https://ricky295.github.io/duodokuprintmultiple.html";
+            const currentClues = document.getElementById("clueRange").value;
+            let cluesString = "";
+            for (let i = 0; i < 6; i++) {
+                cluesString += currentClues;
+                if (i < 5) {
+                    cluesString += ",";
+                }
+            }
+            window.location.href = "https://ricky295.github.io/duodokuprintmultiple.html?clues=" + encodeURIComponent(cluesString);
         }
 
         function constructDuodoku() {
@@ -740,7 +687,7 @@ async function generateDuodoku(targetDifficulty, useMinimalClues = false) {
                 // Simplifying fraction: 15/1152 = 5/384
                 // Final formula: zoom = 25 + width * 5 / 384
                 const width = window.innerWidth;
-                const zoom = (25 + width * 5 / 384) * 1.5;
+                const zoom = 25 + width * 5 / 384;
                 return Math.round(zoom);
             } else if (zoomSelect.value === "custom") {
                 return customZoomInput.value || 50;
