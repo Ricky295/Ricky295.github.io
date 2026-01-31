@@ -21,7 +21,6 @@
             align-items: center;
         }
 
-        /* Responsive container to keep aspect ratio or fill screen */
         .calc-body {
             background: #f3f4f6;
             width: 100%;
@@ -290,6 +289,7 @@
 
 <script>
     let currentExpression = "";
+    let lastAnswer = 0;
     let isAppOpen = false;
     const historyEl = document.getElementById('history');
     const inputEl = document.getElementById('current-input');
@@ -298,18 +298,28 @@
     const display = document.getElementById('display');
     const headerLabel = document.getElementById('header-label');
 
-    // Startup check
     window.onload = function() {
-        if (window.innerWidth > window.innerHeight) {
-            alert("Warning: could not get fullscreen. Consider launching this on a phone while in portrait.");
+        const isLandscape = window.innerWidth > window.innerHeight;
+        const isDesktop = window.innerWidth > 768;
+        
+        if (isLandscape && isDesktop) {
+            setTimeout(() => {
+                alert("Warning: could not get fullscreen. Consider launching this on a phone while in portrait.");
+            }, 500);
         }
     };
 
     function handleInput(val) {
         if (!isAppOpen) return;
         
-        if (val === '+' && (currentExpression.endsWith('+') || currentExpression === "")) {
-            return;
+        if (val === '+') {
+            if (currentExpression === "") {
+                currentExpression = "Ans+";
+                updateDisplay();
+                return;
+            } else if (currentExpression.endsWith('+')) {
+                return;
+            }
         }
         
         currentExpression += val;
@@ -337,6 +347,8 @@
         calcArea.classList.add('hidden');
         headerLabel.innerText = "HOME";
         currentExpression = "";
+        lastAnswer = 0;
+        historyEl.innerHTML = "";
         updateDisplay();
     }
 
@@ -351,7 +363,11 @@
         if (!isAppOpen || currentExpression === "") return;
 
         try {
-            const sanitized = currentExpression.replace(/[^-0-9+]/g, '');
+            // Replace 'Ans' with the last calculation result
+            let evalExpression = currentExpression.replace(/Ans/g, lastAnswer);
+            
+            // Basic sanitization
+            const sanitized = evalExpression.replace(/[^-0-9+]/g, '');
             const result = eval(sanitized);
 
             const line = document.createElement('div');
@@ -365,6 +381,7 @@
             historyEl.appendChild(line);
             historyEl.appendChild(resLine);
 
+            lastAnswer = result;
             currentExpression = "";
             updateDisplay();
         } catch (e) {
@@ -382,7 +399,11 @@
         if (e.key === '+') handleInput('+');
         if (e.key === 'Enter') handleEnter();
         if (e.key === 'Backspace' && isAppOpen) {
-            currentExpression = currentExpression.slice(0, -1);
+            if (currentExpression.endsWith('Ans')) {
+                currentExpression = currentExpression.slice(0, -3);
+            } else {
+                currentExpression = currentExpression.slice(0, -1);
+            }
             updateDisplay();
         }
         if (e.key === 'Escape') goHome();
