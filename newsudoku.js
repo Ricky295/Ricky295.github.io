@@ -533,5 +533,6 @@ export {
     solveWithSingles,
     generateSudoku,
     generateDailySudoku,
-    hint
+    hint,
+    solveGridRandomBacktracking
 };
