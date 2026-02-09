@@ -591,21 +591,21 @@ Generate a crystalline puzzle or import your own.</div>
             
             <div class="form-group">
                 <label for="minDifficulty">Minimum Difficulty</label>
-                <input type="range" id="minDifficulty" min="0" max="1" step="0.1" value="0.3">
+                <input type="range" id="minDifficulty" min="0" max="100" step="1" value="30">
                 <div class="range-display">
-                    <span>Easy (0.0)</span>
-                    <span id="minDiffValue">0.3</span>
-                    <span>Hard (1.0)</span>
+                    <span>Easy (0.0%)</span>
+                    <span id="minDiffValue">30.0%</span>
+                    <span>Hard (100.0%)</span>
                 </div>
             </div>
 
             <div class="form-group">
                 <label for="maxDifficulty">Maximum Difficulty</label>
-                <input type="range" id="maxDifficulty" min="0" max="1" step="0.1" value="0.7">
+                <input type="range" id="maxDifficulty" min="0" max="100" step="1" value="70">
                 <div class="range-display">
-                    <span>Easy (0.0)</span>
-                    <span id="maxDiffValue">0.7</span>
-                    <span>Hard (1.0)</span>
+                    <span>Easy (0.0%)</span>
+                    <span id="maxDiffValue">70.0%</span>
+                    <span>Hard (100.0%)</span>
                 </div>
             </div>
 
@@ -677,9 +677,6 @@ Generate a crystalline puzzle or import your own.</div>
         }
 
         function selectCell(row, col) {
-            // Can't select given cells
-            if (originalPuzzle && originalPuzzle[row][col] !== 0) return;
-
             selectedCell = { row, col };
             
             // Update visual selection and highlighting
@@ -688,18 +685,17 @@ Generate a crystalline puzzle or import your own.</div>
                 const r = Math.floor(idx / 9);
                 const c = idx % 9;
                 
-                // Remove previous highlights
+                // Reset all inline styles first
                 cell.style.background = '';
+                cell.style.boxShadow = '';
                 
                 // Check if it's a given cell
                 const isGiven = originalPuzzle && originalPuzzle[r][c] !== 0;
                 
                 if (r === row && c === col) {
-                    // Selected cell
-                    if (!isGiven) {
-                        cell.style.background = 'linear-gradient(135deg, var(--amethyst-mid), var(--amethyst-rich))';
-                        cell.style.boxShadow = '0 0 20px var(--glow-purple), inset 0 0 15px rgba(255, 255, 255, 0.2)';
-                    }
+                    // Selected cell - always highlight
+                    cell.style.background = 'linear-gradient(135deg, var(--amethyst-mid), var(--amethyst-rich))';
+                    cell.style.boxShadow = '0 0 20px var(--glow-purple), inset 0 0 15px rgba(255, 255, 255, 0.2)';
                 } else {
                     // Highlight same row, column, and box
                     const boxRow = Math.floor(r / 3);
@@ -716,7 +712,8 @@ Generate a crystalline puzzle or import your own.</div>
                     }
                     
                     // Highlight same numbers
-                    if (currentPuzzle[row][col] !== 0 && currentPuzzle[r][c] === currentPuzzle[row][col]) {
+                    const currentValue = currentPuzzle[row][col];
+                    if (currentValue !== 0 && currentPuzzle[r][c] === currentValue) {
                         cell.style.background = 'linear-gradient(135deg, rgba(139, 71, 137, 0.35), rgba(107, 45, 107, 0.45))';
                     }
                 }
@@ -737,6 +734,36 @@ Generate a crystalline puzzle or import your own.</div>
             }
         }
 
+        function autoRemoveCandidates(row, col, num) {
+            // Remove candidate from same row
+            for (let c = 0; c < 9; c++) {
+                const key = `${row},${c}`;
+                if (candidates[key]) {
+                    candidates[key].delete(num);
+                }
+            }
+            
+            // Remove candidate from same column
+            for (let r = 0; r < 9; r++) {
+                const key = `${r},${col}`;
+                if (candidates[key]) {
+                    candidates[key].delete(num);
+                }
+            }
+            
+            // Remove candidate from same 3x3 box
+            const startRow = Math.floor(row / 3) * 3;
+            const startCol = Math.floor(col / 3) * 3;
+            for (let r = startRow; r < startRow + 3; r++) {
+                for (let c = startCol; c < startCol + 3; c++) {
+                    const key = `${r},${c}`;
+                    if (candidates[key]) {
+                        candidates[key].delete(num);
+                    }
+                }
+            }
+        }
+
         function placeNumber(num) {
             if (!selectedCell) {
                 showMessage('◇ Select a cell first');
@@ -744,6 +771,13 @@ Generate a crystalline puzzle or import your own.</div>
             }
 
             const { row, col } = selectedCell;
+            
+            // Can't modify given cells
+            if (originalPuzzle && originalPuzzle[row][col] !== 0) {
+                showMessage('⚠ Cannot modify given cells');
+                return;
+            }
+
             const key = `${row},${col}`;
 
             if (currentMode === 'normal') {
@@ -751,17 +785,23 @@ Generate a crystalline puzzle or import your own.</div>
                 currentPuzzle[row][col] = num;
                 if (num !== 0) {
                     delete candidates[key]; // Clear candidates when placing number
+                    autoRemoveCandidates(row, col, num); // Auto-remove from other cells
                 }
             } else {
                 // Candidate mode: toggle candidate
-                if (!candidates[key]) {
-                    candidates[key] = new Set();
-                }
-                
-                if (candidates[key].has(num)) {
-                    candidates[key].delete(num);
+                if (num === 0) {
+                    // Clear all candidates in this cell
+                    delete candidates[key];
                 } else {
-                    candidates[key].add(num);
+                    if (!candidates[key]) {
+                        candidates[key] = new Set();
+                    }
+                    
+                    if (candidates[key].has(num)) {
+                        candidates[key].delete(num);
+                    } else {
+                        candidates[key].add(num);
+                    }
                 }
             }
 
@@ -827,8 +867,8 @@ Generate a crystalline puzzle or import your own.</div>
         }
 
         function confirmGenerate() {
-            const minDiff = parseFloat(document.getElementById('minDifficulty').value);
-            const maxDiff = parseFloat(document.getElementById('maxDifficulty').value);
+            const minDiff = parseFloat(document.getElementById('minDifficulty').value) / 100;
+            const maxDiff = parseFloat(document.getElementById('maxDifficulty').value) / 100;
             const targetClues = parseInt(document.getElementById('targetClues').value);
 
             if (minDiff > maxDiff) {
@@ -847,11 +887,11 @@ Generate a crystalline puzzle or import your own.</div>
 
         // Update slider displays
         document.getElementById('minDifficulty').addEventListener('input', (e) => {
-            document.getElementById('minDiffValue').textContent = e.target.value;
+            document.getElementById('minDiffValue').textContent = parseFloat(e.target.value).toFixed(1) + '%';
         });
 
         document.getElementById('maxDifficulty').addEventListener('input', (e) => {
-            document.getElementById('maxDiffValue').textContent = e.target.value;
+            document.getElementById('maxDiffValue').textContent = parseFloat(e.target.value).toFixed(1) + '%';
         });
 
         function generatePuzzle(minDiff, maxDiff, targetClues) {
