@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amethyst Sudoku</title>
+    <script src="newsudoku.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --amethyst-deep: #4a1a4a;
+            --amethyst-rich: #6b2d6b;
+            --amethyst-mid: #8b4789;
+            --amethyst-light: #b87bb8;
+            --amethyst-pale: #d4a5d4;
+            --amethyst-glow: #e6c9e6;
+            --crystal-white: #f8f4f8;
+            --shadow-purple: rgba(107, 45, 107, 0.3);
+            --glow-purple: rgba(184, 123, 184, 0.6);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Cormorant Garamond', serif;
+            background: linear-gradient(135deg, #1a0a1a 0%, #2d1a2d 50%, #1a0a1a 100%);
+            color: var(--crystal-white);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Animated crystalline background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background-image: 
+                radial-gradient(circle at 20% 30%, rgba(184, 123, 184, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(107, 45, 107, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 40% 80%, rgba(139, 71, 137, 0.1) 0%, transparent 50%);
+            animation: crystallineShift 20s ease-in-out infinite;
+            z-index: 0;
+        }
+
+        @keyframes crystallineShift {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(-5%, -5%) rotate(2deg); }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+        }
+
+        h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 4.5rem;
+            font-weight: 700;
+            letter-spacing: 0.15em;
+            text-align: center;
+            background: linear-gradient(135deg, var(--amethyst-pale), var(--crystal-white), var(--amethyst-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 30px var(--glow-purple);
+            margin-bottom: -10px;
+            animation: titleGlow 4s ease-in-out infinite;
+            position: relative;
+        }
+
+        h1::after {
+            content: '◆';
+            position: absolute;
+            left: 50%;
+            bottom: -30px;
+            transform: translateX(-50%);
+            font-size: 1.2rem;
+            color: var(--amethyst-light);
+            animation: gemRotate 3s linear infinite;
+        }
+
+        @keyframes titleGlow {
+            0%, 100% { filter: drop-shadow(0 0 20px var(--glow-purple)); }
+            50% { filter: drop-shadow(0 0 40px var(--glow-purple)); }
+        }
+
+        @keyframes gemRotate {
+            from { transform: translateX(-50%) rotate(0deg); }
+            to { transform: translateX(-50%) rotate(360deg); }
+        }
+
+        .controls-panel {
+            width: 100%;
+            max-width: 700px;
+            background: linear-gradient(135deg, rgba(107, 45, 107, 0.2), rgba(74, 26, 74, 0.3));
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 
+                0 0 60px rgba(184, 123, 184, 0.4),
+                inset 0 0 40px rgba(139, 71, 137, 0.2);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(184, 123, 184, 0.3);
+        }
+
+        .import-section {
+            margin-bottom: 20px;
+        }
+
+        .import-section input {
+            width: 100%;
+            padding: 15px;
+            background: rgba(74, 26, 74, 0.4);
+            border: 2px solid var(--amethyst-mid);
+            border-radius: 12px;
+            color: var(--crystal-white);
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .import-section input::placeholder {
+            color: var(--amethyst-pale);
+        }
+
+        .import-section input:focus {
+            outline: none;
+            border-color: var(--amethyst-light);
+            box-shadow: 0 0 20px var(--glow-purple);
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+        }
+
+        button {
+            font-family: 'Cinzel', serif;
+            padding: 14px 20px;
+            background: linear-gradient(135deg, rgba(139, 71, 137, 0.6), rgba(107, 45, 107, 0.7));
+            border: 2px solid var(--amethyst-mid);
+            border-radius: 12px;
+            color: var(--crystal-white);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px var(--shadow-purple);
+            letter-spacing: 0.05em;
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, var(--amethyst-mid), var(--amethyst-rich));
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px var(--glow-purple);
+            border-color: var(--amethyst-light);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .sudoku-container {
+            position: relative;
+            padding: 25px;
+            background: linear-gradient(135deg, rgba(107, 45, 107, 0.2), rgba(74, 26, 74, 0.3));
+            border-radius: 20px;
+            box-shadow: 
+                0 0 60px rgba(184, 123, 184, 0.4),
+                inset 0 0 40px rgba(139, 71, 137, 0.2),
+                0 10px 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(184, 123, 184, 0.3);
+        }
+
+        .sudoku-container::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, 
+                var(--amethyst-light), 
+                var(--amethyst-mid), 
+                var(--amethyst-rich), 
+                var(--amethyst-mid),
+                var(--amethyst-light));
+            border-radius: 20px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: -1;
+            background-size: 300% 300%;
+            animation: gradientFlow 6s ease infinite;
+        }
+
+        .sudoku-container:hover::before {
+            opacity: 0.6;
+        }
+
+        @keyframes gradientFlow {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .difficulty-badge {
+            position: absolute;
+            top: -15px;
+            right: -15px;
+            background: linear-gradient(135deg, var(--amethyst-light), var(--amethyst-mid));
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-family: 'Cinzel', serif;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--crystal-white);
+            box-shadow: 0 0 20px var(--glow-purple);
+            border: 2px solid var(--amethyst-pale);
+            z-index: 10;
+            letter-spacing: 0.1em;
+        }
+
+        .sudoku-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 0;
+            background: var(--amethyst-deep);
+            padding: 3px;
+            border-radius: 12px;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .cell {
+            aspect-ratio: 1;
+            width: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Cinzel', serif;
+            font-size: 1.8rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, rgba(139, 71, 137, 0.15), rgba(107, 45, 107, 0.25));
+            border: 1px solid rgba(184, 123, 184, 0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            color: var(--crystal-white);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .cell::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.1), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .cell:hover::before {
+            opacity: 1;
+        }
+
+        .cell.given {
+            background: linear-gradient(135deg, rgba(107, 45, 107, 0.4), rgba(74, 26, 74, 0.5));
+            color: var(--amethyst-glow);
+            font-weight: 700;
+            cursor: default;
+        }
+
+        .cell.solved {
+            background: linear-gradient(135deg, rgba(139, 71, 137, 0.3), rgba(107, 45, 107, 0.4));
+            color: var(--amethyst-pale);
+        }
+
+        .cell.hint {
+            background: linear-gradient(135deg, var(--amethyst-mid), var(--amethyst-rich));
+            box-shadow: 
+                0 0 20px var(--glow-purple),
+                inset 0 0 15px rgba(255, 255, 255, 0.2);
+            animation: hintPulse 1s ease-in-out;
+        }
+
+        @keyframes hintPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        /* 3x3 box borders */
+        .cell:nth-child(3n):not(:nth-child(9n)) {
+            border-right: 3px solid var(--amethyst-mid);
+        }
+        .cell:nth-child(n+19):nth-child(-n+27),
+        .cell:nth-child(n+46):nth-child(-n+54) {
+            border-bottom: 3px solid var(--amethyst-mid);
+        }
+
+        .message-panel {
+            width: 100%;
+            max-width: 700px;
+            background: linear-gradient(135deg, rgba(139, 71, 137, 0.2), rgba(107, 45, 107, 0.3));
+            border: 2px solid rgba(184, 123, 184, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 16px;
+            line-height: 1.8;
+            color: var(--crystal-white);
+            box-shadow: 
+                0 0 30px rgba(184, 123, 184, 0.3),
+                inset 0 0 20px rgba(139, 71, 137, 0.2);
+            backdrop-filter: blur(10px);
+            white-space: pre-wrap;
+        }
+
+        .hint-display {
+            background: linear-gradient(135deg, rgba(212, 165, 212, 0.3), rgba(184, 123, 184, 0.4));
+            padding: 15px;
+            border-radius: 12px;
+            margin-top: 15px;
+            text-align: center;
+            font-weight: 600;
+            color: var(--crystal-white);
+            display: none;
+            border: 2px solid var(--amethyst-pale);
+            box-shadow: 0 0 20px var(--glow-purple);
+        }
+
+        .hint-display.show {
+            display: block;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+            .cell {
+                width: 40px;
+                font-size: 1.3rem;
+            }
+            .controls {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AMETHYST</h1>
+
+        <div class="controls-panel">
+            <div class="import-section">
+                <input 
+                    type="text" 
+                    id="importInput" 
+                    placeholder="Import puzzle (81 characters: 0 = empty, 1-9 = clues)"
+                    maxlength="81"
+                >
+            </div>
+
+            <div class="controls">
+                <button onclick="importPuzzle()">⬇ Import</button>
+                <button onclick="generatePuzzle()">✦ Generate</button>
+                <button onclick="solvePuzzle()">⚡ Solve</button>
+                <button onclick="getHint(0)">◇ Hint (Std)</button>
+                <button onclick="getHint(1)">◆ Hint (Easy)</button>
+                <button onclick="dailyPuzzle()">☾ Daily</button>
+                <button onclick="clearBoard()">⟡ Clear</button>
+            </div>
+        </div>
+
+        <div class="sudoku-container">
+            <div class="difficulty-badge" id="difficultyBadge">
+                —
+            </div>
+            <div class="sudoku-grid" id="grid"></div>
+        </div>
+
+        <div class="hint-display" id="hintDisplay"></div>
+
+        <div class="message-panel" id="output">Welcome to Amethyst Sudoku ◆
+
+Generate a crystalline puzzle or import your own.</div>
+    </div>
+
+    <script>
+        let currentPuzzle = null;
+        let originalPuzzle = null;
+
+        function displayGrid(puzzle, solved = false) {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+
+                    if (puzzle[r][c] !== 0) {
+                        cell.textContent = puzzle[r][c];
+
+                        if (originalPuzzle && originalPuzzle[r][c] !== 0) {
+                            cell.classList.add('given');
+                        } else if (solved) {
+                            cell.classList.add('solved');
+                        }
+                    }
+
+                    grid.appendChild(cell);
+                }
+            }
+
+            updateDifficulty();
+        }
+
+        function updateDifficulty() {
+            const badge = document.getElementById('difficultyBadge');
+
+            if (!currentPuzzle) {
+                badge.textContent = '—';
+                return;
+            }
+
+            const diff = Sudoku.solveWithSingles(currentPuzzle, true);
+
+            if (diff === -1.0) {
+                badge.textContent = 'INVALID';
+            } else if (diff === -0.1) {
+                badge.textContent = 'xx.x%';
+            } else if (diff === 0.0) {
+                badge.textContent = 'SOLVED';
+            } else {
+                badge.textContent = `${(diff * 100).toFixed(1)}%`;
+            }
+        }
+
+        function generatePuzzle() {
+            showMessage('✦ Crystallizing puzzle...');
+
+            setTimeout(() => {
+                currentPuzzle = Sudoku.generateSudoku(0.3, 0.7, 30);
+                originalPuzzle = Sudoku.deepCopyBoard(currentPuzzle);
+                displayGrid(currentPuzzle);
+
+                const diff = Sudoku.solveWithSingles(currentPuzzle, true);
+                const str = Sudoku.convertToString(currentPuzzle);
+
+                let diffText = diff === -0.1 ? 'xx.x%' : `${(diff * 100).toFixed(1)}%`;
+
+                showMessage(`✦ Puzzle Generated
+
+Difficulty: ${diffText}
+String: ${str}
+
+Begin your journey through the crystal...`);
+            }, 300);
+
+            hideHint();
+        }
+
+        function solvePuzzle() {
+            if (!currentPuzzle) {
+                showMessage('⚠ No puzzle loaded. Generate or import one first.');
+                return;
+            }
+
+            showMessage('⚡ Channeling amethyst energy...');
+
+            setTimeout(() => {
+                const start = performance.now();
+                const solved = Sudoku.solveWithSingles(currentPuzzle, false);
+                const end = performance.now();
+
+                if (solved) {
+                    currentPuzzle = solved;
+                    displayGrid(solved, true);
+                    showMessage(`⚡ Solution revealed in ${(end - start).toFixed(2)}ms
+
+${Sudoku.convertToString(solved)}
+
+The crystal's wisdom illuminates all.`);
+                } else {
+                    showMessage(`⚠ Cannot solve with singles techniques alone.
+
+This puzzle requires advanced methods:
+• Pointing Pairs
+• Box/Line Reduction
+• X-Wing, Swordfish, etc.
+
+Try hints or choose another puzzle.`);
+                }
+            }, 300);
+
+            hideHint();
+        }
+
+        function getHint(priority) {
+            if (!currentPuzzle) {
+                showMessage('⚠ No puzzle loaded.');
+                return;
+            }
+
+            const [technique, [row, col], value] = Sudoku.hint(currentPuzzle, priority);
+            const mode = priority === 0 ? 'Standard' : 'Easier';
+
+            if (technique === 'Solved') {
+                showMessage('✦ Puzzle complete!');
+                document.getElementById('hintDisplay').textContent = '✦ COMPLETE';
+            } else if (technique === 'Stuck' || technique === 'Contradiction') {
+                showMessage(`⚠ ${technique}
+
+Advanced techniques required.`);
+                document.getElementById('hintDisplay').textContent = `⚠ ${technique}`;
+            } else {
+                const cells = document.querySelectorAll('.cell');
+                cells.forEach(cell => cell.classList.remove('hint'));
+
+                const idx = row * 9 + col;
+                cells[idx].classList.add('hint');
+                cells[idx].textContent = value;
+
+                currentPuzzle[row][col] = value;
+
+                showMessage(`◆ Hint (${mode})
+
+Technique: ${technique}
+Position: Row ${row + 1}, Column ${col + 1}
+Value: ${value}`);
+
+                document.getElementById('hintDisplay').textContent = 
+                    `◆ ${technique}: ${value} at (${row + 1}, ${col + 1})`;
+            }
+
+            showHint();
+            updateDifficulty();
+        }
+
+        function dailyPuzzle() {
+            showMessage('☾ Consulting the lunar cycle...');
+
+            setTimeout(() => {
+                const today = new Date();
+                currentPuzzle = Sudoku.generateDailySudoku(today);
+                originalPuzzle = Sudoku.deepCopyBoard(currentPuzzle);
+                displayGrid(currentPuzzle);
+
+                const diff = Sudoku.solveWithSingles(currentPuzzle, true);
+                const str = Sudoku.convertToString(currentPuzzle);
+                let diffText = diff === -0.1 ? 'xx.x%' : `${(diff * 100).toFixed(1)}%`;
+
+                showMessage(`☾ Daily Puzzle — ${today.toDateString()}
+
+Difficulty: ${diffText}
+String: ${str}
+
+Same date yields same puzzle across all realms.`);
+            }, 300);
+
+            hideHint();
+        }
+
+        function importPuzzle() {
+            const input = document.getElementById('importInput');
+            const str = input.value.trim();
+
+            if (str.length !== 81) {
+                showMessage(`⚠ Invalid length: ${str.length} (need 81)
+
+Format: 0 for empty, 1-9 for clues
+Example: 530070000600195000...`);
+                return;
+            }
+
+            if (!/^[0-9]{81}$/.test(str)) {
+                showMessage('⚠ Invalid characters. Use only 0-9.');
+                return;
+            }
+
+            try {
+                currentPuzzle = Sudoku.convertToMatrix(str);
+                originalPuzzle = Sudoku.deepCopyBoard(currentPuzzle);
+                displayGrid(currentPuzzle);
+
+                const diff = Sudoku.solveWithSingles(currentPuzzle, true);
+                let diffText;
+
+                if (diff === -1.0) diffText = 'INVALID';
+                else if (diff === -0.1) diffText = 'xx.x%';
+                else if (diff === 0.0) diffText = 'Already solved';
+                else diffText = `${(diff * 100).toFixed(1)}%`;
+
+                showMessage(`⬇ Puzzle imported
+
+Difficulty: ${diffText}
+String: ${str}
+
+The crystal accepts your offering.`);
+
+                input.value = '';
+                hideHint();
+            } catch (err) {
+                showMessage(`⚠ Import failed: ${err.message}`);
+            }
+        }
+
+        function clearBoard() {
+            currentPuzzle = Array(9).fill(null).map(() => Array(9).fill(0));
+            originalPuzzle = null;
+            displayGrid(currentPuzzle);
+            showMessage('⟡ Board cleared\n\nThe crystal awaits...');
+            document.getElementById('importInput').value = '';
+            hideHint();
+        }
+
+        function showMessage(text) {
+            document.getElementById('output').textContent = text;
+        }
+
+        function showHint() {
+            document.getElementById('hintDisplay').classList.add('show');
+        }
+
+        function hideHint() {
+            document.getElementById('hintDisplay').classList.remove('show');
+        }
+
+        // Enter key to import
+        document.getElementById('importInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') importPuzzle();
+        });
+
+        // Initialize
+        currentPuzzle = Array(9).fill(null).map(() => Array(9).fill(0));
+        displayGrid(currentPuzzle);
+    </script>
+</body>
+</html>
