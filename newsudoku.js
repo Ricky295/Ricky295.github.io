@@ -324,18 +324,39 @@ function findAndApplyUpdates(techniqueType, puzzle, possibilities, emptyCellsCou
         updates = findNakedSingles(puzzle, possibilities);
     }
     
-    // Apply all updates for this technique
+    if (updates.length === 0) {
+        return [emptyCellsCount, false];
+    }
+    
+    // Make updates unique (remove duplicates)
+    const uniqueUpdates = [];
+    const seen = new Set();
     for (const [r, c, val] of updates) {
-        puzzle[r][c] = val;
-        emptyCellsCount--;
-        possibilities[r][c] = new Set();
-        const contradiction = eliminatePossibilities(possibilities, r, c, val, puzzle);
-        if (contradiction) {
-            return [emptyCellsCount, true];
+        const key = `${r},${c},${val}`;
+        if (!seen.has(key)) {
+            seen.add(key);
+            uniqueUpdates.push([r, c, val]);
         }
     }
     
-    return [emptyCellsCount, false];
+    // Apply all unique updates for this technique
+    let contradiction = false;
+    for (const [r, c, val] of uniqueUpdates) {
+        if (puzzle[r][c] === 0) {
+            puzzle[r][c] = val;
+            emptyCellsCount--;
+            
+            // Update possibilities for neighbors and check for contradiction
+            if (eliminatePossibilities(possibilities, r, c, val, puzzle)) {
+                contradiction = true;
+            }
+            
+            // Mark the current cell as solved
+            possibilities[r][c] = new Set();
+        }
+    }
+    
+    return [emptyCellsCount, contradiction];
 }
 
 function solveWithSingles(sudoku, returnDifficulty = false) {
@@ -343,11 +364,17 @@ function solveWithSingles(sudoku, returnDifficulty = false) {
      * Solves a Sudoku puzzle using only singles techniques (Box HS -> Line HS -> Naked Single).
      * 
      * If returnDifficulty is true:
-     *   Returns difficulty score (0.0-1.0) or -0.1 if stuck
+     *   Returns difficulty score or -0.1 if stuck, -0.2 if contradiction
      * If returnDifficulty is false:
-     *   Returns the solved puzzle or null if stuck
+     *   Returns the solved puzzle or original board if stuck/invalid
      */
     const puzzle = deepCopyBoard(sudoku);
+    const initialEmptyCells = puzzle.flat().filter(x => x === 0).length;
+    let highestTechnique = 0;
+    
+    if (initialEmptyCells === 0) {
+        return returnDifficulty ? 0.0 : puzzle;
+    }
     
     // Initialize possibilities
     const possibilities = Array(9).fill(null).map(() => 
@@ -360,76 +387,67 @@ function solveWithSingles(sudoku, returnDifficulty = false) {
             if (puzzle[r][c] === 0) {
                 possibilities[r][c] = new Set(getPossibleValues(puzzle, r, c));
                 if (possibilities[r][c].size === 0) {
-                    return returnDifficulty ? -1.0 : null;
+                    return returnDifficulty ? -0.2 : sudoku;
                 }
                 emptyCellsCount++;
+            } else {
+                possibilities[r][c] = new Set();
             }
         }
     }
     
-    const initialEmptyCells = emptyCellsCount;
-    if (emptyCellsCount === 0) {
-        return returnDifficulty ? 0.0 : puzzle;
-    }
+    // Solving loop with STRICT priority (Box HS -> Line HS -> Naked Single)
+    let steps = 0;
     
-    // Technique tracking
-    const techniqueApplications = {
-        'BoxHS': 0,
-        'LineHS': 0,
-        'NakedSingle': 0
-    };
-    
-    // Main solving loop
-    let lastEmptyCells = emptyCellsCount + 1;
-    
-    while (emptyCellsCount > 0 && emptyCellsCount < lastEmptyCells) {
-        lastEmptyCells = emptyCellsCount;
+    while (emptyCellsCount > 0) {
+        let updates = [];
+        let contradiction = false;
         
-        // Try techniques in order: Box HS -> Line HS -> Naked Single
-        for (const technique of ['BoxHS', 'LineHS', 'NakedSingle']) {
-            const [newEmptyCells, contradiction] = findAndApplyUpdates(
-                technique, puzzle, possibilities, emptyCellsCount
-            );
-            
-            if (contradiction) {
-                return returnDifficulty ? -1.0 : null;
-            }
-            
-            if (newEmptyCells < emptyCellsCount) {
-                techniqueApplications[technique]++;
-                emptyCellsCount = newEmptyCells;
-                break; // Go back to BoxHS
-            }
-        }
-    }
-    
-    // Check if solved or stuck
-    if (emptyCellsCount > 0) {
-        return returnDifficulty ? -0.1 : null;
-    }
-    
-    if (returnDifficulty) {
-        // Calculate difficulty score
-        const totalTechniques = techniqueApplications['BoxHS'] + 
-                                techniqueApplications['LineHS'] + 
-                                techniqueApplications['NakedSingle'];
-        
-        if (totalTechniques === 0) {
-            return 0.0;
+        // 1. Box Hidden Single
+        [emptyCellsCount, contradiction] = findAndApplyUpdates('BoxHS', puzzle, possibilities, emptyCellsCount);
+        const boxUpdates = emptyCellsCount < initialEmptyCells - steps;
+        if (boxUpdates) {
+            steps++;
+            if (contradiction) break;
+            continue;
         }
         
-        const boxHSWeight = 1.0;
-        const lineHSWeight = 2.0;
-        const nakedSingleWeight = 3.0;
+        highestTechnique = Math.max(1, highestTechnique);
         
-        const weightedSum = techniqueApplications['BoxHS'] * boxHSWeight +
-                           techniqueApplications['LineHS'] * lineHSWeight +
-                           techniqueApplications['NakedSingle'] * nakedSingleWeight;
+        // 2. Line Hidden Single
+        const prevCount = emptyCellsCount;
+        [emptyCellsCount, contradiction] = findAndApplyUpdates('LineHS', puzzle, possibilities, emptyCellsCount);
+        if (emptyCellsCount < prevCount) {
+            steps++;
+            if (contradiction) break;
+            continue;
+        }
         
-        const normalizedScore = weightedSum / (totalTechniques * nakedSingleWeight);
-        return normalizedScore;
+        highestTechnique = 2;
+        
+        // 3. Naked Single
+        const prevCount2 = emptyCellsCount;
+        [emptyCellsCount, contradiction] = findAndApplyUpdates('NakedSingle', puzzle, possibilities, emptyCellsCount);
+        if (emptyCellsCount < prevCount2) {
+            steps++;
+            if (contradiction) break;
+            continue;
+        }
+        
+        // Stuck
+        break;
+    }
+    
+    // Final check and return
+    if (contradiction) {
+        return returnDifficulty ? -0.2 : sudoku;
+    } else if (emptyCellsCount === 0) {
+        // Fully solved
+        const difficulty = initialEmptyCells > 0 ? steps / initialEmptyCells : 0.0;
+        return returnDifficulty ? (difficulty + highestTechnique) / 3 : puzzle;
     } else {
-        return puzzle;
+        // Stuck, requires advanced techniques
+        return returnDifficulty ? -0.1 : sudoku;
     }
 }
 
