@@ -398,11 +398,9 @@ function solveWithSingles(sudoku, returnDifficulty = false) {
     
     // Solving loop with STRICT priority (Box HS -> Line HS -> Naked Single)
     let steps = 0;
+    let contradiction = false;
     
     while (emptyCellsCount > 0) {
-        let updates = [];
-        let contradiction = false;
-        
         // 1. Box Hidden Single
         [emptyCellsCount, contradiction] = findAndApplyUpdates('BoxHS', puzzle, possibilities, emptyCellsCount);
         const boxUpdates = emptyCellsCount < initialEmptyCells - steps;
