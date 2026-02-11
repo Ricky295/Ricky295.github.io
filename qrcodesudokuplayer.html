@@ -1,575 +1,258 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Omnibox Timer</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku Player</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: #0f172a;
+            color: #f8fafc;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-    }
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
 
-    .container {
-      max-width: 1000px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      padding: 30px;
-    }
+        .sudoku-grid {
+            display: grid;
+            gap: 0;
+            border: 3px solid #6366f1;
+            background: #6366f1;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            margin: 0 auto;
+        }
 
-    h1 {
-      color: #333;
-      margin-bottom: 30px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+        .cell {
+            width: clamp(35px, 9vw, 55px);
+            height: clamp(35px, 9vw, 55px);
+            background: #1e293b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(1.2rem, 4vw, 1.6rem);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            position: relative;
+        }
 
-    .btn {
-      background: #667eea;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      transition: background 0.2s;
-    }
+        .cell:hover { background: #334155; }
+        .cell.selected { background: #4f46e5; color: white; transform: scale(1.05); z-index: 10; border-radius: 4px; box-shadow: 0 0 20px rgba(99, 102, 241, 0.4); }
+        .cell.fixed { color: #94a3b8; background: #0f172a; cursor: default; }
+        .cell.error { color: #f87171; }
+        
+        /* Subgrid Borders for 9x9 */
+        .grid-9 .cell:nth-child(3n) { border-right: 2px solid #6366f1; }
+        .grid-9 .cell:nth-child(9n) { border-right: none; }
+        .grid-9 .cell:nth-child(n+19):nth-child(-n+27),
+        .grid-9 .cell:nth-child(n+46):nth-child(-n+54) { border-bottom: 2px solid #6366f1; }
 
-    .btn:hover {
-      background: #5568d3;
-    }
+        /* Subgrid Borders for 6x6 */
+        .grid-6 .cell:nth-child(3n) { border-right: 2px solid #6366f1; }
+        .grid-6 .cell:nth-child(6n) { border-right: none; }
+        .grid-6 .cell:nth-child(n+13):nth-child(-n+18),
+        .grid-6 .cell:nth-child(n+31):nth-child(-n+36) { border-bottom: 2px solid #6366f1; }
 
-    .btn-danger {
-      background: #ef4444;
-      padding: 6px 12px;
-    }
+        .numpad-btn {
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.2s;
+        }
+        .numpad-btn:active { transform: scale(0.9); background: #4f46e5; }
 
-    .btn-danger:hover {
-      background: #dc2626;
-    }
-
-    .add-form {
-      background: #f9fafb;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      display: none;
-    }
-
-    .add-form.active {
-      display: block;
-    }
-
-    .form-group {
-      margin-bottom: 15px;
-    }
-
-    label {
-      display: block;
-      margin-bottom: 5px;
-      font-weight: 500;
-      color: #374151;
-    }
-
-    input, select {
-      width: 100%;
-      padding: 8px 12px;
-      border: 1px solid #d1d5db;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-
-    .form-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 20px;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-    }
-
-    th, td {
-      padding: 12px;
-      text-align: left;
-      border-bottom: 1px solid #e5e7eb;
-    }
-
-    th {
-      background: #f9fafb;
-      font-weight: 600;
-      color: #374151;
-    }
-
-    tr:hover {
-      background: #f9fafb;
-    }
-
-    .expired {
-      color: #ef4444;
-      font-weight: 600;
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 60px 20px;
-      color: #6b7280;
-    }
-
-    .hint {
-      font-size: 12px;
-      color: #6b7280;
-      margin-top: 4px;
-    }
-  </style>
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
 </head>
-<body>
-  <div class="container">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <h1>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="12 6 12 12 16 14"></polyline>
-        </svg>
-        Omnibox Timer
-      </h1>
-      <button class="btn" onclick="toggleAddForm()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-        Add Timer
-      </button>
-    </div>
+<body class="p-4 md:p-8">
 
-    <div class="add-form" id="addForm">
-      <div class="form-group">
-        <label>Timer Name</label>
-        <input type="text" id="timerName" placeholder="e.g., Meeting, Birthday, Deadline">
-      </div>
-
-      <div class="form-group">
-        <label>Time</label>
-        <input type="text" id="timeInput" placeholder="e.g., 5h, 30m, 1h 30m, 90, 2025-12-25">
-        <div class="hint">
-          Examples: 5h, 30m, 90s, 1d 5h 30m, tomorrow, next friday, in 2 hours, 3pm, 2025-12-25 14:30
+    <!-- Header -->
+    <header class="max-w-4xl mx-auto w-full flex justify-between items-center mb-8 fade-in">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-extrabold text-indigo-400">Sudoku Flux</h1>
+            <p id="pack-info" class="text-slate-400 text-sm italic">Loading your pack...</p>
         </div>
-      </div>
+        <div class="flex gap-2">
+            <button onclick="prevPuzzle()" class="glass p-3 rounded-full hover:bg-slate-700 transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <button onclick="nextPuzzle()" class="glass p-3 rounded-full hover:bg-slate-700 transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+        </div>
+    </header>
 
-      <div class="form-group">
-        <label>Auto-delete after expiry (minutes, 0 = never)</label>
-        <input type="number" id="autoDelete" min="0" value="10">
-      </div>
+    <!-- Main Game Area -->
+    <main class="flex-grow flex flex-col items-center justify-center gap-8 fade-in" style="animation-delay: 0.1s">
+        
+        <div id="grid-container" class="relative">
+            <!-- Grid injected here -->
+        </div>
 
-      <div class="form-actions">
-        <button class="btn" onclick="addTimer()">Create Timer</button>
-        <button class="btn" style="background: #6b7280;" onclick="toggleAddForm()">Cancel</button>
-      </div>
+        <!-- Controls -->
+        <div class="w-full max-w-md flex flex-col gap-6">
+            <div id="numpad" class="grid grid-cols-5 gap-2">
+                <!-- Numpad buttons injected here -->
+            </div>
+
+            <div class="flex gap-2">
+                <button onclick="clearCell()" class="flex-1 glass py-4 rounded-2xl font-bold text-slate-300 hover:text-white hover:bg-red-500/20 transition border-red-500/20">Clear</button>
+                <button onclick="checkPuzzle()" class="flex-1 bg-indigo-600 py-4 rounded-2xl font-bold shadow-lg shadow-indigo-500/20 hover:bg-indigo-500 transition">Verify</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- UI Overlays -->
+    <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 glass px-6 py-3 rounded-full shadow-2xl opacity-0 transition-opacity pointer-events-none z-50">
+        Message here
     </div>
 
-    <div id="timersContainer"></div>
-  </div>
+    <script>
+        let puzzles = [];
+        let currentIndex = 0;
+        let selectedCell = null;
+        let gameState = [];
 
-  <script>
-    let timers = [];
-    let updateInterval;
-    let notifiedTimers = new Set();
-
-    // Request notification permission on load
-    function requestNotificationPermission() {
-      if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
-    }
-
-    // Send notification for expired timer
-    function sendNotification(timer) {
-      if ('Notification' in window && Notification.permission === 'granted') {
-        const notification = new Notification('⏰ Timer Expired!', {
-          body: `${timer.name} has finished`,
-          icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="%23667eea"/><circle cx="50" cy="50" r="35" fill="white"/><line x1="50" y1="50" x2="50" y2="25" stroke="%23667eea" stroke-width="3"/><line x1="50" y1="50" x2="65" y2="50" stroke="%23667eea" stroke-width="3"/></svg>',
-          tag: `timer-${timer.id}`,
-          requireInteraction: true
-        });
-
-        // Play sound (simple beep)
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.value = 800;
-        oscillator.type = 'sine';
-        
-        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-        
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.5);
-
-        notification.onclick = () => {
-          window.focus();
-          notification.close();
-        };
-      }
-    }
-
-    // Load timers from localStorage
-    function loadTimers() {
-      const stored = localStorage.getItem('omnibox-timers');
-      if (stored) {
-        timers = JSON.parse(stored);
-      }
-    }
-
-    // Save timers to localStorage
-    function saveTimers() {
-      localStorage.setItem('omnibox-timers', JSON.stringify(timers));
-    }
-
-    function toggleAddForm() {
-      const form = document.getElementById('addForm');
-      form.classList.toggle('active');
-    }
-
-    function parseTimeInput(input) {
-      input = input.trim().toLowerCase();
-      const now = new Date();
-      
-      // Handle "in X" format (in 5 minutes, in 2 hours, etc.)
-      const inMatch = input.match(/^in\s+(.+)$/i);
-      if (inMatch) {
-        input = inMatch[1].trim();
-      }
-      
-      // Handle relative day keywords
-      if (input === 'tomorrow') {
-        const tomorrow = new Date(now);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(9, 0, 0, 0); // Default to 9 AM
-        return tomorrow.getTime();
-      }
-      
-      // Handle "next [day]" format
-      const nextDayMatch = input.match(/^next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i);
-      if (nextDayMatch) {
-        const targetDay = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
-          .indexOf(nextDayMatch[1].toLowerCase());
-        const currentDay = now.getDay();
-        let daysToAdd = targetDay - currentDay;
-        if (daysToAdd <= 0) daysToAdd += 7;
-        
-        const nextDate = new Date(now);
-        nextDate.setDate(nextDate.getDate() + daysToAdd);
-        nextDate.setHours(9, 0, 0, 0);
-        return nextDate.getTime();
-      }
-      
-      // Handle "X from now" format (2 weeks from now, 3 days from now)
-      const fromNowMatch = input.match(/^(\d+)\s+(second|minute|hour|day|week|month)s?\s+from\s+now$/i);
-      if (fromNowMatch) {
-        const amount = parseInt(fromNowMatch[1]);
-        const unit = fromNowMatch[2].toLowerCase();
-        const multipliers = {
-          second: 1000,
-          minute: 60 * 1000,
-          hour: 60 * 60 * 1000,
-          day: 24 * 60 * 60 * 1000,
-          week: 7 * 24 * 60 * 60 * 1000,
-          month: 30 * 24 * 60 * 60 * 1000
-        };
-        return now.getTime() + (amount * multipliers[unit]);
-      }
-      
-      // Handle time of day (3pm, 15:30, 3:30pm)
-      const timeMatch = input.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
-      if (timeMatch) {
-        let hours = parseInt(timeMatch[1]);
-        const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-        const period = timeMatch[3] ? timeMatch[3].toLowerCase() : null;
-        
-        if (period === 'pm' && hours < 12) hours += 12;
-        if (period === 'am' && hours === 12) hours = 0;
-        
-        const targetTime = new Date(now);
-        targetTime.setHours(hours, minutes, 0, 0);
-        
-        // If time has passed today, set for tomorrow
-        if (targetTime <= now) {
-          targetTime.setDate(targetTime.getDate() + 1);
-        }
-        
-        return targetTime.getTime();
-      }
-      
-      // Handle "tomorrow at [time]" or "next [day] at [time]"
-      const atTimeMatch = input.match(/^(tomorrow|next\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\s+at\s+(.+)$/i);
-      if (atTimeMatch) {
-        const dateStr = atTimeMatch[1];
-        const timeStr = atTimeMatch[2];
-        
-        // Get the base date
-        const baseDate = parseTimeInput(dateStr);
-        if (baseDate) {
-          const baseDateObj = new Date(baseDate);
-          
-          // Parse the time
-          const timeMatch2 = timeStr.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
-          if (timeMatch2) {
-            let hours = parseInt(timeMatch2[1]);
-            const minutes = timeMatch2[2] ? parseInt(timeMatch2[2]) : 0;
-            const period = timeMatch2[3] ? timeMatch2[3].toLowerCase() : null;
+        // Initialize from URL
+        window.onload = () => {
+            const params = new URLSearchParams(window.location.search);
+            let rawData = params.get('puzzles');
             
-            if (period === 'pm' && hours < 12) hours += 12;
-            if (period === 'am' && hours === 12) hours = 0;
+            if (!rawData) {
+                showToast("No puzzles found in URL.");
+                return;
+            }
+
+            // Try Base64 decoding
+            try {
+                if (!rawData.includes(',')) {
+                    rawData = atob(rawData);
+                }
+            } catch (e) { /* Probably plain text */ }
+
+            puzzles = rawData.split(',').filter(s => s.length === 81 || s.length === 36);
             
-            baseDateObj.setHours(hours, minutes, 0, 0);
-            return baseDateObj.getTime();
-          }
+            if (puzzles.length > 0) {
+                loadPuzzle(0);
+            } else {
+                showToast("Invalid puzzle data.");
+            }
+        };
+
+        function loadPuzzle(index) {
+            currentIndex = index;
+            const str = puzzles[index];
+            const size = str.length === 81 ? 9 : 6;
+            
+            gameState = str.split('').map(v => ({
+                value: parseInt(v),
+                isFixed: v !== '0',
+                userInput: 0
+            }));
+
+            renderGrid(size);
+            renderNumpad(size);
+            document.getElementById('pack-info').textContent = `Puzzle ${index + 1} of ${puzzles.length} (${size}x${size})`;
+            selectedCell = null;
         }
-      }
-      
-      // Try to parse as ISO 8601 or standard date
-      const datePatterns = [
-        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/, // ISO 8601: 2025-12-25T14:30:00
-        /^\d{4}-\d{2}-\d{2}/, // 2025-12-25
-        /^\d{2}\/\d{2}\/\d{4}/, // 12/25/2025
-      ];
-      
-      for (let pattern of datePatterns) {
-        if (pattern.test(input)) {
-          const date = new Date(input);
-          if (!isNaN(date.getTime())) {
-            return date.getTime();
-          }
+
+        function renderGrid(size) {
+            const container = document.getElementById('grid-container');
+            const grid = document.createElement('div');
+            grid.className = `sudoku-grid grid-${size}`;
+            grid.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+
+            gameState.forEach((cell, i) => {
+                const div = document.createElement('div');
+                div.className = `cell ${cell.isFixed ? 'fixed' : ''}`;
+                div.textContent = cell.value !== 0 ? cell.value : (cell.userInput !== 0 ? cell.userInput : '');
+                
+                div.onclick = () => {
+                    if (cell.isFixed) return;
+                    document.querySelectorAll('.cell').forEach(c => c.classList.remove('selected'));
+                    div.classList.add('selected');
+                    selectedCell = i;
+                };
+                
+                grid.appendChild(div);
+            });
+
+            container.innerHTML = '';
+            container.appendChild(grid);
         }
-      }
-      
-      // Parse as duration with multiple units
-      let totalSeconds = 0;
-      
-      // Check for day patterns (2d, 2 days)
-      const dayMatch = input.match(/(\d+)\s*(?:d|day|days)(?![a-z])/gi);
-      if (dayMatch) {
-        dayMatch.forEach(match => {
-          const num = parseInt(match.match(/\d+/)[0]);
-          totalSeconds += num * 24 * 60 * 60;
-        });
-      }
-      
-      // Check for week patterns (2w, 2 weeks)
-      const weekMatch = input.match(/(\d+)\s*(?:w|week|weeks)(?![a-z])/gi);
-      if (weekMatch) {
-        weekMatch.forEach(match => {
-          const num = parseInt(match.match(/\d+/)[0]);
-          totalSeconds += num * 7 * 24 * 60 * 60;
-        });
-      }
-      
-      // Check for hour patterns (5h, 5 hours, 5 h)
-      const hourMatch = input.match(/(\d+)\s*(?:h|hour|hours)(?![a-z])/gi);
-      if (hourMatch) {
-        hourMatch.forEach(match => {
-          const num = parseInt(match.match(/\d+/)[0]);
-          totalSeconds += num * 60 * 60;
-        });
-      }
-      
-      // Check for minute patterns (30m, 30 minutes, 30 min)
-      const minuteMatch = input.match(/(\d+)\s*(?:m|min|minute|minutes)(?![a-z])/gi);
-      if (minuteMatch) {
-        minuteMatch.forEach(match => {
-          const num = parseInt(match.match(/\d+/)[0]);
-          totalSeconds += num * 60;
-        });
-      }
-      
-      // Check for second patterns (30s, 30 seconds, 30 sec)
-      const secondMatch = input.match(/(\d+)\s*(?:s|sec|second|seconds)(?![a-z])/gi);
-      if (secondMatch) {
-        secondMatch.forEach(match => {
-          const num = parseInt(match.match(/\d+/)[0]);
-          totalSeconds += num;
-        });
-      }
-      
-      // If no units found, treat as plain number (default to minutes)
-      if (totalSeconds === 0 && /^\d+$/.test(input)) {
-        totalSeconds = parseInt(input) * 60;
-      }
-      
-      if (totalSeconds > 0) {
-        return Date.now() + (totalSeconds * 1000);
-      }
-      
-      return null;
-    }
 
-    function addTimer() {
-      const name = document.getElementById('timerName').value.trim();
-      if (!name) {
-        alert('Please enter a timer name');
-        return;
-      }
-
-      const timeInput = document.getElementById('timeInput').value.trim();
-      const endTime = parseTimeInput(timeInput);
-      
-      if (!endTime) {
-        alert('Please enter a valid time\n\nExamples:\n• Duration: 5h, 30m, 90s, 1d 5h 30m\n• Relative: tomorrow, next friday, in 2 hours\n• Time: 3pm, 15:30, tomorrow at 3pm\n• Date: 2025-12-25, 2025-12-25T14:30');
-        return;
-      }
-
-      const autoDelete = parseInt(document.getElementById('autoDelete').value) || 0;
-
-      timers.push({
-        id: Date.now(),
-        name,
-        endTime,
-        autoDelete,
-        createdAt: Date.now()
-      });
-
-      saveTimers();
-      renderTimers();
-      toggleAddForm();
-      
-      // Reset form
-      document.getElementById('timerName').value = '';
-      document.getElementById('timeInput').value = '';
-      document.getElementById('autoDelete').value = '10';
-    }
-
-    function deleteTimer(id) {
-      timers = timers.filter(t => t.id !== id);
-      notifiedTimers.delete(id);
-      saveTimers();
-      renderTimers();
-    }
-
-    function formatTimeRemaining(endTime) {
-      const now = Date.now();
-      const diff = endTime - now;
-
-      if (diff <= 0) {
-        return '<span class="expired">EXPIRED</span>';
-      }
-
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-      if (days > 0) {
-        return `${days} day${days !== 1 ? 's' : ''}`;
-      } else if (hours > 0) {
-        return `${hours} hour${hours !== 1 ? 's' : ''}`;
-      } else if (minutes > 0) {
-        return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
-      } else {
-        return `${seconds} second${seconds !== 1 ? 's' : ''}`;
-      }
-    }
-
-    function renderTimers() {
-      const container = document.getElementById('timersContainer');
-      
-      // Check for newly expired timers and send notifications
-      const now = Date.now();
-      timers.forEach(timer => {
-        if (timer.endTime <= now && !notifiedTimers.has(timer.id)) {
-          sendNotification(timer);
-          notifiedTimers.add(timer.id);
+        function renderNumpad(size) {
+            const pad = document.getElementById('numpad');
+            pad.innerHTML = '';
+            for (let i = 1; i <= size; i++) {
+                const btn = document.createElement('button');
+                btn.className = 'numpad-btn h-14 rounded-xl text-xl font-bold hover:border-indigo-500';
+                btn.textContent = i;
+                btn.onclick = () => inputNumber(i);
+                pad.appendChild(btn);
+            }
         }
-      });
-      
-      // Auto-delete expired timers
-      timers = timers.filter(timer => {
-        if (timer.autoDelete > 0) {
-          const deleteTime = timer.endTime + (timer.autoDelete * 60 * 1000);
-          if (now >= deleteTime) {
-            notifiedTimers.delete(timer.id);
-            return false;
-          }
+
+        function inputNumber(num) {
+            if (selectedCell === null) return;
+            gameState[selectedCell].userInput = num;
+            const cells = document.querySelectorAll('.cell');
+            cells[selectedCell].textContent = num;
+            cells[selectedCell].classList.remove('error');
         }
-        return true;
-      });
-      saveTimers();
 
-      if (timers.length === 0) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 20px;">
-              <circle cx="12" cy="12" r="10"></circle>
-              <polyline points="12 6 12 12 16 14"></polyline>
-            </svg>
-            <h3>No timers yet</h3>
-            <p>Click "Add Timer" to create your first timer</p>
-          </div>
-        `;
-        return;
-      }
+        function clearCell() {
+            if (selectedCell === null) return;
+            gameState[selectedCell].userInput = 0;
+            document.querySelectorAll('.cell')[selectedCell].textContent = '';
+        }
 
-      container.innerHTML = `
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Target Date</th>
-              <th>Time Remaining</th>
-              <th>Auto-Delete</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            ${timers.map(timer => `
-              <tr>
-                <td>${timer.name}</td>
-                <td>${new Date(timer.endTime).toLocaleString()}</td>
-                <td>${formatTimeRemaining(timer.endTime)}</td>
-                <td>${timer.autoDelete > 0 ? `${timer.autoDelete} min` : 'Never'}</td>
-                <td>
-                  <button class="btn btn-danger" onclick="deleteTimer(${timer.id})">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <polyline points="3 6 5 6 21 6"></polyline>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
-                  </button>
-                </td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `;
-    }
+        function checkPuzzle() {
+            // Simplified check: just checking if full. 
+            // Real validation would require a solver or comparing against solution.
+            const isComplete = gameState.every(c => (c.isFixed ? c.value : c.userInput) !== 0);
+            if (!isComplete) {
+                showToast("The grid is not complete yet!");
+            } else {
+                showToast("Looks good! (Logic validation coming soon)");
+            }
+        }
 
-    function init() {
-      loadTimers();
-      renderTimers();
-      requestNotificationPermission();
-      updateInterval = setInterval(renderTimers, 1000);
-    }
+        function nextPuzzle() {
+            if (currentIndex < puzzles.length - 1) loadPuzzle(currentIndex + 1);
+        }
 
-    // Initialize on load
-    init();
-  </script>
+        function prevPuzzle() {
+            if (currentIndex > 0) loadPuzzle(currentIndex - 1);
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.style.opacity = '1';
+            setTimeout(() => t.style.opacity = '0', 3000);
+        }
+
+        // Keyboard Support
+        document.addEventListener('keydown', (e) => {
+            if (e.key >= '1' && e.key <= '9') {
+                inputNumber(parseInt(e.key));
+            } else if (e.key === 'Backspace' || e.key === 'Delete') {
+                clearCell();
+            }
+        });
+    </script>
 </body>
 </html>
