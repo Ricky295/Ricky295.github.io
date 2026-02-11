@@ -1,46 +1,30 @@
 /**
- * sudoku6x6.js
- * Core functionality for generating, solving (using singles), and validating
- * 6x6 Sudoku puzzles with 2x3 boxes.
- * 
- * Adapted from newsudoku.js for 6x6 grid.
+ * newsudoku6x6.js - Fixed version with renamed internal functions
+ * Core functionality for 6x6 Sudoku with 2x3 boxes.
  */
 
-// --- Utility Functions ---
+// --- Utility Functions (renamed to avoid conflicts) ---
 
-function convertToMatrix(sudokuString) {
-    /**
-     * Converts a single 36-character string into a 6x6 array (matrix).
-     * Assumes the string contains only digits '0'-'6'.
-     */
+function convertToMatrix6x6(sudokuString) {
     if (sudokuString.length !== 36) {
         throw new Error("Sudoku string must be exactly 36 characters long.");
     }
-    
     const matrix = [];
     for (let i = 0; i < 6; i++) {
         const rowStart = i * 6;
         const rowEnd = (i + 1) * 6;
         const rowString = sudokuString.substring(rowStart, rowEnd);
-        // Convert each character (which is a digit) to an integer
         const row = Array.from(rowString, char => parseInt(char));
         matrix.push(row);
     }
-    
     return matrix;
 }
 
-function range1To6() {
-    /**
-     * Returns a deterministic list of digits 1 through 6.
-     */
+function range1To6_internal() {
     return [1, 2, 3, 4, 5, 6];
 }
 
-function shuffle(array) {
-    /**
-     * Shuffles an array in place (Fisher-Yates shuffle).
-     */
+function shuffle6x6(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [array[i], array[j]] = [array[j], array[i]];
@@ -48,54 +32,34 @@ function shuffle(array) {
     return array;
 }
 
-function getBoxIndex(row, col) {
-    /**
-     * Returns the 2x3 box index (0-5).
-     * Boxes are arranged as:
-     * 0 1 2
-     * 3 4 5
-     */
+function getBoxIndex6x6(row, col) {
     return Math.floor(row / 2) * 3 + Math.floor(col / 2);
 }
 
-function deepCopyBoard(board) {
-    /**
-     * Deep copies a 6x6 array.
-     */
+function deepCopyBoard6x6(board) {
     return board.map(row => [...row]);
 }
 
-function convertToString(array) {
-    /**
-     * Converts the 6x6 board array into a single 36-character string.
-     */
+function convertToString6x6(array) {
     return array.flat().join('');
 }
 
 // --- Sudoku Logic: Full Random Solution Generator ---
 
-function solveGridRandomBacktracking(grid) {
-    /**
-     * Randomized backtracking function to fill a complete 6x6 Sudoku grid.
-     * Returns true if a solution is found, false otherwise.
-     */
+function solveGridRandomBacktracking6x6(grid) {
     for (let r = 0; r < 6; r++) {
         for (let c = 0; c < 6; c++) {
             if (grid[r][c] === 0) {
-                // Get possible values and shuffle them for randomization
-                const possibleNums = range1To6();
-                shuffle(possibleNums);
+                const possibleNums = range1To6_internal();
+                shuffle6x6(possibleNums);
                 
                 for (const num of possibleNums) {
-                    // Check if the number is valid in the current context
                     let isValid = true;
                     
-                    // Row check
                     if (grid[r].includes(num)) {
                         isValid = false;
                     }
                     
-                    // Column check
                     if (isValid) {
                         for (let i = 0; i < 6; i++) {
                             if (grid[i][c] === num) {
@@ -105,7 +69,6 @@ function solveGridRandomBacktracking(grid) {
                         }
                     }
                     
-                    // Box check (2x3 boxes)
                     if (isValid) {
                         const startRow = Math.floor(r / 2) * 2;
                         const startCol = Math.floor(c / 2) * 2;
@@ -122,56 +85,42 @@ function solveGridRandomBacktracking(grid) {
                     
                     if (isValid) {
                         grid[r][c] = num;
-                        if (solveGridRandomBacktracking(grid)) {
+                        if (solveGridRandomBacktracking6x6(grid)) {
                             return true;
                         }
-                        grid[r][c] = 0; // Backtrack
+                        grid[r][c] = 0;
                     }
                 }
-                return false; // No number works for this cell
+                return false;
             }
         }
     }
-    return true; // Grid is solved
+    return true;
 }
 
-function generateSolutionRandom() {
-    /**
-     * Generates a fully solved, truly random 6x6 Sudoku grid using backtracking.
-     */
-    // Initialize an empty board
+function generateSolutionRandom6x6() {
     const solution = Array(6).fill(null).map(() => Array(6).fill(0));
-    
-    // Use the randomized backtracking solver to fill it
-    solveGridRandomBacktracking(solution);
-    
+    solveGridRandomBacktracking6x6(solution);
     return solution;
 }
 
 // --- Sudoku Logic: Core Constraints ---
 
-function getPossibleValues(board, row, col) {
-    /**
-     * Returns a list of numbers (1-6) that can be placed at (row, col)
-     * based on row, column, and 2x3 box constraints.
-     */
+function getPossibleValues6x6(board, row, col) {
     if (board[row][col] !== 0) {
         return [];
     }
 
     const used = new Set();
     
-    // Check row
     for (let c = 0; c < 6; c++) {
         used.add(board[row][c]);
     }
     
-    // Check column
     for (let r = 0; r < 6; r++) {
         used.add(board[r][col]);
     }
     
-    // Check 2x3 box
     const startRow = Math.floor(row / 2) * 2;
     const startCol = Math.floor(col / 2) * 2;
     for (let r = startRow; r < startRow + 2; r++) {
@@ -190,16 +139,10 @@ function getPossibleValues(board, row, col) {
     return possible;
 }
 
-function eliminatePossibilities(possibilities, rPlaced, cPlaced, valPlaced, puzzle) {
-    /**
-     * Updates the possibilities matrix after placing a 'valPlaced' at (rPlaced, cPlaced).
-     * Returns true if any empty cell now has 0 possibilities (contradiction).
-     */
+function eliminatePossibilities6x6(possibilities, rPlaced, cPlaced, valPlaced, puzzle) {
     let contradiction = false;
     
-    // 1. Eliminate in the same row/col
     for (let i = 0; i < 6; i++) {
-        // Row check
         if (possibilities[rPlaced][i].has(valPlaced)) {
             possibilities[rPlaced][i].delete(valPlaced);
             if (possibilities[rPlaced][i].size === 0 && puzzle[rPlaced][i] === 0) {
@@ -207,7 +150,6 @@ function eliminatePossibilities(possibilities, rPlaced, cPlaced, valPlaced, puzz
             }
         }
         
-        // Column check
         if (possibilities[i][cPlaced].has(valPlaced)) {
             possibilities[i][cPlaced].delete(valPlaced);
             if (possibilities[i][cPlaced].size === 0 && puzzle[i][cPlaced] === 0) {
@@ -216,7 +158,6 @@ function eliminatePossibilities(possibilities, rPlaced, cPlaced, valPlaced, puzz
         }
     }
     
-    // 2. Eliminate in the 2x3 box
     const startRow = Math.floor(rPlaced / 2) * 2;
     const startCol = Math.floor(cPlaced / 2) * 2;
     for (let r = startRow; r < startRow + 2; r++) {
@@ -235,21 +176,15 @@ function eliminatePossibilities(possibilities, rPlaced, cPlaced, valPlaced, puzz
 
 // --- Sudoku Logic: Singles Techniques ---
 
-function findHiddenSingles(puzzle, possibilities, unitType, unitIndex) {
-    /**
-     * Finds ALL Hidden Singles within a single unit ('row', 'col', or 'box').
-     * (Used by the main solver, not the hint function.)
-     * Returns: array of [r, c, val] tuples.
-     */
+function findHiddenSingles6x6(puzzle, possibilities, unitType, unitIndex) {
     const updates = [];
-    const allNums = range1To6();
+    const allNums = range1To6_internal();
     const unitPoss = {};
     
     for (const num of allNums) {
         unitPoss[num] = [];
     }
     
-    // Determine coordinates based on unit type
     let coords = [];
     if (unitType === 'row') {
         coords = Array(6).fill(null).map((_, c) => [unitIndex, c]);
@@ -265,7 +200,6 @@ function findHiddenSingles(puzzle, possibilities, unitType, unitIndex) {
         }
     }
     
-    // Analyze the unit's possibilities
     for (const [r, c] of coords) {
         if (puzzle[r][c] === 0) {
             for (const num of possibilities[r][c]) {
@@ -274,7 +208,6 @@ function findHiddenSingles(puzzle, possibilities, unitType, unitIndex) {
         }
     }
     
-    // Check for Hidden Singles
     for (const [num, locations] of Object.entries(unitPoss)) {
         if (locations.length === 1) {
             const [r, c] = locations[0];
@@ -287,11 +220,7 @@ function findHiddenSingles(puzzle, possibilities, unitType, unitIndex) {
     return updates;
 }
 
-function findNakedSingles(puzzle, possibilities) {
-    /**
-     * Finds Naked Singles in all cells.
-     * Returns: array of [r, c, val] tuples.
-     */
+function findNakedSingles6x6(puzzle, possibilities) {
     const updates = [];
     for (let r = 0; r < 6; r++) {
         for (let c = 0; c < 6; c++) {
@@ -304,34 +233,30 @@ function findNakedSingles(puzzle, possibilities) {
     return updates;
 }
 
-// --- Sudoku Logic: Core Solver Loop (Strict Priority) ---
+// --- Sudoku Logic: Core Solver Loop ---
 
-function findAndApplyUpdates(techniqueType, puzzle, possibilities, emptyCellsCount) {
-    /**
-     * Finds and applies all singles of a specific type (BoxHS, LineHS, NakedSingle).
-     */
+function findAndApplyUpdates6x6(techniqueType, puzzle, possibilities, emptyCellsCount) {
     let updates = [];
     
     if (techniqueType === 'BoxHS') {
         for (let boxIdx = 0; boxIdx < 6; boxIdx++) {
-            const boxUpdates = findHiddenSingles(puzzle, possibilities, 'box', boxIdx);
+            const boxUpdates = findHiddenSingles6x6(puzzle, possibilities, 'box', boxIdx);
             updates = updates.concat(boxUpdates);
         }
     } else if (techniqueType === 'LineHS') {
         for (let idx = 0; idx < 6; idx++) {
-            const rowUpdates = findHiddenSingles(puzzle, possibilities, 'row', idx);
-            const colUpdates = findHiddenSingles(puzzle, possibilities, 'col', idx);
+            const rowUpdates = findHiddenSingles6x6(puzzle, possibilities, 'row', idx);
+            const colUpdates = findHiddenSingles6x6(puzzle, possibilities, 'col', idx);
             updates = updates.concat(rowUpdates, colUpdates);
         }
     } else if (techniqueType === 'NakedSingle') {
-        updates = findNakedSingles(puzzle, possibilities);
+        updates = findNakedSingles6x6(puzzle, possibilities);
     }
     
     if (updates.length === 0) {
         return [emptyCellsCount, false];
     }
     
-    // Make updates unique (remove duplicates)
     const uniqueUpdates = [];
     const seen = new Set();
     for (const [r, c, val] of updates) {
@@ -342,19 +267,16 @@ function findAndApplyUpdates(techniqueType, puzzle, possibilities, emptyCellsCou
         }
     }
     
-    // Apply all unique updates for this technique
     let contradiction = false;
     for (const [r, c, val] of uniqueUpdates) {
         if (puzzle[r][c] === 0) {
             puzzle[r][c] = val;
             emptyCellsCount--;
             
-            // Update possibilities for neighbors and check for contradiction
-            if (eliminatePossibilities(possibilities, r, c, val, puzzle)) {
+            if (eliminatePossibilities6x6(possibilities, r, c, val, puzzle)) {
                 contradiction = true;
             }
             
-            // Mark the current cell as solved
             possibilities[r][c] = new Set();
         }
     }
@@ -362,16 +284,8 @@ function findAndApplyUpdates(techniqueType, puzzle, possibilities, emptyCellsCou
     return [emptyCellsCount, contradiction];
 }
 
-function solveWithSingles(sudoku, returnDifficulty = false) {
-    /**
-     * Solves a 6x6 Sudoku puzzle using only singles techniques (Box HS -> Line HS -> Naked Single).
-     * 
-     * If returnDifficulty is true:
-     *   Returns difficulty score or -0.1 if stuck, -0.2 if contradiction
-     * If returnDifficulty is false:
-     *   Returns the solved puzzle or original board if stuck/invalid
-     */
-    const puzzle = deepCopyBoard(sudoku);
+function solveWithSingles6x6(sudoku, returnDifficulty = false) {
+    const puzzle = deepCopyBoard6x6(sudoku);
     const initialEmptyCells = puzzle.flat().filter(x => x === 0).length;
     let highestTechnique = 0;
     
@@ -379,7 +293,6 @@ function solveWithSingles(sudoku, returnDifficulty = false) {
         return returnDifficulty ? 0.0 : puzzle;
     }
     
-    // Initialize possibilities
     const possibilities = Array(6).fill(null).map(() => 
         Array(6).fill(null).map(() => new Set())
     );
@@ -388,7 +301,7 @@ function solveWithSingles(sudoku, returnDifficulty = false) {
     for (let r = 0; r < 6; r++) {
         for (let c = 0; c < 6; c++) {
             if (puzzle[r][c] === 0) {
-                possibilities[r][c] = new Set(getPossibleValues(puzzle, r, c));
+                possibilities[r][c] = new Set(getPossibleValues6x6(puzzle, r, c));
                 if (possibilities[r][c].size === 0) {
                     return returnDifficulty ? -0.2 : sudoku;
                 }
@@ -399,13 +312,11 @@ function solveWithSingles(sudoku, returnDifficulty = false) {
         }
     }
     
-    // Solving loop with STRICT priority (Box HS -> Line HS -> Naked Single)
     let steps = 0;
     let contradiction = false;
     
     while (emptyCellsCount > 0) {
-        // 1. Box Hidden Single
-        [emptyCellsCount, contradiction] = findAndApplyUpdates('BoxHS', puzzle, possibilities, emptyCellsCount);
+        [emptyCellsCount, contradiction] = findAndApplyUpdates6x6('BoxHS', puzzle, possibilities, emptyCellsCount);
         const boxUpdates = emptyCellsCount < initialEmptyCells - steps;
         if (boxUpdates) {
             steps++;
@@ -415,9 +326,8 @@ function solveWithSingles(sudoku, returnDifficulty = false) {
         
         highestTechnique = Math.max(1, highestTechnique);
         
-        // 2. Line Hidden Single
         const prevCount = emptyCellsCount;
-        [emptyCellsCount, contradiction] = findAndApplyUpdates('LineHS', puzzle, possibilities, emptyCellsCount);
+        [emptyCellsCount, contradiction] = findAndApplyUpdates6x6('LineHS', puzzle, possibilities, emptyCellsCount);
         if (emptyCellsCount < prevCount) {
             steps++;
             if (contradiction) break;
@@ -426,54 +336,42 @@ function solveWithSingles(sudoku, returnDifficulty = false) {
         
         highestTechnique = 2;
         
-        // 3. Naked Single
         const prevCount2 = emptyCellsCount;
-        [emptyCellsCount, contradiction] = findAndApplyUpdates('NakedSingle', puzzle, possibilities, emptyCellsCount);
+        [emptyCellsCount, contradiction] = findAndApplyUpdates6x6('NakedSingle', puzzle, possibilities, emptyCellsCount);
         if (emptyCellsCount < prevCount2) {
             steps++;
             if (contradiction) break;
             continue;
         }
         
-        // Stuck
         break;
     }
     
-    // Final check and return
     if (contradiction) {
         return returnDifficulty ? -0.2 : sudoku;
     } else if (emptyCellsCount === 0) {
-        // Fully solved
         const difficulty = initialEmptyCells > 0 ? steps / initialEmptyCells : 0.0;
         return returnDifficulty ? (difficulty + highestTechnique) / 3 : puzzle;
     } else {
-        // Stuck, requires advanced techniques
         return returnDifficulty ? -0.1 : sudoku;
     }
 }
 
 // --- Sudoku Generation ---
 
-function generateSudoku(minDifficulty, maxDifficulty, targetClues = 15, maxAttempts = 100) {
-    /**
-     * Generates a 6x6 Sudoku puzzle with difficulty in [minDifficulty, maxDifficulty].
-     * Uses truly random solution generation.
-     */
+function generateSudoku6x6(minDifficulty, maxDifficulty, targetClues = 15, maxAttempts = 100) {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        // Generate a random complete solution
-        const solution = generateSolutionRandom();
-        const puzzle = deepCopyBoard(solution);
+        const solution = generateSolutionRandom6x6();
+        const puzzle = deepCopyBoard6x6(solution);
         
-        // Create list of all cell positions
         const positions = [];
         for (let r = 0; r < 6; r++) {
             for (let c = 0; c < 6; c++) {
                 positions.push([r, c]);
             }
         }
-        shuffle(positions);
+        shuffle6x6(positions);
         
-        // Remove cells while maintaining solvability
         let cluesRemaining = 36;
         
         for (const [r, c] of positions) {
@@ -482,16 +380,13 @@ function generateSudoku(minDifficulty, maxDifficulty, targetClues = 15, maxAttem
             const originalValue = puzzle[r][c];
             puzzle[r][c] = 0;
             
-            // Check if still solvable with singles
-            const difficulty = solveWithSingles(puzzle, true);
+            const difficulty = solveWithSingles6x6(puzzle, true);
             
             if (difficulty < 0) {
-                // Not solvable, restore the cell
                 puzzle[r][c] = originalValue;
             } else {
                 cluesRemaining--;
                 
-                // Check if we've reached desired difficulty range
                 if (cluesRemaining <= targetClues && 
                     difficulty >= minDifficulty && 
                     difficulty <= maxDifficulty) {
@@ -500,8 +395,7 @@ function generateSudoku(minDifficulty, maxDifficulty, targetClues = 15, maxAttem
             }
         }
         
-        // Check final difficulty
-        const finalDifficulty = solveWithSingles(puzzle, true);
+        const finalDifficulty = solveWithSingles6x6(puzzle, true);
         if (finalDifficulty >= minDifficulty && 
             finalDifficulty <= maxDifficulty && 
             cluesRemaining <= targetClues + 3) {
@@ -509,16 +403,15 @@ function generateSudoku(minDifficulty, maxDifficulty, targetClues = 15, maxAttem
         }
     }
     
-    // Fallback: return a solvable puzzle even if not in exact difficulty range
-    const solution = generateSolutionRandom();
-    const puzzle = deepCopyBoard(solution);
+    const solution = generateSolutionRandom6x6();
+    const puzzle = deepCopyBoard6x6(solution);
     const positions = [];
     for (let r = 0; r < 6; r++) {
         for (let c = 0; c < 6; c++) {
             positions.push([r, c]);
         }
     }
-    shuffle(positions);
+    shuffle6x6(positions);
     
     let cluesRemaining = 36;
     for (const [r, c] of positions) {
@@ -527,7 +420,7 @@ function generateSudoku(minDifficulty, maxDifficulty, targetClues = 15, maxAttem
         const originalValue = puzzle[r][c];
         puzzle[r][c] = 0;
         
-        const difficulty = solveWithSingles(puzzle, true);
+        const difficulty = solveWithSingles6x6(puzzle, true);
         if (difficulty < 0) {
             puzzle[r][c] = originalValue;
         } else {
@@ -538,32 +431,21 @@ function generateSudoku(minDifficulty, maxDifficulty, targetClues = 15, maxAttem
     return puzzle;
 }
 
-function generateDailySudoku(date) {
-    /**
-     * Generates a deterministic daily 6x6 Sudoku puzzle based on the date.
-     * Uses a seeded random generator for reproducibility.
-     */
-    // Create a seed from the date
-    const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD
-    const seed = hashCode(dateString);
+function generateDailySudoku6x6(date) {
+    const dateString = date.toISOString().split('T')[0];
+    const seed = hashCode6x6(dateString);
     
-    // Save current Math.random
     const originalRandom = Math.random;
+    Math.random = seededRandom6x6(seed);
     
-    // Use seeded random
-    Math.random = seededRandom(seed);
+    const puzzle = generateSudoku6x6(0.3, 0.7, 18);
     
-    // Generate puzzle
-    const puzzle = generateSudoku(0.3, 0.7, 18);
-    
-    // Restore original Math.random
     Math.random = originalRandom;
     
     return puzzle;
 }
 
-// Helper function for seeded random
-function seededRandom(seed) {
+function seededRandom6x6(seed) {
     let s = seed;
     return function() {
         s = Math.sin(s) * 10000;
@@ -571,27 +453,21 @@ function seededRandom(seed) {
     };
 }
 
-function hashCode(str) {
+function hashCode6x6(str) {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
         const char = str.charCodeAt(i);
         hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32-bit integer
+        hash = hash & hash;
     }
     return Math.abs(hash);
 }
 
 // --- Hint System ---
 
-function getSortedHiddenSingleUpdate(puzzle, possibilities, unitType) {
-    /**
-     * Finds the first Hidden Single by iterating through digits (1-6) first,
-     * then unit indices (0-5).
-     * Returns [r, c, val] or null.
-     */
-    for (const num of range1To6()) {
+function getSortedHiddenSingleUpdate6x6(puzzle, possibilities, unitType) {
+    for (const num of range1To6_internal()) {
         for (let unitIndex = 0; unitIndex < 6; unitIndex++) {
-            // Determine coordinates based on unit type
             let coords = [];
             if (unitType === 'row') {
                 coords = Array(6).fill(null).map((_, c) => [unitIndex, c]);
@@ -607,7 +483,6 @@ function getSortedHiddenSingleUpdate(puzzle, possibilities, unitType) {
                 }
             }
             
-            // Analyze the unit's possibilities for *only* the current 'num'
             const locations = [];
             for (const [r, c] of coords) {
                 if (puzzle[r][c] === 0 && possibilities[r][c].has(num)) {
@@ -615,7 +490,6 @@ function getSortedHiddenSingleUpdate(puzzle, possibilities, unitType) {
                 }
             }
             
-            // Check for Hidden Single: the digit appears only once in this unit
             if (locations.length === 1) {
                 const [r, c] = locations[0];
                 return [r, c, num];
@@ -626,18 +500,9 @@ function getSortedHiddenSingleUpdate(puzzle, possibilities, unitType) {
     return null;
 }
 
-function hint(sudoku, priority = 0) {
-    /**
-     * Provides the next logical step (hint) based on a priority order.
-     * 
-     * priority=0: Box HS -> Line HS -> Naked Single (Standard)
-     * priority=1: Naked Single -> Box HS -> Line HS (Easier singles first)
-     * 
-     * Format: [technique, [r, c], digit]
-     */
-    const puzzle = deepCopyBoard(sudoku);
+function hint6x6(sudoku, priority = 0) {
+    const puzzle = deepCopyBoard6x6(sudoku);
     
-    // --- 1. Initialize Possibilities (needed for all techniques) ---
     const possibilities = Array(6).fill(null).map(() => 
         Array(6).fill(null).map(() => new Set())
     );
@@ -646,7 +511,7 @@ function hint(sudoku, priority = 0) {
     for (let r = 0; r < 6; r++) {
         for (let c = 0; c < 6; c++) {
             if (puzzle[r][c] === 0) {
-                possibilities[r][c] = new Set(getPossibleValues(puzzle, r, c));
+                possibilities[r][c] = new Set(getPossibleValues6x6(puzzle, r, c));
                 if (possibilities[r][c].size === 0) {
                     return ["Contradiction", [r, c], 0];
                 }
@@ -659,18 +524,15 @@ function hint(sudoku, priority = 0) {
         return ["Solved", [-1, -1], 0];
     }
     
-    // --- 2. Define Technique Order based on priority ---
     let techniqueOrder;
     
     if (priority === 1) {
-        // Priority 1: Naked Single -> Box HS -> Line HS
         techniqueOrder = [
             ["Naked Single", null],
             ["Box HS", 'box'],
             ["Line HS", 'row_col']
         ];
     } else {
-        // Default priority 0: Box HS -> Line HS -> Naked Single
         techniqueOrder = [
             ["Box HS", 'box'],
             ["Line HS", 'row_col'],
@@ -678,33 +540,29 @@ function hint(sudoku, priority = 0) {
         ];
     }
     
-    // --- 3. Execute Techniques in Order ---
     for (const [techniqueName, unitType] of techniqueOrder) {
         let update = null;
         
         if (techniqueName === "Naked Single") {
-            const updates = findNakedSingles(puzzle, possibilities);
+            const updates = findNakedSingles6x6(puzzle, possibilities);
             if (updates.length > 0) {
                 const [r, c, val] = updates[0];
                 return ["Naked Single", [r, c], val];
             }
         } else if (unitType === 'box') {
-            // Box HS: Finds the first one by digit (1-6) then box index (0-5)
-            update = getSortedHiddenSingleUpdate(puzzle, possibilities, 'box');
+            update = getSortedHiddenSingleUpdate6x6(puzzle, possibilities, 'box');
             if (update) {
                 const [r, c, val] = update;
                 return ["Box HS", [r, c], val];
             }
         } else if (unitType === 'row_col') {
-            // Line HS (Row): Finds the first one by digit (1-6) then row index (0-5)
-            update = getSortedHiddenSingleUpdate(puzzle, possibilities, 'row');
+            update = getSortedHiddenSingleUpdate6x6(puzzle, possibilities, 'row');
             if (update) {
                 const [r, c, val] = update;
                 return ["Line HS", [r, c], val];
             }
             
-            // Line HS (Column): Finds the first one by digit (1-6) then col index (0-5)
-            update = getSortedHiddenSingleUpdate(puzzle, possibilities, 'col');
+            update = getSortedHiddenSingleUpdate6x6(puzzle, possibilities, 'col');
             if (update) {
                 const [r, c, val] = update;
                 return ["Line HS", [r, c], val];
@@ -712,9 +570,7 @@ function hint(sudoku, priority = 0) {
         }
     }
     
-    // --- 4. Guess (Fallback if stuck) ---
     if (priority === 0) {
-        // Find the cell with the fewest possibilities for an educated guess
         let bestCell = null;
         let minPossibilities = 7;
         
@@ -734,43 +590,40 @@ function hint(sudoku, priority = 0) {
         }
     }
     
-    // If the puzzle is stuck and we didn't guess
     return ["Stuck", [-1, -1], 0];
 }
 
 // --- Export Functions ---
-// For use with <script src="sudoku6x6.js">
 if (typeof window !== 'undefined') {
     window.Sudoku6x6 = {
-        convertToMatrix,
-        convertToString,
-        range1To6,
-        shuffle,
-        getBoxIndex,
-        deepCopyBoard,
-        generateSolutionRandom,
-        getPossibleValues,
-        solveWithSingles,
-        generateSudoku,
-        generateDailySudoku,
-        hint
+        convertToMatrix: convertToMatrix6x6,
+        convertToString: convertToString6x6,
+        range1To6: range1To6_internal,
+        shuffle: shuffle6x6,
+        getBoxIndex: getBoxIndex6x6,
+        deepCopyBoard: deepCopyBoard6x6,
+        generateSolutionRandom: generateSolutionRandom6x6,
+        getPossibleValues: getPossibleValues6x6,
+        solveWithSingles: solveWithSingles6x6,
+        generateSudoku: generateSudoku6x6,
+        generateDailySudoku: generateDailySudoku6x6,
+        hint: hint6x6
     };
 }
 
-// For use with Node.js (CommonJS)
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        convertToMatrix,
-        convertToString,
-        range1To6,
-        shuffle,
-        getBoxIndex,
-        deepCopyBoard,
-        generateSolutionRandom,
-        getPossibleValues,
-        solveWithSingles,
-        generateSudoku,
-        generateDailySudoku,
-        hint
+        convertToMatrix: convertToMatrix6x6,
+        convertToString: convertToString6x6,
+        range1To6: range1To6_internal,
+        shuffle: shuffle6x6,
+        getBoxIndex: getBoxIndex6x6,
+        deepCopyBoard: deepCopyBoard6x6,
+        generateSolutionRandom: generateSolutionRandom6x6,
+        getPossibleValues: getPossibleValues6x6,
+        solveWithSingles: solveWithSingles6x6,
+        generateSudoku: generateSudoku6x6,
+        generateDailySudoku: generateDailySudoku6x6,
+        hint: hint6x6
     };
 }
