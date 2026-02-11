@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Code Sudoku Pack Generator</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Switched to qrious for QR generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:system-ui,-apple-system,sans-serif;background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 100%);min-height:100vh;padding:20px;color:#333}
@@ -50,7 +51,8 @@
         input[type="number"]{font-family:'Courier New',monospace}
         textarea{resize:vertical;min-height:100px;font-family:'Courier New',monospace}
         .modal-actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
-        #qrcode{display:flex;justify-content:center;margin:20px 0}
+        #qrcode-container{display:flex;justify-content:center;margin:20px 0}
+        #qrcode-canvas{max-width: 100%; height: auto; display: block;}
         .empty-state{text-align:center;padding:60px 20px;color:#94a3b8}
         .empty-state svg{width:80px;height:80px;margin-bottom:20px;opacity:0.5}
         .generation-progress{background:#ddd6fe;border-radius:8px;padding:15px;margin-top:15px;display:none}
@@ -78,8 +80,8 @@
 
         <div class="capacity-bar">
             <div class="capacity-label">
-                <span>QR Code Capacity</span>
-                <span id="capacity-text">0 / 4000 bytes</span>
+                <span>QR Code Capacity (Max: 2950 bytes)</span>
+                <span id="capacity-text">0 / 2950 bytes</span>
             </div>
             <div class="progress-bar">
                 <div class="progress-fill" id="capacity-fill" style="width:0%">0%</div>
@@ -193,7 +195,9 @@
                 <label>Generated URL</label>
                 <textarea id="export-url" readonly></textarea>
             </div>
-            <div id="qrcode"></div>
+            <div id="qrcode-container">
+                <canvas id="qrcode-canvas"></canvas>
+            </div>
             <div class="modal-actions">
                 <button class="btn-secondary" onclick="copyURL()">📋 Copy URL</button>
                 <button class="btn-primary" onclick="closeExportModal()">Close</button>
@@ -206,6 +210,8 @@
     
     <script>
         let puzzles=[],editingIndex=-1,currentGenerateType='9x9',isGenerating=false;
+        let qrInstance = null;
+        const QR_MAX_BYTES = 2950; // Updated limit based on Version 40, Level L (~2953 bytes)
 
         function calculateDifficulty(s,t){
             try{
@@ -524,19 +530,20 @@
         }
 
         function updateCapacity(){
-            const url=generateURL(false);
+            const encrypt=document.getElementById('encrypt-mode').checked;
+            const url=generateURL(encrypt);
             const bytes=new Blob([url]).size;
-            const percentage=Math.min((bytes/4000)*100,100);
+            const percentage=Math.min((bytes/QR_MAX_BYTES)*100,100);
             
-            document.getElementById('capacity-text').textContent=`${bytes} / 4000 bytes`;
+            document.getElementById('capacity-text').textContent=`${bytes} / ${QR_MAX_BYTES} bytes`;
             const fill=document.getElementById('capacity-fill');
             fill.style.width=percentage+'%';
             fill.textContent=Math.round(percentage)+'%';
             
             fill.classList.remove('warning','danger');
-            if(percentage>90){
+            if(percentage>95){
                 fill.classList.add('danger');
-            }else if(percentage>70){
+            }else if(percentage>80){
                 fill.classList.add('warning');
             }
         }
@@ -546,7 +553,11 @@
             let data=puzzleStrings.join(',');
             
             if(encrypt){
-                data=btoa(data);
+                try {
+                    data=btoa(data);
+                } catch(e) {
+                    console.error("Encoding error", e);
+                }
             }
             
             return`https://ricky295.github.io/qrcodesudokuplayer?puzzles=${data}`;
@@ -560,21 +571,27 @@
 
             const encrypt=document.getElementById('encrypt-mode').checked;
             const url=generateURL(encrypt);
+            const bytes=new Blob([url]).size;
+
+            if(bytes > QR_MAX_BYTES) {
+                alert(`Warning: This pack is ${bytes} bytes, which exceeds the reliable QR limit of ${QR_MAX_BYTES} bytes. The QR code may not scan or might not generate correctly.`);
+            }
             
             document.getElementById('export-url').value=url;
-            
-            const qrDiv=document.getElementById('qrcode');
-            qrDiv.innerHTML='';
-
-            console.log(url)
-            
-            new QRCode(qrDiv,{
-                text:url,
-                width:256,
-                height:256
-            });
-            
+            updateQRCode(url);
             document.getElementById('exportModal').classList.add('active');
+        }
+
+        function updateQRCode(value) {
+            const canvas = document.getElementById('qrcode-canvas');
+            if (!qrInstance) {
+                qrInstance = new QRious({
+                    element: canvas,
+                    size: 350, // Slightly larger for high density packs
+                    level: 'L'
+                });
+            }
+            qrInstance.value = value;
         }
 
         function closeExportModal(){
@@ -589,18 +606,12 @@
         }
 
         document.getElementById('encrypt-mode').addEventListener('change',()=>{
+            updateCapacity();
             if(document.getElementById('exportModal').classList.contains('active')){
                 const encrypt=document.getElementById('encrypt-mode').checked;
                 const url=generateURL(encrypt);
                 document.getElementById('export-url').value=url;
-                
-                const qrDiv=document.getElementById('qrcode');
-                qrDiv.innerHTML='';
-                new QRCode(qrDiv,{
-                    text:url,
-                    width:256,
-                    height:256
-                });
+                updateQRCode(url);
             }
         });
 
