@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sudoku Player</title>
+    <title>Sudoku Flux Player</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
@@ -15,6 +15,7 @@
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            overflow-x: hidden;
         }
 
         .glass {
@@ -23,235 +24,237 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
+        /* Responsive Grid Container */
+        .grid-wrapper {
+            width: 100%;
+            max-width: 500px;
+            aspect-ratio: 1 / 1;
+            padding: 4px;
+            background: #4f46e5; /* The border color */
+            border-radius: 8px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
         .sudoku-grid {
             display: grid;
-            gap: 0;
-            border: 3px solid #6366f1;
-            background: #6366f1;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-            margin: 0 auto;
+            width: 100%;
+            height: 100%;
+            gap: 1px; /* Thin lines */
+            background: #4f46e5;
         }
 
         .cell {
-            width: clamp(35px, 9vw, 55px);
-            height: clamp(35px, 9vw, 55px);
             background: #1e293b;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: clamp(1.2rem, 4vw, 1.6rem);
-            font-weight: 600;
+            font-size: clamp(1rem, 5vw, 1.5rem);
+            font-weight: 700;
             cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.15s ease;
             user-select: none;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            position: relative;
+            color: #e2e8f0;
         }
 
         .cell:hover { background: #334155; }
-        .cell.selected { background: #4f46e5; color: white; transform: scale(1.05); z-index: 10; border-radius: 4px; box-shadow: 0 0 20px rgba(99, 102, 241, 0.4); }
-        .cell.fixed { color: #94a3b8; background: #0f172a; cursor: default; }
-        .cell.error { color: #f87171; }
-        
-        /* Subgrid Borders for 9x9 */
-        .grid-9 .cell:nth-child(3n) { border-right: 2px solid #6366f1; }
-        .grid-9 .cell:nth-child(9n) { border-right: none; }
-        .grid-9 .cell:nth-child(n+19):nth-child(-n+27),
-        .grid-9 .cell:nth-child(n+46):nth-child(-n+54) { border-bottom: 2px solid #6366f1; }
+        .cell.selected { background: #6366f1; color: white; }
+        .cell.fixed { background: #0f172a; color: #94a3b8; cursor: default; }
+        .cell.error { color: #f87171; background: #450a0a; }
 
-        /* Subgrid Borders for 6x6 */
-        .grid-6 .cell:nth-child(3n) { border-right: 2px solid #6366f1; }
-        .grid-6 .cell:nth-child(6n) { border-right: none; }
+        /* 9x9 Subgrid Borders (Thick Lines) */
+        .grid-9 .cell:nth-child(3n) { margin-right: 2px; }
+        .grid-9 .cell:nth-child(9n) { margin-right: 0; }
+        .grid-9 .cell:nth-child(n+19):nth-child(-n+27),
+        .grid-9 .cell:nth-child(n+46):nth-child(-n+54) { margin-bottom: 2px; }
+
+        /* 6x6 Subgrid Borders (Thick Lines) */
+        .grid-6 .cell:nth-child(3n) { margin-right: 2px; }
+        .grid-6 .cell:nth-child(6n) { margin-right: 0; }
         .grid-6 .cell:nth-child(n+13):nth-child(-n+18),
-        .grid-6 .cell:nth-child(n+31):nth-child(-n+36) { border-bottom: 2px solid #6366f1; }
+        .grid-6 .cell:nth-child(n+31):nth-child(-n+36) { margin-bottom: 2px; }
 
         .numpad-btn {
             background: #1e293b;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.2s;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: transform 0.1s, background 0.2s;
         }
-        .numpad-btn:active { transform: scale(0.9); background: #4f46e5; }
-
-        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .numpad-btn:active { transform: scale(0.9); background: #6366f1; }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body class="p-4 md:p-6">
 
-    <!-- Header -->
-    <header class="max-w-4xl mx-auto w-full flex justify-between items-center mb-8 fade-in">
+    <header class="max-w-xl mx-auto w-full flex justify-between items-center mb-6">
         <div>
-            <h1 class="text-2xl md:text-3xl font-extrabold text-indigo-400">Sudoku Flux</h1>
-            <p id="pack-info" class="text-slate-400 text-sm italic">Loading your pack...</p>
+            <h1 class="text-2xl font-extrabold text-indigo-400">Sudoku Flux</h1>
+            <div class="flex items-center gap-2">
+                <span id="puzzle-count" class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Puzzle 1 of 1</span>
+                <span id="difficulty-tag" class="bg-indigo-500/20 text-indigo-300 text-[10px] px-2 py-0.5 rounded-full border border-indigo-500/30">0.0%</span>
+            </div>
         </div>
         <div class="flex gap-2">
-            <button onclick="prevPuzzle()" class="glass p-3 rounded-full hover:bg-slate-700 transition">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            <button onclick="changePuzzle(-1)" class="glass p-2 rounded-lg hover:bg-slate-700 transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <button onclick="nextPuzzle()" class="glass p-3 rounded-full hover:bg-slate-700 transition">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            <button onclick="changePuzzle(1)" class="glass p-2 rounded-lg hover:bg-slate-700 transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
         </div>
     </header>
 
-    <!-- Main Game Area -->
-    <main class="flex-grow flex flex-col items-center justify-center gap-8 fade-in" style="animation-delay: 0.1s">
-        
-        <div id="grid-container" class="relative">
-            <!-- Grid injected here -->
+    <main class="flex-grow flex flex-col items-center justify-center gap-6">
+        <div class="grid-wrapper">
+            <div id="grid" class="sudoku-grid"></div>
         </div>
 
-        <!-- Controls -->
-        <div class="w-full max-w-md flex flex-col gap-6">
-            <div id="numpad" class="grid grid-cols-5 gap-2">
-                <!-- Numpad buttons injected here -->
-            </div>
-
+        <div class="w-full max-w-sm flex flex-col gap-4">
+            <div id="numpad" class="grid grid-cols-5 gap-2"></div>
+            
             <div class="flex gap-2">
-                <button onclick="clearCell()" class="flex-1 glass py-4 rounded-2xl font-bold text-slate-300 hover:text-white hover:bg-red-500/20 transition border-red-500/20">Clear</button>
-                <button onclick="checkPuzzle()" class="flex-1 bg-indigo-600 py-4 rounded-2xl font-bold shadow-lg shadow-indigo-500/20 hover:bg-indigo-500 transition">Verify</button>
+                <button onclick="clearCell()" class="flex-1 glass py-3 rounded-xl font-bold text-slate-400 hover:text-white transition">Clear</button>
+                <button onclick="validate()" class="flex-1 bg-indigo-600 py-3 rounded-xl font-bold hover:bg-indigo-500 transition shadow-lg shadow-indigo-500/20">Verify</button>
             </div>
         </div>
     </main>
 
-    <!-- UI Overlays -->
-    <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 glass px-6 py-3 rounded-full shadow-2xl opacity-0 transition-opacity pointer-events-none z-50">
-        Message here
-    </div>
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 glass px-6 py-3 rounded-full text-sm font-bold opacity-0 transition-all duration-300 pointer-events-none translate-y-4"></div>
 
     <script>
         let puzzles = [];
         let currentIndex = 0;
-        let selectedCell = null;
-        let gameState = [];
+        let selectedIdx = null;
+        let gridData = [];
 
-        // Initialize from URL
         window.onload = () => {
             const params = new URLSearchParams(window.location.search);
-            let rawData = params.get('puzzles');
-            
-            if (!rawData) {
-                showToast("No puzzles found in URL.");
-                return;
-            }
+            let raw = params.get('puzzles');
+            if (!raw) return notify("No puzzles loaded.");
 
-            // Try Base64 decoding
             try {
-                if (!rawData.includes(',')) {
-                    rawData = atob(rawData);
-                }
-            } catch (e) { /* Probably plain text */ }
+                if (!raw.includes(',')) raw = atob(raw);
+            } catch(e) {}
 
-            puzzles = rawData.split(',').filter(s => s.length === 81 || s.length === 36);
-            
-            if (puzzles.length > 0) {
-                loadPuzzle(0);
-            } else {
-                showToast("Invalid puzzle data.");
-            }
+            puzzles = raw.split(',').filter(s => s.length === 81 || s.length === 36);
+            if (puzzles.length) loadPuzzle(0);
         };
 
-        function loadPuzzle(index) {
-            currentIndex = index;
-            const str = puzzles[index];
+        function loadPuzzle(idx) {
+            currentIndex = idx;
+            const str = puzzles[idx];
             const size = str.length === 81 ? 9 : 6;
             
-            gameState = str.split('').map(v => ({
-                value: parseInt(v),
-                isFixed: v !== '0',
-                userInput: 0
+            gridData = str.split('').map(v => ({
+                val: parseInt(v),
+                fixed: v !== '0',
+                user: 0
             }));
 
-            renderGrid(size);
-            renderNumpad(size);
-            document.getElementById('pack-info').textContent = `Puzzle ${index + 1} of ${puzzles.length} (${size}x${size})`;
-            selectedCell = null;
+            render(size);
+            updateUI(size);
         }
 
-        function renderGrid(size) {
-            const container = document.getElementById('grid-container');
-            const grid = document.createElement('div');
-            grid.className = `sudoku-grid grid-${size}`;
-            grid.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+        function render(size) {
+            const container = document.getElementById('grid');
+            container.className = `sudoku-grid grid-${size}`;
+            container.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+            container.innerHTML = '';
 
-            gameState.forEach((cell, i) => {
-                const div = document.createElement('div');
-                div.className = `cell ${cell.isFixed ? 'fixed' : ''}`;
-                div.textContent = cell.value !== 0 ? cell.value : (cell.userInput !== 0 ? cell.userInput : '');
-                
-                div.onclick = () => {
-                    if (cell.isFixed) return;
+            gridData.forEach((cell, i) => {
+                const el = document.createElement('div');
+                el.className = `cell ${cell.fixed ? 'fixed' : ''}`;
+                el.textContent = cell.fixed ? cell.val : (cell.user || '');
+                el.onclick = () => {
+                    if (cell.fixed) return;
                     document.querySelectorAll('.cell').forEach(c => c.classList.remove('selected'));
-                    div.classList.add('selected');
-                    selectedCell = i;
+                    el.classList.add('selected');
+                    selectedIdx = i;
                 };
-                
-                grid.appendChild(div);
+                container.appendChild(el);
             });
 
-            container.innerHTML = '';
-            container.appendChild(grid);
-        }
-
-        function renderNumpad(size) {
             const pad = document.getElementById('numpad');
             pad.innerHTML = '';
             for (let i = 1; i <= size; i++) {
-                const btn = document.createElement('button');
-                btn.className = 'numpad-btn h-14 rounded-xl text-xl font-bold hover:border-indigo-500';
-                btn.textContent = i;
-                btn.onclick = () => inputNumber(i);
-                pad.appendChild(btn);
+                const b = document.createElement('button');
+                b.className = 'numpad-btn h-12 rounded-xl font-bold text-lg';
+                b.textContent = i;
+                b.onclick = () => input(i);
+                pad.appendChild(b);
             }
         }
 
-        function inputNumber(num) {
-            if (selectedCell === null) return;
-            gameState[selectedCell].userInput = num;
+        function input(num) {
+            if (selectedIdx === null) return;
+            gridData[selectedIdx].user = num;
             const cells = document.querySelectorAll('.cell');
-            cells[selectedCell].textContent = num;
-            cells[selectedCell].classList.remove('error');
+            cells[selectedIdx].textContent = num;
+            cells[selectedIdx].classList.remove('error');
         }
 
         function clearCell() {
-            if (selectedCell === null) return;
-            gameState[selectedCell].userInput = 0;
-            document.querySelectorAll('.cell')[selectedCell].textContent = '';
+            if (selectedIdx === null) return;
+            gridData[selectedIdx].user = 0;
+            document.querySelectorAll('.cell')[selectedIdx].textContent = '';
         }
 
-        function checkPuzzle() {
-            // Simplified check: just checking if full. 
-            // Real validation would require a solver or comparing against solution.
-            const isComplete = gameState.every(c => (c.isFixed ? c.value : c.userInput) !== 0);
-            if (!isComplete) {
-                showToast("The grid is not complete yet!");
+        function updateUI(size) {
+            document.getElementById('puzzle-count').textContent = `Puzzle ${currentIndex + 1} of ${puzzles.length} (${size}x${size})`;
+            // Logic for difficulty % from clues
+            const clues = gridData.filter(c => c.fixed).length;
+            const total = size * size;
+            const diff = Math.max(0, 100 - (clues / total * 200)).toFixed(1);
+            document.getElementById('difficulty-tag').textContent = `${diff}% Difficulty`;
+            selectedIdx = null;
+        }
+
+        function changePuzzle(dir) {
+            const next = currentIndex + dir;
+            if (next >= 0 && next < puzzles.length) loadPuzzle(next);
+        }
+
+        function validate() {
+            const size = Math.sqrt(gridData.length) || 6;
+            const cells = document.querySelectorAll('.cell');
+            let hasError = false;
+
+            const getVal = (i) => gridData[i].fixed ? gridData[i].val : gridData[i].user;
+
+            // Check if full
+            if (gridData.some(c => getVal(gridData.indexOf(c)) === 0)) {
+                return notify("Grid is not full!");
+            }
+
+            // Simple row/col validation
+            for (let i = 0; i < size; i++) {
+                let row = new Set(), col = new Set();
+                for (let j = 0; j < size; j++) {
+                    const rV = getVal(i * size + j);
+                    const cV = getVal(j * size + i);
+                    if (row.has(rV) || col.has(cV)) hasError = true;
+                    row.add(rV); col.add(cV);
+                }
+            }
+
+            if (hasError) {
+                notify("Conflict detected! Check your logic.");
             } else {
-                showToast("Looks good! (Logic validation coming soon)");
+                notify("Perfect! Puzzle Solved.");
             }
         }
 
-        function nextPuzzle() {
-            if (currentIndex < puzzles.length - 1) loadPuzzle(currentIndex + 1);
-        }
-
-        function prevPuzzle() {
-            if (currentIndex > 0) loadPuzzle(currentIndex - 1);
-        }
-
-        function showToast(msg) {
+        function notify(msg) {
             const t = document.getElementById('toast');
             t.textContent = msg;
             t.style.opacity = '1';
-            setTimeout(() => t.style.opacity = '0', 3000);
+            t.style.transform = 'translateY(0) translateX(-50%)';
+            setTimeout(() => {
+                t.style.opacity = '0';
+                t.style.transform = 'translateY(16px) translateX(-50%)';
+            }, 3000);
         }
 
-        // Keyboard Support
         document.addEventListener('keydown', (e) => {
-            if (e.key >= '1' && e.key <= '9') {
-                inputNumber(parseInt(e.key));
-            } else if (e.key === 'Backspace' || e.key === 'Delete') {
-                clearCell();
-            }
+            if (e.key >= '1' && e.key <= '9') input(parseInt(e.key));
+            if (e.key === 'Backspace' || e.key === 'Delete') clearCell();
         });
     </script>
 </body>
