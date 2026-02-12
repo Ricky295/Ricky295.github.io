@@ -29,7 +29,7 @@
             margin-bottom: 20px;
         }
 
-        .title { font-size: 28px; font-weight: 700; color: #fff; }
+        .title { font-size: 28px; font-weight: 700; color: #fff; line-height: 1; }
         .title span {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             -webkit-background-clip: text;
@@ -37,16 +37,25 @@
             background-clip: text;
         }
 
-        .info { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+        .info { font-size: 11px; color: #94a3b8; margin-top: 6px; display: flex; align-items: center; gap: 8px; }
         .difficulty {
-            display: inline-block;
-            margin-left: 8px;
             padding: 2px 8px;
             background: rgba(102, 126, 234, 0.15);
             border: 1px solid rgba(102, 126, 234, 0.3);
             border-radius: 12px;
             font-weight: 600;
             color: #a5b4fc;
+        }
+
+        .timer {
+            font-family: monospace;
+            font-size: 18px;
+            color: #6366f1;
+            font-weight: 700;
+            background: rgba(0,0,0,0.3);
+            padding: 4px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(99, 102, 241, 0.3);
         }
 
         .grid-wrapper {
@@ -84,8 +93,8 @@
 
         /* Highlight Logic */
         .cell.related { background: #2d3748; }
-        .cell.same-value { background: rgba(102, 126, 234, 0.35); }
-        .cell.selected { background: #667eea !important; color: white; }
+        .cell.same-value { background: rgba(99, 102, 241, 0.4) !important; color: #fff; }
+        .cell.selected { background: #6366f1 !important; color: white !important; }
         .cell.fixed { background: #0f172a; color: #94a3b8; }
         .cell.error { color: #ef4444; }
 
@@ -110,13 +119,13 @@
         }
 
         /* Section Borders */
-        .size-9 .cell:nth-child(3n):not(:nth-child(9n)) { border-right: 2px solid #667eea; }
+        .size-9 .cell:nth-child(3n):not(:nth-child(9n)) { border-right: 3px solid #475569; }
         .size-9 .cell:nth-child(n+19):nth-child(-n+27),
-        .size-9 .cell:nth-child(n+46):nth-child(-n+54) { border-bottom: 2px solid #667eea; }
+        .size-9 .cell:nth-child(n+46):nth-child(-n+54) { border-bottom: 3px solid #475569; }
 
-        .size-6 .cell:nth-child(3n):not(:nth-child(6n)) { border-right: 2px solid #667eea; }
+        .size-6 .cell:nth-child(3n):not(:nth-child(6n)) { border-right: 3px solid #475569; }
         .size-6 .cell:nth-child(n+13):nth-child(-n+18),
-        .size-6 .cell:nth-child(n+31):nth-child(-n+36) { border-bottom: 2px solid #667eea; }
+        .size-6 .cell:nth-child(n+31):nth-child(-n+36) { border-bottom: 3px solid #475569; }
 
         /* Controls */
         .controls { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 12px; }
@@ -131,7 +140,7 @@
             cursor: pointer;
             transition: all 0.2s;
         }
-        .num-btn:active { background: #667eea; transform: scale(0.95); }
+        .num-btn:active { background: #6366f1; transform: scale(0.95); }
 
         .toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
         .tool-btn {
@@ -176,10 +185,7 @@
                     <span id="difficulty" class="difficulty">0%</span>
                 </div>
             </div>
-            <div style="display: flex; gap: 6px;">
-                <button class="num-btn" style="width: 40px;" onclick="navigate(-1)">‹</button>
-                <button class="num-btn" style="width: 40px;" onclick="navigate(1)">›</button>
-            </div>
+            <div id="timer" class="timer">00:00</div>
         </header>
 
         <div class="grid-wrapper">
@@ -188,9 +194,13 @@
 
         <div class="toolbar">
             <button id="pencil-toggle" class="tool-btn" onclick="togglePencil()">
-                <span>✏️</span> Pencil Mode (P)
+                <span>✏️</span> Pencil (P)
             </button>
             <button class="tool-btn" onclick="clearCell()">Clear</button>
+            <div style="display: flex; gap: 4px;">
+                <button class="num-btn" style="width: 44px; height: 44px;" onclick="navigate(-1)">‹</button>
+                <button class="num-btn" style="width: 44px; height: 44px;" onclick="navigate(1)">›</button>
+            </div>
         </div>
 
         <div class="controls" id="numpad"></div>
@@ -200,7 +210,6 @@
 
     <div id="toast" class="toast"></div>
 
-    <!-- Logic imports from uploaded files -->
     <script src="newsudoku.js"></script>
     <script src="newsudoku6x6.js"></script>
 
@@ -211,6 +220,8 @@
         let size = 9;
         let board = [];
         let pencilMode = false;
+        let seconds = 0;
+        let timerInterval = null;
 
         window.onload = () => {
             const params = new URLSearchParams(window.location.search);
@@ -224,6 +235,22 @@
             if (puzzles.length > 0) loadPuzzle(0);
         };
 
+        function startTimer() {
+            clearInterval(timerInterval);
+            seconds = 0;
+            updateTimerDisplay();
+            timerInterval = setInterval(() => {
+                seconds++;
+                updateTimerDisplay();
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = (seconds % 60).toString().padStart(2, '0');
+            document.getElementById('timer').textContent = `${m}:${s}`;
+        }
+
         function loadPuzzle(idx) {
             currentIndex = idx;
             const s = puzzles[idx];
@@ -233,7 +260,8 @@
                 fixed: v !== '0',
                 notes: new Set()
             }));
-            selectedIdx = 0; // Default selection
+            selectedIdx = 0;
+            startTimer();
             render();
             updateMeta(s);
         }
@@ -249,14 +277,12 @@
             grid.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
             grid.innerHTML = '';
 
-            const selectedCell = selectedIdx !== null ? board[selectedIdx] : null;
-            const selectedVal = selectedCell ? (selectedCell.val || 0) : 0;
+            const selectedVal = selectedIdx !== null ? board[selectedIdx].val : 0;
 
             board.forEach((cell, i) => {
                 const div = document.createElement('div');
                 div.className = `cell ${cell.fixed ? 'fixed' : ''}`;
                 
-                // --- Highlighting Logic ---
                 if (selectedIdx !== null) {
                     if (i === selectedIdx) {
                         div.classList.add('selected');
@@ -264,19 +290,21 @@
                         const r = Math.floor(i / size), c = i % size;
                         const sr = Math.floor(selectedIdx / size), sc = selectedIdx % size;
                         
-                        // Row/Col/Box calculation
                         const isSameRow = r === sr;
                         const isSameCol = c === sc;
                         let isSameBox = false;
                         if (size === 9) {
                             isSameBox = Math.floor(r/3) === Math.floor(sr/3) && Math.floor(c/3) === Math.floor(sc/3);
                         } else {
-                            // 6x6 uses 2x3 boxes (2 rows, 3 cols)
                             isSameBox = Math.floor(r/2) === Math.floor(sr/2) && Math.floor(c/3) === Math.floor(sc/3);
                         }
 
                         if (isSameRow || isSameCol || isSameBox) div.classList.add('related');
-                        if (selectedVal > 0 && cell.val === selectedVal) div.classList.add('same-value');
+                        
+                        // FIX: Highlight matching numbers globally (both fixed and user-entered)
+                        if (selectedVal > 0 && cell.val === selectedVal) {
+                            div.classList.add('same-value');
+                        }
                     }
                 }
 
@@ -298,7 +326,6 @@
                 grid.appendChild(div);
             });
 
-            // Update Controls
             const pad = document.getElementById('numpad');
             pad.innerHTML = '';
             for (let i = 1; i <= size; i++) {
@@ -318,7 +345,6 @@
                 if (board[selectedIdx].notes.has(num)) board[selectedIdx].notes.delete(num);
                 else board[selectedIdx].notes.add(num);
             } else {
-                // Toggle value
                 const oldVal = board[selectedIdx].val;
                 board[selectedIdx].val = (oldVal === num) ? 0 : num;
                 board[selectedIdx].notes.clear();
@@ -334,14 +360,12 @@
             const r = Math.floor(idx / size), c = idx % size;
             for (let i = 0; i < size * size; i++) {
                 const ir = Math.floor(i / size), ic = i % size;
-                
                 let sameBox = false;
                 if (size === 9) {
                     sameBox = Math.floor(ir/3) === Math.floor(r/3) && Math.floor(ic/3) === Math.floor(c/3);
                 } else {
                     sameBox = Math.floor(ir/2) === Math.floor(r/2) && Math.floor(ic/3) === Math.floor(c/3);
                 }
-
                 if (ir === r || ic === c || sameBox) {
                     board[i].notes.delete(num);
                 }
@@ -363,9 +387,7 @@
         }
 
         function updateMeta(puzzleStr) {
-            document.getElementById('puzzle-info').textContent = `Puzzle ${currentIndex+1} of ${puzzles.length} (${size}x${size})`;
-            
-            // Use external logic for difficulty if available
+            document.getElementById('puzzle-info').textContent = `PZ ${currentIndex+1}/${puzzles.length}`;
             let diff = 0;
             try {
                 if (size === 9 && window.Sudoku) {
@@ -376,20 +398,17 @@
                     diff = window.Sudoku6x6.solveWithSingles(matrix, true);
                 }
             } catch (e) {
-                // Fallback basic difficulty
                 const clues = board.filter(c => c.fixed).length;
                 diff = (1 - (clues / (size * size)));
             }
-            
-            document.getElementById('difficulty').textContent = `${(diff * 100).toFixed(1)}% Difficulty`;
+            document.getElementById('difficulty').textContent = `${(diff * 100).toFixed(0)}%`;
         }
 
         function verify() {
             const vals = board.map(c => c.val);
-            if (vals.includes(0)) return showToast("Grid is incomplete!");
+            if (vals.includes(0)) return showToast("Fill all cells first!");
             
             let error = false;
-            // Check rows & columns
             for (let i = 0; i < size; i++) {
                 let row = new Set(), col = new Set();
                 for (let j = 0; j < size; j++) {
@@ -399,7 +418,6 @@
                 if (row.size !== size || col.size !== size) error = true;
             }
 
-            // Check Boxes
             const boxRows = size === 9 ? 3 : 2;
             const boxCols = 3;
             for (let br = 0; br < size; br += boxRows) {
@@ -414,7 +432,8 @@
                 }
             }
             
-            showToast(error ? "❌ There are conflicts!" : "🎉 Perfect Solution!");
+            if (!error) clearInterval(timerInterval);
+            showToast(error ? "❌ Mistake detected!" : `🎉 Clear! Time: ${document.getElementById('timer').textContent}`);
         }
 
         function showToast(m) {
@@ -425,30 +444,17 @@
         }
 
         document.addEventListener('keydown', (e) => {
-            // Numbers
-            if (e.key >= '1' && e.key <= size.toString()) {
-                inputNumber(parseInt(e.key));
-            }
-            // Deletion
-            if (e.key === 'Backspace' || e.key === 'Delete') {
-                clearCell();
-            }
-            // Toggle pencil
-            if (e.key.toLowerCase() === 'p') {
-                togglePencil();
-            }
+            if (e.key >= '1' && e.key <= size.toString()) inputNumber(parseInt(e.key));
+            if (e.key === 'Backspace' || e.key === 'Delete') clearCell();
+            if (e.key.toLowerCase() === 'p') togglePencil();
 
-            // Arrow movement (infinite/free)
             if (e.key.startsWith('Arrow')) {
                 if (selectedIdx === null) selectedIdx = 0;
-                let r = Math.floor(selectedIdx / size);
-                let c = selectedIdx % size;
-
+                let r = Math.floor(selectedIdx / size), c = selectedIdx % size;
                 if (e.key === 'ArrowUp') r = (r - 1 + size) % size;
                 if (e.key === 'ArrowDown') r = (r + 1) % size;
                 if (e.key === 'ArrowLeft') c = (c - 1 + size) % size;
                 if (e.key === 'ArrowRight') c = (c + 1) % size;
-
                 selectedIdx = r * size + c;
                 render();
                 e.preventDefault();
