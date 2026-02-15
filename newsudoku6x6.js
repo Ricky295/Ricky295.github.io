@@ -33,11 +33,15 @@ function shuffle6x6(array) {
 }
 
 function getBoxIndex6x6(row, col) {
-    // 3x2 boxes: 3 rows × 2 columns (horizontal boxes)
+    // 2x3 boxes: 2 rows × 3 columns (horizontal boxes)
     // Box layout:
-    // [0][1][2]
-    // [3][4][5]
-    return Math.floor(row / 3) * 3 + Math.floor(col / 2);
+    // [1][1][1][2][2][2]
+    // [1][1][1][2][2][2]
+    // [3][3][3][4][4][4]
+    // [3][3][3][4][4][4]
+    // [5][5][5][6][6][6]
+    // [5][5][5][6][6][6]
+    return Math.floor(row / 2) * 2 + Math.floor(col / 3);
 }
 
 function deepCopyBoard6x6(board) {
@@ -75,12 +79,12 @@ function solveGridRandomBacktracking6x6(grid) {
                         }
                     }
                     
-                    // Box check (3 rows × 2 columns)
+                    // Box check (2 rows × 3 columns)
                     if (isValid) {
-                        const startRow = Math.floor(r / 3) * 3;
-                        const startCol = Math.floor(c / 2) * 2;
-                        for (let rowBox = startRow; rowBox < startRow + 3; rowBox++) {
-                            for (let colBox = startCol; colBox < startCol + 2; colBox++) {
+                        const startRow = Math.floor(r / 2) * 2;
+                        const startCol = Math.floor(c / 3) * 3;
+                        for (let rowBox = startRow; rowBox < startRow + 2; rowBox++) {
+                            for (let colBox = startCol; colBox < startCol + 3; colBox++) {
                                 if (grid[rowBox][colBox] === num) {
                                     isValid = false;
                                     break;
@@ -130,11 +134,11 @@ function getPossibleValues6x6(board, row, col) {
         used.add(board[r][col]);
     }
     
-    // Check 3x2 box
-    const startRow = Math.floor(row / 3) * 3;
-    const startCol = Math.floor(col / 2) * 2;
-    for (let r = startRow; r < startRow + 3; r++) {
-        for (let c = startCol; c < startCol + 2; c++) {
+    // Check 2x3 box
+    const startRow = Math.floor(row / 2) * 2;
+    const startCol = Math.floor(col / 3) * 3;
+    for (let r = startRow; r < startRow + 2; r++) {
+        for (let c = startCol; c < startCol + 3; c++) {
             used.add(board[r][c]);
         }
     }
@@ -171,11 +175,11 @@ function eliminatePossibilities6x6(possibilities, rPlaced, cPlaced, valPlaced, p
         }
     }
     
-    // Eliminate in 3x2 box
-    const startRow = Math.floor(rPlaced / 3) * 3;
-    const startCol = Math.floor(cPlaced / 2) * 2;
-    for (let r = startRow; r < startRow + 3; r++) {
-        for (let c = startCol; c < startCol + 2; c++) {
+    // Eliminate in 2x3 box
+    const startRow = Math.floor(rPlaced / 2) * 2;
+    const startCol = Math.floor(cPlaced / 3) * 3;
+    for (let r = startRow; r < startRow + 2; r++) {
+        for (let c = startCol; c < startCol + 3; c++) {
             if (possibilities[r][c].has(valPlaced)) {
                 possibilities[r][c].delete(valPlaced);
                 if (possibilities[r][c].size === 0 && puzzle[r][c] === 0) {
@@ -205,11 +209,12 @@ function findHiddenSingles6x6(puzzle, possibilities, unitType, unitIndex) {
     } else if (unitType === 'col') {
         coords = Array(6).fill(null).map((_, r) => [r, unitIndex]);
     } else if (unitType === 'box') {
-        // 6 boxes total (0-5), arranged as 2 rows × 3 columns of boxes
-        const startRow = Math.floor(unitIndex / 3) * 3;
-        const startCol = (unitIndex % 3) * 2;
-        for (let r = startRow; r < startRow + 3; r++) {
-            for (let c = startCol; c < startCol + 2; c++) {
+        // 6 boxes total (0-5), arranged as 3 rows × 2 columns of boxes
+        // Each box is 2 rows × 3 columns
+        const startRow = Math.floor(unitIndex / 2) * 2;
+        const startCol = (unitIndex % 2) * 3;
+        for (let r = startRow; r < startRow + 2; r++) {
+            for (let c = startCol; c < startCol + 3; c++) {
                 coords.push([r, c]);
             }
         }
@@ -500,10 +505,10 @@ function getSortedHiddenSingleUpdate6x6(puzzle, possibilities, unitType) {
             } else if (unitType === 'col') {
                 coords = Array(6).fill(null).map((_, r) => [r, unitIndex]);
             } else if (unitType === 'box') {
-                const startRow = Math.floor(unitIndex / 3) * 3;
-                const startCol = (unitIndex % 3) * 2;
-                for (let r = startRow; r < startRow + 3; r++) {
-                    for (let c = startCol; c < startCol + 2; c++) {
+                const startRow = Math.floor(unitIndex / 2) * 2;
+                const startCol = (unitIndex % 2) * 3;
+                for (let r = startRow; r < startRow + 2; r++) {
+                    for (let c = startCol; c < startCol + 3; c++) {
                         coords.push([r, c]);
                     }
                 }
