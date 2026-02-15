@@ -1,9 +1,9 @@
 /**
- * newsudoku6x6.js - Fixed version with renamed internal functions
- * Core functionality for 6x6 Sudoku with 2x3 boxes.
+ * newsudoku6x6.js - Fixed version for 6x6 Sudoku with 2x3 boxes
+ * Core functionality for 6x6 Sudoku with 2x3 boxes (2 rows × 3 columns).
  */
 
-// --- Utility Functions (renamed to avoid conflicts) ---
+// --- Utility Functions ---
 
 function convertToMatrix6x6(sudokuString) {
     if (sudokuString.length !== 36) {
@@ -33,7 +33,11 @@ function shuffle6x6(array) {
 }
 
 function getBoxIndex6x6(row, col) {
-    return Math.floor(row / 2) * 3 + Math.floor(col / 2);
+    // 3x2 boxes: 3 rows × 2 columns (horizontal boxes)
+    // Box layout:
+    // [0][1][2]
+    // [3][4][5]
+    return Math.floor(row / 3) * 3 + Math.floor(col / 2);
 }
 
 function deepCopyBoard6x6(board) {
@@ -56,10 +60,12 @@ function solveGridRandomBacktracking6x6(grid) {
                 for (const num of possibleNums) {
                     let isValid = true;
                     
+                    // Row check
                     if (grid[r].includes(num)) {
                         isValid = false;
                     }
                     
+                    // Column check
                     if (isValid) {
                         for (let i = 0; i < 6; i++) {
                             if (grid[i][c] === num) {
@@ -69,10 +75,11 @@ function solveGridRandomBacktracking6x6(grid) {
                         }
                     }
                     
+                    // Box check (3 rows × 2 columns)
                     if (isValid) {
-                        const startRow = Math.floor(r / 2) * 2;
+                        const startRow = Math.floor(r / 3) * 3;
                         const startCol = Math.floor(c / 2) * 2;
-                        for (let rowBox = startRow; rowBox < startRow + 2; rowBox++) {
+                        for (let rowBox = startRow; rowBox < startRow + 3; rowBox++) {
                             for (let colBox = startCol; colBox < startCol + 2; colBox++) {
                                 if (grid[rowBox][colBox] === num) {
                                     isValid = false;
@@ -113,17 +120,20 @@ function getPossibleValues6x6(board, row, col) {
 
     const used = new Set();
     
+    // Check row
     for (let c = 0; c < 6; c++) {
         used.add(board[row][c]);
     }
     
+    // Check column
     for (let r = 0; r < 6; r++) {
         used.add(board[r][col]);
     }
     
-    const startRow = Math.floor(row / 2) * 2;
+    // Check 3x2 box
+    const startRow = Math.floor(row / 3) * 3;
     const startCol = Math.floor(col / 2) * 2;
-    for (let r = startRow; r < startRow + 2; r++) {
+    for (let r = startRow; r < startRow + 3; r++) {
         for (let c = startCol; c < startCol + 2; c++) {
             used.add(board[r][c]);
         }
@@ -142,7 +152,9 @@ function getPossibleValues6x6(board, row, col) {
 function eliminatePossibilities6x6(possibilities, rPlaced, cPlaced, valPlaced, puzzle) {
     let contradiction = false;
     
+    // Eliminate in row and column
     for (let i = 0; i < 6; i++) {
+        // Row
         if (possibilities[rPlaced][i].has(valPlaced)) {
             possibilities[rPlaced][i].delete(valPlaced);
             if (possibilities[rPlaced][i].size === 0 && puzzle[rPlaced][i] === 0) {
@@ -150,6 +162,7 @@ function eliminatePossibilities6x6(possibilities, rPlaced, cPlaced, valPlaced, p
             }
         }
         
+        // Column
         if (possibilities[i][cPlaced].has(valPlaced)) {
             possibilities[i][cPlaced].delete(valPlaced);
             if (possibilities[i][cPlaced].size === 0 && puzzle[i][cPlaced] === 0) {
@@ -158,9 +171,10 @@ function eliminatePossibilities6x6(possibilities, rPlaced, cPlaced, valPlaced, p
         }
     }
     
-    const startRow = Math.floor(rPlaced / 2) * 2;
+    // Eliminate in 3x2 box
+    const startRow = Math.floor(rPlaced / 3) * 3;
     const startCol = Math.floor(cPlaced / 2) * 2;
-    for (let r = startRow; r < startRow + 2; r++) {
+    for (let r = startRow; r < startRow + 3; r++) {
         for (let c = startCol; c < startCol + 2; c++) {
             if (possibilities[r][c].has(valPlaced)) {
                 possibilities[r][c].delete(valPlaced);
@@ -191,9 +205,10 @@ function findHiddenSingles6x6(puzzle, possibilities, unitType, unitIndex) {
     } else if (unitType === 'col') {
         coords = Array(6).fill(null).map((_, r) => [r, unitIndex]);
     } else if (unitType === 'box') {
-        const startRow = Math.floor(unitIndex / 3) * 2;
+        // 6 boxes total (0-5), arranged as 2 rows × 3 columns of boxes
+        const startRow = Math.floor(unitIndex / 3) * 3;
         const startCol = (unitIndex % 3) * 2;
-        for (let r = startRow; r < startRow + 2; r++) {
+        for (let r = startRow; r < startRow + 3; r++) {
             for (let c = startCol; c < startCol + 2; c++) {
                 coords.push([r, c]);
             }
@@ -233,7 +248,7 @@ function findNakedSingles6x6(puzzle, possibilities) {
     return updates;
 }
 
-// --- Sudoku Logic: Core Solver Loop ---
+// --- Sudoku Logic: Core Solver Loop (Strict Priority) ---
 
 function findAndApplyUpdates6x6(techniqueType, puzzle, possibilities, emptyCellsCount) {
     let updates = [];
@@ -257,6 +272,7 @@ function findAndApplyUpdates6x6(techniqueType, puzzle, possibilities, emptyCells
         return [emptyCellsCount, false];
     }
     
+    // Make updates unique
     const uniqueUpdates = [];
     const seen = new Set();
     for (const [r, c, val] of updates) {
@@ -293,6 +309,7 @@ function solveWithSingles6x6(sudoku, returnDifficulty = false) {
         return returnDifficulty ? 0.0 : puzzle;
     }
     
+    // Initialize possibilities
     const possibilities = Array(6).fill(null).map(() => 
         Array(6).fill(null).map(() => new Set())
     );
@@ -312,10 +329,12 @@ function solveWithSingles6x6(sudoku, returnDifficulty = false) {
         }
     }
     
+    // Solving loop with STRICT priority (Box HS -> Line HS -> Naked Single)
     let steps = 0;
     let contradiction = false;
     
     while (emptyCellsCount > 0) {
+        // 1. Box Hidden Single
         [emptyCellsCount, contradiction] = findAndApplyUpdates6x6('BoxHS', puzzle, possibilities, emptyCellsCount);
         const boxUpdates = emptyCellsCount < initialEmptyCells - steps;
         if (boxUpdates) {
@@ -326,6 +345,7 @@ function solveWithSingles6x6(sudoku, returnDifficulty = false) {
         
         highestTechnique = Math.max(1, highestTechnique);
         
+        // 2. Line Hidden Single
         const prevCount = emptyCellsCount;
         [emptyCellsCount, contradiction] = findAndApplyUpdates6x6('LineHS', puzzle, possibilities, emptyCellsCount);
         if (emptyCellsCount < prevCount) {
@@ -336,6 +356,7 @@ function solveWithSingles6x6(sudoku, returnDifficulty = false) {
         
         highestTechnique = 2;
         
+        // 3. Naked Single
         const prevCount2 = emptyCellsCount;
         [emptyCellsCount, contradiction] = findAndApplyUpdates6x6('NakedSingle', puzzle, possibilities, emptyCellsCount);
         if (emptyCellsCount < prevCount2) {
@@ -344,15 +365,19 @@ function solveWithSingles6x6(sudoku, returnDifficulty = false) {
             continue;
         }
         
+        // Stuck
         break;
     }
     
+    // Final check and return
     if (contradiction) {
         return returnDifficulty ? -0.2 : sudoku;
     } else if (emptyCellsCount === 0) {
+        // Fully solved
         const difficulty = initialEmptyCells > 0 ? steps / initialEmptyCells : 0.0;
         return returnDifficulty ? (difficulty + highestTechnique) / 3 : puzzle;
     } else {
+        // Stuck, requires advanced techniques
         return returnDifficulty ? -0.1 : sudoku;
     }
 }
@@ -403,6 +428,7 @@ function generateSudoku6x6(minDifficulty, maxDifficulty, targetClues = 15, maxAt
         }
     }
     
+    // Fallback
     const solution = generateSolutionRandom6x6();
     const puzzle = deepCopyBoard6x6(solution);
     const positions = [];
@@ -474,9 +500,9 @@ function getSortedHiddenSingleUpdate6x6(puzzle, possibilities, unitType) {
             } else if (unitType === 'col') {
                 coords = Array(6).fill(null).map((_, r) => [r, unitIndex]);
             } else if (unitType === 'box') {
-                const startRow = Math.floor(unitIndex / 3) * 2;
+                const startRow = Math.floor(unitIndex / 3) * 3;
                 const startCol = (unitIndex % 3) * 2;
-                for (let r = startRow; r < startRow + 2; r++) {
+                for (let r = startRow; r < startRow + 3; r++) {
                     for (let c = startCol; c < startCol + 2; c++) {
                         coords.push([r, c]);
                     }
