@@ -264,7 +264,7 @@ body.dark .candidate-num { color: #aaa; }
 
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: none; align-items: center; justify-content: center; }
 .modal.show { display: flex; }
-.modal-content { background: var(--card-bg); padding: 40px; border-radius: 20px; text-align: center; max-width: 420px; width: 90%; position: relative; }
+.modal-content { background: var(--card-bg); padding: 40px; border-radius: 20px; text-align: center; max-width: 420px; width: 90%; position: relative; max-height: 90vh; overflow-y: auto; }
 
 .breakdown {
     text-align: left;
@@ -286,6 +286,16 @@ body.dark .candidate-num { color: #aaa; }
     z-index: 2000; opacity: 0; transition: opacity 0.3s; pointer-events: none;
 }
 .toast.show { opacity: 1; }
+
+.settings-section {
+    text-align: left;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(0,0,0,0.1);
+}
+body.dark .settings-section { border-top: 1px solid rgba(255,255,255,0.1); }
+.settings-label { font-weight: bold; font-size: 0.9rem; margin-bottom: 10px; display: block; }
+.btn-danger { background: var(--danger) !important; color: white !important; border: none !important; }
 
 .mode-toggle-bar {
     display:flex; 
@@ -481,7 +491,7 @@ function updateDashboard() {
             if(dayProg) {
                 const tooltip = document.createElement('div');
                 tooltip.className = 'day-tooltip';
-                tooltip.innerHTML = `<b>Day ${d}</b><br/>Base: ${dayProg.breakdown?.base}<br/>Bonus: +${dayProg.breakdown?.timeBonus + dayProg.breakdown?.medalBonus}<br/>Total: ${dayProg.points}`;
+                tooltip.innerHTML = `<b>Day ${d}</b><br/>Base: ${dayProg.breakdown?.base}<br/>T-Bonus: +${dayProg.breakdown?.timeBonus}<br/>M-Bonus: +${dayProg.breakdown?.medalBonus}<br/>Total: ${dayProg.points}`;
                 div.appendChild(tooltip);
                 div.innerHTML += `<span>${d}</span><span class="pts-label">${dayProg.points >= 1000 ? (dayProg.points/1000).toFixed(1)+'k' : dayProg.points}</span>`;
             } else div.innerHTML += `<span>${d}</span>`;
@@ -505,8 +515,15 @@ function showStats(yr, d) {
             <h1 style="font-size:3rem">${dayProg.medal}</h1>
             <h2>Day ${d} Summary</h2>
             <div class="breakdown">
-                <div class="breakdown-row"><span>Best Score:</span> <span>${dayProg.points} pts</span></div>
-                <div class="breakdown-row"><span>Best Time:</span> <span>${fmtTime(dayProg.time || 0)}</span></div>
+                <div class="breakdown-row"><span>Base Score:</span> <span>${dayProg.breakdown?.base || 0}</span></div>
+                <div class="breakdown-row"><span>Time Bonus:</span> <span class="bonus-text">+${dayProg.breakdown?.timeBonus || 0}</span></div>
+                <div class="breakdown-row"><span>Medal Bonus:</span> <span class="bonus-text">+${dayProg.breakdown?.medalBonus || 0}</span></div>
+                <div class="breakdown-row" style="border-top:2px solid var(--text); margin-top:10px; padding-top:5px; font-weight:bold; font-size:1.2rem;">
+                    <span>Best Score:</span> <span>${dayProg.points} pts</span>
+                </div>
+                <div class="breakdown-row" style="margin-top:8px; opacity:0.7; font-size:0.85rem;">
+                    <span>Best Time:</span> <span>${fmtTime(dayProg.time || 0)}</span>
+                </div>
             </div>
             <div style="display:flex; gap:10px; margin-top:20px;">
                 <button onclick="startPuzzle('${yr}', ${d})" style="flex:1; padding:15px; border-radius:10px; border:none; background:var(--primary); color:white; font-weight:bold; cursor:pointer;">REPLAY</button>
@@ -693,11 +710,93 @@ function win() {
     m.classList.add('show');
 }
 
+/* Data Management Logic */
+
+function exportData() {
+    const data = localStorage.getItem('sudokuProgress') || '{}';
+    const b64 = btoa(unescape(encodeURIComponent(data)));
+    const el = document.createElement('textarea');
+    el.value = b64;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    showToast("Data copied to clipboard!");
+}
+
+function importData() {
+    const str = prompt("Paste your Base64 data string here:");
+    if (!str) return;
+    try {
+        const decoded = decodeURIComponent(escape(atob(str)));
+        const importedProgress = JSON.parse(decoded);
+        
+        const mode = confirm("Click OK to MERGE (keep existing progress) or CANCEL to REPLACE (wipe current progress first).");
+        
+        if (mode) {
+            const current = JSON.parse(localStorage.getItem('sudokuProgress') || '{}');
+            for (let yr in importedProgress) {
+                if (!current[yr]) current[yr] = {};
+                for (let day in importedProgress[yr]) {
+                    if (!current[yr][day] || importedProgress[yr][day].points > current[yr][day].points) {
+                        current[yr][day] = importedProgress[yr][day];
+                    }
+                }
+            }
+            localStorage.setItem('sudokuProgress', JSON.stringify(current));
+            showToast("Data merged successfully!");
+        } else {
+            localStorage.setItem('sudokuProgress', JSON.stringify(importedProgress));
+            showToast("Data replaced successfully!");
+        }
+        updateDashboard();
+    } catch (e) {
+        showToast("Invalid data string!");
+    }
+}
+
+function deleteAllData() {
+    if (confirm("⚠️ WARNING: This will permanently delete all your progress. Continue?")) {
+        if (confirm("Are you absolutely sure? This cannot be undone.")) {
+            if (confirm("Final confirmation: Click OK to wipe everything.")) {
+                localStorage.removeItem('sudokuProgress');
+                showToast("Account reset successfully.");
+                updateDashboard();
+                closeModals();
+            }
+        }
+    }
+}
+
 function openSettings() {
     const m = document.getElementById('settingsModal');
-    m.innerHTML = `<div class="modal-content"><h2>Settings</h2><p>Toggle theme or manage progress.</p><button onclick="toggleDark()" class="btn-util" style="width:100%; margin:10px 0;">🌓 Toggle Theme</button><button onclick="closeModals()" class="btn-util" style="width:100%;">Close</button></div>`;
+    m.innerHTML = `
+        <div class="modal-content">
+            <h2>Settings</h2>
+            
+            <div class="settings-section">
+                <span class="settings-label">Appearance</span>
+                <button onclick="toggleDark()" class="btn-util" style="width:100%;">🌓 Toggle Dark Mode</button>
+            </div>
+
+            <div class="settings-section">
+                <span class="settings-label">Data Management</span>
+                <p style="font-size:0.75rem; opacity:0.7; margin-bottom:10px;">Move your progress between devices or backup your score.</p>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <button onclick="exportData()" class="btn-util" style="justify-content:center;">📤 Export</button>
+                    <button onclick="importData()" class="btn-util" style="justify-content:center;">📥 Import</button>
+                </div>
+                <button onclick="deleteAllData()" class="btn-util btn-danger" style="width:100%; margin-top:15px; justify-content:center;">🗑 Reset All Progress</button>
+            </div>
+
+            <div class="settings-section" style="border-top:none;">
+                <button onclick="closeModals()" class="btn-util" style="width:100%; justify-content:center; margin-top:10px;">Close</button>
+            </div>
+        </div>
+    `;
     m.classList.add('show');
 }
+
 function closeModals() { document.querySelectorAll('.modal').forEach(m => m.classList.remove('show')); }
 function closePuzzle() { document.getElementById('puzzleOverlay').classList.remove('show'); closeModals(); updateDashboard(); }
 function toggleDark() { document.body.classList.toggle('dark'); localStorage.setItem('sudokuDark', document.body.classList.contains('dark')); }
