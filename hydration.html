@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hydration Notifier</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    background: #0d1117;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Segoe UI', sans-serif;
+    color: #e6edf3;
+  }
+
+  .card {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 16px;
+    padding: 36px;
+    width: 380px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  }
+
+  .icon { font-size: 2.4rem; margin-bottom: 8px; }
+
+  h1 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #58a6ff;
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    font-size: 0.8rem;
+    color: #8b949e;
+    margin-bottom: 28px;
+  }
+
+  label {
+    display: block;
+    font-size: 0.75rem;
+    color: #8b949e;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .input-group {
+    display: flex;
+    align-items: center;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    transition: border-color 0.2s;
+  }
+
+  .input-group:focus-within { border-color: #58a6ff; }
+
+  input[type="number"] {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 11px 14px;
+    font-size: 1rem;
+    color: #e6edf3;
+    width: 100%;
+  }
+
+  input[type="number"]::-webkit-inner-spin-button { opacity: 0.3; }
+
+  .unit {
+    padding: 0 14px;
+    font-size: 0.8rem;
+    color: #58a6ff;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px solid #21262d;
+    margin: 20px 0;
+  }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    color: #8b949e;
+    margin-bottom: 8px;
+  }
+
+  .info-row span:last-child { color: #e6edf3; font-weight: 500; }
+
+  .btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 20px;
+    transition: all 0.2s;
+  }
+
+  .btn-start {
+    background: #1f6feb;
+    color: #fff;
+  }
+
+  .btn-start:hover { background: #388bfd; }
+
+  .btn-stop {
+    background: #21262d;
+    color: #f85149;
+    border: 1px solid #f85149;
+  }
+
+  .btn-stop:hover { background: #2d1b1e; }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .status {
+    margin-top: 20px;
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    display: none;
+  }
+
+  .status.active {
+    display: block;
+    background: #0d2137;
+    border: 1px solid #1f6feb;
+    color: #79c0ff;
+  }
+
+  .status.done {
+    display: block;
+    background: #0d2b0d;
+    border: 1px solid #2ea043;
+    color: #56d364;
+  }
+
+  .status.error {
+    display: block;
+    background: #2d1b1e;
+    border: 1px solid #f85149;
+    color: #f85149;
+  }
+
+  .progress-wrap {
+    margin-top: 14px;
+    display: none;
+  }
+
+  .progress-wrap.visible { display: block; }
+
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: #8b949e;
+    margin-bottom: 6px;
+  }
+
+  .progress-bar-bg {
+    background: #21262d;
+    border-radius: 99px;
+    height: 8px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #1f6feb, #58a6ff);
+    border-radius: 99px;
+    transition: width 0.5s ease;
+    width: 0%;
+  }
+
+  .sessions-log {
+    margin-top: 14px;
+    max-height: 110px;
+    overflow-y: auto;
+    display: none;
+  }
+
+  .sessions-log.visible { display: block; }
+
+  .log-entry {
+    font-size: 0.75rem;
+    color: #8b949e;
+    padding: 3px 0;
+    border-bottom: 1px solid #21262d;
+  }
+
+  .log-entry .tick { color: #56d364; margin-right: 6px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">💧</div>
+  <h1>Hydration Notifier</h1>
+  <p class="subtitle">Get notified when it's time to drink — even in another tab.</p>
+
+  <label>Total intake goal</label>
+  <div class="input-group">
+    <input type="number" id="total" value="2000" min="1">
+    <span class="unit">mL</span>
+  </div>
+
+  <label>Over how long</label>
+  <div class="input-group">
+    <input type="number" id="hours" value="8" min="0.1" step="0.5">
+    <span class="unit">hrs</span>
+  </div>
+
+  <label>Each session / drink</label>
+  <div class="input-group">
+    <input type="number" id="session" value="250" min="1">
+    <span class="unit">mL</span>
+  </div>
+
+  <hr class="divider">
+
+  <div class="info-row"><span>Sessions needed</span><span id="numSessions">—</span></div>
+  <div class="info-row"><span>Interval between drinks</span><span id="interval">—</span></div>
+  <div class="info-row"><span>Notifications permission</span><span id="permStatus">—</span></div>
+
+  <button class="btn btn-start" id="startBtn" onclick="start()">Request Permission & Start</button>
+  <button class="btn btn-stop" id="stopBtn" onclick="stop()" style="display:none">Stop</button>
+
+  <div class="status" id="statusBox"></div>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-label">
+      <span>Progress</span>
+      <span id="progressLabel">0 / 0 mL</span>
+    </div>
+    <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
+  </div>
+
+  <div class="sessions-log" id="sessionsLog"></div>
+</div>
+
+<script>
+  let timers = [], sessionsDone = 0, totalSessions = 0, sessionMl = 0, totalMl = 0;
+
+  const $ = id => document.getElementById(id);
+
+  function fmtInterval(ms) {
+    const m = Math.round(ms / 60000);
+    return m >= 60 ? `${(m/60).toFixed(1)} hr` : `${m} min`;
+  }
+
+  function updatePreview() {
+    const total = +$('total').value;
+    const hours = +$('hours').value;
+    const session = +$('session').value;
+    if (!total || !hours || !session) return;
+    const n = Math.ceil(total / session);
+    const intervalMs = (hours * 3600000) / n;
+    $('numSessions').textContent = n;
+    $('interval').textContent = fmtInterval(intervalMs);
+  }
+
+  function checkPerm() {
+    if (!('Notification' in window)) { $('permStatus').textContent = 'Not supported'; return; }
+    $('permStatus').textContent = Notification.permission;
+  }
+
+  function setStatus(msg, type) {
+    const el = $('statusBox');
+    el.className = 'status ' + type;
+    el.textContent = msg;
+  }
+
+  function addLog(text) {
+    const log = $('sessionsLog');
+    log.classList.add('visible');
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.innerHTML = `<span class="tick">✔</span>${text}`;
+    log.prepend(div);
+  }
+
+  function updateProgress() {
+    const done = sessionsDone * sessionMl;
+    const pct = Math.min(100, (done / totalMl) * 100).toFixed(1);
+    $('progressBar').style.width = pct + '%';
+    $('progressLabel').textContent = `${done} / ${totalMl} mL`;
+    $('progressWrap').classList.add('visible');
+  }
+
+  async function start() {
+    if (!('Notification' in window)) { setStatus('Your browser doesn\'t support notifications.', 'error'); return; }
+
+    const perm = await Notification.requestPermission();
+    $('permStatus').textContent = perm;
+
+    if (perm !== 'granted') {
+      setStatus('Permission denied — allow notifications in your browser settings.', 'error');
+      return;
+    }
+
+    totalMl = +$('total').value;
+    const hours = +$('hours').value;
+    sessionMl = +$('session').value;
+
+    if (!totalMl || !hours || !sessionMl) { setStatus('Fill in all fields first.', 'error'); return; }
+
+    totalSessions = Math.ceil(totalMl / sessionMl);
+    const intervalMs = (hours * 3600000) / totalSessions;
+
+    sessionsDone = 0;
+    timers.forEach(clearTimeout);
+    timers = [];
+    $('sessionsLog').innerHTML = '';
+    $('sessionsLog').classList.remove('visible');
+    $('stopBtn').style.display = 'block';
+    $('startBtn').style.display = 'none';
+
+    setStatus(`Running — ${totalSessions} reminders every ${fmtInterval(intervalMs)}.`, 'active');
+    updateProgress();
+
+    for (let i = 1; i <= totalSessions; i++) {
+      const t = setTimeout(() => {
+        const remaining = totalSessions - i;
+        const body = remaining > 0
+          ? `Drink ${sessionMl} mL 💧 — ${remaining} session${remaining !== 1 ? 's' : ''} left.`
+          : `Last sip! You've hit your ${totalMl} mL goal 🎉`;
+
+        new Notification('Time to hydrate!', { body, icon: '💧' });
+
+        sessionsDone = i;
+        updateProgress();
+        addLog(`Session ${i} — ${new Date().toLocaleTimeString()}`);
+
+        if (remaining === 0) {
+          setStatus(`All done! You drank ${totalMl} mL over ${hours} hour${hours !== 1 ? 's' : ''} 🎉`, 'done');
+          $('stopBtn').style.display = 'none';
+          $('startBtn').style.display = 'block';
+          $('startBtn').textContent = 'Start Again';
+        }
+      }, intervalMs * i);
+      timers.push(t);
+    }
+  }
+
+  function stop() {
+    timers.forEach(clearTimeout);
+    timers = [];
+    $('stopBtn').style.display = 'none';
+    $('startBtn').style.display = 'block';
+    $('startBtn').textContent = 'Start';
+    setStatus('Stopped.', 'error');
+  }
+
+  ['total','hours','session'].forEach(id => $( id).addEventListener('input', updatePreview));
+  updatePreview();
+  checkPerm();
+</script>
+</body>
+</html>
