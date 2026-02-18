@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mathdoku Constructor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .grid-cell {
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            position: relative;
+            cursor: pointer;
+            border: 1px solid #e5e7eb;
+            background: white;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .grid-cell:hover { background-color: #f3f4f6; }
+        .grid-cell.selected { background-color: #dbeafe; outline: 2px solid #3b82f6; z-index: 10; }
+        .grid-cell.given { background-color: #eff6ff; color: #2563eb; }
+        .cage-label { position: absolute; top: 2px; left: 2px; font-size: 0.65rem; font-weight: normal; color: #374151; pointer-events: none; }
+        
+        /* Heavy borders for cage visualization */
+        .border-t-heavy { border-top: 3px solid #111827; }
+        .border-b-heavy { border-bottom: 3px solid #111827; }
+        .border-l-heavy { border-left: 3px solid #111827; }
+        .border-r-heavy { border-right: 3px solid #111827; }
+
+        .solution-cell {
+            aspect-ratio: 1 / 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            font-weight: bold;
+            font-size: 1.1rem;
+            position: relative;
+        }
+        .possibility-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; width: 100%; height: 100%; padding: 2px; }
+        .possibility-item { font-size: 0.5rem; color: #94a3b8; display: flex; align-items: center; justify-content: center; }
+        
+        #cageList::-webkit-scrollbar { width: 4px; }
+        #cageList::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-4 md:p-8 font-sans text-slate-900">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-extrabold tracking-tight italic">MATHDOKU<span class="text-blue-600">.BUILDER</span></h1>
+                <p class="text-slate-500 font-medium text-sm">Procedural Interface & Analysis</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="resetConstructor()" class="bg-white border border-slate-200 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-red-50 hover:text-red-600 transition-all">Reset All</button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Construction Zone -->
+            <div class="lg:col-span-7 space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-center mb-6">
+                        <div class="flex items-center gap-4">
+                            <label class="font-bold text-xs uppercase tracking-wider text-slate-400">Dimension</label>
+                            <select id="gridSize" class="bg-slate-100 border-none rounded-lg px-4 py-2 text-sm font-bold focus:ring-2 focus:ring-blue-500">
+                                <option value="4" selected>4x4</option>
+                                <option value="5">5x5</option>
+                                <option value="6">6x6</option>
+                                <option value="7">7x7</option>
+                                <option value="8">8x8</option>
+                                <option value="9">9x9</option>
+                            </select>
+                        </div>
+                        <div id="selectionStatus" class="text-[10px] font-bold text-slate-400 uppercase">
+                            0 Cells Selected
+                        </div>
+                    </div>
+
+                    <div id="gridContainer" class="grid gap-0 mx-auto border-2 border-slate-900 overflow-hidden bg-slate-200 shadow-xl" style="max-width: 420px;"></div>
+
+                    <div class="mt-8 p-5 bg-blue-50 rounded-2xl border border-blue-100 flex flex-wrap gap-4 items-end">
+                        <div class="flex-1 min-w-[100px]">
+                            <label class="block text-[10px] font-bold text-blue-400 uppercase mb-1">Cage Target</label>
+                            <input id="cageTarget" type="number" class="w-full px-3 py-2 rounded-lg border-blue-200 text-sm focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="flex-1 min-w-[100px]">
+                            <label class="block text-[10px] font-bold text-blue-400 uppercase mb-1">Operator</label>
+                            <select id="cageOp" class="w-full px-3 py-2 rounded-lg border-blue-200 text-sm focus:ring-2 focus:ring-blue-500">
+                                <option value="+">+</option>
+                                <option value="-">-</option>
+                                <option value="*">×</option>
+                                <option value="/">÷</option>
+                                <option value="None">Fixed</option>
+                            </select>
+                        </div>
+                        <button onclick="createCage()" class="bg-blue-600 text-white px-8 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-md transition-all active:scale-95">CREATE CAGE</button>
+                    </div>
+                </div>
+
+                <!-- Live Solution Map -->
+                <div class="bg-slate-900 p-6 rounded-2xl shadow-xl text-white">
+                    <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Solution Heatmap</h3>
+                    <div id="solutionContainer" class="grid gap-1 mx-auto" style="max-width: 320px;">
+                        <div class="col-span-full py-12 text-center text-slate-600 text-sm italic">Analyze puzzle to view solution states...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Sidebar -->
+            <div class="lg:col-span-5 space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="font-bold text-lg">Analysis</h2>
+                        <span id="statusBadge" class="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-slate-100 text-slate-400">Idle</span>
+                    </div>
+                    
+                    <div id="resultsArea">
+                        <div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-400 text-xs text-center">
+                            Awaiting complete cage coverage...
+                        </div>
+                    </div>
+
+                    <button onclick="runAnalysis()" id="btnAnalyze" class="w-full mt-6 bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-slate-800 shadow-lg transition-all active:scale-95">
+                        RUN SOLVER
+                    </button>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="font-bold text-xs text-slate-400 uppercase">Cage Registry</h3>
+                        <span id="coverageLabel" class="text-xs font-bold text-slate-500">0 / 16</span>
+                    </div>
+                    <div id="cageList" class="space-y-2 max-h-96 overflow-y-auto pr-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Procedural Logic Imports -->
+    <script src="solver.js"></script>
+
+    <script>
+        /** * GLOBAL STATE
+         */
+        let gridSize = 4;
+        let cages = [];
+        let givens = {}; // Store as "r,c": value
+        let selectedCells = new Set();
+
+        /**
+         * INITIALIZATION
+         */
+        function init() {
+            renderGrid();
+            
+            document.getElementById('gridSize').onchange = (e) => {
+                gridSize = parseInt(e.target.value);
+                resetConstructor();
+            };
+
+            // Keyboard listeners for Givens
+            window.onkeydown = (e) => {
+                if (['INPUT', 'SELECT'].includes(e.target.tagName)) return;
+                if (selectedCells.size === 0) return;
+
+                if (e.key >= '1' && e.key <= gridSize.toString()) {
+                    selectedCells.forEach(id => givens[id] = parseInt(e.key));
+                    renderGrid();
+                } else if (['0', 'Backspace', 'Delete'].includes(e.key)) {
+                    selectedCells.forEach(id => delete givens[id]);
+                    renderGrid();
+                }
+            };
+        }
+
+        /**
+         * UI RENDERING
+         */
+        function renderGrid() {
+            const container = document.getElementById('gridContainer');
+            container.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
+            container.innerHTML = '';
+
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize; c++) {
+                    const key = `${r},${c}`;
+                    const cell = document.createElement('div');
+                    cell.className = `grid-cell ${selectedCells.has(key) ? 'selected' : ''} ${givens[key] ? 'given' : ''}`;
+                    cell.textContent = givens[key] || '';
+                    
+                    cell.onclick = (e) => {
+                        if (!e.metaKey && !e.ctrlKey && !e.shiftKey) selectedCells.clear();
+                        selectedCells.has(key) ? selectedCells.delete(key) : selectedCells.add(key);
+                        updateSelectionCount();
+                        renderGrid();
+                    };
+
+                    // Add cage label if it's the first cell of a cage
+                    const cage = cages.find(cg => cg.cells[0][0] === r && cg.cells[0][1] === c);
+                    if (cage) {
+                        const label = document.createElement('div');
+                        label.className = 'cage-label';
+                        const opMap = { '+': '+', '-': '-', '*': '×', '/': '÷', 'None': '' };
+                        label.textContent = `${cage.target}${opMap[cage.op]}`;
+                        cell.appendChild(label);
+                    }
+
+                    applyCageBorders(cell, r, c);
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        function applyCageBorders(el, r, c) {
+            const cage = cages.find(cg => cg.cells.some(cell => cell[0] === r && cell[1] === c));
+            if (!cage) return;
+            const inCage = (row, col) => cage.cells.some(cell => cell[0] === row && cell[1] === col);
+            
+            if (!inCage(r - 1, c)) el.classList.add('border-t-heavy');
+            if (!inCage(r + 1, c)) el.classList.add('border-b-heavy');
+            if (!inCage(r, c - 1)) el.classList.add('border-l-heavy');
+            if (!inCage(r, c + 1)) el.classList.add('border-r-heavy');
+        }
+
+        function updateSelectionCount() {
+            document.getElementById('selectionStatus').textContent = `${selectedCells.size} Cells Selected`;
+        }
+
+        /**
+         * ACTIONS
+         */
+        function createCage() {
+            const tEl = document.getElementById('cageTarget');
+            const target = parseInt(tEl.value);
+            const op = document.getElementById('cageOp').value;
+
+            if (isNaN(target) || selectedCells.size === 0) return;
+            
+            // Check for overlaps
+            const newCells = Array.from(selectedCells).map(s => s.split(',').map(Number))
+                .sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1]);
+
+            const hasOverlap = newCells.some(([r, c]) => 
+                cages.some(cg => cg.cells.some(cc => cc[0] === r && cc[1] === c))
+            );
+
+            if (hasOverlap) return;
+
+            cages.push({ op, target, cells: newCells, id: Date.now() });
+            selectedCells.clear();
+            tEl.value = '';
+            renderGrid();
+            renderCageList();
+            updateSelectionCount();
+        }
+
+        function removeCage(id) {
+            cages = cages.filter(c => c.id !== id);
+            renderGrid();
+            renderCageList();
+        }
+
+        function renderCageList() {
+            const list = document.getElementById('cageList');
+            const coverage = document.getElementById('coverageLabel');
+            list.innerHTML = '';
+            let total = 0;
+            
+            cages.forEach(c => {
+                total += c.cells.length;
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center bg-slate-50 p-2.5 rounded-lg text-xs border border-slate-200';
+                div.innerHTML = `
+                    <span class="font-medium text-slate-700">
+                        <strong class="text-blue-600">${c.target}${c.op === 'None' ? '' : c.op}</strong> 
+                        <span class="text-slate-400 ml-1">(${c.cells.length} cells)</span>
+                    </span>
+                    <button onclick="removeCage(${c.id})" class="text-slate-300 hover:text-red-500 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                `;
+                list.appendChild(div);
+            });
+            
+            coverage.textContent = `${total} / ${gridSize * gridSize}`;
+        }
+
+        async function runAnalysis() {
+            const badge = document.getElementById('statusBadge');
+            badge.textContent = "SOLVING...";
+            badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-blue-100 text-blue-600";
+            
+            // Allow DOM to update
+            await new Promise(r => setTimeout(r, 100));
+            
+            // Use functions from solver.js
+            const result = solveMathdoku(gridSize, cages, givens);
+            const rating = ratePuzzle(result);
+            
+            badge.textContent = rating.status;
+            badge.className = `text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-${rating.color}-100 text-${rating.color}-600`;
+            
+            document.getElementById('resultsArea').innerHTML = `
+                <div class="p-6 rounded-2xl bg-${rating.color}-50 border border-${rating.color}-200 text-center">
+                    <p class="text-[10px] uppercase font-bold text-${rating.color}-500 mb-1">${rating.status}</p>
+                    <p class="text-2xl font-black text-${rating.color}-900">${rating.label}</p>
+                    <div class="flex justify-center gap-4 mt-3 text-xs text-slate-500 font-medium">
+                        <span>${result.count} Solutions</span>
+                        <span class="text-slate-300">|</span>
+                        <span>${result.complexity} Iterations</span>
+                    </div>
+                </div>
+            `;
+            
+            renderSolutionMap(result);
+        }
+
+        function renderSolutionMap(res) {
+            const container = document.getElementById('solutionContainer');
+            container.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
+            container.innerHTML = '';
+
+            if (res.count === 0) {
+                container.innerHTML = '<div class="col-span-full py-8 text-center text-red-400 text-xs">No valid solutions found for this configuration.</div>';
+                return;
+            }
+
+            // Calculate possibilities for each cell
+            const possibilities = Array.from({ length: gridSize }, () => 
+                Array.from({ length: gridSize }, () => new Set())
+            );
+
+            res.solutions.forEach(sol => {
+                for (let r = 0; r < gridSize; r++) {
+                    for (let c = 0; c < gridSize; c++) possibilities[r][c].add(sol[r][c]);
+                }
+            });
+
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'solution-cell';
+                    const set = possibilities[r][c];
+                    
+                    if (set.size === 1) {
+                        cell.textContent = [...set][0];
+                        cell.classList.add('text-slate-900');
+                    } else {
+                        // Show small grid of possible numbers
+                        cell.innerHTML = `
+                            <div class="possibility-grid">
+                                ${Array.from({length: gridSize}, (_, i) => `
+                                    <div class="possibility-item">
+                                        ${set.has(i+1) ? i+1 : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    }
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        function resetConstructor() {
+            cages = [];
+            givens = {};
+            selectedCells.clear();
+            renderGrid();
+            renderCageList();
+            updateSelectionCount();
+            document.getElementById('resultsArea').innerHTML = `
+                <div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-400 text-xs text-center">
+                    Awaiting complete cage coverage...
+                </div>
+            `;
+            document.getElementById('solutionContainer').innerHTML = '<div class="col-span-full py-12 text-center text-slate-600 text-sm italic">Analyze puzzle to view solution states...</div>';
+            document.getElementById('statusBadge').textContent = "IDLE";
+            document.getElementById('statusBadge').className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-slate-100 text-slate-400";
+        }
+
+        init();
+    </script>
+</body>
+</html>
