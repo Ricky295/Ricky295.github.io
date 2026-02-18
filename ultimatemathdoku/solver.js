@@ -1,106 +1,99 @@
 /**
- * MathdokuSolver Logic Engine
- * Shared by Constructor (Rating), Player (Verification), and Solver (Heatmaps).
+ * SOLVER MODULE - Procedural backtracking for Mathdoku
  */
-class MathdokuSolver {
-    constructor(size, cages, givens = {}) {
-        this.size = size;
-        this.cages = cages;
-        this.givens = givens;
-        this.solutions = [];
-        this.backtrackCount = 0;
+
+function solveMathdoku(size, cages, givens, maxSolutions = 1000) {
+    const solutions = [];
+    const state = { backtrackCount: 0 };
+    const grid = Array.from({ length: size }, () => Array(size).fill(0));
+
+    // Fill givens
+    for (const key in givens) {
+        const [r, c] = key.split(',').map(Number);
+        grid[r][c] = givens[key];
     }
 
-    solve(limit = 1000) {
-        const grid = Array.from({ length: this.size }, () => Array(this.size).fill(0));
+    // Internal recursive runner
+    function backtrack(r, c) {
+        if (solutions.length >= maxSolutions) return;
         
-        // Load Givens
-        for (const key in this.givens) {
-            const [r, c] = key.split(',').map(Number);
-            grid[r][c] = this.givens[key];
-        }
-
-        this._backtrack(grid, 0, 0, limit);
-        return {
-            solutions: this.solutions,
-            count: this.solutions.length,
-            complexity: this.backtrackCount
-        };
-    }
-
-    _backtrack(grid, r, c, limit) {
-        if (this.solutions.length >= limit) return;
-        
-        if (c === this.size) { r++; c = 0; }
-        if (r === this.size) {
-            if (this._verifyAllCages(grid)) {
-                this.solutions.push(grid.map(row => [...row]));
+        if (c === size) { r++; c = 0; }
+        if (r === size) {
+            if (checkAllCages(grid, cages)) {
+                solutions.push(grid.map(row => [...row]));
             }
             return;
         }
 
         if (grid[r][c] !== 0) {
-            this._backtrack(grid, r, c + 1, limit);
+            if (isSafe(grid, r, c, grid[r][c], size)) {
+                backtrack(r, c + 1);
+            }
             return;
         }
 
-        this.backtrackCount++;
-        for (let n = 1; n <= this.size; n++) {
-            if (this._isSafe(grid, r, c, n)) {
-                grid[r][c] = n;
-                if (this._isPartialCageValid(grid, r, c)) {
-                    this._backtrack(grid, r, c + 1, limit);
+        state.backtrackCount++;
+        for (let num = 1; num <= size; num++) {
+            if (isSafe(grid, r, c, num, size)) {
+                grid[r][c] = num;
+                if (isPartialCageValid(grid, r, c, cages)) {
+                    backtrack(r, c + 1);
                 }
                 grid[r][c] = 0;
             }
         }
     }
 
-    _isSafe(grid, r, c, n) {
-        for (let i = 0; i < this.size; i++) {
-            if (grid[r][i] === n || grid[i][c] === n) return false;
-        }
-        return true;
+    backtrack(0, 0);
+    return { 
+        count: solutions.length, 
+        complexity: state.backtrackCount, 
+        solutions 
+    };
+}
+
+function isSafe(grid, r, c, num, size) {
+    for (let i = 0; i < size; i++) {
+        if (i !== c && grid[r][i] === num) return false;
+        if (i !== r && grid[i][c] === num) return false;
     }
+    return true;
+}
 
-    _isPartialCageValid(grid, r, c) {
-        const cage = this.cages.find(cg => cg.cells.some(p => p[0] === r && p[1] === c));
-        if (!cage) return true;
+function isPartialCageValid(grid, r, c, cages) {
+    const cage = cages.find(cg => cg.cells.some(cell => cell[0] === r && cell[1] === c));
+    if (!cage) return true;
 
-        const vals = cage.cells.map(([rr, cc]) => grid[rr][cc]).filter(v => v !== 0);
-        const isFull = vals.length === cage.cells.length;
-        const { target: t, op } = cage;
+    const vals = cage.cells.map(([cr, cc]) => grid[cr][cc]).filter(v => v !== 0);
+    const isFull = vals.length === cage.cells.length;
 
-        if (op === '+') {
-            const s = vals.reduce((a, b) => a + b, 0);
-            return isFull ? s === t : s < t;
-        }
-        if (op === '*') {
-            const p = vals.reduce((a, b) => a * b, 1);
-            return isFull ? p === t : p <= t;
-        }
-        if (op === '-') {
+    switch (cage.op) {
+        case '+': 
+            const sum = vals.reduce((a, b) => a + b, 0);
+            return isFull ? sum === cage.target : sum < cage.target;
+        case '*': 
+            const prod = vals.reduce((a, b) => a * b, 1);
+            return isFull ? prod === cage.target : prod <= cage.target;
+        case '-': 
             if (!isFull) return true;
-            return Math.abs(vals[0] - vals[1]) === t;
-        }
-        if (op === '/') {
+            return Math.abs(vals[0] - vals[1]) === cage.target;
+        case '/': 
             if (!isFull) return true;
-            return (vals[0] / vals[1] === t || vals[1] / vals[0] === t);
-        }
-        if (op === 'None') return vals[0] === t;
-        return true;
+            return Math.abs(vals[0] / vals[1] - cage.target) < 0.001 || Math.abs(vals[1] / vals[0] - cage.target) < 0.001;
+        case 'None': 
+            return vals[0] === cage.target;
     }
+    return true;
+}
 
-    _verifyAllCages(grid) {
-        return this.cages.every(cg => {
-            const vals = cg.cells.map(([r, c]) => grid[r][c]);
-            const { target: t, op } = cg;
-            if (op === '+') return vals.reduce((a, b) => a + b, 0) === t;
-            if (op === '*') return vals.reduce((a, b) => a * b, 1) === t;
-            if (op === '-') return Math.abs(vals[0] - vals[1]) === t;
-            if (op === '/') return vals[0] / vals[1] === t || vals[1] / vals[0] === t;
-            if (op === 'None') return vals[0] === t;
-            return false;
-        });
-    }
+function checkAllCages(grid, cages) {
+    return cages.every(cage => {
+        const vals = cage.cells.map(([r, c]) => grid[r][c]);
+        if (cage.op === '+') return vals.reduce((a, b) => a + b, 0) === cage.target;
+        if (cage.op === '*') return vals.reduce((a, b) => a * b, 1) === cage.target;
+        if (cage.op === '-') return Math.abs(vals[0] - vals[1]) === cage.target;
+        if (cage.op === '/') return Math.abs(vals[0] / vals[1] - cage.target) < 0.001 || Math.abs(vals[1] / vals[0] - cage.target) < 0.001;
+        if (cage.op === 'None') return vals[0] === cage.target;
+        return false;
+    });
 }
