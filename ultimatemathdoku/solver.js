@@ -1,7 +1,11 @@
 /**
- * SOLVER MODULE - Procedural backtracking for Mathdoku
+ * SOLVER & RATER MODULE
+ * Procedural backtracking and difficulty classification for Mathdoku
  */
 
+/**
+ * Core backtracking solver
+ */
 function solveMathdoku(size, cages, givens, maxSolutions = 1000) {
     const solutions = [];
     const state = { backtrackCount: 0 };
@@ -52,6 +56,36 @@ function solveMathdoku(size, cages, givens, maxSolutions = 1000) {
     };
 }
 
+/**
+ * Difficulty classification logic
+ */
+function ratePuzzle(solverResult) {
+    const { count, complexity } = solverResult;
+
+    if (count === 0) return { label: "Impossible", color: "red", status: "Invalid" };
+    if (count > 1) return { label: "Ambiguous", color: "orange", status: "Multi-Solution" };
+
+    // Unique solution difficulty mapping
+    let label = "Beyond Diabolical";
+    let color = "slate";
+
+    if (complexity <= 100) { label = "Easy"; color = "emerald"; }
+    else if (complexity <= 200) { label = "Medium"; color = "teal"; }
+    else if (complexity <= 400) { label = "Hard"; color = "blue"; }
+    else if (complexity <= 700) { label = "Vicious"; color = "indigo"; }
+    else if (complexity <= 1000) { label = "Devilish"; color = "rose"; }
+    else if (complexity <= 1500) { label = "Diabolical"; color = "red"; }
+
+    return {
+        label,
+        color,
+        status: "Unique"
+    };
+}
+
+/**
+ * Helper functions
+ */
 function isSafe(grid, r, c, num, size) {
     for (let i = 0; i < size; i++) {
         if (i !== c && grid[r][i] === num) return false;
