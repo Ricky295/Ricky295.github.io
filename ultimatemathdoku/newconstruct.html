@@ -48,7 +48,6 @@
         #cageList::-webkit-scrollbar { width: 4px; }
         #cageList::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 
-        /* Modal Overlay */
         #modalOverlay {
             display: none;
             position: fixed;
@@ -63,7 +62,6 @@
 </head>
 <body class="bg-slate-50 min-h-screen p-4 md:p-8 font-sans text-slate-900">
 
-    <!-- Modal for Import/Export -->
     <div id="modalOverlay">
         <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4">
             <h3 id="modalTitle" class="text-lg font-bold mb-2 text-slate-900">Share Puzzle</h3>
@@ -90,7 +88,6 @@
         </header>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <!-- Construction Zone -->
             <div class="lg:col-span-7 space-y-6">
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <div class="flex justify-between items-center mb-6">
@@ -131,7 +128,6 @@
                     </div>
                 </div>
 
-                <!-- Live Solution Map -->
                 <div class="bg-slate-900 p-6 rounded-2xl shadow-xl text-white">
                     <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Solution Heatmap</h3>
                     <div id="solutionContainer" class="grid gap-1 mx-auto" style="max-width: 320px;">
@@ -140,7 +136,6 @@
                 </div>
             </div>
 
-            <!-- Analysis Sidebar -->
             <div class="lg:col-span-5 space-y-6">
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <div class="flex justify-between items-center mb-4">
@@ -150,7 +145,7 @@
                     
                     <div id="resultsArea">
                         <div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-400 text-xs text-center">
-                            Awaiting complete cage coverage...
+                            Run solver to check validity...
                         </div>
                     </div>
 
@@ -170,23 +165,16 @@
         </div>
     </div>
 
-    <!-- Procedural Logic Imports -->
     <script src="solver.js"></script>
 
     <script>
-        /** * GLOBAL STATE
-         */
         let gridSize = 4;
         let cages = [];
         let givens = {}; 
         let selectedCells = new Set();
 
-        /**
-         * INITIALIZATION
-         */
         function init() {
             renderGrid();
-            
             document.getElementById('gridSize').onchange = (e) => {
                 gridSize = parseInt(e.target.value);
                 resetConstructor();
@@ -195,7 +183,6 @@
             window.onkeydown = (e) => {
                 if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
                 if (selectedCells.size === 0) return;
-
                 if (e.key >= '1' && e.key <= gridSize.toString()) {
                     selectedCells.forEach(id => givens[id] = parseInt(e.key));
                     renderGrid();
@@ -206,28 +193,22 @@
             };
         }
 
-        /**
-         * UI RENDERING
-         */
         function renderGrid() {
             const container = document.getElementById('gridContainer');
             container.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
             container.innerHTML = '';
-
             for (let r = 0; r < gridSize; r++) {
                 for (let c = 0; c < gridSize; c++) {
                     const key = `${r},${c}`;
                     const cell = document.createElement('div');
                     cell.className = `grid-cell ${selectedCells.has(key) ? 'selected' : ''} ${givens[key] ? 'given' : ''}`;
                     cell.textContent = givens[key] || '';
-                    
                     cell.onclick = (e) => {
                         if (!e.metaKey && !e.ctrlKey && !e.shiftKey) selectedCells.clear();
                         selectedCells.has(key) ? selectedCells.delete(key) : selectedCells.add(key);
                         updateSelectionCount();
                         renderGrid();
                     };
-
                     const cage = cages.find(cg => cg.cells[0][0] === r && cg.cells[0][1] === c);
                     if (cage) {
                         const label = document.createElement('div');
@@ -236,7 +217,6 @@
                         label.textContent = `${cage.target}${opMap[cage.op]}`;
                         cell.appendChild(label);
                     }
-
                     applyCageBorders(cell, r, c);
                     container.appendChild(cell);
                 }
@@ -247,7 +227,6 @@
             const cage = cages.find(cg => cg.cells.some(cell => cell[0] === r && cell[1] === c));
             if (!cage) return;
             const inCage = (row, col) => cage.cells.some(cell => cell[0] === row && cell[1] === col);
-            
             if (!inCage(r - 1, c)) el.classList.add('border-t-heavy');
             if (!inCage(r + 1, c)) el.classList.add('border-b-heavy');
             if (!inCage(r, c - 1)) el.classList.add('border-l-heavy');
@@ -258,25 +237,15 @@
             document.getElementById('selectionStatus').textContent = `${selectedCells.size} Cells Selected`;
         }
 
-        /**
-         * CAGE ACTIONS
-         */
         function createCage() {
             const tEl = document.getElementById('cageTarget');
             const target = parseInt(tEl.value);
             const op = document.getElementById('cageOp').value;
-
             if (isNaN(target) || selectedCells.size === 0) return;
-            
             const newCells = Array.from(selectedCells).map(s => s.split(',').map(Number))
                 .sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1]);
-
-            const hasOverlap = newCells.some(([r, c]) => 
-                cages.some(cg => cg.cells.some(cc => cc[0] === r && cc[1] === c))
-            );
-
+            const hasOverlap = newCells.some(([r, c]) => cages.some(cg => cg.cells.some(cc => cc[0] === r && cc[1] === c)));
             if (hasOverlap) return;
-
             cages.push({ op, target, cells: newCells, id: Date.now() });
             selectedCells.clear();
             tEl.value = '';
@@ -296,7 +265,6 @@
             const coverage = document.getElementById('coverageLabel');
             list.innerHTML = '';
             let total = 0;
-            
             cages.forEach(c => {
                 total += c.cells.length;
                 const div = document.createElement('div');
@@ -312,38 +280,29 @@
                 `;
                 list.appendChild(div);
             });
-            
             coverage.textContent = `${total} / ${gridSize * gridSize}`;
         }
 
-        /**
-         * SOLVER INTEGRATION
-         */
         async function runAnalysis() {
             const badge = document.getElementById('statusBadge');
             badge.textContent = "SOLVING...";
             badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-blue-100 text-blue-600";
-            
             await new Promise(r => setTimeout(r, 100));
-            
             const result = solveMathdoku(gridSize, cages, givens);
             const rating = ratePuzzle(result);
-            
             badge.textContent = rating.status;
             badge.className = `text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-${rating.color}-100 text-${rating.color}-600`;
-            
             document.getElementById('resultsArea').innerHTML = `
                 <div class="p-6 rounded-2xl bg-${rating.color}-50 border border-${rating.color}-200 text-center">
                     <p class="text-[10px] uppercase font-bold text-${rating.color}-500 mb-1">${rating.status}</p>
                     <p class="text-2xl font-black text-${rating.color}-900">${rating.label}</p>
                     <div class="flex justify-center gap-4 mt-3 text-xs text-slate-500 font-medium">
-                        <span>${result.count} Solutions</span>
+                        <span>${result.count >= 1000 ? '1000+' : result.count} Solutions</span>
                         <span class="text-slate-300">|</span>
                         <span>${result.complexity} Iterations</span>
                     </div>
                 </div>
             `;
-            
             renderSolutionMap(result);
         }
 
@@ -351,19 +310,16 @@
             const container = document.getElementById('solutionContainer');
             container.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
             container.innerHTML = '';
-
             if (res.count === 0) {
                 container.innerHTML = '<div class="col-span-full py-8 text-center text-red-400 text-xs">No valid solutions found for this configuration.</div>';
                 return;
             }
-
             const possibilities = Array.from({ length: gridSize }, () => Array.from({ length: gridSize }, () => new Set()));
             res.solutions.forEach(sol => {
                 for (let r = 0; r < gridSize; r++) {
                     for (let c = 0; c < gridSize; c++) possibilities[r][c].add(sol[r][c]);
                 }
             });
-
             for (let r = 0; r < gridSize; r++) {
                 for (let c = 0; c < gridSize; c++) {
                     const cell = document.createElement('div');
@@ -386,19 +342,14 @@
             }
         }
 
-        /**
-         * IMPORT / EXPORT LOGIC
-         */
         function openExportModal() {
             const data = { gridSize, cages, givens };
             const base64 = btoa(JSON.stringify(data));
-            
             const overlay = document.getElementById('modalOverlay');
             const title = document.getElementById('modalTitle');
             const desc = document.getElementById('modalDesc');
             const area = document.getElementById('modalTextarea');
             const btn = document.getElementById('modalActionBtn');
-
             title.textContent = "Export Puzzle";
             desc.textContent = "Copy the string below to save or share your design.";
             area.value = base64;
@@ -410,7 +361,6 @@
                 btn.textContent = "Copied!";
                 setTimeout(() => btn.textContent = "Copy to Clipboard", 2000);
             };
-
             overlay.style.display = 'flex';
         }
 
@@ -420,7 +370,6 @@
             const desc = document.getElementById('modalDesc');
             const area = document.getElementById('modalTextarea');
             const btn = document.getElementById('modalActionBtn');
-
             title.textContent = "Import Puzzle";
             desc.textContent = "Paste a puzzle Base64 string below to load it.";
             area.value = "";
@@ -442,20 +391,17 @@
                     alert("Invalid puzzle string.");
                 }
             };
-
             overlay.style.display = 'flex';
         }
 
-        function closeModal() {
-            document.getElementById('modalOverlay').style.display = 'none';
-        }
+        function closeModal() { document.getElementById('modalOverlay').style.display = 'none'; }
 
         function resetConstructor() {
             cages = []; givens = {}; selectedCells.clear();
             renderGrid(); renderCageList(); updateSelectionCount();
             document.getElementById('resultsArea').innerHTML = `
                 <div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-400 text-xs text-center">
-                    Awaiting complete cage coverage...
+                    Run solver to check validity...
                 </div>
             `;
             document.getElementById('solutionContainer').innerHTML = '<div class="col-span-full py-12 text-center text-slate-600 text-sm italic">Analyze puzzle to view solution states...</div>';
