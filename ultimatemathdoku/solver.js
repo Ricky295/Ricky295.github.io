@@ -133,3 +133,38 @@ function isPartialCageValid(grid, r, c, cages) {
     }
     return true;
 }
+
+function checkAllCages(grid, cages) {
+    return cages.every(cage => {
+        const vals = cage.cells.map(([r, c]) => grid[r][c]);
+        
+        // Skip if any cell is still empty (0)
+        if (vals.includes(0)) return false;
+
+        switch (cage.op) {
+            case '+': 
+                return vals.reduce((a, b) => a + b, 0) === cage.target;
+            
+            case '*': 
+                return vals.reduce((a, b) => a * b, 1) === cage.target;
+            
+            case '-': {
+                const [largest, ...others] = [...vals].sort((a, b) => b - a);
+                const othersSum = others.reduce((a, b) => a + b, 0);
+                return (largest - othersSum) === cage.target;
+            }
+            
+            case '/': {
+                const [largest, ...others] = [...vals].sort((a, b) => b - a);
+                const othersProduct = others.reduce((a, b) => a * b, 1);
+                return (largest / othersProduct) === cage.target;
+            }
+            
+            case 'None': 
+                return vals[0] === cage.target;
+            
+            default:
+                return false;
+        }
+    });
+}
