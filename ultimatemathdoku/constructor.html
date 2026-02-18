@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Mathdoku Constructor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .grid-cell {
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            position: relative;
+            cursor: pointer;
+            border: 1px solid #e5e7eb;
+            background: white;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .grid-cell:hover {
+            background-color: #f3f4f6;
+        }
+        .grid-cell.selected {
+            background-color: #dbeafe;
+            outline: 2px solid #3b82f6;
+            z-index: 10;
+        }
+        .grid-cell.given {
+            background-color: #eff6ff;
+            color: #2563eb;
+        }
+        .cage-label {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            font-size: 0.65rem;
+            font-weight: normal;
+            color: #374151;
+            pointer-events: none;
+        }
+        .border-t-heavy { border-top: 3px solid #111827; }
+        .border-b-heavy { border-bottom: 3px solid #111827; }
+        .border-l-heavy { border-left: 3px solid #111827; }
+        .border-r-heavy { border-right: 3px solid #111827; }
+
+        .solution-cell {
+            aspect-ratio: 1 / 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            font-weight: bold;
+            font-size: 1.1rem;
+            position: relative;
+        }
+        .possibility-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            width: 100%;
+            height: 100%;
+            padding: 2px;
+        }
+        .possibility-item {
+            font-size: 0.5rem;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #cageList::-webkit-scrollbar { width: 4px; }
+        #cageList::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-4 md:p-8 font-sans text-slate-900">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-8 flex justify-between items-start">
+            <div>
+                <h1 class="text-3xl font-extrabold tracking-tight text-slate-900 italic">MATHDOKU<span class="text-blue-600">.ULTIMATE</span></h1>
+                <p class="text-slate-500">High-precision constructor with Givens support.</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="exportBase64()" class="bg-white border border-slate-200 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 shadow-sm transition-all">Export B64</button>
+                <button onclick="importBase64()" class="bg-white border border-slate-200 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 shadow-sm transition-all">Import B64</button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div class="lg:col-span-7 space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center gap-4">
+                            <label class="font-bold text-sm uppercase tracking-wider text-slate-400">Grid Size</label>
+                            <select id="gridSize" class="bg-slate-100 border-none rounded-lg px-4 py-2 text-sm font-bold focus:ring-2 focus:ring-blue-500">
+                                <option value="4" selected>4x4</option>
+                                <option value="5">5x5</option>
+                                <option value="6">6x6</option>
+                                <option value="7">7x7</option>
+                                <option value="8">8x8</option>
+                                <option value="9">9x9</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col items-end text-[10px] font-bold text-slate-400 uppercase">
+                            <div class="flex gap-2 mb-1">
+                                <span>Selection: <span id="selectionCount" class="text-blue-600 font-bold">0</span> cells</span>
+                                <button onclick="resetConstructor()" class="text-slate-400 hover:text-red-500 transition">Reset Canvas</button>
+                            </div>
+                            <span>Select cell + press 1-9 for Given</span>
+                            <span>Backspace/0 to Clear</span>
+                        </div>
+                    </div>
+
+                    <div id="gridContainer" class="grid gap-0 mx-auto border-2 border-slate-900 overflow-hidden rounded-sm bg-slate-200 shadow-xl" style="max-width: 400px;"></div>
+
+                    <div class="mt-6 flex flex-wrap gap-3 items-center p-5 bg-blue-50 rounded-2xl border border-blue-100">
+                        <div class="flex flex-col">
+                            <label class="text-[10px] font-bold text-blue-400 uppercase mb-1">Target</label>
+                            <input id="cageTarget" type="number" placeholder="Value" class="w-24 px-3 py-2 rounded-lg border-blue-200 text-sm focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="flex flex-col">
+                            <label class="text-[10px] font-bold text-blue-400 uppercase mb-1">Operator</label>
+                            <select id="cageOp" class="w-24 px-3 py-2 rounded-lg border-blue-200 text-sm focus:ring-2 focus:ring-blue-500">
+                                <option value="+">+</option>
+                                <option value="-">-</option>
+                                <option value="*">×</option>
+                                <option value="/">÷</option>
+                                <option value="None">Fixed</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col flex-1">
+                            <label class="text-[10px] opacity-0 mb-1">Submit</label>
+                            <button onclick="createCage()" class="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-md transition-all active:scale-95">CREATE CAGE</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900 p-6 rounded-2xl shadow-xl text-white">
+                    <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Solution Visualization
+                    </h3>
+                    <div id="solutionContainer" class="grid gap-1 mx-auto" style="max-width: 300px;">
+                        <div class="col-span-full py-12 text-center text-slate-600 text-sm italic">
+                            Run analysis to see possible values...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-5 space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h2 class="font-bold text-lg mb-4 flex items-center justify-between">
+                        <span>Analysis Engine</span>
+                        <span id="statusBadge" class="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-slate-100 text-slate-500">Standby</span>
+                    </h2>
+
+                    <div id="results" class="space-y-4">
+                        <div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-400 text-sm text-center">
+                            Awaiting cage definitions...
+                        </div>
+                    </div>
+
+                    <button onclick="runAnalysis()" id="btnAnalyze" class="w-full mt-6 bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-slate-800 shadow-lg transition-all active:scale-95 disabled:opacity-50">
+                        ANALYZE PUZZLE
+                    </button>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-xs text-slate-400 uppercase tracking-widest mb-3 flex justify-between">
+                        <span>Cages List</span>
+                        <span id="totalCellsCovered" class="text-slate-300">0 / 16 cells</span>
+                    </h3>
+                    <div id="cageList" class="space-y-2 max-h-80 overflow-y-auto pr-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let size = 4;
+        let cages = []; 
+        let givens = {}; 
+        let selectedCells = new Set();
+        const gridContainer = document.getElementById('gridContainer');
+        const gridSizeSelect = document.getElementById('gridSize');
+
+        function init() {
+            renderGrid();
+            gridSizeSelect.addEventListener('change', (e) => {
+                size = parseInt(e.target.value);
+                resetConstructor();
+            });
+
+            window.addEventListener('keydown', (e) => {
+                // BUG FIX: Ignore keys if user is typing in an input field
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
+                    return;
+                }
+
+                if (selectedCells.size > 0) {
+                    const key = e.key;
+                    if (key >= '1' && key <= size.toString()) {
+                        const val = parseInt(key);
+                        selectedCells.forEach(id => givens[id] = val);
+                        renderGrid();
+                    } else if (key === '0' || key === 'Backspace' || key === 'Delete') {
+                        selectedCells.forEach(id => delete givens[id]);
+                        renderGrid();
+                    }
+                }
+            });
+        }
+
+        function resetConstructor() {
+            cages = [];
+            givens = {};
+            selectedCells.clear();
+            renderGrid();
+            renderCageList();
+            const countEl = document.getElementById('selectionCount');
+            if (countEl) countEl.textContent = '0';
+            document.getElementById('results').innerHTML = `<div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-400 text-sm text-center">Awaiting cage definitions...</div>`;
+            document.getElementById('solutionContainer').innerHTML = `<div class="col-span-full py-12 text-center text-slate-600 text-sm italic">Run analysis to see possible values...</div>`;
+            updateStatus('Standby', 'slate');
+        }
+
+        function renderGrid() {
+            gridContainer.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+            gridContainer.innerHTML = '';
+            for (let r = 0; r < size; r++) {
+                for (let c = 0; c < size; c++) {
+                    const cell = document.createElement('div');
+                    const key = `${r},${c}`;
+                    cell.className = 'grid-cell';
+                    if (selectedCells.has(key)) cell.classList.add('selected');
+                    if (givens[key]) {
+                        cell.classList.add('given');
+                        cell.textContent = givens[key];
+                    }
+                    
+                    cell.onclick = (e) => {
+                        if (!e.metaKey && !e.ctrlKey && !e.shiftKey) {
+                            selectedCells.clear();
+                            document.querySelectorAll('.grid-cell').forEach(el => el.classList.remove('selected'));
+                        }
+                        if (selectedCells.has(key)) { 
+                            selectedCells.delete(key); 
+                            cell.classList.remove('selected'); 
+                        } else { 
+                            selectedCells.add(key); 
+                            cell.classList.add('selected'); 
+                        }
+                        const countEl = document.getElementById('selectionCount');
+                        if (countEl) countEl.textContent = selectedCells.size;
+                    };
+
+                    const cage = cages.find(cg => cg.cells[0][0] === r && cg.cells[0][1] === c);
+                    if (cage) {
+                        const label = document.createElement('div');
+                        label.className = 'cage-label';
+                        label.textContent = `${cage.target}${cage.op === 'None' ? '' : (cage.op === '*' ? '×' : (cage.op === '/' ? '÷' : cage.op))}`;
+                        cell.appendChild(label);
+                    }
+                    applyCageBorders(cell, r, c);
+                    gridContainer.appendChild(cell);
+                }
+            }
+        }
+
+        function applyCageBorders(element, r, c) {
+            const currentCage = cages.find(cg => cg.cells.some(cell => cell[0] === r && cell[1] === c));
+            if (!currentCage) return;
+            const inCage = (row, col) => currentCage.cells.some(cell => cell[0] === row && cell[1] === col);
+            if (!inCage(r - 1, c)) element.classList.add('border-t-heavy');
+            if (!inCage(r + 1, c)) element.classList.add('border-b-heavy');
+            if (!inCage(r, c - 1)) element.classList.add('border-l-heavy');
+            if (!inCage(r, c + 1)) element.classList.add('border-r-heavy');
+        }
+
+        function createCage() {
+            const targetInput = document.getElementById('cageTarget');
+            const targetValue = targetInput.value.trim();
+            const target = parseInt(targetValue);
+            const op = document.getElementById('cageOp').value;
+            if (targetValue === "" || isNaN(target) || selectedCells.size === 0) return;
+            const cells = Array.from(selectedCells).map(s => s.split(',').map(Number));
+            cells.sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1]);
+            
+            if (cells.some(([r, c]) => cages.some(cg => cg.cells.some(cc => cc[0] === r && cc[1] === c)))) {
+                return;
+            }
+            
+            cages.push({ op, target, cells, id: Date.now() });
+            selectedCells.clear();
+            targetInput.value = '';
+            const countEl = document.getElementById('selectionCount');
+            if (countEl) countEl.textContent = '0';
+            renderGrid();
+            renderCageList();
+        }
+
+        function removeCage(id) {
+            cages = cages.filter(c => c.id !== id);
+            renderGrid();
+            renderCageList();
+        }
+
+        function renderCageList() {
+            const list = document.getElementById('cageList');
+            const counter = document.getElementById('totalCellsCovered');
+            if (!list || !counter) return;
+            list.innerHTML = '';
+            let total = 0;
+            cages.forEach(c => {
+                total += c.cells.length;
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center bg-slate-50 p-3 rounded-xl text-xs border border-slate-100 hover:border-slate-300 transition-all group';
+                div.innerHTML = `<span><strong class="text-blue-600 mr-2">${c.target}${c.op === 'None' ? '' : c.op}</strong> <span class="text-slate-400 font-medium">${c.cells.length} cells</span></span><button onclick="removeCage(${c.id})" class="text-slate-300 hover:text-red-500 font-bold px-2 group-hover:opacity-100">×</button>`;
+                list.appendChild(div);
+            });
+            if (total < size * size) {
+                const div = document.createElement('div');
+                div.className = 'bg-red-50 border border-red-100 text-red-600 p-3 rounded-xl text-[10px] font-bold uppercase tracking-wider text-center';
+                div.textContent = `${(size*size) - total} UNASSIGNED CELLS`;
+                list.appendChild(div);
+            }
+            counter.textContent = `${total} / ${size * size} cells`;
+            counter.className = total === (size * size) ? "text-emerald-500 font-bold" : "text-slate-300";
+        }
+
+        function updateStatus(text, color) {
+            const b = document.getElementById('statusBadge');
+            if(!b) return;
+            b.textContent = text;
+            b.className = `text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-${color}-100 text-${color}-600`;
+        }
+
+        async function runAnalysis() {
+            const btn = document.getElementById('btnAnalyze');
+            btn.disabled = true;
+            updateStatus('Solving...', 'blue');
+            await new Promise(r => setTimeout(r, 100));
+            const solver = new MathdokuSolver(size, cages, givens);
+            const result = solver.solve();
+            displayResults(result);
+            renderSolution(result);
+            btn.disabled = false;
+        }
+
+        function displayResults(res) {
+            const resultsDiv = document.getElementById('results');
+            let difficulty = "N/A";
+            let color = "slate";
+            const displayCount = res.count >= 1000 ? "1000+" : res.count;
+
+            if (res.count === 0) {
+                difficulty = "Impossible";
+                color = "red";
+                updateStatus('Invalid', 'red');
+            } else if (res.count === 1) {
+                const s = res.complexity;
+                if (s <= 100) { difficulty = "Easy"; color = "emerald"; }
+                else if (s <= 200) { difficulty = "Medium"; color = "teal"; }
+                else if (s <= 400) { difficulty = "Hard"; color = "blue"; }
+                else if (s <= 700) { difficulty = "Vicious"; color = "indigo"; }
+                else if (s <= 1000) { difficulty = "Devilish"; color = "rose"; }
+                else if (s <= 1500) { difficulty = "Diabolical"; color = "red"; }
+                else { difficulty = "Beyond Diabolical"; color = "slate"; }
+                updateStatus('Unique', 'emerald');
+            } else {
+                difficulty = "Ambiguous";
+                color = "orange";
+                updateStatus('Multi-Solution', 'orange');
+            }
+
+            resultsDiv.innerHTML = `
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-sm"><p class="text-[10px] text-slate-400 uppercase font-bold">Solutions</p><p class="text-2xl font-black">${displayCount}</p></div>
+                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-sm"><p class="text-[10px] text-slate-400 uppercase font-bold">Complexity</p><p class="text-2xl font-black">${res.complexity.toLocaleString()}</p></div>
+                </div>
+                <div class="p-6 rounded-2xl bg-${color}-50 border border-${color}-200 text-center shadow-inner">
+                    <p class="text-[10px] text-${color}-600 font-bold uppercase tracking-widest mb-1">Grid Rating</p>
+                    <p class="text-2xl font-black text-${color}-900 italic tracking-tight">${difficulty}</p>
+                </div>
+            `;
+        }
+
+        function renderSolution(res) {
+            const container = document.getElementById('solutionContainer');
+            container.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+            container.innerHTML = '';
+
+            if (res.count === 0) {
+                container.innerHTML = `<div class="col-span-full py-12 text-center text-red-400 text-sm font-bold">NO VALID SOLUTION</div>`;
+                return;
+            }
+
+            const possibilities = Array.from({ length: size }, () => Array.from({ length: size }, () => new Set()));
+            res.solutions.forEach(sol => {
+                for (let r = 0; r < size; r++) {
+                    for (let c = 0; c < size; c++) {
+                        possibilities[r][c].add(sol[r][c]);
+                    }
+                }
+            });
+
+            for (let r = 0; r < size; r++) {
+                for (let c = 0; c < size; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'solution-cell';
+                    const set = possibilities[r][c];
+                    
+                    if (set.size === 1) {
+                        cell.innerHTML = `<span class="text-slate-800">${[...set][0]}</span>`;
+                        cell.classList.add('bg-white');
+                    } else if (set.size === size) {
+                        cell.innerHTML = `<span class="text-slate-300 text-[10px] uppercase font-bold">Any</span>`;
+                        cell.classList.add('bg-slate-800', 'border-slate-700');
+                    } else {
+                        const grid = document.createElement('div');
+                        grid.className = 'possibility-grid';
+                        for(let i=1; i<=size; i++) {
+                            const item = document.createElement('div');
+                            item.className = 'possibility-item';
+                            if(set.has(i)) item.textContent = i;
+                            grid.appendChild(item);
+                        }
+                        cell.appendChild(grid);
+                        cell.classList.add('bg-slate-800', 'border-slate-700');
+                    }
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        function exportBase64() {
+            const data = { s: size, c: cages.map(cg => ({ o: cg.op, t: cg.target, cl: cg.cells })), g: givens };
+            const b64 = btoa(JSON.stringify(data));
+            const dummy = document.createElement("textarea");
+            document.body.appendChild(dummy);
+            dummy.value = b64;
+            dummy.select();
+            document.execCommand("copy");
+            document.body.removeChild(dummy);
+        }
+
+        function importBase64() {
+            const b64 = prompt("Paste Puzzle Base64 string:");
+            if (!b64) return;
+            try {
+                const data = JSON.parse(atob(b64));
+                size = data.s;
+                gridSizeSelect.value = size;
+                cages = data.c.map((cg, idx) => ({ op: cg.o, target: cg.t, cells: cg.cl, id: Date.now() + idx }));
+                givens = data.g || {};
+                selectedCells.clear();
+                renderGrid();
+                renderCageList();
+                updateStatus('Ready', 'emerald');
+            } catch (e) { alert("Invalid Base64 string."); }
+        }
+
+        class MathdokuSolver {
+            constructor(size, cages, givens) {
+                this.size = size;
+                this.cages = [...cages];
+                this.givens = givens;
+                this.solutions = [];
+                this.backtrackCount = 0;
+                
+                if (this.cages.length === 0 && Object.keys(this.givens).length === 0) {
+                    const firstRowCells = [];
+                    let rowSum = 0;
+                    for(let i=0; i<this.size; i++) {
+                        firstRowCells.push([0, i]);
+                        rowSum += (i + 1);
+                    }
+                    this.cages.push({ op: '+', target: rowSum, cells: firstRowCells, id: 'synthetic' });
+                }
+            }
+            solve() {
+                const grid = Array.from({ length: this.size }, () => Array(this.size).fill(0));
+                for (const key in this.givens) {
+                    const [r, c] = key.split(',').map(Number);
+                    grid[r][c] = this.givens[key];
+                }
+                this._backtrack(grid, 0, 0);
+                return { count: this.solutions.length, complexity: this.backtrackCount, solutions: this.solutions };
+            }
+            _backtrack(grid, r, c) {
+                if (this.solutions.length >= 1000) return; 
+                if (c === this.size) { r++; c = 0; }
+                if (r === this.size) {
+                    if (this._checkAllCages(grid)) this.solutions.push(grid.map(row => [...row]));
+                    return;
+                }
+                if (grid[r][c] !== 0) {
+                    if (this._isSafeGiven(grid, r, c, grid[r][c])) {
+                         this._backtrack(grid, r, c + 1);
+                    }
+                    return;
+                }
+                this.backtrackCount++;
+                for (let num = 1; num <= this.size; num++) {
+                    if (this._isSafe(grid, r, c, num)) {
+                        grid[r][c] = num;
+                        if (this._isPartialCageValid(grid, r, c)) this._backtrack(grid, r, c + 1);
+                        grid[r][c] = 0;
+                    }
+                }
+            }
+            _isSafeGiven(grid, r, c, num) {
+                for (let i = 0; i < this.size; i++) {
+                    if (i !== c && grid[r][i] === num) return false;
+                    if (i !== r && grid[i][c] === num) return false;
+                }
+                return true;
+            }
+            _isSafe(grid, r, c, num) {
+                for (let i = 0; i < this.size; i++) if (grid[r][i] === num || grid[i][c] === num) return false;
+                return true;
+            }
+            _isPartialCageValid(grid, r, c) {
+                const cage = this.cages.find(cg => cg.cells.some(cell => cell[0] === r && cell[1] === c));
+                if (!cage) return true;
+                const vals = cage.cells.map(([cr, cc]) => grid[cr][cc]).filter(v => v !== 0);
+                const isFull = vals.length === cage.cells.length;
+                switch (cage.op) {
+                    case '+': const sum = vals.reduce((a, b) => a + b, 0); return isFull ? sum === cage.target : sum < cage.target;
+                    case '*': const prod = vals.reduce((a, b) => a * b, 1); return isFull ? prod === cage.target : prod <= cage.target;
+                    case '-': if (!isFull) return true; return Math.abs(vals[0] - vals[1]) === cage.target;
+                    case '/': if (!isFull) return true; return Math.abs(vals[0] / vals[1] - cage.target) < 0.001 || Math.abs(vals[1] / vals[0] - cage.target) < 0.001;
+                    case 'None': return vals[0] === cage.target;
+                }
+                return true;
+            }
+            _checkAllCages(grid) {
+                return this.cages.every(cage => {
+                    const vals = cage.cells.map(([r, c]) => grid[r][c]);
+                    if (cage.op === '+') return vals.reduce((a, b) => a + b, 0) === cage.target;
+                    if (cage.op === '*') return vals.reduce((a, b) => a * b, 1) === cage.target;
+                    if (cage.op === '-') return Math.abs(vals[0] - vals[1]) === cage.target;
+                    if (cage.op === '/') return Math.abs(vals[0] / vals[1] - cage.target) < 0.001 || Math.abs(vals[1] / vals[0] - cage.target) < 0.001;
+                    if (cage.op === 'None') return vals[0] === cage.target;
+                    return false;
+                });
+            }
+        }
+        init();
+    </script>
+</body>
+</html>
