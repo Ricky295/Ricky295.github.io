@@ -42,12 +42,12 @@
             grid-template-columns: repeat(3, 1fr);
             width: 100%;
             height: 100%;
-            padding: 20% 5% 5% 5%;
+            padding: 22% 5% 5% 5%;
             pointer-events: none;
         }
 
         .candidate-num {
-            font-size: clamp(0.5rem, 1.2vw, 0.75rem);
+            font-size: clamp(0.4rem, 1.2vw, 0.6rem);
             color: #94a3b8;
             line-height: 1;
             text-align: center;
@@ -92,7 +92,7 @@
         <div id="selectorScreen" class="space-y-8">
             <header class="text-center space-y-2">
                 <h1 class="text-4xl font-black italic tracking-tighter">MATHDOKU<span class="text-blue-600">.PLAY</span></h1>
-                <p class="text-slate-500 font-medium">Procedural challenge generator powered by Solver.js</p>
+                <p class="text-slate-500 font-medium">Procedural challenge generator</p>
             </header>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -124,7 +124,7 @@
                                 </div>
                                 <div id="bestSoFarBadge"></div>
                             </div>
-                            <button id="stopGenBtn" class="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-[10px] font-black uppercase transition-all">End & Accept Best Match</button>
+                            <button id="stopGenBtn" class="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-[10px] font-black uppercase transition-all">Accept Best Found</button>
                         </div>
 
                         <button id="generateBtn" onclick="startGeneration()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-lg hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 flex items-center justify-center gap-3">
@@ -154,13 +154,16 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke-width="2"></path></svg>
                     Menu
                 </button>
-                <div id="difficultyBadge"></div>
+                <div class="flex items-center gap-3">
+                    <div id="gameTimer" class="font-mono font-bold text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">00:00</div>
+                    <div id="difficultyBadge"></div>
+                </div>
             </div>
 
             <div class="flex flex-col lg:flex-row gap-6 items-center lg:items-start justify-center">
                 <!-- Main Grid -->
-                <div class="w-full max-w-[500px] space-y-4">
-                    <div id="gridContainer" class="grid border-[3px] border-slate-900 bg-slate-300 shadow-2xl rounded-sm overflow-hidden"></div>
+                <div class="w-full max-w-[550px] space-y-4">
+                    <div id="gridContainer" class="grid border-[3px] border-slate-900 bg-slate-200 shadow-2xl rounded-sm overflow-hidden"></div>
                 </div>
 
                 <!-- Interaction Panel -->
@@ -181,7 +184,7 @@
                     <div id="numpad" class="grid grid-cols-3 gap-2 p-3 bg-white rounded-3xl border border-slate-200 shadow-sm"></div>
                     
                     <div class="space-y-2">
-                        <button onclick="checkPuzzle()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all active:scale-95">CHECK SOLUTION</button>
+                        <button id="checkBtn" onclick="checkPuzzle()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all active:scale-95">CHECK SOLUTION</button>
                         <div id="messageBox" class="p-4 rounded-xl text-center text-sm font-bold hidden transition-all"></div>
                     </div>
                 </div>
@@ -193,16 +196,19 @@
 
     <script>
         // --- APP STATE ---
-        let config = { size: 4, difficulty: 'Medium' };
+        let config = { size: 6, difficulty: 'Medium' };
         let gameState = {
-            gridSize: 4,
+            gridSize: 6,
             cages: [],
             givens: {},
-            userGrid: [],      // Main values
-            candidates: {},    // Map of "r,c" -> Set([1,2,3])
+            userGrid: [],
+            candidates: {},
             selected: null,
             difficulty: null,
-            entryMode: 'pen'   // 'pen' or 'pencil'
+            entryMode: 'pen',
+            seconds: 0,
+            timerActive: false,
+            solved: false
         };
 
         const DIFFICULTIES = ['Easy', 'Medium', 'Hard', 'Vicious', 'Devilish', 'Diabolical', 'Beyond Diabolical'];
@@ -211,8 +217,37 @@
         let genAttempts = 0;
         let bestPuzzle = null;
         let bestDiffDist = Infinity;
+        let timerInterval = null;
 
-        // --- GENERATOR ---
+        // --- TIMER LOGIC ---
+
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            gameState.timerActive = true;
+            timerInterval = setInterval(() => {
+                if (gameState.timerActive && !gameState.solved) {
+                    gameState.seconds++;
+                    updateTimerUI();
+                }
+            }, 1000);
+        }
+
+        function updateTimerUI() {
+            const mins = Math.floor(gameState.seconds / 60);
+            const secs = gameState.seconds % 60;
+            const el = document.getElementById('gameTimer');
+            if (el) el.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                gameState.timerActive = false;
+            } else if (!gameState.solved && !document.getElementById('gameScreen').classList.contains('hidden')) {
+                gameState.timerActive = true;
+            }
+        });
+
+        // --- GENERATOR OPTIMIZATIONS ---
 
         function startGeneration() {
             genActive = true;
@@ -226,7 +261,7 @@
                 if (bestPuzzle) loadPuzzleData(btoa(JSON.stringify(bestPuzzle)));
                 stopGeneration();
             };
-            huntLoop();
+            requestAnimationFrame(huntLoop);
         }
 
         function stopGeneration() {
@@ -237,20 +272,30 @@
 
         function huntLoop() {
             if (!genActive) return;
-            for (let i = 0; i < 4; i++) {
+            
+            // Adaptive batching: Smaller batches for larger grids to prevent frame drops
+            const batchSize = config.size >= 8 ? 2 : (config.size >= 7 ? 4 : 8);
+            
+            for (let i = 0; i < batchSize; i++) {
                 genAttempts++;
                 const candidate = createCandidate(config.size, config.difficulty);
+                
+                // Fast-fail check: If it has multiple solutions or is unsolvable, ratePuzzle will catch it
+                // We use a low maxSolutions for speed during search
                 const solverRes = solveMathdoku(candidate.gridSize, candidate.cages, candidate.givens, 2);
+                
                 if (solverRes.count === 1) {
                     const rating = ratePuzzle(solverRes);
                     const targetIdx = DIFFICULTIES.indexOf(config.difficulty);
                     const actualIdx = DIFFICULTIES.indexOf(rating.label);
                     const dist = Math.abs(targetIdx - actualIdx);
+                    
                     if (dist < bestDiffDist) {
                         bestDiffDist = dist;
                         bestPuzzle = candidate;
                         updateBestBadge(rating);
                     }
+                    
                     if (dist === 0) {
                         loadPuzzleData(btoa(JSON.stringify(candidate)));
                         stopGeneration();
@@ -258,6 +303,7 @@
                     }
                 }
             }
+            
             document.getElementById('attemptCount').textContent = genAttempts;
             requestAnimationFrame(huntLoop);
         }
@@ -265,7 +311,11 @@
         function updateBestBadge(rating) {
             const colorMap = { emerald: 'bg-emerald-100 text-emerald-700', teal: 'bg-teal-100 text-teal-700', blue: 'bg-blue-100 text-blue-700', indigo: 'bg-indigo-100 text-indigo-700', rose: 'bg-rose-100 text-rose-700', red: 'bg-red-100 text-red-700', slate: 'bg-slate-200 text-slate-800' };
             const cls = colorMap[rating.color] || 'bg-slate-100 text-slate-600';
-            document.getElementById('bestSoFarBadge').innerHTML = `<div class="flex flex-col items-end"><span class="text-[8px] font-black text-slate-400 uppercase">Found</span><span class="px-2 py-0.5 rounded text-[9px] font-black uppercase ${cls}">${rating.label}</span></div>`;
+            document.getElementById('bestSoFarBadge').innerHTML = `
+                <div class="flex flex-col items-end">
+                    <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Best Found</span>
+                    <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase ${cls}">${rating.label}</span>
+                </div>`;
         }
 
         function createCandidate(size, targetDiff) {
@@ -274,7 +324,13 @@
                 if (c === size) { r++; c = 0; }
                 if (r === size) return true;
                 const nums = Array.from({length: size}, (_, i) => i + 1).sort(() => Math.random() - 0.5);
-                for (let n of nums) { if (isSafe(grid, r, c, n, size)) { grid[r][c] = n; if (fill(r, c + 1)) return true; grid[r][c] = 0; } }
+                for (let n of nums) { 
+                    if (isSafe(grid, r, c, n, size)) { 
+                        grid[r][c] = n; 
+                        if (fill(r, c + 1)) return true; 
+                        grid[r][c] = 0; 
+                    } 
+                }
                 return false;
             }
             fill(0, 0);
@@ -287,8 +343,12 @@
 
             for (const [r, c] of cells) {
                 if (visited.has(`${r},${c}`)) continue;
-                let maxC = targetDiff === 'Easy' ? 2 : (targetDiff.includes('Diabolical') ? 5 : 3);
+                
+                // Logic Adjustment: Larger grids need larger cages to remain solvable/interesting
+                let baseMax = size >= 7 ? 4 : 3;
+                let maxC = targetDiff === 'Easy' ? 2 : (targetDiff.includes('Diabolical') ? baseMax + 2 : baseMax);
                 let cageSize = Math.floor(Math.random() * maxC) + 1;
+                
                 const currentCage = [[r, c]];
                 visited.add(`${r},${c}`);
                 for (let i = 1; i < cageSize; i++) {
@@ -303,6 +363,7 @@
                     currentCage.push(next);
                     visited.add(`${next[0]},${next[1]}`);
                 }
+                
                 const vals = currentCage.map(([cr, cc]) => grid[cr][cc]);
                 let op = '+', target = 0;
                 if (currentCage.length === 1) { op = 'None'; target = vals[0]; }
@@ -322,7 +383,7 @@
             return { gridSize: size, cages, givens: {} };
         }
 
-        // --- CORE GAME ---
+        // --- CORE GAME LOGIC ---
 
         window.onload = () => { initMenu(); checkUrlParams(); setupKeyboard(); };
 
@@ -360,15 +421,23 @@
                 gameState.givens = data.givens || {};
                 gameState.userGrid = Array.from({ length: data.gridSize }, () => Array(data.gridSize).fill(0));
                 gameState.candidates = {};
+                gameState.seconds = 0;
+                gameState.solved = false;
+                
                 for (let k in gameState.givens) {
                     const [r, c] = k.split(',').map(Number);
                     gameState.userGrid[r][c] = gameState.givens[k];
                 }
+
                 const res = solveMathdoku(data.gridSize, data.cages, data.givens, 2);
                 gameState.difficulty = ratePuzzle(res);
+                
                 window.history.replaceState({}, '', `?p=${base64}`);
                 document.getElementById('selectorScreen').classList.add('hidden');
                 document.getElementById('gameScreen').classList.remove('hidden');
+                
+                updateTimerUI();
+                startTimer();
                 renderGame();
             } catch (e) { alert("Invalid puzzle string."); }
         }
@@ -394,10 +463,11 @@
                     } else if (gameState.candidates[key] && gameState.candidates[key].size > 0) {
                         const cGrid = document.createElement('div');
                         cGrid.className = 'candidate-grid';
-                        for (let i = 1; i <= 9; i++) {
+                        // Adjust columns for larger grids if needed, but 3x3 is standard
+                        for (let i = 1; i <= size; i++) {
                             const cn = document.createElement('div');
                             cn.className = 'candidate-num';
-                            if (i <= size && gameState.candidates[key].has(i)) cn.textContent = i;
+                            if (gameState.candidates[key].has(i)) cn.textContent = i;
                             cGrid.appendChild(cn);
                         }
                         cell.appendChild(cGrid);
@@ -412,7 +482,7 @@
                         cell.appendChild(l);
                     }
                     applyBorders(cell, r, c);
-                    if (!isGiven) cell.onclick = () => { gameState.selected = {r, c}; renderGame(); };
+                    if (!isGiven && !gameState.solved) cell.onclick = () => { gameState.selected = {r, c}; renderGame(); };
                     container.appendChild(cell);
                 }
             }
@@ -437,24 +507,27 @@
                 const b = document.createElement('button');
                 b.className = "numpad-btn text-xl";
                 b.textContent = i;
+                b.disabled = gameState.solved;
                 b.onclick = () => setVal(i);
                 numpad.appendChild(b);
             }
             const clr = document.createElement('button');
-            clr.className = "numpad-btn col-span-1 text-[10px] uppercase font-black text-slate-400 bg-slate-50";
+            clr.className = "numpad-btn col-span-1 text-slate-400 bg-slate-50";
             clr.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z"></path></svg>`;
+            clr.disabled = gameState.solved;
             clr.onclick = () => setVal(0);
             numpad.appendChild(clr);
         }
 
         function setEntryMode(m) {
+            if (gameState.solved) return;
             gameState.entryMode = m;
             document.getElementById('modePen').className = m === 'pen' ? "py-3 rounded-xl font-black text-xs uppercase bg-blue-600 text-white flex items-center justify-center gap-2" : "py-3 rounded-xl font-black text-xs uppercase text-slate-400 hover:bg-slate-50 flex items-center justify-center gap-2";
             document.getElementById('modePencil').className = m === 'pencil' ? "py-3 rounded-xl font-black text-xs uppercase bg-blue-600 text-white flex items-center justify-center gap-2" : "py-3 rounded-xl font-black text-xs uppercase text-slate-400 hover:bg-slate-50 flex items-center justify-center gap-2";
         }
 
         function setVal(n) {
-            if (!gameState.selected) return;
+            if (!gameState.selected || gameState.solved) return;
             const { r, c } = gameState.selected;
             const key = `${r},${c}`;
             if (gameState.givens[key]) return;
@@ -463,12 +536,14 @@
                 if (n === 0) {
                     gameState.userGrid[r][c] = 0;
                 } else {
-                    // If we place a main number, clear candidates for that cell
-                    gameState.userGrid[r][c] = (gameState.userGrid[r][c] === n) ? 0 : n;
-                    if (gameState.candidates[key]) delete gameState.candidates[key];
+                    const newVal = (gameState.userGrid[r][c] === n) ? 0 : n;
+                    gameState.userGrid[r][c] = newVal;
+                    if (newVal !== 0) {
+                        autoRemoveCandidates(r, c, newVal);
+                        if (gameState.candidates[key]) delete gameState.candidates[key];
+                    }
                 }
             } else {
-                // Pencil mode
                 if (n === 0) {
                     gameState.userGrid[r][c] = 0;
                     delete gameState.candidates[key];
@@ -479,6 +554,19 @@
                 }
             }
             renderGame();
+        }
+
+        function autoRemoveCandidates(row, col, num) {
+            // Remove from column
+            for (let r = 0; r < gameState.gridSize; r++) {
+                const k = `${r},${col}`;
+                if (gameState.candidates[k]) gameState.candidates[k].delete(num);
+            }
+            // Remove from row
+            for (let c = 0; c < gameState.gridSize; c++) {
+                const k = `${row},${c}`;
+                if (gameState.candidates[k]) gameState.candidates[k].delete(num);
+            }
         }
 
         function renderDifficultyBadge() {
@@ -493,13 +581,17 @@
                 if (!gameState.selected || document.activeElement.tagName === 'TEXTAREA') return;
                 if (e.key >= '1' && e.key <= gameState.gridSize.toString()) setVal(parseInt(e.key));
                 if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') setVal(0);
-                if (e.key === 'n' || e.key === 'N') setEntryMode(gameState.entryMode === 'pen' ? 'pencil' : 'pen');
-                if (e.key.startsWith('Arrow')) moveSelection(e.key);
+                if (e.key.toLowerCase() === 'n') setEntryMode(gameState.entryMode === 'pen' ? 'pencil' : 'pen');
+                if (e.key.startsWith('Arrow')) {
+                    e.preventDefault();
+                    moveSelection(e.key);
+                }
             });
         }
 
         function moveSelection(key) {
-            let { r, c } = gameState.selected;
+            if (gameState.solved) return;
+            let { r, c } = gameState.selected || {r:0, c:0};
             if (key === 'ArrowUp') r = Math.max(0, r - 1);
             if (key === 'ArrowDown') r = Math.min(gameState.gridSize - 1, r + 1);
             if (key === 'ArrowLeft') c = Math.max(0, c - 1);
@@ -514,7 +606,13 @@
             for (let i = 0; i < s; i++) {
                 if (new Set(gameState.userGrid[i]).size !== s || new Set(gameState.userGrid.map(r => r[i])).size !== s) return showMsg("Duplicates found.", "error");
             }
-            if (checkAllCages(gameState.userGrid, gameState.cages)) showMsg("SOLVED!", "success");
+            if (checkAllCages(gameState.userGrid, gameState.cages)) {
+                gameState.solved = true;
+                gameState.timerActive = false;
+                gameState.selected = null;
+                showMsg(`SOLVED! Time: ${document.getElementById('gameTimer').textContent}`, "success");
+                renderGame();
+            }
             else showMsg("Arithmetic error.", "error");
         }
 
@@ -532,6 +630,8 @@
             document.getElementById('gameScreen').classList.add('hidden');
             document.getElementById('messageBox').classList.add('hidden');
             gameState.selected = null;
+            gameState.timerActive = false;
+            if (timerInterval) clearInterval(timerInterval);
         }
         
         function importPuzzle() {
