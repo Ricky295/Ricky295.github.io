@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solver - Mathdoku Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .solver-cell { aspect-ratio: 1/1; display: flex; align-items: center; justify-content: center; border: 1px solid #334155; position: relative; }
+        .candidate-grid { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; height: 100%; padding: 2px; }
+        .candidate { font-size: 0.5rem; display: flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+    <nav class="p-4 border-b border-slate-800 flex justify-between">
+        <a href="index.html" id="nav-home" class="text-slate-400 hover:text-white font-bold">← EXIT</a>
+        <div id="status-tag" class="text-[10px] font-black uppercase tracking-widest text-slate-500">Idle</div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-8 grid grid-cols-1 lg:grid-cols-12 gap-12">
+        <div class="lg:col-span-4 space-y-6">
+            <div class="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                <h2 class="text-xl font-black mb-2">Complexity Analysis</h2>
+                <div id="stats" class="space-y-4 text-sm text-slate-400">
+                    <p>Load a puzzle to analyze difficulty and uniqueness.</p>
+                </div>
+                <button onclick="runSolver()" id="run-btn" class="w-full mt-6 bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl transition shadow-lg shadow-blue-900/20">RUN SOLVER</button>
+            </div>
+        </div>
+
+        <div class="lg:col-span-8 flex flex-col items-center">
+            <div id="grid-solver" class="grid bg-slate-900 border-2 border-slate-700 shadow-2xl" style="width: 100%; max-width: 500px;"></div>
+            <div class="mt-8 flex gap-4 text-[10px] font-bold uppercase text-slate-500">
+                <div class="flex items-center gap-2"><div class="w-3 h-3 bg-blue-900/50 rounded-sm"></div> Unique Solution</div>
+                <div class="flex items-center gap-2"><div class="w-3 h-3 bg-slate-800 rounded-sm"></div> Multiple Possible</div>
+            </div>
+        </div>
+    </main>
+
+    <script src="utils.js"></script>
+    <script src="solver.js"></script>
+    <script>
+        let size = 4, cages = [], givens = {};
+
+        function init() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const puzzleB64 = urlParams.get('puzzle');
+            let data = puzzleB64 ? MathdokuUtils.importB64(puzzleB64) : MathdokuUtils.loadFromStorage();
+
+            if (!data) {
+                alert("No puzzle found!");
+                window.location.href = "constructor.html";
+                return;
+            }
+
+            size = data.s; cages = data.c; givens = data.g || {};
+            if(puzzleB64) document.getElementById('nav-home').href = `index.html?puzzle=${puzzleB64}`;
+            
+            renderEmptyGrid();
+        }
+
+        function renderEmptyGrid() {
+            const container = document.getElementById('grid-solver');
+            container.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+            container.innerHTML = '';
+            for(let i=0; i<size*size; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'solver-cell text-slate-700';
+                cell.textContent = '?';
+                container.appendChild(cell);
+            }
+        }
+
+        async function runSolver() {
+            const btn = document.getElementById('run-btn');
+            const status = document.getElementById('status-tag');
+            btn.disabled = true;
+            status.textContent = "Solving...";
+            status.classList.add('text-blue-400');
+
+            await new Promise(r => setTimeout(r, 50));
+            const engine = new MathdokuSolver(size, cages, givens);
+            const result = engine.solve(500); // Limit to 500 solutions for heatmap
+
+            btn.disabled = false;
+            status.textContent = "Complete";
+            displayStats(result);
+            renderHeatmap(result);
+        }
+
+        function displayStats(res) {
+            const stats = document.getElementById('stats');
+            let diff = "Unknown";
+            if(res.count === 1) {
+                diff = res.complexity < 200 ? "Easy" : (res.complexity < 1000 ? "Medium" : "Hard");
+            }
+            stats.innerHTML = `
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-slate-800 p-4 rounded-xl"><span class="block opacity-50 uppercase text-[10px]">Solutions</span><span class="text-2xl font-black">${res.count === 500 ? '500+' : res.count}</span></div>
+                    <div class="bg-slate-800 p-4 rounded-xl"><span class="block opacity-50 uppercase text-[10px]">Rating</span><span class="text-2xl font-black text-blue-400">${res.count === 1 ? diff : 'N/A'}</span></div>
+                </div>
+                <div class="p-4 bg-slate-800/50 rounded-xl border border-slate-800">
+                    <p class="uppercase text-[10px] font-bold mb-1">Backtrack Passes</p>
+                    <p class="text-xl font-mono">${res.complexity.toLocaleString()}</p>
+                </div>
+            `;
+        }
+
+        function renderHeatmap(res) {
+            const container = document.getElementById('grid-solver');
+            container.innerHTML = '';
+            if(res.count === 0) { container.innerHTML = '<div class="p-20 text-red-500 font-bold">UNSOLVABLE</div>'; return; }
+
+            const heatmap = Array.from({length: size}, () => Array.from({length: size}, () => new Set()));
+            res.solutions.forEach(s => {
+                for(let r=0; r<size; r++) for(let c=0; c<size; c++) heatmap[r][c].add(s[r][c]);
+            });
+
+            for(let r=0; r<size; r++) {
+                for(let c=0; c<size; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'solver-cell';
+                    const set = heatmap[r][c];
+                    if(set.size === 1) {
+                        cell.classList.add('bg-blue-600/20', 'text-blue-400', 'text-2xl', 'font-black');
+                        cell.textContent = [...set][0];
+                    } else {
+                        const grid = document.createElement('div');
+                        grid.className = 'candidate-grid';
+                        for(let i=1; i<=size; i++) {
+                            const d = document.createElement('div');
+                            d.className = `candidate ${set.has(i) ? 'text-slate-500' : 'text-transparent'}`;
+                            d.textContent = i;
+                            grid.appendChild(d);
+                        }
+                        cell.appendChild(grid);
+                    }
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
