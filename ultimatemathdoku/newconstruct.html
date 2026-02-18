@@ -25,7 +25,6 @@
         .grid-cell.given { background-color: #eff6ff; color: #2563eb; }
         .cage-label { position: absolute; top: 2px; left: 2px; font-size: 0.65rem; font-weight: normal; color: #374151; pointer-events: none; }
         
-        /* Heavy borders for cage visualization */
         .border-t-heavy { border-top: 3px solid #111827; }
         .border-b-heavy { border-bottom: 3px solid #111827; }
         .border-l-heavy { border-left: 3px solid #111827; }
@@ -48,18 +47,45 @@
         
         #cageList::-webkit-scrollbar { width: 4px; }
         #cageList::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        /* Modal Overlay */
+        #modalOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 50;
+            align-items: center;
+            justify-content: center;
+        }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen p-4 md:p-8 font-sans text-slate-900">
 
+    <!-- Modal for Import/Export -->
+    <div id="modalOverlay">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4">
+            <h3 id="modalTitle" class="text-lg font-bold mb-2 text-slate-900">Share Puzzle</h3>
+            <p id="modalDesc" class="text-sm text-slate-500 mb-4">Copy the string below to save your puzzle.</p>
+            <textarea id="modalTextarea" class="w-full h-32 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono mb-4 focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeModal()" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700">Close</button>
+                <button id="modalActionBtn" class="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-md transition-all active:scale-95">Copy String</button>
+            </div>
+        </div>
+    </div>
+
     <div class="max-w-6xl mx-auto">
-        <header class="mb-8 flex justify-between items-center">
+        <header class="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
                 <h1 class="text-3xl font-extrabold tracking-tight italic">MATHDOKU<span class="text-blue-600">.BUILDER</span></h1>
                 <p class="text-slate-500 font-medium text-sm">Procedural Interface & Analysis</p>
             </div>
-            <div class="flex gap-2">
-                <button onclick="resetConstructor()" class="bg-white border border-slate-200 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-red-50 hover:text-red-600 transition-all">Reset All</button>
+            <div class="flex flex-wrap gap-2">
+                <button onclick="openExportModal()" class="bg-white border border-slate-200 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 shadow-sm transition-all">Export</button>
+                <button onclick="openImportModal()" class="bg-white border border-slate-200 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 shadow-sm transition-all">Import</button>
+                <button onclick="resetConstructor()" class="bg-white border border-red-100 px-4 py-2 rounded-lg text-sm font-semibold text-red-500 hover:bg-red-50 transition-all">Reset All</button>
             </div>
         </header>
 
@@ -152,7 +178,7 @@
          */
         let gridSize = 4;
         let cages = [];
-        let givens = {}; // Store as "r,c": value
+        let givens = {}; 
         let selectedCells = new Set();
 
         /**
@@ -166,9 +192,8 @@
                 resetConstructor();
             };
 
-            // Keyboard listeners for Givens
             window.onkeydown = (e) => {
-                if (['INPUT', 'SELECT'].includes(e.target.tagName)) return;
+                if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
                 if (selectedCells.size === 0) return;
 
                 if (e.key >= '1' && e.key <= gridSize.toString()) {
@@ -203,7 +228,6 @@
                         renderGrid();
                     };
 
-                    // Add cage label if it's the first cell of a cage
                     const cage = cages.find(cg => cg.cells[0][0] === r && cg.cells[0][1] === c);
                     if (cage) {
                         const label = document.createElement('div');
@@ -235,7 +259,7 @@
         }
 
         /**
-         * ACTIONS
+         * CAGE ACTIONS
          */
         function createCage() {
             const tEl = document.getElementById('cageTarget');
@@ -244,7 +268,6 @@
 
             if (isNaN(target) || selectedCells.size === 0) return;
             
-            // Check for overlaps
             const newCells = Array.from(selectedCells).map(s => s.split(',').map(Number))
                 .sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1]);
 
@@ -293,15 +316,16 @@
             coverage.textContent = `${total} / ${gridSize * gridSize}`;
         }
 
+        /**
+         * SOLVER INTEGRATION
+         */
         async function runAnalysis() {
             const badge = document.getElementById('statusBadge');
             badge.textContent = "SOLVING...";
             badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-blue-100 text-blue-600";
             
-            // Allow DOM to update
             await new Promise(r => setTimeout(r, 100));
             
-            // Use functions from solver.js
             const result = solveMathdoku(gridSize, cages, givens);
             const rating = ratePuzzle(result);
             
@@ -333,11 +357,7 @@
                 return;
             }
 
-            // Calculate possibilities for each cell
-            const possibilities = Array.from({ length: gridSize }, () => 
-                Array.from({ length: gridSize }, () => new Set())
-            );
-
+            const possibilities = Array.from({ length: gridSize }, () => Array.from({ length: gridSize }, () => new Set()));
             res.solutions.forEach(sol => {
                 for (let r = 0; r < gridSize; r++) {
                     for (let c = 0; c < gridSize; c++) possibilities[r][c].add(sol[r][c]);
@@ -349,18 +369,14 @@
                     const cell = document.createElement('div');
                     cell.className = 'solution-cell';
                     const set = possibilities[r][c];
-                    
                     if (set.size === 1) {
                         cell.textContent = [...set][0];
                         cell.classList.add('text-slate-900');
                     } else {
-                        // Show small grid of possible numbers
                         cell.innerHTML = `
                             <div class="possibility-grid">
                                 ${Array.from({length: gridSize}, (_, i) => `
-                                    <div class="possibility-item">
-                                        ${set.has(i+1) ? i+1 : ''}
-                                    </div>
+                                    <div class="possibility-item">${set.has(i+1) ? i+1 : ''}</div>
                                 `).join('')}
                             </div>
                         `;
@@ -370,13 +386,73 @@
             }
         }
 
+        /**
+         * IMPORT / EXPORT LOGIC
+         */
+        function openExportModal() {
+            const data = { gridSize, cages, givens };
+            const base64 = btoa(JSON.stringify(data));
+            
+            const overlay = document.getElementById('modalOverlay');
+            const title = document.getElementById('modalTitle');
+            const desc = document.getElementById('modalDesc');
+            const area = document.getElementById('modalTextarea');
+            const btn = document.getElementById('modalActionBtn');
+
+            title.textContent = "Export Puzzle";
+            desc.textContent = "Copy the string below to save or share your design.";
+            area.value = base64;
+            area.readOnly = true;
+            btn.textContent = "Copy to Clipboard";
+            btn.onclick = () => {
+                area.select();
+                document.execCommand('copy');
+                btn.textContent = "Copied!";
+                setTimeout(() => btn.textContent = "Copy to Clipboard", 2000);
+            };
+
+            overlay.style.display = 'flex';
+        }
+
+        function openImportModal() {
+            const overlay = document.getElementById('modalOverlay');
+            const title = document.getElementById('modalTitle');
+            const desc = document.getElementById('modalDesc');
+            const area = document.getElementById('modalTextarea');
+            const btn = document.getElementById('modalActionBtn');
+
+            title.textContent = "Import Puzzle";
+            desc.textContent = "Paste a puzzle Base64 string below to load it.";
+            area.value = "";
+            area.readOnly = false;
+            btn.textContent = "Load Puzzle";
+            btn.onclick = () => {
+                try {
+                    const data = JSON.parse(atob(area.value));
+                    if (data.gridSize && data.cages) {
+                        gridSize = data.gridSize;
+                        cages = data.cages;
+                        givens = data.givens || {};
+                        document.getElementById('gridSize').value = gridSize;
+                        renderGrid();
+                        renderCageList();
+                        closeModal();
+                    }
+                } catch (e) {
+                    alert("Invalid puzzle string.");
+                }
+            };
+
+            overlay.style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').style.display = 'none';
+        }
+
         function resetConstructor() {
-            cages = [];
-            givens = {};
-            selectedCells.clear();
-            renderGrid();
-            renderCageList();
-            updateSelectionCount();
+            cages = []; givens = {}; selectedCells.clear();
+            renderGrid(); renderCageList(); updateSelectionCount();
             document.getElementById('resultsArea').innerHTML = `
                 <div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-400 text-xs text-center">
                     Awaiting complete cage coverage...
