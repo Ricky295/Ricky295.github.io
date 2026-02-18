@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate Mathdoku Constructor</title>
+    <title>Mathdoku Constructor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .grid-cell {
@@ -20,27 +20,11 @@
             transition: all 0.2s;
             user-select: none;
         }
-        .grid-cell:hover {
-            background-color: #f3f4f6;
-        }
-        .grid-cell.selected {
-            background-color: #dbeafe;
-            outline: 2px solid #3b82f6;
-            z-index: 10;
-        }
-        .grid-cell.given {
-            background-color: #eff6ff;
-            color: #2563eb;
-        }
-        .cage-label {
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            font-size: 0.65rem;
-            font-weight: normal;
-            color: #374151;
-            pointer-events: none;
-        }
+        .grid-cell:hover { background-color: #f3f4f6; }
+        .grid-cell.selected { background-color: #dbeafe; outline: 2px solid #3b82f6; z-index: 10; }
+        .grid-cell.given { background-color: #eff6ff; color: #2563eb; }
+        .cage-label { position: absolute; top: 2px; left: 2px; font-size: 0.65rem; font-weight: normal; color: #374151; pointer-events: none; }
+        
         .border-t-heavy { border-top: 3px solid #111827; }
         .border-b-heavy { border-bottom: 3px solid #111827; }
         .border-l-heavy { border-left: 3px solid #111827; }
@@ -58,46 +42,57 @@
             font-size: 1.1rem;
             position: relative;
         }
-        .possibility-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1px;
-            width: 100%;
-            height: 100%;
-            padding: 2px;
-        }
-        .possibility-item {
-            font-size: 0.5rem;
-            color: #94a3b8;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+        .possibility-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; width: 100%; height: 100%; padding: 2px; }
+        .possibility-item { font-size: 0.5rem; color: #94a3b8; display: flex; align-items: center; justify-content: center; }
         
         #cageList::-webkit-scrollbar { width: 4px; }
         #cageList::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        #modalOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 50;
+            align-items: center;
+            justify-content: center;
+        }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen p-4 md:p-8 font-sans text-slate-900">
 
-    <div class="max-w-6xl mx-auto">
-        <header class="mb-8 flex justify-between items-start">
-            <div>
-                <h1 class="text-3xl font-extrabold tracking-tight text-slate-900 italic">MATHDOKU<span class="text-blue-600">.ULTIMATE</span></h1>
-                <p class="text-slate-500">High-precision constructor with Givens support.</p>
+    <div id="modalOverlay">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4">
+            <h3 id="modalTitle" class="text-lg font-bold mb-2 text-slate-900">Share Puzzle</h3>
+            <p id="modalDesc" class="text-sm text-slate-500 mb-4">Copy the string below to save your puzzle.</p>
+            <textarea id="modalTextarea" class="w-full h-32 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono mb-4 focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeModal()" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700">Close</button>
+                <button id="modalActionBtn" class="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-md transition-all active:scale-95">Copy String</button>
             </div>
-            <div class="flex gap-2">
-                <button onclick="exportBase64()" class="bg-white border border-slate-200 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 shadow-sm transition-all">Export B64</button>
-                <button onclick="importBase64()" class="bg-white border border-slate-200 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 shadow-sm transition-all">Import B64</button>
+        </div>
+    </div>
+
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold tracking-tight italic">MATHDOKU<span class="text-blue-600">.BUILDER</span></h1>
+                <p class="text-slate-500 font-medium text-sm">Procedural Interface & Analysis</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <button onclick="openExportModal()" class="bg-white border border-slate-200 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 shadow-sm transition-all">Export</button>
+                <button onclick="openImportModal()" class="bg-white border border-slate-200 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 shadow-sm transition-all">Import</button>
+                <button onclick="resetConstructor()" class="bg-white border border-red-100 px-4 py-2 rounded-lg text-sm font-semibold text-red-500 hover:bg-red-50 transition-all">Reset All</button>
             </div>
         </header>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div class="lg:col-span-7 space-y-6">
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div class="flex justify-between items-center mb-4">
+                    <div class="flex justify-between items-center mb-6">
                         <div class="flex items-center gap-4">
-                            <label class="font-bold text-sm uppercase tracking-wider text-slate-400">Grid Size</label>
+                            <label class="font-bold text-xs uppercase tracking-wider text-slate-400">Dimension</label>
                             <select id="gridSize" class="bg-slate-100 border-none rounded-lg px-4 py-2 text-sm font-bold focus:ring-2 focus:ring-blue-500">
                                 <option value="4" selected>4x4</option>
                                 <option value="5">5x5</option>
@@ -107,26 +102,21 @@
                                 <option value="9">9x9</option>
                             </select>
                         </div>
-                        <div class="flex flex-col items-end text-[10px] font-bold text-slate-400 uppercase">
-                            <div class="flex gap-2 mb-1">
-                                <span>Selection: <span id="selectionCount" class="text-blue-600 font-bold">0</span> cells</span>
-                                <button onclick="resetConstructor()" class="text-slate-400 hover:text-red-500 transition">Reset Canvas</button>
-                            </div>
-                            <span>Select cell + press 1-9 for Given</span>
-                            <span>Backspace/0 to Clear</span>
+                        <div id="selectionStatus" class="text-[10px] font-bold text-slate-400 uppercase">
+                            0 Cells Selected
                         </div>
                     </div>
 
-                    <div id="gridContainer" class="grid gap-0 mx-auto border-2 border-slate-900 overflow-hidden rounded-sm bg-slate-200 shadow-xl" style="max-width: 400px;"></div>
+                    <div id="gridContainer" class="grid gap-0 mx-auto border-2 border-slate-900 overflow-hidden bg-slate-200 shadow-xl" style="max-width: 420px;"></div>
 
-                    <div class="mt-6 flex flex-wrap gap-3 items-center p-5 bg-blue-50 rounded-2xl border border-blue-100">
-                        <div class="flex flex-col">
-                            <label class="text-[10px] font-bold text-blue-400 uppercase mb-1">Target</label>
-                            <input id="cageTarget" type="number" placeholder="Value" class="w-24 px-3 py-2 rounded-lg border-blue-200 text-sm focus:ring-2 focus:ring-blue-500">
+                    <div class="mt-8 p-5 bg-blue-50 rounded-2xl border border-blue-100 flex flex-wrap gap-4 items-end">
+                        <div class="flex-1 min-w-[100px]">
+                            <label class="block text-[10px] font-bold text-blue-400 uppercase mb-1">Cage Target</label>
+                            <input id="cageTarget" type="number" class="w-full px-3 py-2 rounded-lg border-blue-200 text-sm focus:ring-2 focus:ring-blue-500">
                         </div>
-                        <div class="flex flex-col">
-                            <label class="text-[10px] font-bold text-blue-400 uppercase mb-1">Operator</label>
-                            <select id="cageOp" class="w-24 px-3 py-2 rounded-lg border-blue-200 text-sm focus:ring-2 focus:ring-blue-500">
+                        <div class="flex-1 min-w-[100px]">
+                            <label class="block text-[10px] font-bold text-blue-400 uppercase mb-1">Operator</label>
+                            <select id="cageOp" class="w-full px-3 py-2 rounded-lg border-blue-200 text-sm focus:ring-2 focus:ring-blue-500">
                                 <option value="+">+</option>
                                 <option value="-">-</option>
                                 <option value="*">×</option>
@@ -134,176 +124,134 @@
                                 <option value="None">Fixed</option>
                             </select>
                         </div>
-                        <div class="flex flex-col flex-1">
-                            <label class="text-[10px] opacity-0 mb-1">Submit</label>
-                            <button onclick="createCage()" class="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-md transition-all active:scale-95">CREATE CAGE</button>
-                        </div>
+                        <button onclick="createCage()" class="bg-blue-600 text-white px-8 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-md transition-all active:scale-95">CREATE CAGE</button>
                     </div>
                 </div>
 
                 <div class="bg-slate-900 p-6 rounded-2xl shadow-xl text-white">
-                    <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        Solution Visualization
-                    </h3>
-                    <div id="solutionContainer" class="grid gap-1 mx-auto" style="max-width: 300px;">
-                        <div class="col-span-full py-12 text-center text-slate-600 text-sm italic">
-                            Run analysis to see possible values...
-                        </div>
+                    <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Solution Heatmap</h3>
+                    <div id="solutionContainer" class="grid gap-1 mx-auto" style="max-width: 320px;">
+                        <div class="col-span-full py-12 text-center text-slate-600 text-sm italic">Analyze puzzle to view solution states...</div>
                     </div>
                 </div>
             </div>
 
             <div class="lg:col-span-5 space-y-6">
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 class="font-bold text-lg mb-4 flex items-center justify-between">
-                        <span>Analysis Engine</span>
-                        <span id="statusBadge" class="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-slate-100 text-slate-500">Standby</span>
-                    </h2>
-
-                    <div id="results" class="space-y-4">
-                        <div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-400 text-sm text-center">
-                            Awaiting cage definitions...
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="font-bold text-lg">Analysis</h2>
+                        <span id="statusBadge" class="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-slate-100 text-slate-400">Idle</span>
+                    </div>
+                    
+                    <div id="resultsArea">
+                        <div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-400 text-xs text-center">
+                            Run solver to check validity...
                         </div>
                     </div>
 
-                    <button onclick="runAnalysis()" id="btnAnalyze" class="w-full mt-6 bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-slate-800 shadow-lg transition-all active:scale-95 disabled:opacity-50">
-                        ANALYZE PUZZLE
+                    <button onclick="runAnalysis()" id="btnAnalyze" class="w-full mt-6 bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-slate-800 shadow-lg transition-all active:scale-95">
+                        RUN SOLVER
                     </button>
                 </div>
 
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <h3 class="font-bold text-xs text-slate-400 uppercase tracking-widest mb-3 flex justify-between">
-                        <span>Cages List</span>
-                        <span id="totalCellsCovered" class="text-slate-300">0 / 16 cells</span>
-                    </h3>
-                    <div id="cageList" class="space-y-2 max-h-80 overflow-y-auto pr-2"></div>
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="font-bold text-xs text-slate-400 uppercase">Cage Registry</h3>
+                        <span id="coverageLabel" class="text-xs font-bold text-slate-500">0 / 16</span>
+                    </div>
+                    <div id="cageList" class="space-y-2 max-h-96 overflow-y-auto pr-2"></div>
                 </div>
             </div>
         </div>
     </div>
 
+    <script src="solver.js"></script>
+
     <script>
-        let size = 4;
-        let cages = []; 
+        let gridSize = 4;
+        let cages = [];
         let givens = {}; 
         let selectedCells = new Set();
-        const gridContainer = document.getElementById('gridContainer');
-        const gridSizeSelect = document.getElementById('gridSize');
 
         function init() {
             renderGrid();
-            gridSizeSelect.addEventListener('change', (e) => {
-                size = parseInt(e.target.value);
+            document.getElementById('gridSize').onchange = (e) => {
+                gridSize = parseInt(e.target.value);
                 resetConstructor();
-            });
+            };
 
-            window.addEventListener('keydown', (e) => {
-                // BUG FIX: Ignore keys if user is typing in an input field
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
-                    return;
+            window.onkeydown = (e) => {
+                if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+                if (selectedCells.size === 0) return;
+                if (e.key >= '1' && e.key <= gridSize.toString()) {
+                    selectedCells.forEach(id => givens[id] = parseInt(e.key));
+                    renderGrid();
+                } else if (['0', 'Backspace', 'Delete'].includes(e.key)) {
+                    selectedCells.forEach(id => delete givens[id]);
+                    renderGrid();
                 }
-
-                if (selectedCells.size > 0) {
-                    const key = e.key;
-                    if (key >= '1' && key <= size.toString()) {
-                        const val = parseInt(key);
-                        selectedCells.forEach(id => givens[id] = val);
-                        renderGrid();
-                    } else if (key === '0' || key === 'Backspace' || key === 'Delete') {
-                        selectedCells.forEach(id => delete givens[id]);
-                        renderGrid();
-                    }
-                }
-            });
-        }
-
-        function resetConstructor() {
-            cages = [];
-            givens = {};
-            selectedCells.clear();
-            renderGrid();
-            renderCageList();
-            const countEl = document.getElementById('selectionCount');
-            if (countEl) countEl.textContent = '0';
-            document.getElementById('results').innerHTML = `<div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-400 text-sm text-center">Awaiting cage definitions...</div>`;
-            document.getElementById('solutionContainer').innerHTML = `<div class="col-span-full py-12 text-center text-slate-600 text-sm italic">Run analysis to see possible values...</div>`;
-            updateStatus('Standby', 'slate');
+            };
         }
 
         function renderGrid() {
-            gridContainer.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
-            gridContainer.innerHTML = '';
-            for (let r = 0; r < size; r++) {
-                for (let c = 0; c < size; c++) {
-                    const cell = document.createElement('div');
+            const container = document.getElementById('gridContainer');
+            container.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
+            container.innerHTML = '';
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize; c++) {
                     const key = `${r},${c}`;
-                    cell.className = 'grid-cell';
-                    if (selectedCells.has(key)) cell.classList.add('selected');
-                    if (givens[key]) {
-                        cell.classList.add('given');
-                        cell.textContent = givens[key];
-                    }
-                    
+                    const cell = document.createElement('div');
+                    cell.className = `grid-cell ${selectedCells.has(key) ? 'selected' : ''} ${givens[key] ? 'given' : ''}`;
+                    cell.textContent = givens[key] || '';
                     cell.onclick = (e) => {
-                        if (!e.metaKey && !e.ctrlKey && !e.shiftKey) {
-                            selectedCells.clear();
-                            document.querySelectorAll('.grid-cell').forEach(el => el.classList.remove('selected'));
-                        }
-                        if (selectedCells.has(key)) { 
-                            selectedCells.delete(key); 
-                            cell.classList.remove('selected'); 
-                        } else { 
-                            selectedCells.add(key); 
-                            cell.classList.add('selected'); 
-                        }
-                        const countEl = document.getElementById('selectionCount');
-                        if (countEl) countEl.textContent = selectedCells.size;
+                        if (!e.metaKey && !e.ctrlKey && !e.shiftKey) selectedCells.clear();
+                        selectedCells.has(key) ? selectedCells.delete(key) : selectedCells.add(key);
+                        updateSelectionCount();
+                        renderGrid();
                     };
-
                     const cage = cages.find(cg => cg.cells[0][0] === r && cg.cells[0][1] === c);
                     if (cage) {
                         const label = document.createElement('div');
                         label.className = 'cage-label';
-                        label.textContent = `${cage.target}${cage.op === 'None' ? '' : (cage.op === '*' ? '×' : (cage.op === '/' ? '÷' : cage.op))}`;
+                        const opMap = { '+': '+', '-': '-', '*': '×', '/': '÷', 'None': '' };
+                        label.textContent = `${cage.target}${opMap[cage.op]}`;
                         cell.appendChild(label);
                     }
                     applyCageBorders(cell, r, c);
-                    gridContainer.appendChild(cell);
+                    container.appendChild(cell);
                 }
             }
         }
 
-        function applyCageBorders(element, r, c) {
-            const currentCage = cages.find(cg => cg.cells.some(cell => cell[0] === r && cell[1] === c));
-            if (!currentCage) return;
-            const inCage = (row, col) => currentCage.cells.some(cell => cell[0] === row && cell[1] === col);
-            if (!inCage(r - 1, c)) element.classList.add('border-t-heavy');
-            if (!inCage(r + 1, c)) element.classList.add('border-b-heavy');
-            if (!inCage(r, c - 1)) element.classList.add('border-l-heavy');
-            if (!inCage(r, c + 1)) element.classList.add('border-r-heavy');
+        function applyCageBorders(el, r, c) {
+            const cage = cages.find(cg => cg.cells.some(cell => cell[0] === r && cell[1] === c));
+            if (!cage) return;
+            const inCage = (row, col) => cage.cells.some(cell => cell[0] === row && cell[1] === col);
+            if (!inCage(r - 1, c)) el.classList.add('border-t-heavy');
+            if (!inCage(r + 1, c)) el.classList.add('border-b-heavy');
+            if (!inCage(r, c - 1)) el.classList.add('border-l-heavy');
+            if (!inCage(r, c + 1)) el.classList.add('border-r-heavy');
+        }
+
+        function updateSelectionCount() {
+            document.getElementById('selectionStatus').textContent = `${selectedCells.size} Cells Selected`;
         }
 
         function createCage() {
-            const targetInput = document.getElementById('cageTarget');
-            const targetValue = targetInput.value.trim();
-            const target = parseInt(targetValue);
+            const tEl = document.getElementById('cageTarget');
+            const target = parseInt(tEl.value);
             const op = document.getElementById('cageOp').value;
-            if (targetValue === "" || isNaN(target) || selectedCells.size === 0) return;
-            const cells = Array.from(selectedCells).map(s => s.split(',').map(Number));
-            cells.sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1]);
-            
-            if (cells.some(([r, c]) => cages.some(cg => cg.cells.some(cc => cc[0] === r && cc[1] === c)))) {
-                return;
-            }
-            
-            cages.push({ op, target, cells, id: Date.now() });
+            if (isNaN(target) || selectedCells.size === 0) return;
+            const newCells = Array.from(selectedCells).map(s => s.split(',').map(Number))
+                .sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1]);
+            const hasOverlap = newCells.some(([r, c]) => cages.some(cg => cg.cells.some(cc => cc[0] === r && cc[1] === c)));
+            if (hasOverlap) return;
+            cages.push({ op, target, cells: newCells, id: Date.now() });
             selectedCells.clear();
-            targetInput.value = '';
-            const countEl = document.getElementById('selectionCount');
-            if (countEl) countEl.textContent = '0';
+            tEl.value = '';
             renderGrid();
             renderCageList();
+            updateSelectionCount();
         }
 
         function removeCage(id) {
@@ -314,245 +262,153 @@
 
         function renderCageList() {
             const list = document.getElementById('cageList');
-            const counter = document.getElementById('totalCellsCovered');
-            if (!list || !counter) return;
+            const coverage = document.getElementById('coverageLabel');
             list.innerHTML = '';
             let total = 0;
             cages.forEach(c => {
                 total += c.cells.length;
                 const div = document.createElement('div');
-                div.className = 'flex justify-between items-center bg-slate-50 p-3 rounded-xl text-xs border border-slate-100 hover:border-slate-300 transition-all group';
-                div.innerHTML = `<span><strong class="text-blue-600 mr-2">${c.target}${c.op === 'None' ? '' : c.op}</strong> <span class="text-slate-400 font-medium">${c.cells.length} cells</span></span><button onclick="removeCage(${c.id})" class="text-slate-300 hover:text-red-500 font-bold px-2 group-hover:opacity-100">×</button>`;
+                div.className = 'flex justify-between items-center bg-slate-50 p-2.5 rounded-lg text-xs border border-slate-200';
+                div.innerHTML = `
+                    <span class="font-medium text-slate-700">
+                        <strong class="text-blue-600">${c.target}${c.op === 'None' ? '' : c.op}</strong> 
+                        <span class="text-slate-400 ml-1">(${c.cells.length} cells)</span>
+                    </span>
+                    <button onclick="removeCage(${c.id})" class="text-slate-300 hover:text-red-500 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                `;
                 list.appendChild(div);
             });
-            if (total < size * size) {
-                const div = document.createElement('div');
-                div.className = 'bg-red-50 border border-red-100 text-red-600 p-3 rounded-xl text-[10px] font-bold uppercase tracking-wider text-center';
-                div.textContent = `${(size*size) - total} UNASSIGNED CELLS`;
-                list.appendChild(div);
-            }
-            counter.textContent = `${total} / ${size * size} cells`;
-            counter.className = total === (size * size) ? "text-emerald-500 font-bold" : "text-slate-300";
-        }
-
-        function updateStatus(text, color) {
-            const b = document.getElementById('statusBadge');
-            if(!b) return;
-            b.textContent = text;
-            b.className = `text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-${color}-100 text-${color}-600`;
+            coverage.textContent = `${total} / ${gridSize * gridSize}`;
         }
 
         async function runAnalysis() {
-            const btn = document.getElementById('btnAnalyze');
-            btn.disabled = true;
-            updateStatus('Solving...', 'blue');
+            const badge = document.getElementById('statusBadge');
+            badge.textContent = "SOLVING...";
+            badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-blue-100 text-blue-600";
             await new Promise(r => setTimeout(r, 100));
-            const solver = new MathdokuSolver(size, cages, givens);
-            const result = solver.solve();
-            displayResults(result);
-            renderSolution(result);
-            btn.disabled = false;
-        }
-
-        function displayResults(res) {
-            const resultsDiv = document.getElementById('results');
-            let difficulty = "N/A";
-            let color = "slate";
-            const displayCount = res.count >= 1000 ? "1000+" : res.count;
-
-            if (res.count === 0) {
-                difficulty = "Impossible";
-                color = "red";
-                updateStatus('Invalid', 'red');
-            } else if (res.count === 1) {
-                const s = res.complexity;
-                if (s <= 100) { difficulty = "Easy"; color = "emerald"; }
-                else if (s <= 200) { difficulty = "Medium"; color = "teal"; }
-                else if (s <= 400) { difficulty = "Hard"; color = "blue"; }
-                else if (s <= 700) { difficulty = "Vicious"; color = "indigo"; }
-                else if (s <= 1000) { difficulty = "Devilish"; color = "rose"; }
-                else if (s <= 1500) { difficulty = "Diabolical"; color = "red"; }
-                else { difficulty = "Beyond Diabolical"; color = "slate"; }
-                updateStatus('Unique', 'emerald');
-            } else {
-                difficulty = "Ambiguous";
-                color = "orange";
-                updateStatus('Multi-Solution', 'orange');
-            }
-
-            resultsDiv.innerHTML = `
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-sm"><p class="text-[10px] text-slate-400 uppercase font-bold">Solutions</p><p class="text-2xl font-black">${displayCount}</p></div>
-                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-sm"><p class="text-[10px] text-slate-400 uppercase font-bold">Complexity</p><p class="text-2xl font-black">${res.complexity.toLocaleString()}</p></div>
-                </div>
-                <div class="p-6 rounded-2xl bg-${color}-50 border border-${color}-200 text-center shadow-inner">
-                    <p class="text-[10px] text-${color}-600 font-bold uppercase tracking-widest mb-1">Grid Rating</p>
-                    <p class="text-2xl font-black text-${color}-900 italic tracking-tight">${difficulty}</p>
+            const result = solveMathdoku(gridSize, cages, givens);
+            const rating = ratePuzzle(result);
+            badge.textContent = rating.status;
+            badge.className = `text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-${rating.color}-100 text-${rating.color}-600`;
+            document.getElementById('resultsArea').innerHTML = `
+                <div class="p-6 rounded-2xl bg-${rating.color}-50 border border-${rating.color}-200 text-center">
+                    <p class="text-[10px] uppercase font-bold text-${rating.color}-500 mb-1">${rating.status}</p>
+                    <p class="text-2xl font-black text-${rating.color}-900">${rating.label}</p>
+                    <div class="flex justify-center gap-4 mt-3 text-xs text-slate-500 font-medium">
+                        <span>${result.count >= 1000 ? '1000+' : result.count} Solutions</span>
+                        <span class="text-slate-300">|</span>
+                        <span>${result.complexity} Iterations</span>
+                    </div>
                 </div>
             `;
+            renderSolutionMap(result);
         }
 
-        function renderSolution(res) {
+        function renderSolutionMap(res) {
             const container = document.getElementById('solutionContainer');
-            container.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+            container.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
             container.innerHTML = '';
-
             if (res.count === 0) {
-                container.innerHTML = `<div class="col-span-full py-12 text-center text-red-400 text-sm font-bold">NO VALID SOLUTION</div>`;
+                container.innerHTML = '<div class="col-span-full py-8 text-center text-red-400 text-xs">No valid solutions found for this configuration.</div>';
                 return;
             }
-
-            const possibilities = Array.from({ length: size }, () => Array.from({ length: size }, () => new Set()));
+            const possibilities = Array.from({ length: gridSize }, () => Array.from({ length: gridSize }, () => new Set()));
             res.solutions.forEach(sol => {
-                for (let r = 0; r < size; r++) {
-                    for (let c = 0; c < size; c++) {
-                        possibilities[r][c].add(sol[r][c]);
-                    }
+                for (let r = 0; r < gridSize; r++) {
+                    for (let c = 0; c < gridSize; c++) possibilities[r][c].add(sol[r][c]);
                 }
             });
-
-            for (let r = 0; r < size; r++) {
-                for (let c = 0; c < size; c++) {
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize; c++) {
                     const cell = document.createElement('div');
                     cell.className = 'solution-cell';
                     const set = possibilities[r][c];
-                    
                     if (set.size === 1) {
-                        cell.innerHTML = `<span class="text-slate-800">${[...set][0]}</span>`;
-                        cell.classList.add('bg-white');
-                    } else if (set.size === size) {
-                        cell.innerHTML = `<span class="text-slate-300 text-[10px] uppercase font-bold">Any</span>`;
-                        cell.classList.add('bg-slate-800', 'border-slate-700');
+                        cell.textContent = [...set][0];
+                        cell.classList.add('text-slate-900');
                     } else {
-                        const grid = document.createElement('div');
-                        grid.className = 'possibility-grid';
-                        for(let i=1; i<=size; i++) {
-                            const item = document.createElement('div');
-                            item.className = 'possibility-item';
-                            if(set.has(i)) item.textContent = i;
-                            grid.appendChild(item);
-                        }
-                        cell.appendChild(grid);
-                        cell.classList.add('bg-slate-800', 'border-slate-700');
+                        cell.innerHTML = `
+                            <div class="possibility-grid">
+                                ${Array.from({length: gridSize}, (_, i) => `
+                                    <div class="possibility-item">${set.has(i+1) ? i+1 : ''}</div>
+                                `).join('')}
+                            </div>
+                        `;
                     }
                     container.appendChild(cell);
                 }
             }
         }
 
-        function exportBase64() {
-            const data = { s: size, c: cages.map(cg => ({ o: cg.op, t: cg.target, cl: cg.cells })), g: givens };
-            const b64 = btoa(JSON.stringify(data));
-            const dummy = document.createElement("textarea");
-            document.body.appendChild(dummy);
-            dummy.value = b64;
-            dummy.select();
-            document.execCommand("copy");
-            document.body.removeChild(dummy);
+        function openExportModal() {
+            const data = { gridSize, cages, givens };
+            const base64 = btoa(JSON.stringify(data));
+            const overlay = document.getElementById('modalOverlay');
+            const title = document.getElementById('modalTitle');
+            const desc = document.getElementById('modalDesc');
+            const area = document.getElementById('modalTextarea');
+            const btn = document.getElementById('modalActionBtn');
+            title.textContent = "Export Puzzle";
+            desc.textContent = "Copy the string below to save or share your design.";
+            area.value = base64;
+            area.readOnly = true;
+            btn.textContent = "Copy to Clipboard";
+            btn.onclick = () => {
+                area.select();
+                document.execCommand('copy');
+                btn.textContent = "Copied!";
+                setTimeout(() => btn.textContent = "Copy to Clipboard", 2000);
+            };
+            overlay.style.display = 'flex';
         }
 
-        function importBase64() {
-            const b64 = prompt("Paste Puzzle Base64 string:");
-            if (!b64) return;
-            try {
-                const data = JSON.parse(atob(b64));
-                size = data.s;
-                gridSizeSelect.value = size;
-                cages = data.c.map((cg, idx) => ({ op: cg.o, target: cg.t, cells: cg.cl, id: Date.now() + idx }));
-                givens = data.g || {};
-                selectedCells.clear();
-                renderGrid();
-                renderCageList();
-                updateStatus('Ready', 'emerald');
-            } catch (e) { alert("Invalid Base64 string."); }
+        function openImportModal() {
+            const overlay = document.getElementById('modalOverlay');
+            const title = document.getElementById('modalTitle');
+            const desc = document.getElementById('modalDesc');
+            const area = document.getElementById('modalTextarea');
+            const btn = document.getElementById('modalActionBtn');
+            title.textContent = "Import Puzzle";
+            desc.textContent = "Paste a puzzle Base64 string below to load it.";
+            area.value = "";
+            area.readOnly = false;
+            btn.textContent = "Load Puzzle";
+            btn.onclick = () => {
+                try {
+                    const data = JSON.parse(atob(area.value));
+                    if (data.gridSize && data.cages) {
+                        gridSize = data.gridSize;
+                        cages = data.cages;
+                        givens = data.givens || {};
+                        document.getElementById('gridSize').value = gridSize;
+                        renderGrid();
+                        renderCageList();
+                        closeModal();
+                    }
+                } catch (e) {
+                    alert("Invalid puzzle string.");
+                }
+            };
+            overlay.style.display = 'flex';
         }
 
-        class MathdokuSolver {
-            constructor(size, cages, givens) {
-                this.size = size;
-                this.cages = [...cages];
-                this.givens = givens;
-                this.solutions = [];
-                this.backtrackCount = 0;
-                
-                if (this.cages.length === 0 && Object.keys(this.givens).length === 0) {
-                    const firstRowCells = [];
-                    let rowSum = 0;
-                    for(let i=0; i<this.size; i++) {
-                        firstRowCells.push([0, i]);
-                        rowSum += (i + 1);
-                    }
-                    this.cages.push({ op: '+', target: rowSum, cells: firstRowCells, id: 'synthetic' });
-                }
-            }
-            solve() {
-                const grid = Array.from({ length: this.size }, () => Array(this.size).fill(0));
-                for (const key in this.givens) {
-                    const [r, c] = key.split(',').map(Number);
-                    grid[r][c] = this.givens[key];
-                }
-                this._backtrack(grid, 0, 0);
-                return { count: this.solutions.length, complexity: this.backtrackCount, solutions: this.solutions };
-            }
-            _backtrack(grid, r, c) {
-                if (this.solutions.length >= 1000) return; 
-                if (c === this.size) { r++; c = 0; }
-                if (r === this.size) {
-                    if (this._checkAllCages(grid)) this.solutions.push(grid.map(row => [...row]));
-                    return;
-                }
-                if (grid[r][c] !== 0) {
-                    if (this._isSafeGiven(grid, r, c, grid[r][c])) {
-                         this._backtrack(grid, r, c + 1);
-                    }
-                    return;
-                }
-                this.backtrackCount++;
-                for (let num = 1; num <= this.size; num++) {
-                    if (this._isSafe(grid, r, c, num)) {
-                        grid[r][c] = num;
-                        if (this._isPartialCageValid(grid, r, c)) this._backtrack(grid, r, c + 1);
-                        grid[r][c] = 0;
-                    }
-                }
-            }
-            _isSafeGiven(grid, r, c, num) {
-                for (let i = 0; i < this.size; i++) {
-                    if (i !== c && grid[r][i] === num) return false;
-                    if (i !== r && grid[i][c] === num) return false;
-                }
-                return true;
-            }
-            _isSafe(grid, r, c, num) {
-                for (let i = 0; i < this.size; i++) if (grid[r][i] === num || grid[i][c] === num) return false;
-                return true;
-            }
-            _isPartialCageValid(grid, r, c) {
-                const cage = this.cages.find(cg => cg.cells.some(cell => cell[0] === r && cell[1] === c));
-                if (!cage) return true;
-                const vals = cage.cells.map(([cr, cc]) => grid[cr][cc]).filter(v => v !== 0);
-                const isFull = vals.length === cage.cells.length;
-                switch (cage.op) {
-                    case '+': const sum = vals.reduce((a, b) => a + b, 0); return isFull ? sum === cage.target : sum < cage.target;
-                    case '*': const prod = vals.reduce((a, b) => a * b, 1); return isFull ? prod === cage.target : prod <= cage.target;
-                    case '-': if (!isFull) return true; return Math.abs(vals[0] - vals[1]) === cage.target;
-                    case '/': if (!isFull) return true; return Math.abs(vals[0] / vals[1] - cage.target) < 0.001 || Math.abs(vals[1] / vals[0] - cage.target) < 0.001;
-                    case 'None': return vals[0] === cage.target;
-                }
-                return true;
-            }
-            _checkAllCages(grid) {
-                return this.cages.every(cage => {
-                    const vals = cage.cells.map(([r, c]) => grid[r][c]);
-                    if (cage.op === '+') return vals.reduce((a, b) => a + b, 0) === cage.target;
-                    if (cage.op === '*') return vals.reduce((a, b) => a * b, 1) === cage.target;
-                    if (cage.op === '-') return Math.abs(vals[0] - vals[1]) === cage.target;
-                    if (cage.op === '/') return Math.abs(vals[0] / vals[1] - cage.target) < 0.001 || Math.abs(vals[1] / vals[0] - cage.target) < 0.001;
-                    if (cage.op === 'None') return vals[0] === cage.target;
-                    return false;
-                });
-            }
+        function closeModal() { document.getElementById('modalOverlay').style.display = 'none'; }
+
+        function resetConstructor() {
+            cages = []; givens = {}; selectedCells.clear();
+            renderGrid(); renderCageList(); updateSelectionCount();
+            document.getElementById('resultsArea').innerHTML = `
+                <div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-400 text-xs text-center">
+                    Run solver to check validity...
+                </div>
+            `;
+            document.getElementById('solutionContainer').innerHTML = '<div class="col-span-full py-12 text-center text-slate-600 text-sm italic">Analyze puzzle to view solution states...</div>';
+            document.getElementById('statusBadge').textContent = "IDLE";
+            document.getElementById('statusBadge').className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-slate-100 text-slate-400";
         }
+
         init();
     </script>
 </body>
