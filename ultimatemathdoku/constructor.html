@@ -162,7 +162,8 @@
 
     <script>
         /**
-         * Mathdoku Solver Class - Integrated directly to avoid module issues
+         * Mathdoku (KenKen) Solver and Rater
+         * Updated to support multiple solutions and non-unique/impossible levels.
          */
         class MathdokuSolver {
             constructor(size, cages) {
@@ -170,7 +171,8 @@
                 this.cages = cages;
                 this.grid = Array(size * size).fill(0);
                 this.backtracks = 0;
-                this.firstSolution = null;
+                this.solutions = []; 
+                
                 this.cellToCageMap = {};
                 this.cages.forEach((cage, index) => {
                     cage.cells.forEach(cellIdx => {
@@ -227,6 +229,85 @@
                 return true;
             }
 
+            findAllSolutions(limit = 2) {
+                this.solutions = [];
+                this.backtracks = 0;
+                this.solveRecursive(0, limit);
+                return this.solutions;
+            }
+
+            solveRecursive(idx, limit) {
+                if (this.solutions.length >= limit) return;
+                if (idx === this.size * this.size) {
+                    this.solutions.push([...this.grid]);
+                    return;
+                }
+                for (let val = 1; val <= this.size; val++) {
+                    if (this.isValid(idx, val)) {
+                        this.grid[idx] = val;
+                        this.solveRecursive(idx + 1, limit);
+                        this.grid[idx] = 0;
+                        if (this.solutions.length >= limit) return;
+                    } else {
+                        this.backtracks++;
+                    }
+                }
+            }
+
+            rateDifficulty() {
+                if (this.solutions.length === 0) {
+                    this.findAllSolutions(2);
+                }
+
+                if (this.solutions.length === 0) {
+                    return { rank: "Impossible", score: Infinity };
+                }
+
+                let totalCageComplexity = 0;
+                this.cages.forEach(c => {
+                    const combos = this.countPotentialCombinations(c);
+                    let complexity = Math.log2(combos + 1);
+                    if (c.op === '/' || c.op === '*') complexity *= 1.5;
+                    if (c.op === '-') complexity *= 1.2;
+                    totalCageComplexity += complexity;
+                });
+
+                const avgCageComplexity = totalCageComplexity / this.cages.length;
+                const searchScore = Math.sqrt(this.backtracks) * 2;
+                const totalScore = Math.round((avgCageComplexity * 20) + searchScore);
+
+                if (this.solutions.length > 1) {
+                    return { 
+                        rank: "Non-unique", 
+                        score: totalScore,
+                        metrics: {
+                            backtracks: this.backtracks,
+                            avgComplexity: avgCageComplexity.toFixed(2),
+                            solutionCount: this.solutions.length
+                        }
+                    };
+                }
+
+                let rank = "";
+                if (totalScore < 15) rank = "Easy";
+                else if (totalScore < 30) rank = "Medium";
+                else if (totalScore < 50) rank = "Hard";
+                else if (totalScore < 75) rank = "Vicious";
+                else if (totalScore < 110) rank = "Devilish";
+                else if (totalScore < 160) rank = "Diabolical";
+                else rank = "Beyond Diabolical";
+
+                return { 
+                    score: totalScore, 
+                    rank, 
+                    metrics: { 
+                        backtracks: this.backtracks, 
+                        avgComplexity: avgCageComplexity.toFixed(2), 
+                        solutionCount: this.solutions.length 
+                    } 
+                };
+            }
+
             countPotentialCombinations(cage) {
                 let count = 0;
                 const n = this.size;
@@ -244,46 +325,6 @@
                 };
                 backtrack(0, []);
                 return count;
-            }
-
-            solve(index = 0) {
-                if (index === this.size * this.size) {
-                    this.firstSolution = [...this.grid];
-                    return true;
-                }
-                for (let v = 1; v <= this.size; v++) {
-                    if (this.isValid(index, v)) {
-                        this.grid[index] = v;
-                        if (this.solve(index + 1)) return true;
-                        this.grid[index] = 0;
-                        this.backtracks++;
-                    }
-                }
-                return false;
-            }
-
-            rateDifficulty() {
-                if (!this.firstSolution) return { rank: "Unsolvable", score: Infinity };
-                let totalCageComplexity = 0;
-                this.cages.forEach(c => {
-                    const combos = this.countPotentialCombinations(c);
-                    let complexity = Math.log2(combos + 1);
-                    if (c.op === '/' || c.op === '*') complexity *= 1.5;
-                    if (c.op === '-') complexity *= 1.2;
-                    totalCageComplexity += complexity;
-                });
-                const avgCageComplexity = totalCageComplexity / this.cages.length;
-                const searchScore = Math.sqrt(this.backtracks) * 2;
-                const totalScore = Math.round((avgCageComplexity * 20) + searchScore);
-                let rank = "";
-                if (totalScore < 15) rank = "Easy";
-                else if (totalScore < 30) rank = "Medium";
-                else if (totalScore < 50) rank = "Hard";
-                else if (totalScore < 75) rank = "Vicious";
-                else if (totalScore < 110) rank = "Devilish";
-                else if (totalScore < 160) rank = "Diabolical";
-                else rank = "Beyond Diabolical";
-                return { score: totalScore, rank, metrics: { backtracks: this.backtracks, avgCageComplexity: avgCageComplexity.toFixed(2), totalCages: this.cages.length } };
             }
         }
 
@@ -424,26 +465,52 @@
             badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-blue-100 text-blue-600 font-bold";
             await new Promise(r => setTimeout(r, 200));
             const solver = new MathdokuSolver(size, cages);
-            const success = solver.solve();
-            if (success) {
-                const rating = solver.rateDifficulty();
-                renderResults(rating);
-                renderSolution(solver.firstSolution);
+            solver.findAllSolutions(2);
+            const rating = solver.rateDifficulty();
+            renderResults(rating);
+            if (solver.solutions.length > 0) {
+                renderSolution(solver.solutions[0]);
             } else {
-                badge.innerText = "IMPOSSIBLE";
-                badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-red-100 text-red-600 font-bold";
-                document.getElementById('resultsArea').innerHTML = `<div class="p-6 rounded-2xl bg-red-50 border border-red-200 text-center"><p class="text-[10px] uppercase font-bold text-red-500 mb-1">Error</p><p class="text-xl font-black text-red-900">NO SOLUTION FOUND</p></div>`;
                 document.getElementById('solutionContainer').innerHTML = '<div class="col-span-full py-12 text-center text-red-400 text-sm font-medium">Contradiction in cage logic.</div>';
             }
         };
 
         function renderResults(rating) {
             const badge = document.getElementById('statusBadge');
+            
+            if (rating.rank === "Impossible") {
+                badge.innerText = "IMPOSSIBLE";
+                badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-red-100 text-red-600 font-bold";
+                document.getElementById('resultsArea').innerHTML = `<div class="p-6 rounded-2xl bg-red-50 border border-red-200 text-center"><p class="text-[10px] uppercase font-bold text-red-500 mb-1">Error</p><p class="text-xl font-black text-red-900">NO SOLUTION FOUND</p></div>`;
+                return;
+            }
+
             badge.innerText = "VALID";
             badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-green-100 text-green-600 font-bold";
-            const rankColors = { "Easy": "text-green-600 bg-green-50", "Medium": "text-blue-600 bg-blue-50", "Hard": "text-yellow-600 bg-yellow-50", "Vicious": "text-orange-600 bg-orange-50", "Devilish": "text-red-600 bg-red-50", "Diabolical": "text-purple-600 bg-purple-50", "Beyond Diabolical": "text-white bg-slate-900" };
+            
+            const rankColors = { 
+                "Non-unique": "text-pink-600 bg-pink-50",
+                "Easy": "text-green-600 bg-green-50", 
+                "Medium": "text-blue-600 bg-blue-50", 
+                "Hard": "text-yellow-600 bg-yellow-50", 
+                "Vicious": "text-orange-600 bg-orange-50", 
+                "Devilish": "text-red-600 bg-red-50", 
+                "Diabolical": "text-purple-600 bg-purple-50", 
+                "Beyond Diabolical": "text-white bg-slate-900" 
+            };
+            
             const colorClass = rankColors[rating.rank] || "bg-slate-50";
-            document.getElementById('resultsArea').innerHTML = `<div class="p-6 rounded-2xl ${colorClass.split(' ')[1]} border-2 border-slate-900 shadow-sm text-center"><p class="text-[10px] uppercase font-black text-slate-400 mb-1 tracking-tighter">Complexity Rating</p><p class="text-2xl font-black ${colorClass.split(' ')[0]}">${rating.rank.toUpperCase()}</p><div class="flex justify-center gap-4 mt-3 text-[10px] text-slate-500 font-bold uppercase tracking-widest"><span>Score: ${rating.score}</span><span>|</span><span>Complexity: ${rating.metrics.avgCageComplexity}</span></div></div>`;
+            document.getElementById('resultsArea').innerHTML = `
+                <div class="p-6 rounded-2xl ${colorClass.split(' ')[1]} border-2 border-slate-900 shadow-sm text-center">
+                    <p class="text-[10px] uppercase font-black text-slate-400 mb-1 tracking-tighter">Complexity Rating</p>
+                    <p class="text-2xl font-black ${colorClass.split(' ')[0]}">${rating.rank.toUpperCase()}</p>
+                    <div class="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-3 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                        <span>Score: ${rating.score}</span>
+                        <span>|</span>
+                        <span>Backtracks: ${rating.metrics.backtracks}</span>
+                        ${rating.rank === "Non-unique" ? '<span>|</span><span class="text-pink-600">Multiple Solutions</span>' : ''}
+                    </div>
+                </div>`;
         }
 
         function renderSolution(solution) {
