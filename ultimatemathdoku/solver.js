@@ -2,7 +2,6 @@
  * Mathdoku (KenKen) Solver and Rater
  * This file contains the logic to solve Mathdoku puzzles using backtracking 
  * with constraint propagation and evaluate their difficulty.
- * * Note: Export removed to support standard script tag loading.
  */
 
 class MathdokuSolver {
@@ -16,7 +15,7 @@ class MathdokuSolver {
         this.cages = cages;
         this.grid = Array(size * size).fill(0);
         this.backtracks = 0;
-        this.firstSolution = null;
+        this.solutions = []; // Array to store multiple solutions
         
         // Pre-map cells to their respective cage index for O(1) lookup during solving
         this.cellToCageMap = {};
@@ -40,101 +39,103 @@ class MathdokuSolver {
             if (this.grid[i * this.size + c] === val) return false;
         }
 
-        // 2. Cage Constraint Check
+        // 2. Cage Check
         const cageIdx = this.cellToCageMap[idx];
-        if (cageIdx === undefined) return true;
-
         const cage = this.cages[cageIdx];
-        const cageValues = cage.cells.map(i => i === idx ? val : this.grid[i]).filter(v => v !== 0);
         
-        if (cageValues.length === cage.cells.length) {
-            return this.checkCageLogic(cage, cageValues);
-        }
-
-        return this.checkPartialCageLogic(cage, cageValues);
+        // Temporarily place the value to check cage validity
+        this.grid[idx] = val;
+        const valid = this.isCageValid(cage);
+        this.grid[idx] = 0; // Reset
+        
+        return valid;
     }
 
-    checkCageLogic(cage, values) {
-        switch(cage.op) {
-            case '+': return values.reduce((a, b) => a + b, 0) === cage.target;
-            case '*': return values.reduce((a, b) => a * b, 1) === cage.target;
-            case '-': {
-                const max = Math.max(...values);
-                return (max - (values.reduce((a, b) => a + b, 0) - max)) === cage.target;
-            }
-            case '/': {
-                const max = Math.max(...values);
-                return (max / (values.reduce((a, b) => a * b, 1) / max)) === cage.target;
-            }
-            case '=': return values[0] === cage.target;
-            default: return false;
-        }
-    }
+    /**
+     * Checks if a cage is mathematically valid based on its current entries.
+     */
+    isCageValid(cage) {
+        const values = cage.cells.map(c => this.grid[c]).filter(v => v !== 0);
+        const isComplete = values.length === cage.cells.length;
 
-    checkPartialCageLogic(cage, values) {
-        const remaining = cage.cells.length - values.length;
-        const currentSum = values.reduce((a, b) => a + b, 0);
-        const currentProd = values.reduce((a, b) => a * b, 1);
-
-        switch(cage.op) {
+        // If cage is not full, we check if it's still possible to reach the target
+        switch (cage.op) {
             case '+':
-                if (currentSum + remaining > cage.target) return false;
-                if (currentSum + (remaining * this.size) < cage.target) return false;
+                const sum = values.reduce((a, b) => a + b, 0);
+                if (sum > cage.target) return false;
+                if (isComplete && sum !== cage.target) return false;
                 break;
             case '*':
-                if (currentProd > cage.target && cage.target !== 0) return false;
+                const product = values.reduce((a, b) => a * b, 1);
+                if (product > cage.target) return false;
+                if (isComplete && product !== cage.target) return false;
+                break;
+            case '-':
+                if (isComplete) {
+                    const [a, b] = values;
+                    if (Math.abs(a - b) !== cage.target) return false;
+                }
+                break;
+            case '/':
+                if (isComplete) {
+                    const [a, b] = values;
+                    if (a / b !== cage.target && b / a !== cage.target) return false;
+                }
+                break;
+            case '': // Single cell cage
+                if (values[0] !== cage.target) return false;
                 break;
         }
         return true;
     }
 
     /**
-     * Finds all valid permutations for a cage ignoring grid constraints.
+     * Finds up to 2 solutions. 
+     * Stopping at 2 is enough to determine non-uniqueness without searching the whole tree.
      */
-    countPotentialCombinations(cage) {
-        let count = 0;
-        const n = this.size;
-        const k = cage.cells.length;
-        
-        const backtrack = (index, currentValues) => {
-            if (index === k) {
-                if (this.checkCageLogic(cage, currentValues)) count++;
-                return;
-            }
-            for (let v = 1; v <= n; v++) {
-                currentValues.push(v);
-                backtrack(index + 1, currentValues);
-                currentValues.pop();
-            }
-        };
-
-        backtrack(0, []);
-        return count;
+    findAllSolutions(limit = 2) {
+        this.solutions = [];
+        this.backtracks = 0;
+        this.solveRecursive(0, limit);
+        return this.solutions;
     }
 
-    solve(index = 0) {
-        if (index === this.size * this.size) {
-            this.firstSolution = [...this.grid];
-            return true;
+    solveRecursive(idx, limit) {
+        if (this.solutions.length >= limit) return;
+
+        if (idx === this.size * this.size) {
+            this.solutions.push([...this.grid]);
+            return;
         }
 
-        for (let v = 1; v <= this.size; v++) {
-            if (this.isValid(index, v)) {
-                this.grid[index] = v;
-                if (this.solve(index + 1)) return true;
-                this.grid[index] = 0;
+        for (let val = 1; val <= this.size; val++) {
+            if (this.isValid(idx, val)) {
+                this.grid[idx] = val;
+                this.solveRecursive(idx + 1, limit);
+                this.grid[idx] = 0;
+                
+                if (this.solutions.length >= limit) return;
+            } else {
                 this.backtracks++;
             }
         }
-        return false;
     }
 
     /**
      * Difficulty Rating with Expanded Levels
      */
     rateDifficulty() {
-        if (!this.firstSolution) return { rank: "Unsolvable", score: Infinity };
+        // Find solutions if not already done
+        if (this.solutions.length === 0) {
+            this.findAllSolutions(2);
+        }
 
+        // 1. Handle Impossible
+        if (this.solutions.length === 0) {
+            return { rank: "Impossible", score: Infinity };
+        }
+
+        // Calculate complexity score (used for both unique and non-unique)
         let totalCageComplexity = 0;
         this.cages.forEach(c => {
             const combos = this.countPotentialCombinations(c);
@@ -150,6 +151,20 @@ class MathdokuSolver {
         const searchScore = Math.sqrt(this.backtracks) * 2;
         const totalScore = Math.round((avgCageComplexity * 20) + searchScore);
 
+        // 2. Handle Non-unique (returning calculated score instead of 0)
+        if (this.solutions.length > 1) {
+            return { 
+                rank: "Non-unique", 
+                score: totalScore,
+                metrics: {
+                    backtracks: this.backtracks,
+                    avgComplexity: avgCageComplexity.toFixed(2),
+                    solutionCount: this.solutions.length
+                }
+            };
+        }
+
+        // Standard ranking for unique solutions
         let rank = "";
         if (totalScore < 15) rank = "Easy";
         else if (totalScore < 30) rank = "Medium";
@@ -164,9 +179,19 @@ class MathdokuSolver {
             rank, 
             metrics: {
                 backtracks: this.backtracks,
-                avgCageComplexity: avgCageComplexity.toFixed(2),
-                totalCages: this.cages.length
+                avgComplexity: avgCageComplexity.toFixed(2),
+                solutionCount: this.solutions.length
             }
         };
+    }
+
+    /**
+     * Helper to estimate cage complexity
+     */
+    countPotentialCombinations(cage) {
+        if (cage.cells.length === 1) return 1;
+        if (cage.op === '-') return this.size;
+        if (cage.op === '/') return 2;
+        return Math.pow(this.size, cage.cells.length - 1);
     }
 }
