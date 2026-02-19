@@ -12,14 +12,18 @@ function solveMathdoku(size, cages, givens, maxSolutions = 1000) {
     const cageMap = Array.from({ length: size }, () => Array(size).fill(null));
     cages.forEach(cage => {
         cage.cells.forEach(([r, c]) => {
-            cageMap[r][c] = cage;
+            if (r < size && c < size) {
+                cageMap[r][c] = cage;
+            }
         });
     });
 
     // Apply givens
     for (const key in givens) {
         const [r, c] = key.split(',').map(Number);
-        grid[r][c] = givens[key];
+        if (r < size && c < size) {
+            grid[r][c] = givens[key];
+        }
     }
 
     /**
@@ -27,11 +31,12 @@ function solveMathdoku(size, cages, givens, maxSolutions = 1000) {
      * Returns false if the cage is now impossible (Early Pruning).
      */
     function isCageValid(cage, currentR, currentC) {
+        // Safety check: if cell belongs to no cage, it's technically invalid in Mathdoku
+        if (!cage) return false;
+
         let filledCount = 0;
         let sum = 0;
         let product = 1;
-        let max = 0;
-        let min = Infinity;
         const vals = [];
 
         for (const [r, c] of cage.cells) {
@@ -40,8 +45,6 @@ function solveMathdoku(size, cages, givens, maxSolutions = 1000) {
                 filledCount++;
                 sum += val;
                 product *= val;
-                if (val > max) max = val;
-                if (val < min) min = val;
                 vals.push(val);
             }
         }
@@ -63,15 +66,16 @@ function solveMathdoku(size, cages, givens, maxSolutions = 1000) {
                 return true;
 
             case '-':
-                if (!isComplete) return true; // Hard to prune partial subtraction
-                // In Mathdoku, subtraction is usually restricted to 2 cells: [Large] - [Small]
+                if (!isComplete) return true;
                 vals.sort((a, b) => b - a);
                 return (vals[0] - vals.slice(1).reduce((a, b) => a + b, 0)) === cage.target;
 
             case '/':
                 if (!isComplete) return true;
                 vals.sort((a, b) => b - a);
-                return (vals[0] / vals.slice(1).reduce((a, b) => a * b, 1)) === cage.target;
+                // Handle division carefully to avoid precision issues
+                const divisor = vals.slice(1).reduce((a, b) => a * b, 1);
+                return divisor !== 0 && (vals[0] / divisor) === cage.target;
 
             case 'None':
                 return vals[0] === cage.target;
@@ -96,8 +100,14 @@ function solveMathdoku(size, cages, givens, maxSolutions = 1000) {
             return;
         }
 
+        // Check if current cell is part of a cage. If not, the puzzle is unsolveable.
+        if (!cageMap[r][c]) return;
+
         if (grid[r][c] !== 0) {
-            backtrack(r, c + 1);
+            // If it's a given, just validate it once and move on
+            if (isCageValid(cageMap[r][c], r, c)) {
+                backtrack(r, c + 1);
+            }
             return;
         }
 
@@ -108,7 +118,6 @@ function solveMathdoku(size, cages, givens, maxSolutions = 1000) {
                 grid[r][c] = num;
                 state.backtrackCount++;
 
-                // Early Pruning: Only recurse if the current cage is still mathematically possible
                 if (isCageValid(currentCage, r, c)) {
                     backtrack(r, c + 1);
                 }
@@ -126,7 +135,7 @@ function solveMathdoku(size, cages, givens, maxSolutions = 1000) {
  * Difficulty Rater
  */
 function calculateCagePossibilities(cage, size) {
-    if (cage.op === 'None') return 1;
+    if (!cage || cage.op === 'None') return 1;
     const cellCount = cage.cells.length;
     if (cellCount === 2) {
         let combinations = 0;
@@ -150,6 +159,8 @@ function calculateCagePossibilities(cage, size) {
 
 function ratePuzzle(solverResult) {
     const { count, complexity, cages, size } = solverResult;
+    
+    // Status badges
     if (count === 0) return { label: "Impossible", color: "red", status: "Invalid" };
     if (count > 1) return { label: "Ambiguous", color: "orange", status: "Multi-Solution" };
 
@@ -160,10 +171,12 @@ function ratePuzzle(solverResult) {
     const computationalLog = Math.log10(complexity || 1);
     const score = (logicalDensity * 150) + (computationalLog * 40);
 
-    if (score <= 100) return { label: "Easy", color: "emerald", score, status: "Valid" };
-    if (score <= 180) return { label: "Medium", color: "teal", score, status: "Valid" };
-    if (score <= 260) return { label: "Hard", color: "blue", score, status: "Valid" };
-    if (score <= 340) return { label: "Vicious", color: "indigo", score, status: "Valid" };
-    if (score <= 420) return { label: "Devilish", color: "rose", score, status: "Valid" };
-    return { label: "Diabolical", color: "red", score, status: "Valid" };
+    const result = { score, status: "Valid" };
+
+    if (score <= 100) return { ...result, label: "Easy", color: "emerald" };
+    if (score <= 180) return { ...result, label: "Medium", color: "teal" };
+    if (score <= 260) return { ...result, label: "Hard", color: "blue" };
+    if (score <= 340) return { ...result, label: "Vicious", color: "indigo" };
+    if (score <= 420) return { ...result, label: "Devilish", color: "rose" };
+    return { ...result, label: "Diabolical", color: "red" };
 }
