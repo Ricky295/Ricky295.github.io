@@ -84,7 +84,6 @@
         </header>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <!-- Left Column: Design -->
             <div class="lg:col-span-7 space-y-6">
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <div class="flex justify-between items-center mb-6">
@@ -132,7 +131,6 @@
                 </div>
             </div>
 
-            <!-- Right Column: Results & List -->
             <div class="lg:col-span-5 space-y-6">
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <div class="flex justify-between items-center mb-4">
@@ -162,8 +160,134 @@
         </div>
     </div>
 
-    <script type="module">
-        import { MathdokuSolver } from './solver.js';
+    <script>
+        /**
+         * Mathdoku Solver Class - Integrated directly to avoid module issues
+         */
+        class MathdokuSolver {
+            constructor(size, cages) {
+                this.size = size;
+                this.cages = cages;
+                this.grid = Array(size * size).fill(0);
+                this.backtracks = 0;
+                this.firstSolution = null;
+                this.cellToCageMap = {};
+                this.cages.forEach((cage, index) => {
+                    cage.cells.forEach(cellIdx => {
+                        this.cellToCageMap[cellIdx] = index;
+                    });
+                });
+            }
+
+            isValid(idx, val) {
+                const r = Math.floor(idx / this.size);
+                const c = idx % this.size;
+                for (let i = 0; i < this.size; i++) {
+                    if (this.grid[r * this.size + i] === val) return false;
+                    if (this.grid[i * this.size + c] === val) return false;
+                }
+                const cageIdx = this.cellToCageMap[idx];
+                if (cageIdx === undefined) return true;
+                const cage = this.cages[cageIdx];
+                const cageValues = cage.cells.map(i => i === idx ? val : this.grid[i]).filter(v => v !== 0);
+                if (cageValues.length === cage.cells.length) return this.checkCageLogic(cage, cageValues);
+                return this.checkPartialCageLogic(cage, cageValues);
+            }
+
+            checkCageLogic(cage, values) {
+                switch(cage.op) {
+                    case '+': return values.reduce((a, b) => a + b, 0) === cage.target;
+                    case '*': return values.reduce((a, b) => a * b, 1) === cage.target;
+                    case '-': {
+                        const max = Math.max(...values);
+                        return (max - (values.reduce((a, b) => a + b, 0) - max)) === cage.target;
+                    }
+                    case '/': {
+                        const max = Math.max(...values);
+                        return (max / (values.reduce((a, b) => a * b, 1) / max)) === cage.target;
+                    }
+                    case '=': return values[0] === cage.target;
+                    default: return false;
+                }
+            }
+
+            checkPartialCageLogic(cage, values) {
+                const remaining = cage.cells.length - values.length;
+                const currentSum = values.reduce((a, b) => a + b, 0);
+                const currentProd = values.reduce((a, b) => a * b, 1);
+                switch(cage.op) {
+                    case '+':
+                        if (currentSum + remaining > cage.target) return false;
+                        if (currentSum + (remaining * this.size) < cage.target) return false;
+                        break;
+                    case '*':
+                        if (currentProd > cage.target && cage.target !== 0) return false;
+                        break;
+                }
+                return true;
+            }
+
+            countPotentialCombinations(cage) {
+                let count = 0;
+                const n = this.size;
+                const k = cage.cells.length;
+                const backtrack = (index, currentValues) => {
+                    if (index === k) {
+                        if (this.checkCageLogic(cage, currentValues)) count++;
+                        return;
+                    }
+                    for (let v = 1; v <= n; v++) {
+                        currentValues.push(v);
+                        backtrack(index + 1, currentValues);
+                        currentValues.pop();
+                    }
+                };
+                backtrack(0, []);
+                return count;
+            }
+
+            solve(index = 0) {
+                if (index === this.size * this.size) {
+                    this.firstSolution = [...this.grid];
+                    return true;
+                }
+                for (let v = 1; v <= this.size; v++) {
+                    if (this.isValid(index, v)) {
+                        this.grid[index] = v;
+                        if (this.solve(index + 1)) return true;
+                        this.grid[index] = 0;
+                        this.backtracks++;
+                    }
+                }
+                return false;
+            }
+
+            rateDifficulty() {
+                if (!this.firstSolution) return { rank: "Unsolvable", score: Infinity };
+                let totalCageComplexity = 0;
+                this.cages.forEach(c => {
+                    const combos = this.countPotentialCombinations(c);
+                    let complexity = Math.log2(combos + 1);
+                    if (c.op === '/' || c.op === '*') complexity *= 1.5;
+                    if (c.op === '-') complexity *= 1.2;
+                    totalCageComplexity += complexity;
+                });
+                const avgCageComplexity = totalCageComplexity / this.cages.length;
+                const searchScore = Math.sqrt(this.backtracks) * 2;
+                const totalScore = Math.round((avgCageComplexity * 20) + searchScore);
+                let rank = "";
+                if (totalScore < 15) rank = "Easy";
+                else if (totalScore < 30) rank = "Medium";
+                else if (totalScore < 50) rank = "Hard";
+                else if (totalScore < 75) rank = "Vicious";
+                else if (totalScore < 110) rank = "Devilish";
+                else if (totalScore < 160) rank = "Diabolical";
+                else rank = "Beyond Diabolical";
+                return { score: totalScore, rank, metrics: { backtracks: this.backtracks, avgCageComplexity: avgCageComplexity.toFixed(2), totalCages: this.cages.length } };
+            }
+        }
+
+        // --- Application UI Logic ---
 
         let size = 4;
         let cages = [];
@@ -205,12 +329,10 @@
 
                 cell.addEventListener('click', (e) => {
                     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
-                        // Only clear if selecting a fresh cell that isn't occupied
                         if (cellToCageMap[i] === undefined && !selectedCells.has(i)) {
                             selectedCells.clear();
                         }
                     }
-                    
                     if (cellToCageMap[i] === undefined) {
                         if (selectedCells.has(i)) {
                             selectedCells.delete(i);
@@ -232,12 +354,10 @@
                 const sortedCells = [...cage.cells].sort((a, b) => a - b);
                 const labelCell = cells[sortedCells[0]];
                 labelCell.querySelector('.cage-label').innerText = `${cage.target}${cage.op === '=' ? '' : cage.op}`;
-
                 cage.cells.forEach(idx => {
                     const r = Math.floor(idx / size);
                     const c = idx % size;
                     const cell = cells[idx];
-                    
                     if (r === 0 || cellToCageMap[idx - size] !== cIdx) cell.classList.add('border-t-heavy');
                     if (r === size - 1 || cellToCageMap[idx + size] !== cIdx) cell.classList.add('border-b-heavy');
                     if (c === 0 || cellToCageMap[idx - 1] !== cIdx) cell.classList.add('border-l-heavy');
@@ -254,18 +374,10 @@
             const target = parseInt(cageTargetInput.value);
             const op = cageOpInput.value;
             if (isNaN(target) || selectedCells.size === 0) return;
-
-            const newCage = {
-                target,
-                op,
-                cells: Array.from(selectedCells),
-                id: Date.now()
-            };
-
+            const newCage = { target, op, cells: Array.from(selectedCells), id: Date.now() };
             const cageIdx = cages.length;
             cages.push(newCage);
             newCage.cells.forEach(idx => cellToCageMap[idx] = cageIdx);
-
             selectedCells.clear();
             updateSelectionCount();
             cageTargetInput.value = '';
@@ -295,7 +407,6 @@
 
         window.removeCage = (index) => {
             cages.splice(index, 1);
-            // Re-map
             cellToCageMap = {};
             cages.forEach((c, i) => c.cells.forEach(idx => cellToCageMap[idx] = i));
             renderGrid();
@@ -308,16 +419,12 @@
                 alert("Please cover all cells before solving.");
                 return;
             }
-
             const badge = document.getElementById('statusBadge');
             badge.innerText = "SOLVING...";
             badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-blue-100 text-blue-600 font-bold";
-            
             await new Promise(r => setTimeout(r, 200));
-            
             const solver = new MathdokuSolver(size, cages);
             const success = solver.solve();
-            
             if (success) {
                 const rating = solver.rateDifficulty();
                 renderResults(rating);
@@ -325,11 +432,7 @@
             } else {
                 badge.innerText = "IMPOSSIBLE";
                 badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-red-100 text-red-600 font-bold";
-                document.getElementById('resultsArea').innerHTML = `
-                    <div class="p-6 rounded-2xl bg-red-50 border border-red-200 text-center">
-                        <p class="text-[10px] uppercase font-bold text-red-500 mb-1">Error</p>
-                        <p class="text-xl font-black text-red-900">NO SOLUTION FOUND</p>
-                    </div>`;
+                document.getElementById('resultsArea').innerHTML = `<div class="p-6 rounded-2xl bg-red-50 border border-red-200 text-center"><p class="text-[10px] uppercase font-bold text-red-500 mb-1">Error</p><p class="text-xl font-black text-red-900">NO SOLUTION FOUND</p></div>`;
                 document.getElementById('solutionContainer').innerHTML = '<div class="col-span-full py-12 text-center text-red-400 text-sm font-medium">Contradiction in cage logic.</div>';
             }
         };
@@ -338,28 +441,9 @@
             const badge = document.getElementById('statusBadge');
             badge.innerText = "VALID";
             badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-green-100 text-green-600 font-bold";
-            
-            const rankColors = {
-                "Easy": "text-green-600 bg-green-50",
-                "Medium": "text-blue-600 bg-blue-50",
-                "Hard": "text-yellow-600 bg-yellow-50",
-                "Vicious": "text-orange-600 bg-orange-50",
-                "Devilish": "text-red-600 bg-red-50",
-                "Diabolical": "text-purple-600 bg-purple-50",
-                "Beyond Diabolical": "text-white bg-slate-900"
-            };
+            const rankColors = { "Easy": "text-green-600 bg-green-50", "Medium": "text-blue-600 bg-blue-50", "Hard": "text-yellow-600 bg-yellow-50", "Vicious": "text-orange-600 bg-orange-50", "Devilish": "text-red-600 bg-red-50", "Diabolical": "text-purple-600 bg-purple-50", "Beyond Diabolical": "text-white bg-slate-900" };
             const colorClass = rankColors[rating.rank] || "bg-slate-50";
-
-            document.getElementById('resultsArea').innerHTML = `
-                <div class="p-6 rounded-2xl ${colorClass.split(' ')[1]} border-2 border-slate-900 shadow-sm text-center">
-                    <p class="text-[10px] uppercase font-black text-slate-400 mb-1 tracking-tighter">Complexity Rating</p>
-                    <p class="text-2xl font-black ${colorClass.split(' ')[0]}">${rating.rank.toUpperCase()}</p>
-                    <div class="flex justify-center gap-4 mt-3 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                        <span>Score: ${rating.score}</span>
-                        <span>|</span>
-                        <span>Complexity: ${rating.metrics.avgCageComplexity}</span>
-                    </div>
-                </div>`;
+            document.getElementById('resultsArea').innerHTML = `<div class="p-6 rounded-2xl ${colorClass.split(' ')[1]} border-2 border-slate-900 shadow-sm text-center"><p class="text-[10px] uppercase font-black text-slate-400 mb-1 tracking-tighter">Complexity Rating</p><p class="text-2xl font-black ${colorClass.split(' ')[0]}">${rating.rank.toUpperCase()}</p><div class="flex justify-center gap-4 mt-3 text-[10px] text-slate-500 font-bold uppercase tracking-widest"><span>Score: ${rating.score}</span><span>|</span><span>Complexity: ${rating.metrics.avgCageComplexity}</span></div></div>`;
         }
 
         function renderSolution(solution) {
@@ -375,12 +459,8 @@
         }
 
         window.resetConstructor = () => {
-            cages = [];
-            cellToCageMap = {};
-            selectedCells.clear();
-            renderGrid();
-            updateCageList();
-            updateSelectionCount();
+            cages = []; cellToCageMap = {}; selectedCells.clear();
+            renderGrid(); updateCageList(); updateSelectionCount();
             document.getElementById('resultsArea').innerHTML = `<div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-400 text-xs text-center font-medium">Awaiting grid completion...</div>`;
             document.getElementById('solutionContainer').innerHTML = '<div class="col-span-full py-12 text-center text-slate-600 text-sm italic font-medium">Solve to reveal solution...</div>';
             const badge = document.getElementById('statusBadge');
@@ -394,12 +474,10 @@
             const area = document.getElementById('modalTextarea');
             const btn = document.getElementById('modalActionBtn');
             document.getElementById('modalTitle').textContent = "Export Puzzle";
-            area.value = base64;
-            area.readOnly = true;
+            area.value = base64; area.readOnly = true;
             btn.textContent = "Copy to Clipboard";
             btn.onclick = () => {
-                area.select();
-                document.execCommand('copy');
+                area.select(); document.execCommand('copy');
                 btn.textContent = "Copied!";
                 setTimeout(() => btn.textContent = "Copy to Clipboard", 2000);
             };
@@ -410,20 +488,16 @@
             const area = document.getElementById('modalTextarea');
             const btn = document.getElementById('modalActionBtn');
             document.getElementById('modalTitle').textContent = "Import Puzzle";
-            area.value = "";
-            area.readOnly = false;
+            area.value = ""; area.readOnly = false;
             btn.textContent = "Load Puzzle";
             btn.onclick = () => {
                 try {
                     const data = JSON.parse(atob(area.value));
-                    size = data.size;
-                    cages = data.cages;
+                    size = data.size; cages = data.cages;
                     gridSizeSelect.value = size;
                     cellToCageMap = {};
                     cages.forEach((c, i) => c.cells.forEach(idx => cellToCageMap[idx] = i));
-                    renderGrid();
-                    updateCageList();
-                    closeModal();
+                    renderGrid(); updateCageList(); closeModal();
                 } catch (e) { alert("Invalid string."); }
             };
             document.getElementById('modalOverlay').style.display = 'flex';
