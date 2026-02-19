@@ -22,6 +22,7 @@
         }
         .grid-cell:hover { background-color: #f3f4f6; }
         .grid-cell.selected { background-color: #dbeafe; outline: 2px solid #3b82f6; z-index: 10; }
+        .grid-cell.given { color: #2563eb; }
         .cage-label { position: absolute; top: 2px; left: 4px; font-size: 0.7rem; font-weight: 800; color: #374151; pointer-events: none; }
         
         .border-t-heavy { border-top: 3.5px solid #0f172a; }
@@ -32,14 +33,17 @@
         .solution-cell {
             aspect-ratio: 1 / 1;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             background: #1e293b;
             border: 1px solid #334155;
-            font-weight: 900;
-            font-size: 1.25rem;
             color: #f1f5f9;
+            padding: 2px;
+            overflow: hidden;
         }
+        .solution-val { font-weight: 900; font-size: 1.1rem; }
+        .solution-multi { font-size: 0.6rem; color: #94a3b8; font-weight: bold; line-height: 1; text-align: center; }
         
         #cageList::-webkit-scrollbar { width: 4px; }
         #cageList::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -106,27 +110,28 @@
 
                     <div class="mt-8 p-5 bg-blue-50 rounded-2xl border border-blue-100 flex flex-wrap gap-4 items-end">
                         <div class="flex-1 min-w-[120px]">
-                            <label class="block text-[10px] font-bold text-blue-400 uppercase mb-1">Cage Target</label>
-                            <input id="cageTarget" type="number" class="w-full px-3 py-2 rounded-lg border-blue-200 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                            <label class="block text-[10px] font-bold text-blue-400 uppercase mb-1">Target / Given</label>
+                            <input id="cageTarget" type="number" class="w-full px-3 py-2 rounded-lg border-blue-200 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. 12">
                         </div>
                         <div class="flex-1 min-w-[100px]">
-                            <label class="block text-[10px] font-bold text-blue-400 uppercase mb-1">Operator</label>
+                            <label class="block text-[10px] font-bold text-blue-400 uppercase mb-1">Op / Type</label>
                             <select id="cageOp" class="w-full px-3 py-2 rounded-lg border-blue-200 text-sm outline-none focus:ring-2 focus:ring-blue-500">
                                 <option value="+">+</option>
                                 <option value="-">-</option>
                                 <option value="*">×</option>
                                 <option value="/">÷</option>
                                 <option value="=">=</option>
+                                <option value="GIVEN">GIVEN</option>
                             </select>
                         </div>
-                        <button onclick="createCage()" class="bg-blue-600 text-white px-8 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-md transition-all active:scale-95">CREATE CAGE</button>
+                        <button onclick="createCage()" class="bg-blue-600 text-white px-8 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 shadow-md transition-all active:scale-95">ADD ELEMENT</button>
                     </div>
                 </div>
 
                 <div class="bg-slate-900 p-6 rounded-2xl shadow-xl text-white">
-                    <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Solution Map</h3>
+                    <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Solution Map (Candidate Analysis)</h3>
                     <div id="solutionContainer" class="grid gap-1 mx-auto" style="max-width: 320px;">
-                        <div class="col-span-full py-12 text-center text-slate-600 text-sm italic font-medium">Solve to reveal solution...</div>
+                        <div class="col-span-full py-12 text-center text-slate-600 text-sm italic font-medium">Solve to reveal all possible candidates...</div>
                     </div>
                 </div>
             </div>
@@ -140,18 +145,18 @@
                     
                     <div id="resultsArea">
                         <div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-400 text-xs text-center font-medium">
-                            Awaiting grid completion...
+                            Ready for analysis (all-cell coverage not required).
                         </div>
                     </div>
 
                     <button onclick="runSolver()" id="btnAnalyze" class="w-full mt-6 bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-slate-800 shadow-lg transition-all active:scale-95">
-                        RUN SOLVER
+                        RUN SOLVER (Limit 10k)
                     </button>
                 </div>
 
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <div class="flex justify-between items-center mb-3">
-                        <h3 class="font-bold text-xs text-slate-400 uppercase tracking-widest">Cage Registry</h3>
+                        <h3 class="font-bold text-xs text-slate-400 uppercase tracking-widest">Puzzle Registry</h3>
                         <span id="coverageLabel" class="text-xs font-bold text-slate-500">0 / 16</span>
                     </div>
                     <div id="cageList" class="space-y-2 max-h-96 overflow-y-auto pr-2"></div>
@@ -161,10 +166,6 @@
     </div>
 
     <script>
-        /**
-         * Mathdoku (KenKen) Solver and Rater
-         * Updated to support multiple solutions and non-unique/impossible levels.
-         */
         class MathdokuSolver {
             constructor(size, cages) {
                 this.size = size;
@@ -172,8 +173,8 @@
                 this.grid = Array(size * size).fill(0);
                 this.backtracks = 0;
                 this.solutions = []; 
-                
                 this.cellToCageMap = {};
+                
                 this.cages.forEach((cage, index) => {
                     cage.cells.forEach(cellIdx => {
                         this.cellToCageMap[cellIdx] = index;
@@ -189,7 +190,8 @@
                     if (this.grid[i * this.size + c] === val) return false;
                 }
                 const cageIdx = this.cellToCageMap[idx];
-                if (cageIdx === undefined) return true;
+                if (cageIdx === undefined) return true; // Partial grid: empty cells are just Latin Square constrained
+                
                 const cage = this.cages[cageIdx];
                 const cageValues = cage.cells.map(i => i === idx ? val : this.grid[i]).filter(v => v !== 0);
                 if (cageValues.length === cage.cells.length) return this.checkCageLogic(cage, cageValues);
@@ -208,7 +210,8 @@
                         const max = Math.max(...values);
                         return (max / (values.reduce((a, b) => a * b, 1) / max)) === cage.target;
                     }
-                    case '=': return values[0] === cage.target;
+                    case '=':
+                    case 'GIVEN': return values[0] === cage.target;
                     default: return false;
                 }
             }
@@ -229,7 +232,7 @@
                 return true;
             }
 
-            findAllSolutions(limit = 2) {
+            findAllSolutions(limit = 10000) {
                 this.solutions = [];
                 this.backtracks = 0;
                 this.solveRecursive(0, limit);
@@ -242,6 +245,19 @@
                     this.solutions.push([...this.grid]);
                     return;
                 }
+
+                // If cell is a GIVEN, skip the value loop
+                const cageIdx = this.cellToCageMap[idx];
+                if (cageIdx !== undefined && this.cages[cageIdx].op === 'GIVEN') {
+                    const val = this.cages[cageIdx].target;
+                    if (this.isValid(idx, val)) {
+                        this.grid[idx] = val;
+                        this.solveRecursive(idx + 1, limit);
+                        this.grid[idx] = 0;
+                    }
+                    return;
+                }
+
                 for (let val = 1; val <= this.size; val++) {
                     if (this.isValid(idx, val)) {
                         this.grid[idx] = val;
@@ -255,16 +271,11 @@
             }
 
             rateDifficulty() {
-                if (this.solutions.length === 0) {
-                    this.findAllSolutions(2);
-                }
-
-                if (this.solutions.length === 0) {
-                    return { rank: "Impossible", score: Infinity };
-                }
-
+                if (this.solutions.length === 0) return { rank: "Impossible", score: Infinity };
+                
                 let totalCageComplexity = 0;
                 this.cages.forEach(c => {
+                    if (c.op === 'GIVEN') return;
                     const combos = this.countPotentialCombinations(c);
                     let complexity = Math.log2(combos + 1);
                     if (c.op === '/' || c.op === '*') complexity *= 1.5;
@@ -272,19 +283,19 @@
                     totalCageComplexity += complexity;
                 });
 
-                const avgCageComplexity = totalCageComplexity / this.cages.length;
+                const avgCageComplexity = totalCageComplexity / Math.max(1, this.cages.length);
                 const searchScore = Math.sqrt(this.backtracks) * 2;
                 const totalScore = Math.round((avgCageComplexity * 20) + searchScore);
 
                 if (this.solutions.length > 1) {
                     return { 
                         rank: "Non-unique", 
-                        score: totalScore,
-                        metrics: {
-                            backtracks: this.backtracks,
-                            avgComplexity: avgCageComplexity.toFixed(2),
-                            solutionCount: this.solutions.length
-                        }
+                        score: totalScore, 
+                        metrics: { 
+                            backtracks: this.backtracks, 
+                            avgComplexity: avgCageComplexity.toFixed(2), 
+                            solutionCount: this.solutions.length 
+                        } 
                     };
                 }
 
@@ -309,15 +320,15 @@
             }
 
             countPotentialCombinations(cage) {
+                if (cage.op === 'GIVEN') return 1;
                 let count = 0;
-                const n = this.size;
                 const k = cage.cells.length;
                 const backtrack = (index, currentValues) => {
                     if (index === k) {
                         if (this.checkCageLogic(cage, currentValues)) count++;
                         return;
                     }
-                    for (let v = 1; v <= n; v++) {
+                    for (let v = 1; v <= this.size; v++) {
                         currentValues.push(v);
                         backtrack(index + 1, currentValues);
                         currentValues.pop();
@@ -328,8 +339,7 @@
             }
         }
 
-        // --- Application UI Logic ---
-
+        // --- UI Logic ---
         let size = 4;
         let cages = [];
         let selectedCells = new Set();
@@ -344,46 +354,34 @@
 
         function init() {
             size = parseInt(gridSizeSelect.value);
-            cages = [];
-            selectedCells.clear();
-            cellToCageMap = {};
             renderGrid();
-            updateCageList();
-            gridSizeSelect.onchange = (e) => {
-                size = parseInt(e.target.value);
-                resetConstructor();
-            };
+            gridSizeSelect.onchange = (e) => { size = parseInt(e.target.value); resetConstructor(); };
         }
 
         function renderGrid() {
             gridContainer.innerHTML = '';
             gridContainer.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
-            
             for (let i = 0; i < size * size; i++) {
                 const cell = document.createElement('div');
-                cell.className = `grid-cell ${selectedCells.has(i) ? 'selected' : ''}`;
+                const givenCage = cages.find(c => c.op === 'GIVEN' && c.cells.includes(i));
+                cell.className = `grid-cell ${selectedCells.has(i) ? 'selected' : ''} ${givenCage ? 'given' : ''}`;
                 cell.dataset.idx = i;
-                
                 const label = document.createElement('span');
                 label.className = 'cage-label';
                 cell.appendChild(label);
+                
+                if (givenCage) cell.append(givenCage.target);
 
-                cell.addEventListener('click', (e) => {
-                    if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
-                        if (cellToCageMap[i] === undefined && !selectedCells.has(i)) {
-                            selectedCells.clear();
-                        }
+                cell.onclick = (e) => {
+                    if (!e.shiftKey && !e.ctrlKey) {
+                        if (cellToCageMap[i] === undefined && !selectedCells.has(i)) selectedCells.clear();
                     }
                     if (cellToCageMap[i] === undefined) {
-                        if (selectedCells.has(i)) {
-                            selectedCells.delete(i);
-                        } else {
-                            selectedCells.add(i);
-                        }
-                        renderGrid();
-                        updateSelectionCount();
+                        if (selectedCells.has(i)) selectedCells.delete(i);
+                        else selectedCells.add(i);
+                        renderGrid(); updateSelectionCount();
                     }
-                });
+                };
                 gridContainer.appendChild(cell);
             }
             drawCageBorders();
@@ -394,10 +392,11 @@
             cages.forEach((cage, cIdx) => {
                 const sortedCells = [...cage.cells].sort((a, b) => a - b);
                 const labelCell = cells[sortedCells[0]];
-                labelCell.querySelector('.cage-label').innerText = `${cage.target}${cage.op === '=' ? '' : cage.op}`;
+                if (cage.op !== 'GIVEN') {
+                    labelCell.querySelector('.cage-label').innerText = `${cage.target}${cage.op === '=' ? '' : cage.op}`;
+                }
                 cage.cells.forEach(idx => {
-                    const r = Math.floor(idx / size);
-                    const c = idx % size;
+                    const r = Math.floor(idx / size), c = idx % size;
                     const cell = cells[idx];
                     if (r === 0 || cellToCageMap[idx - size] !== cIdx) cell.classList.add('border-t-heavy');
                     if (r === size - 1 || cellToCageMap[idx + size] !== cIdx) cell.classList.add('border-b-heavy');
@@ -415,15 +414,15 @@
             const target = parseInt(cageTargetInput.value);
             const op = cageOpInput.value;
             if (isNaN(target) || selectedCells.size === 0) return;
+            if (op === 'GIVEN' && selectedCells.size > 1) {
+                alert("Givens must be single cells."); return;
+            }
             const newCage = { target, op, cells: Array.from(selectedCells), id: Date.now() };
             const cageIdx = cages.length;
             cages.push(newCage);
             newCage.cells.forEach(idx => cellToCageMap[idx] = cageIdx);
-            selectedCells.clear();
-            updateSelectionCount();
-            cageTargetInput.value = '';
-            renderGrid();
-            updateCageList();
+            selectedCells.clear(); updateSelectionCount();
+            cageTargetInput.value = ''; renderGrid(); updateCageList();
         };
 
         function updateCageList() {
@@ -435,8 +434,8 @@
                 div.className = 'flex justify-between items-center bg-slate-50 p-3 rounded-xl text-xs border border-slate-200';
                 div.innerHTML = `
                     <span class="font-bold text-slate-700">
-                        <strong class="text-blue-600">${c.target}${c.op === '=' ? '' : c.op}</strong> 
-                        <span class="text-slate-400 ml-1">(${c.cells.length} cells)</span>
+                        <strong class="text-blue-600">${c.op === 'GIVEN' ? 'GIVEN: ' + c.target : c.target + (c.op === '=' ? '' : c.op)}</strong> 
+                        <span class="text-slate-400 ml-1">(${c.cells.length} cell${c.cells.length > 1 ? 's' : ''})</span>
                     </span>
                     <button class="text-slate-300 hover:text-red-500 transition-colors" onclick="removeCage(${i})">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -448,57 +447,36 @@
 
         window.removeCage = (index) => {
             cages.splice(index, 1);
-            cellToCageMap = {};
-            cages.forEach((c, i) => c.cells.forEach(idx => cellToCageMap[idx] = i));
-            renderGrid();
-            updateCageList();
+            cellToCageMap = {}; cages.forEach((c, i) => c.cells.forEach(idx => cellToCageMap[idx] = i));
+            renderGrid(); updateCageList();
         };
 
         window.runSolver = async () => {
-            const covered = Object.keys(cellToCageMap).length;
-            if (covered < size * size) {
-                alert("Please cover all cells before solving.");
-                return;
-            }
             const badge = document.getElementById('statusBadge');
-            badge.innerText = "SOLVING...";
+            badge.innerText = "SEARCHING...";
             badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-blue-100 text-blue-600 font-bold";
-            await new Promise(r => setTimeout(r, 200));
+            await new Promise(r => setTimeout(r, 100));
+            
             const solver = new MathdokuSolver(size, cages);
-            solver.findAllSolutions(2);
+            const solutions = solver.findAllSolutions(10000);
             const rating = solver.rateDifficulty();
+            
             renderResults(rating);
-            if (solver.solutions.length > 0) {
-                renderSolution(solver.solutions[0]);
-            } else {
-                document.getElementById('solutionContainer').innerHTML = '<div class="col-span-full py-12 text-center text-red-400 text-sm font-medium">Contradiction in cage logic.</div>';
-            }
+            if (solutions.length > 0) renderSolutionsMap(solutions);
+            else document.getElementById('solutionContainer').innerHTML = '<div class="col-span-full py-12 text-center text-red-400 text-sm font-medium">Contradiction: No solution possible.</div>';
         };
 
         function renderResults(rating) {
             const badge = document.getElementById('statusBadge');
-            
             if (rating.rank === "Impossible") {
                 badge.innerText = "IMPOSSIBLE";
                 badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-red-100 text-red-600 font-bold";
-                document.getElementById('resultsArea').innerHTML = `<div class="p-6 rounded-2xl bg-red-50 border border-red-200 text-center"><p class="text-[10px] uppercase font-bold text-red-500 mb-1">Error</p><p class="text-xl font-black text-red-900">NO SOLUTION FOUND</p></div>`;
+                document.getElementById('resultsArea').innerHTML = `<div class="p-6 rounded-2xl bg-red-50 border border-red-200 text-center"><p class="text-[10px] uppercase font-bold text-red-500 mb-1">Error</p><p class="text-xl font-black text-red-900">UNSOLVABLE</p></div>`;
                 return;
             }
-
-            badge.innerText = "VALID";
+            badge.innerText = "DONE";
             badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-green-100 text-green-600 font-bold";
-            
-            const rankColors = { 
-                "Non-unique": "text-pink-600 bg-pink-50",
-                "Easy": "text-green-600 bg-green-50", 
-                "Medium": "text-blue-600 bg-blue-50", 
-                "Hard": "text-yellow-600 bg-yellow-50", 
-                "Vicious": "text-orange-600 bg-orange-50", 
-                "Devilish": "text-red-600 bg-red-50", 
-                "Diabolical": "text-purple-600 bg-purple-50", 
-                "Beyond Diabolical": "text-white bg-slate-900" 
-            };
-            
+            const rankColors = { "Non-unique": "text-pink-600 bg-pink-50", "Easy": "text-green-600 bg-green-50", "Medium": "text-blue-600 bg-blue-50", "Hard": "text-yellow-600 bg-yellow-50", "Vicious": "text-orange-600 bg-orange-50", "Devilish": "text-red-600 bg-red-50", "Diabolical": "text-purple-600 bg-purple-50", "Beyond Diabolical": "text-white bg-slate-900" };
             const colorClass = rankColors[rating.rank] || "bg-slate-50";
             document.getElementById('resultsArea').innerHTML = `
                 <div class="p-6 rounded-2xl ${colorClass.split(' ')[1]} border-2 border-slate-900 shadow-sm text-center">
@@ -507,65 +485,68 @@
                     <div class="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-3 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
                         <span>Score: ${rating.score}</span>
                         <span>|</span>
-                        <span>Backtracks: ${rating.metrics.backtracks}</span>
-                        ${rating.rank === "Non-unique" ? '<span>|</span><span class="text-pink-600">Multiple Solutions</span>' : ''}
+                        <span>Found: ${rating.metrics.solutionCount}${rating.metrics.solutionCount >= 10000 ? '+' : ''} sol.</span>
                     </div>
                 </div>`;
         }
 
-        function renderSolution(solution) {
+        function renderSolutionsMap(solutions) {
             const container = document.getElementById('solutionContainer');
             container.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
             container.innerHTML = '';
-            solution.forEach(val => {
+            
+            for (let i = 0; i < size * size; i++) {
+                const possibleValues = new Set();
+                solutions.forEach(sol => possibleValues.add(sol[i]));
+                const values = Array.from(possibleValues).sort((a, b) => a - b);
+                
                 const cell = document.createElement('div');
                 cell.className = 'solution-cell';
-                cell.textContent = val;
+                
+                if (values.length === 1) {
+                    cell.innerHTML = `<span class="solution-val">${values[0]}</span>`;
+                } else {
+                    const label = values.length > 3 ? `${values.slice(0, 2).join(',')},..` : values.join(', ');
+                    cell.innerHTML = `
+                        <span class="solution-val text-pink-400">?</span>
+                        <span class="solution-multi">${label}</span>
+                    `;
+                    cell.title = "Possible: " + values.join(', ');
+                }
                 container.appendChild(cell);
-            });
+            }
         }
 
         window.resetConstructor = () => {
             cages = []; cellToCageMap = {}; selectedCells.clear();
             renderGrid(); updateCageList(); updateSelectionCount();
-            document.getElementById('resultsArea').innerHTML = `<div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-400 text-xs text-center font-medium">Awaiting grid completion...</div>`;
-            document.getElementById('solutionContainer').innerHTML = '<div class="col-span-full py-12 text-center text-slate-600 text-sm italic font-medium">Solve to reveal solution...</div>';
+            document.getElementById('resultsArea').innerHTML = `<div class="p-8 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-slate-400 text-xs text-center font-medium">Ready for analysis.</div>`;
+            document.getElementById('solutionContainer').innerHTML = '<div class="col-span-full py-12 text-center text-slate-600 text-sm italic font-medium">Solve to reveal candidates...</div>';
             const badge = document.getElementById('statusBadge');
-            badge.innerText = "IDLE";
-            badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-slate-100 text-slate-400 font-bold";
+            badge.innerText = "IDLE"; badge.className = "text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-slate-100 text-slate-400 font-bold";
         };
 
         window.openExportModal = () => {
-            const data = { size, cages };
-            const base64 = btoa(JSON.stringify(data));
+            const base64 = btoa(JSON.stringify({ size, cages }));
             const area = document.getElementById('modalTextarea');
-            const btn = document.getElementById('modalActionBtn');
             document.getElementById('modalTitle').textContent = "Export Puzzle";
             area.value = base64; area.readOnly = true;
-            btn.textContent = "Copy to Clipboard";
-            btn.onclick = () => {
-                area.select(); document.execCommand('copy');
-                btn.textContent = "Copied!";
-                setTimeout(() => btn.textContent = "Copy to Clipboard", 2000);
-            };
+            document.getElementById('modalActionBtn').onclick = () => { area.select(); document.execCommand('copy'); };
             document.getElementById('modalOverlay').style.display = 'flex';
         };
 
         window.openImportModal = () => {
             const area = document.getElementById('modalTextarea');
-            const btn = document.getElementById('modalActionBtn');
             document.getElementById('modalTitle').textContent = "Import Puzzle";
             area.value = ""; area.readOnly = false;
-            btn.textContent = "Load Puzzle";
-            btn.onclick = () => {
+            document.getElementById('modalActionBtn').onclick = () => {
                 try {
                     const data = JSON.parse(atob(area.value));
                     size = data.size; cages = data.cages;
                     gridSizeSelect.value = size;
-                    cellToCageMap = {};
-                    cages.forEach((c, i) => c.cells.forEach(idx => cellToCageMap[idx] = i));
+                    cellToCageMap = {}; cages.forEach((c, i) => c.cells.forEach(idx => cellToCageMap[idx] = i));
                     renderGrid(); updateCageList(); closeModal();
-                } catch (e) { alert("Invalid string."); }
+                } catch (e) { alert("Invalid puzzle string."); }
             };
             document.getElementById('modalOverlay').style.display = 'flex';
         };
