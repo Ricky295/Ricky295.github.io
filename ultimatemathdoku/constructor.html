@@ -266,47 +266,125 @@
 
   function rate(puzzle) {
     const { size, cages } = puzzle;
-    function cageCombinations(cage) {
-      const n = cage.cells.length, combos = [];
-      function gen(idx, cur) {
-        if (idx === n) { if (checkCage(cur, cage.op, cage.target)) combos.push(cur.slice()); return; }
-        for (let v = 1; v <= size; v++) { cur.push(v); gen(idx+1, cur); cur.pop(); }
-      }
-      gen(0, []);
-      return combos;
-    }
-    const cageCombos = cages.map(cageCombinations);
+
+    // ── Step 1: check solvability ──
     const solveResult = solve(puzzle, { maxSolutions: 2 });
     if (!solveResult || !solveResult.solutions.length)
       return { difficulty: "Impossible", score: Infinity, breakdown: {} };
     const nonUnique = solveResult.solutions.length > 1;
 
-    let totalCageComplexity = 0;
-    cages.forEach((cage, ci) => {
-      let complexity = Math.log2(cageCombos[ci].length + 1);
-      if (cage.op === '*' || cage.op === '/') complexity *= 1.5;
-      else if (cage.op === '-') complexity *= 1.2;
-      totalCageComplexity += complexity;
-    });
-    const avgCageComplexity = totalCageComplexity / Math.max(1, cages.length);
-    const cagedCells = cages.reduce((s,c) => s + c.cells.length, 0);
-    const cagedRatio = Math.min(1, cagedCells / (size * size));
-    const uncagedPenalty = cagedRatio === 0 ? Infinity : 1 / Math.sqrt(cagedRatio);
-    const score = Math.round(avgCageComplexity * 5 * uncagedPenalty);
+    // ── Step 2: simulate a logical solver, count iterations ──
+    // candidates[r][c] = Set of possible values
+    const cands = Array.from({length: size}, () =>
+      Array.from({length: size}, () => new Set(Array.from({length: size}, (_,i) => i+1)))
+    );
+    const placed = Array.from({length: size}, () => new Array(size).fill(0));
+
+    const cellToCage = Array.from({length: size}, () => new Array(size).fill(-1));
+    cages.forEach((cage, ci) => cage.cells.forEach(([r,c]) => cellToCage[r][c] = ci));
+
+    // precompute valid cage combos given current candidates
+    function validCombos(cage) {
+      const n = cage.cells.length, combos = [];
+      function gen(idx, cur) {
+        if (idx === n) { if (checkCage(cur, cage.op, cage.target)) combos.push(cur.slice()); return; }
+        const [r,c] = cage.cells[idx];
+        for (const v of cands[r][c]) { cur.push(v); gen(idx+1, cur); cur.pop(); }
+      }
+      gen(0, []);
+      return combos;
+    }
+
+    function placeCell(r, c, v) {
+      placed[r][c] = v;
+      cands[r][c] = new Set([v]);
+      for (let i = 0; i < size; i++) {
+        if (i !== c) cands[r][i].delete(v);
+        if (i !== r) cands[i][c].delete(v);
+      }
+    }
+
+    // pre-fill givens
+    (puzzle.givens || []).forEach(g => placeCell(g.row, g.col, g.value));
+
+    let iterations = 0;   // total logical deduction steps
+    let bifurcations = 0; // times we had to guess (no pure logic move available)
+
+    function logicPass() {
+      let anyChange = true;
+      while (anyChange) {
+        anyChange = false;
+
+        // cage elimination: remove candidates not in any valid combo
+        for (let ci = 0; ci < cages.length; ci++) {
+          const cage = cages[ci];
+          const combos = validCombos(cage);
+          cage.cells.forEach(([r,c], idx) => {
+            if (placed[r][c]) return;
+            const allowed = new Set(combos.map(combo => combo[idx]));
+            for (const v of [...cands[r][c]]) {
+              if (!allowed.has(v)) {
+                cands[r][c].delete(v);
+                iterations++;
+                anyChange = true;
+              }
+            }
+          });
+        }
+
+        // naked singles
+        for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
+          if (!placed[r][c] && cands[r][c].size === 1) {
+            placeCell(r, c, [...cands[r][c]][0]);
+            iterations++;
+            anyChange = true;
+          }
+        }
+
+        // hidden singles in rows
+        for (let r = 0; r < size; r++) {
+          for (let v = 1; v <= size; v++) {
+            const cols = [];
+            for (let c = 0; c < size; c++) if (!placed[r][c] && cands[r][c].has(v)) cols.push(c);
+            if (cols.length === 1) { placeCell(r, cols[0], v); iterations++; anyChange = true; }
+          }
+        }
+
+        // hidden singles in cols
+        for (let c = 0; c < size; c++) {
+          for (let v = 1; v <= size; v++) {
+            const rows = [];
+            for (let r = 0; r < size; r++) if (!placed[r][c] && cands[r][c].has(v)) rows.push(r);
+            if (rows.length === 1) { placeCell(rows[0], c, v); iterations++; anyChange = true; }
+          }
+        }
+      }
+    }
+
+    logicPass();
+
+    // count remaining unplaced cells — each needs a guess (bifurcation)
+    for (let r = 0; r < size; r++)
+      for (let c = 0; c < size; c++)
+        if (!placed[r][c]) bifurcations++;
+
+    // ── Step 3: score = logic work + heavy penalty for guessing ──
+    const score = iterations + bifurcations * 15;
 
     let difficulty;
-    if      (score < 15)  difficulty = "Easy";
-    else if (score < 30)  difficulty = "Medium";
-    else if (score < 50)  difficulty = "Hard";
-    else if (score < 75)  difficulty = "Vicious";
-    else if (score < 110) difficulty = "Devilish";
-    else if (score < 160) difficulty = "Diabolical";
-    else                  difficulty = "Beyond Diabolical";
+    if (bifurcations === 0 && iterations === 0) difficulty = "Easy";       // trivial / no cages
+    else if (score < 20)   difficulty = "Easy";
+    else if (score < 50)   difficulty = "Medium";
+    else if (score < 100)  difficulty = "Hard";
+    else if (score < 180)  difficulty = "Vicious";
+    else if (score < 280)  difficulty = "Devilish";
+    else if (score < 420)  difficulty = "Diabolical";
+    else                   difficulty = "Beyond Diabolical";
 
     return {
       difficulty: nonUnique ? "Non-unique (" + difficulty + ")" : difficulty,
       score,
-      breakdown: { avgCageComplexity: avgCageComplexity.toFixed(2), solutionCount: solveResult.solutions.length }
+      breakdown: { iterations, bifurcations, solutionCount: solveResult.solutions.length }
     };
   }
 
