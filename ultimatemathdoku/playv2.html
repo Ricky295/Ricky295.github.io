@@ -291,6 +291,7 @@ async function generatePuzzle() {
   genBestPuzzle    = null;
   genBestProximity = Infinity;
   genBestLabel     = '—';
+  bias             = { ...DEFAULT_BIAS }; // reset learning state
 
   $('genBtn').style.display       = 'none';
   $('genInline').style.display    = 'flex';
@@ -314,15 +315,18 @@ async function generatePuzzle() {
     if (uniq === 'guaranteed' && !isUniq) { await maybeYield(attempt); continue; }
     if (uniq === 'only'       &&  isUniq) { await maybeYield(attempt); continue; }
 
-    // Now rate (only puzzles that pass uniqueness filter)
-    const rating  = MathdokuSolver.rate(puz);
+    // Rate — use fast mode for large grids during generation loop
+    const fast   = size >= 6;
+    const rating = MathdokuSolver.rate(puz, { fast });
     const rawDiff = isUniq
       ? rating.difficulty
       : rating.difficulty.replace(/^Non-unique \(/, '').replace(/\)$/, '');
     const proximity = diffProximity(rating.score, diff);
 
     // Update best-so-far if this is closer to target
-    if (proximity < genBestProximity) {
+    const scoredWell = proximity < genBestProximity;
+    nudgeBias(puz, scoredWell);
+    if (scoredWell) {
       genBestProximity = proximity;
       genBestPuzzle    = puz;
       genBestLabel     = rawDiff + ' (' + rating.score + ')';
@@ -404,8 +408,7 @@ function carveCages(grid, size) {
     if (assigned[r][c]) continue;
     const cells = [[r, c]];
     assigned[r][c] = true;
-    // Grow cage: prefer smaller cages on larger grids to keep solve tractable
-    const maxSz = size <= 5 ? 4 : size <= 7 ? 3 : 2;
+    const maxSz = Math.min(4, size);
     for (let t = 0; t < maxSz - 1; t++) {
       // Collect unassigned neighbours of any cell already in cage
       const cands = [];
@@ -459,7 +462,7 @@ function startGame(puz) {
   const result = MathdokuSolver.solve(puz, { maxSolutions: 1 });
   if (!result) { alert('This puzzle has no solution.'); return; }
   solution   = result.grid;
-  difficulty = MathdokuSolver.rate(puz).difficulty;
+  difficulty = MathdokuSolver.rate(puz).difficulty; // full rate on accepted puzzle
   userGrid   = Array.from({length: N}, () => new Array(N).fill(0));
   pencilGrid = Array.from({length: N}, () => Array.from({length: N}, () => new Set()));
   selected   = null;
@@ -477,6 +480,9 @@ function startGame(puz) {
   $('lobby').style.display = 'none';
   $('game').style.display  = 'flex';
   $('difficultyLabel').textContent = difficulty;
+  // Update URL so the puzzle is shareable
+  const encoded = btoa(JSON.stringify({ size: puz.size, cages: puz.cages, givens: puz.givens || [] }));
+  history.replaceState(null, '', '?p=' + encoded);
   renderGrid();
   renderNumpad();
 }
