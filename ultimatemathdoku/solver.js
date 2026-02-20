@@ -144,10 +144,11 @@
 
   // ── Rater ─────────────────────────────────────────────────────────────────
 
-  function rate(puzzle) {
+  function rate(puzzle, timeLimitMs) {
+    const deadline = timeLimitMs ? performance.now() + timeLimitMs : Infinity;
     const { size, cages } = puzzle;
 
-    const solveResult = solve(puzzle, { maxSolutions: 2, timeLimitMs: 500 });
+    const solveResult = solve(puzzle, { maxSolutions: 2, timeLimitMs: timeLimitMs || 500 });
     if (!solveResult || !solveResult.solutions.length)
       return { difficulty: "Impossible", score: Infinity, breakdown: {} };
     const nonUnique = solveResult.solutions.length > 1;
@@ -258,6 +259,7 @@
     }
 
     function search() {
+      if (performance.now() > deadline) return false;
       logicFixpoint();
       // Contradiction check
       for (let r = 0; r < size; r++) for (let c = 0; c < size; c++)
@@ -317,7 +319,7 @@
         self.postMessage({ type: 'rateResult', result, callId });
       } else if (type === 'solveAndRate') {
         const solveResult = solve(puzzle, opts);
-        const rateResult  = solveResult ? rate(puzzle) : null;
+        const rateResult  = solveResult ? rate(puzzle, opts.timeLimitMs || 500) : null;
         self.postMessage({ type: 'solveAndRateResult', solveResult, rateResult, callId });
       }
     };
