@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hollow Crown: Cemetery Chess</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg-dark: #1a1a1a;
+            --cell-light: #d1d5db;
+            --cell-dark: #4b5563;
+            --corpse-opacity: 0.5;
+        }
+        body {
+            background-color: var(--bg-dark);
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: min(90vw, 550px);
+            height: min(90vw, 550px);
+            border: 4px solid #374151;
+            user-select: none;
+        }
+        .cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: min(8vw, 45px);
+            cursor: pointer;
+            position: relative;
+        }
+        .cell.light { background-color: var(--cell-light); }
+        .cell.dark { background-color: var(--cell-dark); }
+        .cell.selected { background-color: #fbbf24 !important; }
+        .cell.last-move { background-color: rgba(251, 191, 36, 0.3) !important; }
+        
+        .cell.valid-move::after {
+            content: '';
+            width: 25%;
+            height: 25%;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 50%;
+            position: absolute;
+            z-index: 20;
+        }
+
+        .piece {
+            z-index: 15;
+            transition: all 0.2s ease;
+        }
+        
+        .has-corpse-under::before {
+            content: '墓';
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            font-size: 10px;
+            color: rgba(0,0,0,0.4);
+            font-weight: bold;
+            z-index: 5;
+        }
+
+        .piece.corpse {
+            filter: grayscale(100%) brightness(30%);
+            opacity: var(--corpse-opacity);
+            transform: rotate(90deg) scale(0.8);
+            z-index: 5;
+        }
+        
+        .piece.white { color: white; text-shadow: 0 0 3px black; }
+        .piece.black { color: black; }
+        
+        #status-panel {
+            margin-top: 20px;
+            text-align: center;
+            background: #2d3748;
+            padding: 15px;
+            border-radius: 8px;
+            width: min(90vw, 550px);
+        }
+
+        .config-box {
+            background: #262626;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            min-width: 140px;
+        }
+        
+        input[type=range] {
+            cursor: pointer;
+            accent-color: #ef4444;
+        }
+    </style>
+</head>
+<body>
+
+    <h1 class="text-3xl font-bold mb-1 text-red-500 tracking-widest uppercase">Hollow Crown</h1>
+    <p class="text-gray-400 mb-4 text-center text-xs max-w-lg">
+        The Graveyard Shift: Multi-seat AI configuration.
+    </p>
+
+    <div class="mb-4 flex flex-wrap justify-center items-end gap-4">
+        <!-- White Config -->
+        <div class="config-box flex flex-col gap-1">
+            <span class="text-xs font-bold text-yellow-400 uppercase">White Seat</span>
+            <select id="white-mode" class="bg-gray-700 text-white text-xs rounded p-1 border border-gray-600 outline-none" onchange="checkAiTurn()">
+                <option value="human">Human</option>
+                <option value="ai">AI Agent</option>
+            </select>
+            <select id="white-level" class="bg-gray-800 text-gray-300 text-[10px] rounded p-1 border border-gray-600 outline-none">
+                <option value="1">1. Easy</option>
+                <option value="2">2. Medium</option>
+                <option value="3">3. Hard</option>
+                <option value="4" selected>4. Monte Carlo</option>
+            </select>
+        </div>
+
+        <!-- Global Think Time -->
+        <div class="config-box flex flex-col items-center gap-1">
+            <span class="text-[10px] font-bold text-gray-400 uppercase">AI Think Time</span>
+            <input type="range" id="think-time" min="100" max="3000" value="600" step="100" class="w-24">
+            <span id="think-time-val" class="text-[10px] text-red-400 font-mono">600ms</span>
+        </div>
+
+        <!-- Black Config -->
+        <div class="config-box flex flex-col gap-1">
+            <span class="text-xs font-bold text-blue-400 uppercase">Black Seat</span>
+            <select id="black-mode" class="bg-gray-700 text-white text-xs rounded p-1 border border-gray-600 outline-none" onchange="checkAiTurn()">
+                <option value="human">Human</option>
+                <option value="ai" selected>AI Agent</option>
+            </select>
+            <select id="black-level" class="bg-gray-800 text-gray-300 text-[10px] rounded p-1 border border-gray-600 outline-none">
+                <option value="1">1. Easy</option>
+                <option value="2">2. Medium</option>
+                <option value="3">3. Hard</option>
+                <option value="4" selected>4. Monte Carlo</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="board"></div>
+
+    <div id="status-panel">
+        <div id="turn-display" class="text-xl font-bold mb-1 text-yellow-400">White's Turn</div>
+        <div id="game-log" class="text-xs text-gray-300 italic h-4 mb-2">Configure the seats and begin...</div>
+        <button onclick="resetGame()" class="px-4 py-1 bg-red-600 hover:bg-red-700 rounded text-sm font-bold transition">Reset Game</button>
+    </div>
+
+<script>
+    const boardElement = document.getElementById('board');
+    const turnDisplay = document.getElementById('turn-display');
+    const logDisplay = document.getElementById('game-log');
+    const thinkSlider = document.getElementById('think-time');
+    const thinkDisplay = document.getElementById('think-time-val');
+    
+    thinkSlider.oninput = () => { thinkDisplay.innerText = `${thinkSlider.value}ms`; };
+
+    const controls = {
+        white: { mode: document.getElementById('white-mode'), level: document.getElementById('white-level') },
+        black: { mode: document.getElementById('black-mode'), level: document.getElementById('black-level') }
+    };
+    
+    let board = [];
+    let turn = 'white';
+    let selectedSquare = null;
+    let validMoves = [];
+    let lastMove = null;
+    let isGameOver = false;
+
+    const PIECES = {
+        white: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' },
+        black: { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' }
+    };
+
+    const PIECE_VALUES = { 'p': 10, 'n': 30, 'b': 30, 'r': 50, 'q': 90, 'k': 500 };
+
+    function initBoard() {
+        board = Array(8).fill(null).map(() => Array(8).fill(null).map(() => []));
+        isGameOver = false;
+        lastMove = null;
+        
+        const layout = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'];
+        for (let i = 0; i < 8; i++) {
+            board[0][i].push({ type: layout[i], color: 'black', isCorpse: false });
+            board[1][i].push({ type: 'p', color: 'black', isCorpse: false });
+            board[6][i].push({ type: 'p', color: 'white', isCorpse: false });
+            board[7][i].push({ type: layout[i], color: 'white', isCorpse: false });
+        }
+        render();
+        checkAiTurn();
+    }
+
+    function render() {
+        boardElement.innerHTML = '';
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const cell = document.createElement('div');
+                cell.className = `cell ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+                
+                if (selectedSquare && selectedSquare.r === r && selectedSquare.c === c) {
+                    cell.classList.add('selected');
+                }
+                
+                if (lastMove && ((lastMove.from.r === r && lastMove.from.c === c) || (lastMove.to.r === r && lastMove.to.c === c))) {
+                    cell.classList.add('last-move');
+                }
+
+                if (validMoves.some(m => m.r === r && m.c === c)) {
+                    cell.classList.add('valid-move');
+                }
+
+                const stack = board[r][c];
+                if (stack.length > 0) {
+                    const p = stack[stack.length - 1];
+                    const pElem = document.createElement('span');
+                    pElem.className = `piece ${p.color} ${p.isCorpse ? 'corpse' : ''}`;
+                    pElem.innerHTML = PIECES[p.color][p.type];
+                    cell.appendChild(pElem);
+                    if (stack.length > 1 && !p.isCorpse) {
+                        cell.classList.add('has-corpse-under');
+                    }
+                }
+
+                cell.onclick = () => handleCellClick(r, c);
+                boardElement.appendChild(cell);
+            }
+        }
+    }
+
+    function handleCellClick(r, c) {
+        if (isGameOver) return;
+        if (controls[turn].mode.value === 'ai') return;
+
+        const stack = board[r][c];
+        const topPiece = stack.length > 0 ? stack[stack.length - 1] : null;
+        const move = validMoves.find(m => m.r === r && m.c === c);
+
+        if (move) {
+            executeMove(selectedSquare.r, selectedSquare.c, r, c);
+            return;
+        }
+
+        if (topPiece && topPiece.color === turn && !topPiece.isCorpse) {
+            selectedSquare = { r, c };
+            validMoves = getValidMoves(board, r, c);
+        } else {
+            selectedSquare = null;
+            validMoves = [];
+        }
+        render();
+    }
+
+    function getValidMoves(currentBoard, r, c) {
+        const stack = currentBoard[r][c];
+        if (stack.length === 0) return [];
+        const piece = stack[stack.length - 1];
+        if (piece.isCorpse) return [];
+
+        let moves = [];
+        const directions = {
+            'r': [[0,1], [0,-1], [1,0], [-1,0]],
+            'b': [[1,1], [1,-1], [-1,1], [-1,-1]],
+            'q': [[0,1], [0,-1], [1,0], [-1,0], [1,1], [1,-1], [-1,1], [-1,-1]],
+            'k': [[0,1], [0,-1], [1,0], [-1,0], [1,1], [1,-1], [-1,1], [-1,-1]],
+            'n': [[2,1], [2,-1], [-2,1], [-2,-1], [1,2], [1,-2], [-1,2], [-1,-2]]
+        };
+
+        const canMoveTo = (nr, nc) => {
+            const targetStack = currentBoard[nr][nc];
+            if (targetStack.length === 0) return true;
+            const target = targetStack[targetStack.length - 1];
+            if (target.isCorpse && target.color === piece.color) return false;
+            return (target.color !== piece.color);
+        };
+
+        if (piece.type === 'p') {
+            const dir = piece.color === 'white' ? -1 : 1;
+            if (isInside(r + dir, c) && currentBoard[r + dir][c].length === 0) {
+                moves.push({ r: r + dir, c });
+                const startRow = piece.color === 'white' ? 6 : 1;
+                if (r === startRow && currentBoard[r + (dir * 2)][c].length === 0) {
+                    moves.push({ r: r + (dir * 2), c });
+                }
+            }
+            for (let dc of [-1, 1]) {
+                if (isInside(r + dir, c + dc)) {
+                    if (canMoveTo(r + dir, c + dc) && currentBoard[r + dir][c + dc].length > 0) {
+                        moves.push({ r: r + dir, c: c + dc });
+                    }
+                }
+            }
+        } else if (piece.type === 'n' || piece.type === 'k') {
+            directions[piece.type].forEach(([dr, dc]) => {
+                const nr = r + dr, nc = c + dc;
+                if (isInside(nr, nc) && canMoveTo(nr, nc)) {
+                    moves.push({ r: nr, c: nc });
+                }
+            });
+        } else {
+            directions[piece.type].forEach(([dr, dc]) => {
+                let nr = r + dr, nc = c + dc;
+                while (isInside(nr, nc)) {
+                    if (canMoveTo(nr, nc)) {
+                        moves.push({ r: nr, c: nc });
+                        if (currentBoard[nr][nc].length > 0) break;
+                    } else {
+                        break;
+                    }
+                    nr += dr; nc += dc;
+                }
+            });
+        }
+        return moves;
+    }
+
+    function isInside(r, c) { return r >= 0 && r < 8 && c >= 0 && c < 8; }
+
+    function executeMove(fromR, fromC, toR, toC) {
+        const fromStack = board[fromR][fromC];
+        const toStack = board[toR][toC];
+        const attacker = fromStack.pop(); 
+        
+        lastMove = { from: { r: fromR, c: fromC }, to: { r: toR, c: toC } };
+
+        if (toStack.length > 0) {
+            const target = toStack[toStack.length - 1];
+            if (target.isCorpse) {
+                if (target.type === 'k' && target.color !== attacker.color) {
+                    toStack.pop();
+                    toStack.push(attacker);
+                    render();
+                    setTimeout(() => endGame(`${turn.toUpperCase()} has buried the King!`), 100);
+                    return;
+                }
+                logDisplay.innerText = `${turn} cleared a corpse.`;
+                toStack.pop();
+            } else {
+                logDisplay.innerText = `${turn} killed a ${target.type}.`;
+                target.isCorpse = true;
+                if (target.type === 'k') logDisplay.innerText = `THE KING IS FALLEN! REVEAL THE GRAVE!`;
+            }
+        }
+
+        toStack.push(attacker);
+        if (attacker.type === 'p' && (toR === 0 || toR === 7)) attacker.type = 'q';
+
+        selectedSquare = null;
+        validMoves = [];
+        turn = turn === 'white' ? 'black' : 'white';
+        updateUI();
+        render();
+
+        if (!isGameOver) {
+            // Check for stalemate/depletion: If the current side has NO live pieces, they lose.
+            const currentPossibleMoves = getAllMoves(turn);
+            if (currentPossibleMoves.length === 0) {
+                const winner = turn === 'white' ? 'BLACK' : 'WHITE';
+                setTimeout(() => endGame(`${winner} wins! ${turn.toUpperCase()} has no surviving pieces.`), 100);
+                return;
+            }
+            checkAiTurn();
+        }
+    }
+
+    function checkAiTurn() {
+        if (isGameOver) return;
+        if (controls[turn].mode.value === 'ai') {
+            setTimeout(aiThink, parseInt(thinkSlider.value));
+        }
+    }
+
+    function updateUI() {
+        turnDisplay.innerText = `${turn.charAt(0).toUpperCase() + turn.slice(1)}'s Turn`;
+        turnDisplay.className = `text-xl font-bold mb-1 ${turn === 'white' ? 'text-yellow-400' : 'text-blue-400'}`;
+    }
+
+    function aiThink() {
+        if (isGameOver) return;
+        const level = parseInt(controls[turn].level.value);
+        let move;
+
+        if (level === 1) move = getEasyMove(turn);
+        else if (level === 2) move = getMinimaxMove(1, turn);
+        else if (level === 3) move = getMinimaxMove(2, turn);
+        else move = getMonteCarloMove(turn);
+
+        if (move) executeMove(move.from.r, move.from.c, move.to.r, move.to.c);
+    }
+
+    function getEasyMove(color) {
+        const moves = getAllMoves(color);
+        if (moves.length === 0) return null;
+        const captures = moves.filter(m => board[m.to.r][m.to.c].length > 0);
+        return captures.length > 0 && Math.random() > 0.5 ? 
+            captures[Math.floor(Math.random() * captures.length)] :
+            moves[Math.floor(Math.random() * moves.length)];
+    }
+
+    function getMinimaxMove(depth, color) {
+        let bestScore = -Infinity;
+        let bestMove = null;
+        const moves = getAllMoves(color);
+        if (moves.length === 0) return null;
+
+        moves.forEach(m => {
+            const score = evaluateMove(m, color);
+            if (score > bestScore) {
+                bestScore = score;
+                bestMove = m;
+            }
+        });
+        return bestMove;
+    }
+
+    function evaluateMove(move, color) {
+        const targetStack = board[move.to.r][move.to.c];
+        const enemyColor = color === 'white' ? 'black' : 'white';
+        let score = Math.random() * 2; 
+
+        if (targetStack.length > 0) {
+            const target = targetStack[targetStack.length - 1];
+            if (target.isCorpse) {
+                if (target.type === 'k' && target.color === enemyColor) score += 5000;
+                else score += 2;
+            } else {
+                score += PIECE_VALUES[target.type];
+                if (target.type === 'k') score += 500;
+            }
+        }
+        
+        const p = board[move.from.r][move.from.c][board[move.from.r][move.from.c].length-1];
+        if (p && p.type === 'p') {
+            const isFpawn = (move.from.c === 5);
+            const isOneStep = Math.abs(move.from.r - move.to.r) === 1;
+            if (isFpawn && isOneStep) score -= 15;
+        }
+
+        const rankScore = color === 'white' ? (7 - move.to.r) : move.to.r;
+        score += rankScore * 0.5;
+        score += (4 - Math.abs(3.5 - move.to.c)) * 0.5;
+        
+        return score;
+    }
+
+    function getMonteCarloMove(color) {
+        const moves = getAllMoves(color);
+        if (moves.length === 0) return null;
+        let bestMove = null;
+        let bestScore = -Infinity;
+        const enemyColor = color === 'white' ? 'black' : 'white';
+
+        moves.forEach(move => {
+            let score = evaluateMove(move, color);
+            
+            const kingPos = findKing(color);
+            if (kingPos && board[kingPos.r][kingPos.c][0].isCorpse) {
+                const dist = Math.abs(kingPos.r - move.to.r) + Math.abs(kingPos.c - move.to.c);
+                if (dist <= 2) score += 40; 
+            }
+
+            const enemyKingPos = findKing(enemyColor);
+            if (enemyKingPos && board[enemyKingPos.r][enemyKingPos.c][0].isCorpse) {
+                const distToEnemyKing = Math.abs(enemyKingPos.r - move.to.r) + Math.abs(enemyKingPos.c - move.to.c);
+                score += (16 - distToEnemyKing) * 2;
+            }
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestMove = move;
+            }
+        });
+        return bestMove;
+    }
+
+    function findKing(color) {
+        for (let r=0; r<8; r++) {
+            for (let c=0; c<8; c++) {
+                const s = board[r][c];
+                if (s.length > 0 && s[0].type === 'k' && s[0].color === color) return {r,c};
+            }
+        }
+        return null;
+    }
+
+    function getAllMoves(color) {
+        const moves = [];
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const stack = board[r][c];
+                if (stack.length > 0) {
+                    const p = stack[stack.length - 1];
+                    if (p.color === color && !p.isCorpse) {
+                        const mvs = getValidMoves(board, r, c);
+                        mvs.forEach(m => moves.push({ from: { r, c }, to: m }));
+                    }
+                }
+            }
+        }
+        return moves;
+    }
+
+    function endGame(msg) {
+        isGameOver = true;
+        logDisplay.innerText = msg;
+        alert(msg);
+    }
+
+    function resetGame() {
+        turn = 'white';
+        selectedSquare = null;
+        validMoves = [];
+        updateUI();
+        logDisplay.innerText = "The cycle repeats...";
+        initBoard();
+    }
+
+    initBoard();
+</script>
+</body>
+</html>
