@@ -318,3 +318,5 @@
   global.MathdokuSolver = { solve, rate };
 
 })(typeof window !== "undefined" ? window : global);
+
+//stupid github that didnt update the first time made me add this
