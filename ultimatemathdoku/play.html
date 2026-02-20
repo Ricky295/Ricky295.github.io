@@ -1,643 +1,716 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mathdoku Play</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .grid-cell {
-            aspect-ratio: 1 / 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            font-weight: bold;
-            position: relative;
-            cursor: pointer;
-            border: 1px solid #e2e8f0;
-            background: white;
-            transition: all 0.1s;
-            user-select: none;
-            touch-action: manipulation;
-        }
-        .grid-cell:hover { background-color: #f8fafc; }
-        .grid-cell.selected { background-color: #eff6ff; z-index: 10; outline: 2px solid #3b82f6; }
-        .grid-cell.given { color: #64748b; background-color: #f1f5f9; cursor: default; }
-        
-        .cage-label { 
-            position: absolute; 
-            top: 2px; 
-            left: 3px; 
-            font-size: clamp(0.5rem, 1.5vw, 0.7rem);
-            font-weight: 800; 
-            color: #1e293b; 
-            pointer-events: none; 
-            line-height: 1;
-            z-index: 5;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mathdoku Play</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0e0e10; --surface: #18181b; --surface2: #222226;
+    --border: #2e2e34; --accent: #f97316; --accent2: #fb923c;
+    --text: #f4f4f5; --muted: #71717a; --danger: #ef4444; --success: #22c55e;
+    --blue: #3b82f6;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; }
 
-        .candidate-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            width: 100%;
-            height: 100%;
-            padding: 22% 5% 5% 5%;
-            pointer-events: none;
-        }
+  /* ── Lobby ── */
+  #lobby { display: flex; flex-direction: column; align-items: center; gap: 28px; width: 100%; max-width: 420px; }
+  #lobby h1 { font-size: 2rem; font-weight: 900; letter-spacing: -0.04em; }
+  #lobby h1 span { color: var(--accent); }
+  #lobby p { color: var(--muted); font-size: .85rem; text-align: center; }
 
-        .candidate-num {
-            font-size: clamp(0.4rem, 1.2vw, 0.6rem);
-            color: #94a3b8;
-            line-height: 1;
-            text-align: center;
-            font-weight: normal;
-        }
-        
-        .border-t-heavy { border-top: 3px solid #0f172a; }
-        .border-b-heavy { border-bottom: 3px solid #0f172a; }
-        .border-l-heavy { border-left: 3px solid #0f172a; }
-        .border-r-heavy { border-right: 3px solid #0f172a; }
+  .lobby-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 24px; width: 100%; display: flex; flex-direction: column; gap: 16px; }
+  .lobby-card h2 { font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
 
-        .numpad-btn {
-            aspect-ratio: 1 / 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-weight: 800;
-            background: white;
-            border: 1px solid #e2e8f0;
-            border-radius: 1rem;
-            transition: all 0.1s;
-            touch-action: manipulation;
-        }
-        .numpad-btn:active { transform: scale(0.92); background: #f1f5f9; }
+  .option-row { display: flex; flex-direction: column; gap: 6px; }
+  .option-row label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .option-row select, .option-row input {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 10px 14px; border-radius: 10px; font-size: .9rem; font-weight: 700; outline: none; width: 100%;
+  }
+  .option-row select:focus, .option-row input:focus { border-color: var(--accent); }
 
-        .loader {
-            border: 3px solid #cbd5e1;
-            border-top: 3px solid #3b82f6;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
+  .seg { display: flex; gap: 4px; }
+  .seg-btn { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 9px 4px; border-radius: 8px; font-size: .78rem; font-weight: 800; cursor: pointer; transition: all .15s; text-align: center; }
+  .seg-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 12px 20px; border-radius: 10px; font-size: .88rem; font-weight: 700; cursor: pointer; transition: background .15s, transform .1s; user-select: none; width: 100%; }
+  .btn:hover { background: #2e2e36; }
+  .btn:active { transform: scale(.97); }
+  .btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-accent:hover { background: var(--accent2); }
+
+  .or-divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .75rem; font-weight: 700; }
+  .or-divider::before, .or-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* ── Game ── */
+  #game { display: none; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 540px; }
+
+  .game-topbar { width: 100%; display: flex; justify-content: space-between; align-items: center; }
+  .game-topbar .back-btn { background: none; border: none; color: var(--muted); font-size: .8rem; font-weight: 700; cursor: pointer; padding: 4px 0; }
+  .game-topbar .back-btn:hover { color: var(--text); }
+  #timerDisplay { font-size: 1.1rem; font-weight: 900; letter-spacing: .05em; color: var(--text); font-variant-numeric: tabular-nums; }
+
+  /* puzzle wrapper: grid + difficulty label */
+  .puzzle-wrap { position: relative; width: 100%; }
+  #gridEl { display: grid; border: 3px solid var(--text); background: var(--border); gap: 1px; touch-action: none; user-select: none; margin: 0 auto; }
+
+  .cell {
+    width: 100%; aspect-ratio: 1; background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(.9rem, 4vw, 1.5rem); font-weight: 900;
+    position: relative; cursor: pointer; transition: background .1s;
+    border: 2px solid transparent;
+  }
+  .cell:hover { background: #1e1e22; }
+  .cell.selected { background: #1c2a3a; border-color: var(--blue); z-index: 2; }
+  .cell.given { color: var(--accent); cursor: default; }
+  .cell.given:hover { background: var(--surface); }
+  .cell.filled { color: var(--blue); }
+  .cell.error { color: var(--danger) !important; background: #1f1010 !important; }
+  .cell.correct { color: var(--success) !important; }
+  .cell.highlight { background: #1a2030; }
+
+  .cage-label {
+    position: absolute; top: 2px; left: 3px;
+    font-size: clamp(.4rem, 1.1vw, .6rem); font-weight: 900;
+    color: var(--text); pointer-events: none; line-height: 1;
+  }
+  .bt { border-top: 3px solid var(--text) !important; }
+  .bb { border-bottom: 3px solid var(--text) !important; }
+  .bl { border-left: 3px solid var(--text) !important; }
+  .br { border-right: 3px solid var(--text) !important; }
+
+  /* pencil marks grid inside cell */
+  .pencil-grid {
+    display: grid; width: 90%; height: 90%;
+    position: absolute; inset: 5%;
+  }
+  .pencil-digit {
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(.3rem, .9vw, .5rem); font-weight: 700;
+    color: var(--muted); line-height: 1;
+  }
+
+  #difficultyLabel {
+    text-align: center; font-size: .7rem; font-weight: 800;
+    text-transform: uppercase; letter-spacing: .12em;
+    color: var(--muted); margin-top: 6px;
+  }
+
+  /* numpad */
+  #numpad { display: grid; gap: 6px; width: 100%; }
+  .np-btn {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    aspect-ratio: 1; border-radius: 10px; font-size: clamp(1rem, 4vw, 1.4rem);
+    font-weight: 900; cursor: pointer; transition: background .1s, transform .1s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .np-btn:hover { background: var(--surface2); }
+  .np-btn:active { transform: scale(.93); }
+  .np-btn.pencil-mode { border-color: var(--blue); color: var(--blue); }
+  .np-erase { background: var(--surface2); color: var(--muted); font-size: clamp(.7rem, 2.5vw, 1rem); }
+  .np-pencil { background: var(--surface2); font-size: clamp(.65rem, 2vw, .85rem); }
+  .np-pencil.active { background: #1c2a3a; border-color: var(--blue); color: var(--blue); }
+
+  /* win overlay */
+  #winOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.8); backdrop-filter: blur(8px); z-index: 200; align-items: center; justify-content: center; }
+  #winOverlay.open { display: flex; }
+  .win-box { background: var(--surface); border: 1px solid var(--border); border-radius: 24px; padding: 40px 32px; text-align: center; max-width: 340px; margin: 16px; }
+  .win-box .emoji { font-size: 3rem; margin-bottom: 12px; }
+  .win-box h2 { font-size: 1.6rem; font-weight: 900; margin-bottom: 6px; }
+  .win-box p { color: var(--muted); font-size: .85rem; margin-bottom: 20px; }
+  .win-stats { display: flex; justify-content: center; gap: 24px; margin-bottom: 24px; }
+  .win-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .win-stat .val { font-size: 1.2rem; font-weight: 900; color: var(--accent); }
+  .win-stat .lbl { font-size: .65rem; font-weight: 700; text-transform: uppercase; color: var(--muted); }
+
+  .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #genOverlay p { font-size: .85rem; font-weight: 700; color: var(--muted); }
+</style>
 </head>
-<body class="bg-slate-50 min-h-screen text-slate-900 font-sans overflow-x-hidden">
+<body>
 
-    <div id="app" class="max-w-5xl mx-auto p-4 md:p-8">
-        <!-- Selector Screen -->
-        <div id="selectorScreen" class="space-y-8">
-            <header class="text-center space-y-2">
-                <h1 class="text-4xl font-black italic tracking-tighter">MATHDOKU<span class="text-blue-600">.PLAY</span></h1>
-                <p class="text-slate-500 font-medium">Procedural challenge generator</p>
-            </header>
+<!-- ── Lobby ── -->
+<div id="lobby">
+  <div style="text-align:center;">
+    <h1>MATHDOKU<span>.PLAY</span></h1>
+    <p style="margin-top:6px;">Train your mind.</p>
+  </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Generator Configuration -->
-                <div class="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
-                    <h3 class="font-bold text-xl mb-6 flex items-center gap-2">
-                        <span class="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-                        </span>
-                        New Game
-                    </h3>
-                    
-                    <div class="space-y-6">
-                        <div>
-                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Grid Size</label>
-                            <div class="grid grid-cols-3 gap-2" id="sizeSelector"></div>
-                        </div>
+  <div class="lobby-card">
+    <h2>New Puzzle</h2>
 
-                        <div>
-                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Target Difficulty</label>
-                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2" id="diffSelector"></div>
-                        </div>
-
-                        <div id="genStatusArea" class="hidden space-y-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-3">
-                                    <div class="loader"></div>
-                                    <span class="text-xs font-black uppercase tracking-widest text-slate-400">Attempts: <span id="attemptCount" class="text-slate-900">0</span></span>
-                                </div>
-                                <div id="bestSoFarBadge"></div>
-                            </div>
-                            <button id="stopGenBtn" class="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-[10px] font-black uppercase transition-all">Accept Best Found</button>
-                        </div>
-
-                        <button id="generateBtn" onclick="startGeneration()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-lg hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 flex items-center justify-center gap-3">
-                            GENERATE PUZZLE
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Custom Import -->
-                <div class="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200 flex flex-col">
-                    <h3 class="font-bold text-xl mb-6 flex items-center gap-2">
-                        <span class="p-1.5 bg-purple-100 text-purple-600 rounded-lg">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
-                        </span>
-                        Import String
-                    </h3>
-                    <textarea id="importString" class="flex-1 w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono mb-4 focus:ring-2 focus:ring-blue-500 outline-none min-h-[120px]" placeholder="Paste code..."></textarea>
-                    <button onclick="importPuzzle()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all">LOAD CUSTOM</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Game Screen -->
-        <div id="gameScreen" class="hidden space-y-6">
-            <div class="flex justify-between items-center bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
-                <button onclick="backToMenu()" class="text-slate-500 hover:text-slate-900 font-bold text-sm flex items-center gap-1 bg-slate-100 px-3 py-1.5 rounded-lg transition-colors">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke-width="2"></path></svg>
-                    Menu
-                </button>
-                <div class="flex items-center gap-3">
-                    <div id="gameTimer" class="font-mono font-bold text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">00:00</div>
-                    <div id="difficultyBadge"></div>
-                </div>
-            </div>
-
-            <div class="flex flex-col lg:flex-row gap-6 items-center lg:items-start justify-center">
-                <!-- Main Grid -->
-                <div class="w-full max-w-[550px] space-y-4">
-                    <div id="gridContainer" class="grid border-[3px] border-slate-900 bg-slate-200 shadow-2xl rounded-sm overflow-hidden"></div>
-                </div>
-
-                <!-- Interaction Panel -->
-                <div class="w-full max-w-[400px] lg:w-80 space-y-4">
-                    <!-- Mode Toggle -->
-                    <div class="grid grid-cols-2 gap-2 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm">
-                        <button id="modePen" onclick="setEntryMode('pen')" class="py-3 rounded-xl font-black text-xs uppercase transition-all flex items-center justify-center gap-2 bg-blue-600 text-white">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                            Pen
-                        </button>
-                        <button id="modePencil" onclick="setEntryMode('pencil')" class="py-3 rounded-xl font-black text-xs uppercase transition-all flex items-center justify-center gap-2 text-slate-400 hover:bg-slate-50">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                            Pencil
-                        </button>
-                    </div>
-
-                    <!-- Numpad -->
-                    <div id="numpad" class="grid grid-cols-3 gap-2 p-3 bg-white rounded-3xl border border-slate-200 shadow-sm"></div>
-                    
-                    <div class="space-y-2">
-                        <button id="checkBtn" onclick="checkPuzzle()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all active:scale-95">CHECK SOLUTION</button>
-                        <div id="messageBox" class="p-4 rounded-xl text-center text-sm font-bold hidden transition-all"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="option-row">
+      <label>Grid Size</label>
+      <div class="seg" id="sizeSegs">
+        <div class="seg-btn active" data-val="4">4×4</div>
+        <div class="seg-btn" data-val="5">5×5</div>
+        <div class="seg-btn" data-val="6">6×6</div>
+        <div class="seg-btn" data-val="7">7×7</div>
+        <div class="seg-btn" data-val="8">8×8</div>
+        <div class="seg-btn" data-val="9">9×9</div>
+      </div>
     </div>
 
-    <script src="solver.js"></script>
+    <div class="option-row">
+      <label>Difficulty</label>
+      <div class="seg" id="diffSegs">
+        <div class="seg-btn active" data-val="any">Any</div>
+        <div class="seg-btn" data-val="Easy">Easy</div>
+        <div class="seg-btn" data-val="Medium">Med</div>
+        <div class="seg-btn" data-val="Hard">Hard</div>
+        <div class="seg-btn" data-val="Vicious">Vic</div>
+        <div class="seg-btn" data-val="Devilish">Dev</div>
+        <div class="seg-btn" data-val="Diabolical">Dia</div>
+        <div class="seg-btn" data-val="Beyond Diabolical">BD</div>
+      </div>
+    </div>
 
-    <script>
-        // --- APP STATE ---
-        let config = { size: 6, difficulty: 'Medium' };
-        let gameState = {
-            gridSize: 6,
-            cages: [],
-            givens: {},
-            userGrid: [],
-            candidates: {},
-            selected: null,
-            difficulty: null,
-            entryMode: 'pen',
-            seconds: 0,
-            timerActive: false,
-            solved: false
-        };
+    <div class="option-row">
+      <label>Uniqueness</label>
+      <div class="seg" id="uniqSegs">
+        <div class="seg-btn active" data-val="guaranteed">Guaranteed</div>
+        <div class="seg-btn" data-val="any">Allow non-unique</div>
+        <div class="seg-btn" data-val="only">Only non-unique</div>
+      </div>
+    </div>
 
-        const DIFFICULTIES = ['Easy', 'Medium', 'Hard', 'Vicious', 'Devilish', 'Diabolical', 'Beyond Diabolical'];
-        
-        let genActive = false;
-        let genAttempts = 0;
-        let bestPuzzle = null;
-        let bestDiffDist = Infinity;
-        let timerInterval = null;
+    <button class="btn btn-accent" id="genBtn" onclick="generatePuzzle()">▶ Generate Puzzle</button>
 
-        // --- TIMER LOGIC ---
+    <div id="genInline" style="display:none; flex-direction:column; gap:10px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div class="spinner"></div>
+        <span style="font-size:.85rem; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.08em;">Generating…</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; font-size:.78rem; font-weight:700; color:var(--muted);">
+        <span>Attempts: <span id="genAttempts" style="color:var(--text);">0</span></span>
+        <span>Best so far: <span id="genBestLabel" style="color:var(--accent);">—</span></span>
+      </div>
+      <button class="btn" id="genAcceptBtn" style="display:none;" onclick="acceptBest()">Accept Best</button>
+      <button class="btn btn-danger" onclick="stopGeneration()">✕ Cancel</button>
+    </div>
+  </div>
 
-        function startTimer() {
-            if (timerInterval) clearInterval(timerInterval);
-            gameState.timerActive = true;
-            timerInterval = setInterval(() => {
-                if (gameState.timerActive && !gameState.solved) {
-                    gameState.seconds++;
-                    updateTimerUI();
-                }
-            }, 1000);
+  <div class="or-divider">or</div>
+
+  <div class="lobby-card">
+    <h2>Load from String</h2>
+    <div class="option-row">
+      <label>Puzzle String</label>
+      <input id="importStr" type="text" placeholder="Paste export string…">
+    </div>
+    <button class="btn" onclick="loadFromString()">Load Puzzle</button>
+  </div>
+</div>
+
+<!-- ── Game ── -->
+<div id="game">
+  <div class="game-topbar" style="max-width:540px;width:100%;">
+    <button class="back-btn" onclick="goLobby()">← Back</button>
+    <div id="timerDisplay">0:00</div>
+  </div>
+
+  <div class="puzzle-wrap">
+    <div id="gridEl"></div>
+    <div id="difficultyLabel">—</div>
+  </div>
+
+  <div id="numpad"></div>
+</div>
+
+<!-- Win overlay -->
+<div id="winOverlay">
+  <div class="win-box">
+    <div class="emoji">🎉</div>
+    <h2>Solved!</h2>
+    <p id="winDiff"></p>
+    <div class="win-stats">
+      <div class="win-stat"><div class="val" id="winTime">—</div><div class="lbl">Time</div></div>
+    </div>
+    <button class="btn btn-accent" onclick="goLobby()">Play Again</button>
+  </div>
+</div>
+
+
+
+<script src="solver.js"></script>
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let puzzle = null;       // { size, cages, givens }
+let solution = null;     // 2D array [r][c] = value
+let userGrid = [];       // 2D array, 0 = empty
+let pencilGrid = [];     // 2D array of Set
+let selected = null;     // [r,c] or null
+let pencilMode = false;
+let timerSec = 0;
+let timerInt = null;
+let solved = false;
+let difficulty = '—';
+
+const $ = id => document.getElementById(id);
+
+// ── Segment controls ─────────────────────────────────────────────────────────
+function segVal(id) {
+  return $( id).querySelector('.active')?.dataset.val;
+}
+document.querySelectorAll('.seg').forEach(seg => {
+  seg.addEventListener('click', e => {
+    const btn = e.target.closest('.seg-btn');
+    if (!btn) return;
+    seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+// ── URL puzzle load ──────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(location.search);
+  const p = params.get('p');
+  if (p) {
+    try {
+      const data = JSON.parse(atob(p));
+      startGame(data);
+      return;
+    } catch(e) { /* fall through to lobby */ }
+  }
+});
+
+// ── Lobby actions ─────────────────────────────────────────────────────────────
+function loadFromString() {
+  const str = $('importStr').value.trim();
+  if (!str) return;
+  try {
+    const data = JSON.parse(atob(str));
+    startGame(data);
+  } catch(e) { alert('Invalid puzzle string.'); }
+}
+
+let genRunning = false;
+let genBestPuzzle = null;
+let genBestScore = null;
+let genBestDiff = null;
+
+async function generatePuzzle() {
+  const size   = parseInt(segVal('sizeSegs'));
+  const diff   = segVal('diffSegs');
+  const uniq   = segVal('uniqSegs');
+
+  genRunning   = true;
+  genBestPuzzle = null;
+  genBestScore  = null;
+  genBestDiff   = null;
+
+  $('genBestWrap').style.display = 'none';
+  $('genBestLabel').textContent = 'Best so far: —';
+  $('genOverlay').classList.add('open');
+  $('genStatus').textContent = 'Generating…';
+  await sleep(30);
+
+  let attempt = 0;
+  while (genRunning) {
+    attempt++;
+    if (attempt % 5 === 0) {
+      $('genStatus').textContent = 'Attempt ' + attempt + '…';
+      await sleep(0);
+    }
+
+    const puz = randomPuzzle(size);
+    const rating = MathdokuSolver.rate(puz);
+    const isUnique = !rating.difficulty.startsWith('Non-unique');
+    const diffLabel = isUnique ? rating.difficulty : rating.difficulty.replace(/^Non-unique \(/, '').replace(/\)$/, '');
+
+    // Always update best so far so the accept button is always available
+    updateBest(puz, rating, diffLabel);
+
+    // Check uniqueness filter
+    if (uniq === 'guaranteed' && !isUnique) continue;
+    if (uniq === 'only' && isUnique) continue;
+
+    // Check difficulty filter
+    if (diff !== 'any' && diffLabel !== diff) continue;
+
+    // Perfect match — accept immediately
+    genRunning = false;
+    $('genOverlay').classList.remove('open');
+    startGame(puz);
+    return;
+  }
+
+  // Stopped by user (acceptBest)
+}
+
+function updateBest(puz, rating, diffLabel) {
+  // Always keep track of the best puzzle found so far (closest match by score proximity)
+  if (!genBestPuzzle) {
+    genBestPuzzle = puz;
+    genBestScore  = rating.score;
+    genBestDiff   = rating.difficulty;
+  } else {
+    // Prefer puzzles with a valid solution; otherwise just keep latest
+    genBestPuzzle = puz;
+    genBestScore  = rating.score;
+    genBestDiff   = rating.difficulty;
+  }
+  $('genBestWrap').style.display = 'flex';
+  $('genBestLabel').textContent = 'Best so far: ' + genBestDiff + ' (score ' + genBestScore + ')';
+}
+
+function acceptBest() {
+  if (!genBestPuzzle) return;
+  genRunning = false;
+  $('genOverlay').classList.remove('open');
+  startGame(genBestPuzzle);
+}
+
+
+
+function randomPuzzle(size) {
+  // 1. Generate a random valid latin square
+  const grid = randomLatinSquare(size);
+
+  // 2. Carve random cages covering all cells
+  const cages = carveCages(grid, size);
+
+  return { size, cages, givens: [] };
+}
+
+function randomLatinSquare(size) {
+  // Shuffle-based backtracking
+  const grid = Array.from({length: size}, () => new Array(size).fill(0));
+  function bt(pos) {
+    if (pos === size * size) return true;
+    const r = Math.floor(pos / size), c = pos % size;
+    const nums = shuffle(Array.from({length: size}, (_,i) => i+1));
+    for (const v of nums) {
+      let ok = true;
+      for (let i = 0; i < c; i++) if (grid[r][i] === v) { ok = false; break; }
+      if (ok) for (let i = 0; i < r; i++) if (grid[i][c] === v) { ok = false; break; }
+      if (!ok) continue;
+      grid[r][c] = v;
+      if (bt(pos+1)) return true;
+      grid[r][c] = 0;
+    }
+    return false;
+  }
+  bt(0);
+  return grid;
+}
+
+function carveCages(grid, size) {
+  const assigned = Array.from({length: size}, () => new Array(size).fill(false));
+  const cages = [];
+  const cells = shuffle(Array.from({length: size*size}, (_,i) => i));
+
+  for (const flat of cells) {
+    const r = Math.floor(flat / size), c = flat % size;
+    if (assigned[r][c]) continue;
+
+    // Grow a cage of 1–4 cells using flood-fill-like expansion
+    const maxSize = Math.min(4, size);
+    const cageCells = [[r, c]];
+    assigned[r][c] = true;
+
+    const tries = 1 + Math.floor(Math.random() * (maxSize - 1));
+    for (let t = 0; t < tries; t++) {
+      const candidates = [];
+      for (const [cr, cc] of cageCells) {
+        for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+          const nr = cr+dr, nc = cc+dc;
+          if (nr>=0 && nr<size && nc>=0 && nc<size && !assigned[nr][nc])
+            candidates.push([nr, nc]);
         }
+      }
+      if (!candidates.length) break;
+      const [nr, nc] = candidates[Math.floor(Math.random() * candidates.length)];
+      cageCells.push([nr, nc]);
+      assigned[nr][nc] = true;
+    }
 
-        function updateTimerUI() {
-            const mins = Math.floor(gameState.seconds / 60);
-            const secs = gameState.seconds % 60;
-            const el = document.getElementById('gameTimer');
-            if (el) el.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    // Pick operation
+    const vals = cageCells.map(([cr,cc]) => grid[cr][cc]);
+    const { op, target } = chooseOp(vals, size);
+    cages.push({ id: Date.now() + cages.length, cells: cageCells, op, target });
+  }
+  return cages;
+}
+
+function chooseOp(vals, size) {
+  if (vals.length === 1) return { op: '=', target: vals[0] };
+  const ops = ['+', '*'];
+  // allow - and / only if result is positive/integer
+  const sorted = [...vals].sort((a,b) => b-a);
+  const subResult = sorted.slice(1).reduce((acc,v) => acc-v, sorted[0]);
+  if (subResult > 0) ops.push('-');
+  const divResult = sorted.slice(1).reduce((acc,v) => acc/v, sorted[0]);
+  if (Number.isInteger(divResult) && divResult > 0) ops.push('/');
+
+  const op = ops[Math.floor(Math.random() * ops.length)];
+  let target;
+  switch(op) {
+    case '+': target = vals.reduce((a,b) => a+b, 0); break;
+    case '*': target = vals.reduce((a,b) => a*b, 1); break;
+    case '-': target = subResult; break;
+    case '/': target = divResult; break;
+  }
+  return { op, target };
+}
+
+function shuffle(arr) {
+  for (let i = arr.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i+1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Start game ────────────────────────────────────────────────────────────────
+function startGame(puz) {
+  puzzle = puz;
+  const N = puz.size;
+
+  // Solve to get solution
+  const result = MathdokuSolver.solve(puz, { maxSolutions: 1 });
+  if (!result) { alert('This puzzle has no solution.'); return; }
+  solution = result.grid;
+
+  // Rate
+  const rating = MathdokuSolver.rate(puz);
+  difficulty = rating.difficulty;
+
+  // Init user state
+  userGrid  = Array.from({length: N}, () => new Array(N).fill(0));
+  pencilGrid = Array.from({length: N}, () => Array.from({length: N}, () => new Set()));
+  selected   = null;
+  pencilMode = false;
+  solved     = false;
+
+  // Pre-fill givens
+  (puz.givens || []).forEach(g => { userGrid[g.row][g.col] = g.value; });
+
+  // Timer
+  clearInterval(timerInt);
+  timerSec = 0;
+  $('timerDisplay').textContent = '0:00';
+  timerInt = setInterval(() => {
+    if (solved) return;
+    timerSec++;
+    const m = Math.floor(timerSec/60), s = timerSec%60;
+    $('timerDisplay').textContent = m + ':' + String(s).padStart(2,'0');
+  }, 1000);
+
+  $('lobby').style.display = 'none';
+  $('game').style.display  = 'flex';
+  $('difficultyLabel').textContent = difficulty;
+
+  renderGrid();
+  renderNumpad();
+}
+
+function goLobby() {
+  clearInterval(timerInt);
+  $('winOverlay').classList.remove('open');
+  $('game').style.display  = 'none';
+  $('lobby').style.display = 'flex';
+}
+
+// ── Render grid ───────────────────────────────────────────────────────────────
+function renderGrid() {
+  const N = puzzle.size;
+  const el = $('gridEl');
+  const maxW = Math.min(window.innerWidth - 32, 480);
+  const cellPx = Math.floor((maxW - N) / N);
+  el.style.gridTemplateColumns = 'repeat(' + N + ', ' + cellPx + 'px)';
+  el.style.width = (cellPx * N + N - 1) + 'px';
+  el.innerHTML = '';
+
+  // Build cage lookup
+  const cellToCage = Array.from({length:N}, () => new Array(N).fill(-1));
+  puzzle.cages.forEach((cage,ci) => cage.cells.forEach(([r,c]) => cellToCage[r][c] = ci));
+
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const ci = cellToCage[r][c];
+      const isGiven = (puzzle.givens||[]).some(g => g.row===r && g.col===c);
+      const val = userGrid[r][c];
+      const isSel = selected && selected[0]===r && selected[1]===c;
+      const isHighlight = selected && !isSel && (selected[0]===r || selected[1]===c);
+
+      const div = document.createElement('div');
+      let cls = 'cell';
+      if (isGiven) cls += ' given';
+      else if (val && val === solution[r][c]) cls += ' correct';
+      else if (val && val !== solution[r][c]) cls += ' error';
+      else if (val) cls += ' filled';
+      if (isSel) cls += ' selected';
+      else if (isHighlight) cls += ' highlight';
+      div.className = cls;
+
+      // Cage borders
+      if (ci !== -1) {
+        const cage = puzzle.cages[ci];
+        const inCage = (rr,cc) => cage.cells.some(([a,b]) => a===rr && b===cc);
+        if (r===0 || !inCage(r-1,c)) div.classList.add('bt');
+        if (r===N-1 || !inCage(r+1,c)) div.classList.add('bb');
+        if (c===0 || !inCage(r,c-1)) div.classList.add('bl');
+        if (c===N-1 || !inCage(r,c+1)) div.classList.add('br');
+
+        const sorted = [...cage.cells].sort((a,b) => (a[0]*N+a[1])-(b[0]*N+b[1]));
+        if (sorted[0][0]===r && sorted[0][1]===c) {
+          const lbl = document.createElement('span');
+          lbl.className = 'cage-label';
+          lbl.textContent = cage.target + (cage.op === '=' ? '' : cage.op);
+          div.appendChild(lbl);
         }
+      }
 
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                gameState.timerActive = false;
-            } else if (!gameState.solved && !document.getElementById('gameScreen').classList.contains('hidden')) {
-                gameState.timerActive = true;
-            }
-        });
-
-        // --- GENERATOR OPTIMIZATIONS ---
-
-        function startGeneration() {
-            genActive = true;
-            genAttempts = 0;
-            bestPuzzle = null;
-            bestDiffDist = Infinity;
-            document.getElementById('generateBtn').classList.add('hidden');
-            document.getElementById('genStatusArea').classList.remove('hidden');
-            document.getElementById('bestSoFarBadge').innerHTML = '';
-            document.getElementById('stopGenBtn').onclick = () => {
-                if (bestPuzzle) loadPuzzleData(btoa(JSON.stringify(bestPuzzle)));
-                stopGeneration();
-            };
-            requestAnimationFrame(huntLoop);
+      // Value or pencil marks
+      if (val) {
+        div.append(val);
+      } else {
+        const marks = pencilGrid[r][c];
+        if (marks.size > 0) {
+          const cols = Math.ceil(Math.sqrt(N));
+          const pg = document.createElement('div');
+          pg.className = 'pencil-grid';
+          pg.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
+          for (let v = 1; v <= N; v++) {
+            const pd = document.createElement('div');
+            pd.className = 'pencil-digit';
+            pd.textContent = marks.has(v) ? v : '';
+            pg.appendChild(pd);
+          }
+          div.appendChild(pg);
         }
+      }
 
-        function stopGeneration() {
-            genActive = false;
-            document.getElementById('generateBtn').classList.remove('hidden');
-            document.getElementById('genStatusArea').classList.add('hidden');
-        }
+      if (!isGiven) {
+        div.addEventListener('click', () => selectCell(r, c));
+      }
+      el.appendChild(div);
+    }
+  }
+}
 
-        function huntLoop() {
-            if (!genActive) return;
-            
-            // Adaptive batching: Smaller batches for larger grids to prevent frame drops
-            const batchSize = config.size >= 8 ? 2 : (config.size >= 7 ? 4 : 8);
-            
-            for (let i = 0; i < batchSize; i++) {
-                genAttempts++;
-                const candidate = createCandidate(config.size, config.difficulty);
-                
-                // Fast-fail check: If it has multiple solutions or is unsolvable, ratePuzzle will catch it
-                // We use a low maxSolutions for speed during search
-                const solverRes = solveMathdoku(candidate.gridSize, candidate.cages, candidate.givens, 2);
-                
-                if (solverRes.count === 1) {
-                    const rating = ratePuzzle(solverRes);
-                    const targetIdx = DIFFICULTIES.indexOf(config.difficulty);
-                    const actualIdx = DIFFICULTIES.indexOf(rating.label);
-                    const dist = Math.abs(targetIdx - actualIdx);
-                    
-                    if (dist < bestDiffDist) {
-                        bestDiffDist = dist;
-                        bestPuzzle = candidate;
-                        updateBestBadge(rating);
-                    }
-                    
-                    if (dist === 0) {
-                        loadPuzzleData(btoa(JSON.stringify(candidate)));
-                        stopGeneration();
-                        return;
-                    }
-                }
-            }
-            
-            document.getElementById('attemptCount').textContent = genAttempts;
-            requestAnimationFrame(huntLoop);
-        }
+function selectCell(r, c) {
+  selected = [r, c];
+  renderGrid();
+}
 
-        function updateBestBadge(rating) {
-            const colorMap = { emerald: 'bg-emerald-100 text-emerald-700', teal: 'bg-teal-100 text-teal-700', blue: 'bg-blue-100 text-blue-700', indigo: 'bg-indigo-100 text-indigo-700', rose: 'bg-rose-100 text-rose-700', red: 'bg-red-100 text-red-700', slate: 'bg-slate-200 text-slate-800' };
-            const cls = colorMap[rating.color] || 'bg-slate-100 text-slate-600';
-            document.getElementById('bestSoFarBadge').innerHTML = `
-                <div class="flex flex-col items-end">
-                    <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Best Found</span>
-                    <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase ${cls}">${rating.label}</span>
-                </div>`;
-        }
+// ── Input ─────────────────────────────────────────────────────────────────────
+function inputValue(v) {
+  if (!selected || solved) return;
+  const [r, c] = selected;
+  const isGiven = (puzzle.givens||[]).some(g => g.row===r && g.col===c);
+  if (isGiven) return;
 
-        function createCandidate(size, targetDiff) {
-            const grid = Array.from({ length: size }, () => Array(size).fill(0));
-            function fill(r, c) {
-                if (c === size) { r++; c = 0; }
-                if (r === size) return true;
-                const nums = Array.from({length: size}, (_, i) => i + 1).sort(() => Math.random() - 0.5);
-                for (let n of nums) { 
-                    if (isSafe(grid, r, c, n, size)) { 
-                        grid[r][c] = n; 
-                        if (fill(r, c + 1)) return true; 
-                        grid[r][c] = 0; 
-                    } 
-                }
-                return false;
-            }
-            fill(0, 0);
+  if (pencilMode) {
+    if (userGrid[r][c]) return; // can't pencil on a filled cell
+    if (pencilGrid[r][c].has(v)) pencilGrid[r][c].delete(v);
+    else pencilGrid[r][c].add(v);
+  } else {
+    userGrid[r][c] = v;
+    pencilGrid[r][c].clear();
+    // Auto-remove pencil marks in same row/col
+    for (let i = 0; i < puzzle.size; i++) {
+      pencilGrid[r][i].delete(v);
+      pencilGrid[i][c].delete(v);
+    }
+    checkWin();
+  }
+  renderGrid();
+}
 
-            const cages = [];
-            const visited = new Set();
-            const cells = [];
-            for(let r=0; r<size; r++) for(let c=0; c<size; c++) cells.push([r, c]);
-            cells.sort(() => Math.random() - 0.5);
+function eraseCell() {
+  if (!selected || solved) return;
+  const [r, c] = selected;
+  const isGiven = (puzzle.givens||[]).some(g => g.row===r && g.col===c);
+  if (isGiven) return;
+  userGrid[r][c] = 0;
+  pencilGrid[r][c].clear();
+  renderGrid();
+}
 
-            for (const [r, c] of cells) {
-                if (visited.has(`${r},${c}`)) continue;
-                
-                // Logic Adjustment: Larger grids need larger cages to remain solvable/interesting
-                let baseMax = size >= 7 ? 4 : 3;
-                let maxC = targetDiff === 'Easy' ? 2 : (targetDiff.includes('Diabolical') ? baseMax + 2 : baseMax);
-                let cageSize = Math.floor(Math.random() * maxC) + 1;
-                
-                const currentCage = [[r, c]];
-                visited.add(`${r},${c}`);
-                for (let i = 1; i < cageSize; i++) {
-                    const neighbors = [];
-                    for (const [cr, cc] of currentCage) {
-                        [[cr-1, cc], [cr+1, cc], [cr, cc-1], [cr, cc+1]].forEach(([nr, nc]) => {
-                            if (nr >= 0 && nr < size && nc >= 0 && nc < size && !visited.has(`${nr},${nc}`)) neighbors.push([nr, nc]);
-                        });
-                    }
-                    if (!neighbors.length) break;
-                    const next = neighbors[Math.floor(Math.random() * neighbors.length)];
-                    currentCage.push(next);
-                    visited.add(`${next[0]},${next[1]}`);
-                }
-                
-                const vals = currentCage.map(([cr, cc]) => grid[cr][cc]);
-                let op = '+', target = 0;
-                if (currentCage.length === 1) { op = 'None'; target = vals[0]; }
-                else if (currentCage.length === 2) {
-                    const ops = ['+', '-', '*', '/'].filter(o => o !== '/' || (Math.max(...vals) % Math.min(...vals) === 0));
-                    op = ops[Math.floor(Math.random() * ops.length)];
-                    if (op === '+') target = vals[0] + vals[1];
-                    else if (op === '*') target = vals[0] * vals[1];
-                    else if (op === '-') target = Math.abs(vals[0] - vals[1]);
-                    else if (op === '/') target = Math.max(...vals) / Math.min(...vals);
-                } else {
-                    op = Math.random() > 0.4 ? '+' : '*';
-                    target = op === '+' ? vals.reduce((a,b)=>a+b,0) : vals.reduce((a,b)=>a*b,1);
-                }
-                cages.push({ op, target, cells: currentCage, id: Math.random() });
-            }
-            return { gridSize: size, cages, givens: {} };
-        }
+function checkWin() {
+  const N = puzzle.size;
+  for (let r = 0; r < N; r++)
+    for (let c = 0; c < N; c++)
+      if (userGrid[r][c] !== solution[r][c]) return;
+  // All correct!
+  solved = true;
+  clearInterval(timerInt);
+  const m = Math.floor(timerSec/60), s = timerSec%60;
+  $('winTime').textContent = m + ':' + String(s).padStart(2,'0');
+  $('winDiff').textContent = difficulty;
+  setTimeout(() => $('winOverlay').classList.add('open'), 400);
+}
 
-        // --- CORE GAME LOGIC ---
+// ── Numpad ────────────────────────────────────────────────────────────────────
+function renderNumpad() {
+  const N = puzzle.size;
+  const np = $('numpad');
+  np.innerHTML = '';
+  // cols: N digits + erase + pencil
+  const cols = Math.min(N + 2, 11);
+  np.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
 
-        window.onload = () => { initMenu(); checkUrlParams(); setupKeyboard(); };
+  for (let v = 1; v <= N; v++) {
+    const btn = document.createElement('button');
+    btn.className = 'np-btn' + (pencilMode ? ' pencil-mode' : '');
+    btn.textContent = v;
+    btn.onclick = () => inputValue(v);
+    np.appendChild(btn);
+  }
 
-        function initMenu() {
-            const sEl = document.getElementById('sizeSelector');
-            sEl.innerHTML = '';
-            [4, 5, 6, 7, 8, 9].forEach(s => {
-                const b = document.createElement('button');
-                b.className = `py-3 rounded-xl border-2 font-bold transition-all ${config.size === s ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200'}`;
-                b.textContent = `${s}x${s}`;
-                b.onclick = () => { config.size = s; initMenu(); };
-                sEl.appendChild(b);
-            });
-            const dEl = document.getElementById('diffSelector');
-            dEl.innerHTML = '';
-            DIFFICULTIES.forEach(d => {
-                const b = document.createElement('button');
-                b.className = `py-2 rounded-xl border-2 font-bold text-[10px] uppercase transition-all ${config.difficulty === d ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200'}`;
-                b.textContent = d;
-                b.onclick = () => { config.difficulty = d; initMenu(); };
-                dEl.appendChild(b);
-            });
-        }
+  // Pencil toggle
+  const pencilBtn = document.createElement('button');
+  pencilBtn.className = 'np-btn np-pencil' + (pencilMode ? ' active' : '');
+  pencilBtn.textContent = '✏️';
+  pencilBtn.title = 'Pencil mode';
+  pencilBtn.onclick = () => { pencilMode = !pencilMode; renderNumpad(); renderGrid(); };
+  np.appendChild(pencilBtn);
 
-        function checkUrlParams() {
-            const p = new URLSearchParams(window.location.search).get('p');
-            if (p) loadPuzzleData(p);
-        }
+  // Erase
+  const eraseBtn = document.createElement('button');
+  eraseBtn.className = 'np-btn np-erase';
+  eraseBtn.textContent = '⌫';
+  eraseBtn.title = 'Erase';
+  eraseBtn.onclick = () => eraseCell();
+  np.appendChild(eraseBtn);
+}
 
-        function loadPuzzleData(base64) {
-            try {
-                const data = JSON.parse(atob(base64));
-                gameState.gridSize = data.gridSize;
-                gameState.cages = data.cages;
-                gameState.givens = data.givens || {};
-                gameState.userGrid = Array.from({ length: data.gridSize }, () => Array(data.gridSize).fill(0));
-                gameState.candidates = {};
-                gameState.seconds = 0;
-                gameState.solved = false;
-                
-                for (let k in gameState.givens) {
-                    const [r, c] = k.split(',').map(Number);
-                    gameState.userGrid[r][c] = gameState.givens[k];
-                }
+// ── Keyboard ──────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if ($('game').style.display === 'none') return;
+  if (['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
 
-                const res = solveMathdoku(data.gridSize, data.cages, data.givens, 2);
-                gameState.difficulty = ratePuzzle(res);
-                
-                window.history.replaceState({}, '', `?p=${base64}`);
-                document.getElementById('selectorScreen').classList.add('hidden');
-                document.getElementById('gameScreen').classList.remove('hidden');
-                
-                updateTimerUI();
-                startTimer();
-                renderGame();
-            } catch (e) { alert("Invalid puzzle string."); }
-        }
+  const N = puzzle?.size || 4;
+  const digit = parseInt(e.key);
 
-        function renderGame() {
-            const container = document.getElementById('gridContainer');
-            const size = gameState.gridSize;
-            container.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
-            container.innerHTML = '';
+  if (!isNaN(digit) && digit >= 1 && digit <= N) {
+    inputValue(digit);
+  } else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
+    eraseCell();
+  } else if (e.key === 'p' || e.key === 'P') {
+    pencilMode = !pencilMode; renderNumpad(); renderGrid();
+  } else if (selected) {
+    const [r, c] = selected;
+    const dirs = { ArrowUp:[-1,0], ArrowDown:[1,0], ArrowLeft:[0,-1], ArrowRight:[0,1] };
+    if (dirs[e.key]) {
+      e.preventDefault();
+      const [dr,dc] = dirs[e.key];
+      const nr = Math.max(0, Math.min(N-1, r+dr));
+      const nc = Math.max(0, Math.min(N-1, c+dc));
+      selected = [nr, nc]; renderGrid();
+    }
+  }
+});
 
-            for (let r = 0; r < size; r++) {
-                for (let c = 0; c < size; c++) {
-                    const cell = document.createElement('div');
-                    const key = `${r},${c}`;
-                    const isSelected = gameState.selected?.r === r && gameState.selected?.c === c;
-                    const isGiven = gameState.givens[key];
-                    const val = gameState.userGrid[r][c];
-                    
-                    cell.className = `grid-cell ${isGiven ? 'given' : ''} ${isSelected ? 'selected' : ''}`;
-                    
-                    if (val !== 0) {
-                        cell.textContent = val;
-                    } else if (gameState.candidates[key] && gameState.candidates[key].size > 0) {
-                        const cGrid = document.createElement('div');
-                        cGrid.className = 'candidate-grid';
-                        // Adjust columns for larger grids if needed, but 3x3 is standard
-                        for (let i = 1; i <= size; i++) {
-                            const cn = document.createElement('div');
-                            cn.className = 'candidate-num';
-                            if (gameState.candidates[key].has(i)) cn.textContent = i;
-                            cGrid.appendChild(cn);
-                        }
-                        cell.appendChild(cGrid);
-                    }
-                    
-                    const cage = gameState.cages.find(cg => cg.cells[0][0] === r && cg.cells[0][1] === c);
-                    if (cage) {
-                        const l = document.createElement('div');
-                        l.className = 'cage-label';
-                        const sym = { '+': '+', '-': '−', '*': '×', '/': '÷', 'None': '' }[cage.op];
-                        l.textContent = `${cage.target}${sym}`;
-                        cell.appendChild(l);
-                    }
-                    applyBorders(cell, r, c);
-                    if (!isGiven && !gameState.solved) cell.onclick = () => { gameState.selected = {r, c}; renderGame(); };
-                    container.appendChild(cell);
-                }
-            }
-            renderNumpad();
-            renderDifficultyBadge();
-        }
-
-        function applyBorders(el, r, c) {
-            const cage = gameState.cages.find(cg => cg.cells.some(cell => cell[0] === r && cell[1] === c));
-            if (!cage) return;
-            const inCage = (row, col) => cage.cells.some(cell => cell[0] === row && cell[1] === col);
-            if (!inCage(r - 1, c)) el.classList.add('border-t-heavy');
-            if (!inCage(r + 1, c)) el.classList.add('border-b-heavy');
-            if (!inCage(r, c - 1)) el.classList.add('border-l-heavy');
-            if (!inCage(r, c + 1)) el.classList.add('border-r-heavy');
-        }
-
-        function renderNumpad() {
-            const numpad = document.getElementById('numpad');
-            numpad.innerHTML = '';
-            for (let i = 1; i <= gameState.gridSize; i++) {
-                const b = document.createElement('button');
-                b.className = "numpad-btn text-xl";
-                b.textContent = i;
-                b.disabled = gameState.solved;
-                b.onclick = () => setVal(i);
-                numpad.appendChild(b);
-            }
-            const clr = document.createElement('button');
-            clr.className = "numpad-btn col-span-1 text-slate-400 bg-slate-50";
-            clr.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z"></path></svg>`;
-            clr.disabled = gameState.solved;
-            clr.onclick = () => setVal(0);
-            numpad.appendChild(clr);
-        }
-
-        function setEntryMode(m) {
-            if (gameState.solved) return;
-            gameState.entryMode = m;
-            document.getElementById('modePen').className = m === 'pen' ? "py-3 rounded-xl font-black text-xs uppercase bg-blue-600 text-white flex items-center justify-center gap-2" : "py-3 rounded-xl font-black text-xs uppercase text-slate-400 hover:bg-slate-50 flex items-center justify-center gap-2";
-            document.getElementById('modePencil').className = m === 'pencil' ? "py-3 rounded-xl font-black text-xs uppercase bg-blue-600 text-white flex items-center justify-center gap-2" : "py-3 rounded-xl font-black text-xs uppercase text-slate-400 hover:bg-slate-50 flex items-center justify-center gap-2";
-        }
-
-        function setVal(n) {
-            if (!gameState.selected || gameState.solved) return;
-            const { r, c } = gameState.selected;
-            const key = `${r},${c}`;
-            if (gameState.givens[key]) return;
-
-            if (gameState.entryMode === 'pen') {
-                if (n === 0) {
-                    gameState.userGrid[r][c] = 0;
-                } else {
-                    const newVal = (gameState.userGrid[r][c] === n) ? 0 : n;
-                    gameState.userGrid[r][c] = newVal;
-                    if (newVal !== 0) {
-                        autoRemoveCandidates(r, c, newVal);
-                        if (gameState.candidates[key]) delete gameState.candidates[key];
-                    }
-                }
-            } else {
-                if (n === 0) {
-                    gameState.userGrid[r][c] = 0;
-                    delete gameState.candidates[key];
-                } else if (gameState.userGrid[r][c] === 0) {
-                    if (!gameState.candidates[key]) gameState.candidates[key] = new Set();
-                    if (gameState.candidates[key].has(n)) gameState.candidates[key].delete(n);
-                    else gameState.candidates[key].add(n);
-                }
-            }
-            renderGame();
-        }
-
-        function autoRemoveCandidates(row, col, num) {
-            // Remove from column
-            for (let r = 0; r < gameState.gridSize; r++) {
-                const k = `${r},${col}`;
-                if (gameState.candidates[k]) gameState.candidates[k].delete(num);
-            }
-            // Remove from row
-            for (let c = 0; c < gameState.gridSize; c++) {
-                const k = `${row},${c}`;
-                if (gameState.candidates[k]) gameState.candidates[k].delete(num);
-            }
-        }
-
-        function renderDifficultyBadge() {
-            const d = gameState.difficulty;
-            const colorMap = { emerald: 'bg-emerald-100 text-emerald-700 border-emerald-200', teal: 'bg-teal-100 text-teal-700 border-teal-200', blue: 'bg-blue-100 text-blue-700 border-blue-200', indigo: 'bg-indigo-100 text-indigo-700 border-indigo-200', rose: 'bg-rose-100 text-rose-700 border-rose-200', red: 'bg-red-100 text-red-700 border-red-200', slate: 'bg-slate-200 text-slate-800 border-slate-300' };
-            const classes = colorMap[d.color] || 'bg-slate-100 text-slate-600';
-            document.getElementById('difficultyBadge').innerHTML = `<span class="px-3 py-1 rounded-full text-[10px] font-black uppercase border ${classes}">${d.label}</span>`;
-        }
-
-        function setupKeyboard() {
-            window.addEventListener('keydown', (e) => {
-                if (!gameState.selected || document.activeElement.tagName === 'TEXTAREA') return;
-                if (e.key >= '1' && e.key <= gameState.gridSize.toString()) setVal(parseInt(e.key));
-                if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') setVal(0);
-                if (e.key.toLowerCase() === 'n') setEntryMode(gameState.entryMode === 'pen' ? 'pencil' : 'pen');
-                if (e.key.startsWith('Arrow')) {
-                    e.preventDefault();
-                    moveSelection(e.key);
-                }
-            });
-        }
-
-        function moveSelection(key) {
-            if (gameState.solved) return;
-            let { r, c } = gameState.selected || {r:0, c:0};
-            if (key === 'ArrowUp') r = Math.max(0, r - 1);
-            if (key === 'ArrowDown') r = Math.min(gameState.gridSize - 1, r + 1);
-            if (key === 'ArrowLeft') c = Math.max(0, c - 1);
-            if (key === 'ArrowRight') c = Math.min(gameState.gridSize - 1, c + 1);
-            gameState.selected = { r, c };
-            renderGame();
-        }
-
-        function checkPuzzle() {
-            if (gameState.userGrid.flat().includes(0)) return showMsg("Grid incomplete.", "error");
-            const s = gameState.gridSize;
-            for (let i = 0; i < s; i++) {
-                if (new Set(gameState.userGrid[i]).size !== s || new Set(gameState.userGrid.map(r => r[i])).size !== s) return showMsg("Duplicates found.", "error");
-            }
-            if (checkAllCages(gameState.userGrid, gameState.cages)) {
-                gameState.solved = true;
-                gameState.timerActive = false;
-                gameState.selected = null;
-                showMsg(`SOLVED! Time: ${document.getElementById('gameTimer').textContent}`, "success");
-                renderGame();
-            }
-            else showMsg("Arithmetic error.", "error");
-        }
-
-        function showMsg(txt, type) {
-            const b = document.getElementById('messageBox');
-            b.classList.remove('hidden');
-            b.textContent = txt;
-            const cls = { success: "bg-emerald-50 text-emerald-700 border border-emerald-200", error: "bg-red-50 text-red-700 border border-red-200" };
-            b.className = `p-4 rounded-xl text-sm font-bold text-center ${cls[type]}`;
-        }
-
-        function backToMenu() {
-            window.history.replaceState({}, '', window.location.pathname);
-            document.getElementById('selectorScreen').classList.remove('hidden');
-            document.getElementById('gameScreen').classList.add('hidden');
-            document.getElementById('messageBox').classList.add('hidden');
-            gameState.selected = null;
-            gameState.timerActive = false;
-            if (timerInterval) clearInterval(timerInterval);
-        }
-        
-        function importPuzzle() {
-            const v = document.getElementById('importString').value.trim();
-            if (v) loadPuzzleData(v);
-        }
-    </script>
+window.addEventListener('resize', () => { if (puzzle) renderGrid(); });
+</script>
 </body>
 </html>
