@@ -292,7 +292,6 @@ async function generatePuzzle() {
   genBestProximity = Infinity;
   genBestLabel     = '—';
 
-
   $('genBtn').style.display       = 'none';
   $('genInline').style.display    = 'flex';
   $('genAttempts').textContent    = '0';
@@ -315,17 +314,15 @@ async function generatePuzzle() {
     if (uniq === 'guaranteed' && !isUniq) { await maybeYield(attempt); continue; }
     if (uniq === 'only'       &&  isUniq) { await maybeYield(attempt); continue; }
 
-    // Rate — fast mode only for 6×6+ where full sim is expensive
-    const fast   = size >= 6;
-    const rating = MathdokuSolver.rate(puz, { fast });
+    // Now rate (only puzzles that pass uniqueness filter)
+    const rating  = MathdokuSolver.rate(puz);
     const rawDiff = isUniq
       ? rating.difficulty
       : rating.difficulty.replace(/^Non-unique \(/, '').replace(/\)$/, '');
     const proximity = diffProximity(rating.score, diff);
 
     // Update best-so-far if this is closer to target
-    const scoredWell = proximity < genBestProximity;
-    if (scoredWell) {
+    if (proximity < genBestProximity) {
       genBestProximity = proximity;
       genBestPuzzle    = puz;
       genBestLabel     = rawDiff + ' (' + rating.score + ')';
@@ -400,28 +397,33 @@ function randomLatinSquare(size) {
 function carveCages(grid, size) {
   const assigned = Array.from({length: size}, () => new Array(size).fill(false));
   const cages = [];
-  // Process cells in random order
   const order = shuffle(Array.from({length: size*size}, (_,i) => i));
+
   for (const flat of order) {
     const r = Math.floor(flat / size), c = flat % size;
     if (assigned[r][c]) continue;
+
+    // Snake walk: start from this cell, repeatedly step to a random
+    // unassigned neighbour, up to `size` cells total
     const cells = [[r, c]];
     assigned[r][c] = true;
-    const maxSz = Math.min(4, size);
-    for (let t = 0; t < maxSz - 1; t++) {
-      // Collect unassigned neighbours of any cell already in cage
-      const cands = [];
-      for (const [cr, cc] of cells)
-        for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-          const nr = cr+dr, nc = cc+dc;
-          if (nr>=0 && nr<size && nc>=0 && nc<size && !assigned[nr][nc])
-            cands.push([nr, nc]);
-        }
-      if (!cands.length) break;
-      const [nr, nc] = cands[Math.floor(Math.random() * cands.length)];
-      cells.push([nr, nc]);
-      assigned[nr][nc] = true;
+    let cur = [r, c];
+
+    for (let t = 1; t < size; t++) {
+      const [cr, cc] = cur;
+      const neighbours = [];
+      for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const nr = cr+dr, nc = cc+dc;
+        if (nr>=0 && nr<size && nc>=0 && nc<size && !assigned[nr][nc])
+          neighbours.push([nr, nc]);
+      }
+      if (!neighbours.length) break;
+      // Pick a random neighbour and continue the snake from there
+      cur = neighbours[Math.floor(Math.random() * neighbours.length)];
+      cells.push(cur);
+      assigned[cur[0]][cur[1]] = true;
     }
+
     const vals = cells.map(([cr,cc]) => grid[cr][cc]);
     const { op, target } = chooseOp(vals);
     cages.push({ id: Date.now() + cages.length, cells, op, target });
@@ -461,7 +463,7 @@ function startGame(puz) {
   const result = MathdokuSolver.solve(puz, { maxSolutions: 1 });
   if (!result) { alert('This puzzle has no solution.'); return; }
   solution   = result.grid;
-  difficulty = MathdokuSolver.rate(puz).difficulty; // full rate on accepted puzzle
+  difficulty = MathdokuSolver.rate(puz).difficulty;
   userGrid   = Array.from({length: N}, () => new Array(N).fill(0));
   pencilGrid = Array.from({length: N}, () => Array.from({length: N}, () => new Set()));
   selected   = null;
