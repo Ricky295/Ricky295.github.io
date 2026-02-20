@@ -305,17 +305,23 @@ async function generatePuzzle() {
 
     const puz = randomPuzzle(size);
 
-    // Fast uniqueness check only — no full rate() yet
+    // Fast uniqueness check
     const solveResult = MathdokuSolver.solve(puz, { maxSolutions: 2 });
-    if (!solveResult) continue; // no solution at all, skip
+    if (!solveResult) continue;
     const isUniq = solveResult.solutions.length === 1;
 
-    // Uniqueness filter — don't even consider these for best-so-far
+    // Uniqueness filter
     if (uniq === 'guaranteed' && !isUniq) { await maybeYield(attempt); continue; }
     if (uniq === 'only'       &&  isUniq) { await maybeYield(attempt); continue; }
 
-    // Now rate (only puzzles that pass uniqueness filter)
+    // Full rate
     const rating  = MathdokuSolver.rate(puz);
+
+    // Early discard: if no guesses were needed and target is hard+, skip immediately
+    const hardTargets = ['Hard','Vicious','Devilish','Diabolical','Beyond Diabolical'];
+    if (diff !== 'any' && hardTargets.includes(diff) && (rating.breakdown?.guesses || 0) === 0) {
+      await maybeYield(attempt); continue;
+    }
     const rawDiff = isUniq
       ? rating.difficulty
       : rating.difficulty.replace(/^Non-unique \(/, '').replace(/\)$/, '');
@@ -406,9 +412,9 @@ function carveCages(grid, size) {
     assigned[r][c] = true;
     // Grow cage: max 4 cells on any size, but larger grids bias toward smaller cages
     const maxSz = 4;
-    const growProb = size <= 5 ? 0.8 : size <= 7 ? 0.65 : 0.5; // chance to keep growing
+    const growProb = size <= 5 ? 0.8 : size <= 7 ? 0.65 : 0.5;
     for (let t = 0; t < maxSz - 1; t++) {
-      if (Math.random() > growProb) break; // probabilistic stop
+      if (t > 0 && Math.random() > growProb) break; // always try at least once
       // Collect unassigned neighbours of any cell already in cage
       const cands = [];
       for (const [cr, cc] of cells)
@@ -431,12 +437,17 @@ function carveCages(grid, size) {
 
 function chooseOp(vals) {
   if (vals.length === 1) return { op: '=', target: vals[0] };
-  const ops = ['+', '*'];
   const sorted = [...vals].sort((a,b) => b-a);
   const sub = sorted.slice(1).reduce((a,v) => a-v, sorted[0]);
   const div = sorted.slice(1).reduce((a,v) => a/v, sorted[0]);
-  if (sub > 0) ops.push('-');
-  if (Number.isInteger(div) && div > 0) ops.push('/');
+
+  const ops = [];
+  // Always allow + and *
+  ops.push('+', '+', '*'); // weighted: + appears twice to balance
+  // Heavily bias toward - and / for difficulty
+  if (sub > 0)                          ops.push('-', '-', '-');
+  if (Number.isInteger(div) && div > 0) ops.push('/', '/', '/');
+
   const op = ops[Math.floor(Math.random() * ops.length)];
   const target = op==='+' ? vals.reduce((a,b)=>a+b,0)
                : op==='*' ? vals.reduce((a,b)=>a*b,1)
