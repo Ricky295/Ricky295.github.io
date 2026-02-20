@@ -397,16 +397,19 @@ function randomLatinSquare(size) {
 function carveCages(grid, size) {
   const assigned = Array.from({length: size}, () => new Array(size).fill(false));
   const cages = [];
-  const MAX_COMBOS = 1000;
-
+  // Process cells in random order
   const order = shuffle(Array.from({length: size*size}, (_,i) => i));
   for (const flat of order) {
     const r = Math.floor(flat / size), c = flat % size;
     if (assigned[r][c]) continue;
     const cells = [[r, c]];
     assigned[r][c] = true;
-
-    for (let t = 0; t < size - 1; t++) {
+    // Grow cage: max 4 cells on any size, but larger grids bias toward smaller cages
+    const maxSz = 4;
+    const growProb = size <= 5 ? 0.8 : size <= 7 ? 0.65 : 0.5; // chance to keep growing
+    for (let t = 0; t < maxSz - 1; t++) {
+      if (Math.random() > growProb) break; // probabilistic stop
+      // Collect unassigned neighbours of any cell already in cage
       const cands = [];
       for (const [cr, cc] of cells)
         for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
@@ -415,50 +418,15 @@ function carveCages(grid, size) {
             cands.push([nr, nc]);
         }
       if (!cands.length) break;
-
-      // Try adding a neighbour — only commit if combos stay under cap
-      const candidate = cands[Math.floor(Math.random() * cands.length)];
-      const testCells = [...cells, candidate];
-      const testVals  = testCells.map(([cr,cc]) => grid[cr][cc]);
-      const { op, target } = chooseOp(testVals);
-      const combos = countCombos(testCells, op, target, size, MAX_COMBOS);
-      if (combos > MAX_COMBOS) break; // too complex, stop growing
-
-      cells.push(candidate);
-      assigned[candidate[0]][candidate[1]] = true;
+      const [nr, nc] = cands[Math.floor(Math.random() * cands.length)];
+      cells.push([nr, nc]);
+      assigned[nr][nc] = true;
     }
-
     const vals = cells.map(([cr,cc]) => grid[cr][cc]);
     const { op, target } = chooseOp(vals);
     cages.push({ id: Date.now() + cages.length, cells, op, target });
   }
   return cages;
-}
-
-function countCombos(cells, op, target, size, cap) {
-  const n = cells.length;
-  let count = 0;
-  function gen(idx, cur) {
-    if (count > cap) return; // early exit
-    if (idx === n) {
-      if (checkCageLocal(cur, op, target)) count++;
-      return;
-    }
-    for (let v = 1; v <= size; v++) { cur.push(v); gen(idx+1, cur); cur.pop(); }
-  }
-  gen(0, []);
-  return count;
-}
-
-function checkCageLocal(values, op, target) {
-  switch(op) {
-    case '=': return values.length === 1 && values[0] === target;
-    case '+': return values.reduce((a,b) => a+b, 0) === target;
-    case '*': return values.reduce((a,b) => a*b, 1) === target;
-    case '-': { const s = [...values].sort((a,b)=>b-a); return s.slice(1).reduce((a,v)=>a-v, s[0]) === target; }
-    case '/': { const s = [...values].sort((a,b)=>b-a); return s.slice(1).reduce((a,v)=>a/v, s[0]) === target; }
-  }
-  return false;
 }
 
 function chooseOp(vals) {
