@@ -1,25 +1,14 @@
 /**
- * solver.js — Mathdoku (KenKen) Solver + Rater
+ * solver.js — Mathdoku Solver + Rater
+ * Works both as a normal script and as a Web Worker.
  *
- * API:
+ * Direct API (same-thread):
  *   MathdokuSolver.solve(puzzle, opts)  → { grid, solutions } | null
  *   MathdokuSolver.rate(puzzle)         → { difficulty, score, breakdown }
  *
- * Puzzle format:
- *   {
- *     size: 4,
- *     cages: [
- *       { cells: [[0,0],[0,1]], op: '+', target: 5 },
- *       ...
- *     ],
- *     givens: [          // optional
- *       { row: 0, col: 2, value: 3 },
- *       ...
- *     ]
- *   }
- *
- * Ops: '+', '-', '*', '/'
- * '-' and '/' sort values highest→lowest before applying left-to-right.
+ * Worker API (postMessage):
+ *   post { type:'solve'|'rate'|'solveAndRate', puzzle, opts }
+ *   receive { type:'solveResult'|'rateResult'|'solveAndRateResult', ... }
  */
 
 (function(global) {
@@ -54,55 +43,94 @@
     return true;
   }
 
-  // ── Solver (backtracking) ─────────────────────────────────────────────────
+  // ── Precompute valid cage combinations ────────────────────────────────────
+  // Called once per cage. Returns array of valid value-arrays.
+
+  function precomputeCombos(cage, size) {
+    const n = cage.cells.length;
+    const combos = [];
+    function gen(idx, cur) {
+      if (idx === n) {
+        if (checkCage(cur, cage.op, cage.target)) combos.push(cur.slice());
+        return;
+      }
+      for (let v = 1; v <= size; v++) { cur.push(v); gen(idx+1, cur); cur.pop(); }
+    }
+    gen(0, []);
+    return combos;
+  }
+
+  // ── Solver (backtracking + precomputed combos) ────────────────────────────
 
   function solve(puzzle, opts) {
     opts = opts || {};
     const maxSolutions = opts.maxSolutions || 2;
+    const deadline = opts.timeLimitMs ? performance.now() + opts.timeLimitMs : Infinity;
     const { size, cages, givens } = puzzle;
 
     const cellToCage = Array.from({length: size}, () => new Array(size).fill(-1));
     cages.forEach((cage, ci) => cage.cells.forEach(([r,c]) => cellToCage[r][c] = ci));
 
+    // Precompute all valid combos per cage
+    const cageComboSets = cages.map(cage => precomputeCombos(cage, size));
+
     const givenSet = new Set();
     const grid = Array.from({length: size}, () => new Array(size).fill(0));
-    if (givens) {
-      givens.forEach(g => {
-        grid[g.row][g.col] = g.value;
-        givenSet.add(g.row * size + g.col);
-      });
-    }
+    if (givens) givens.forEach(g => {
+      grid[g.row][g.col] = g.value;
+      givenSet.add(g.row * size + g.col);
+    });
 
+    // Track how many cells of each cage have been filled and their values
     const cageFilled = cages.map(() => []);
     const solutions = [];
 
     function bt(pos) {
       if (solutions.length >= maxSolutions) return;
+      if (performance.now() > deadline) return;
       if (pos === size * size) {
-        for (let ci = 0; ci < cages.length; ci++) {
+        // Verify all cages complete
+        for (let ci = 0; ci < cages.length; ci++)
           if (!checkCage(cageFilled[ci], cages[ci].op, cages[ci].target)) return;
-        }
         solutions.push(grid.map(r => r.slice()));
         return;
       }
       const row = Math.floor(pos / size), col = pos % size;
       if (givenSet.has(pos)) { bt(pos+1); return; }
       const ci = cellToCage[row][col];
+
       for (let v = 1; v <= size; v++) {
+        // Latin square check
         let ok = true;
         for (let c = 0; c < col; c++) if (grid[row][c] === v) { ok = false; break; }
         if (ok) for (let r = 0; r < row; r++) if (grid[r][col] === v) { ok = false; break; }
         if (!ok) continue;
+
         if (ci === -1) {
           grid[row][col] = v; bt(pos+1); grid[row][col] = 0;
         } else {
-          const cage = cages[ci];
+          const cage   = cages[ci];
           const filled = cageFilled[ci];
           filled.push(v);
-          const partial = filled.length < cage.cells.length
-            ? partialCageOk(filled, cage.op, cage.target)
-            : checkCage(filled, cage.op, cage.target);
-          if (partial) { grid[row][col] = v; bt(pos+1); }
+
+          // Use precomputed combos to prune: check if any combo matches filled so far
+          const filledLen = filled.length;
+          const cageIdx   = cage.cells.findIndex(([r,c]) => r===row && c===col);
+          let viable = false;
+          const combos = cageComboSets[ci];
+          for (let k = 0; k < combos.length; k++) {
+            const combo = combos[k];
+            let match = true;
+            // Check all placed cells in this cage so far
+            for (let f = 0; f < filledLen; f++) {
+              if (combo[f] !== filled[f]) { match = false; break; }
+            }
+            if (match) { viable = true; break; }
+          }
+
+          if (viable) {
+            grid[row][col] = v; bt(pos+1);
+          }
           filled.pop();
         }
         grid[row][col] = 0;
@@ -114,192 +142,141 @@
     return solutions.length === 0 ? null : { grid: solutions[0], solutions };
   }
 
-  // ── Rater (logic simulation) ──────────────────────────────────────────────
-  //
-  // Three-tier simulation:
-  //   1. Singles  — naked single (one candidate left in cell),
-  //                 hidden single (value has only one cell in row/col)
-  //   2. Cage logic — eliminate candidates not present in ANY valid combo
-  //                   for that cage given current candidates (naked sets per cage)
-  //   3. Guessing — when neither singles nor cage logic make progress,
-  //                 pick the most-constrained cell and try each candidate;
-  //                 every branch attempted counts as a guess (not just the final).
+  // ── Rater ─────────────────────────────────────────────────────────────────
 
   function rate(puzzle) {
     const { size, cages } = puzzle;
 
-    // Step 0: solvability
-    const solveResult = solve(puzzle, { maxSolutions: 2 });
+    const solveResult = solve(puzzle, { maxSolutions: 2, timeLimitMs: 500 });
     if (!solveResult || !solveResult.solutions.length)
       return { difficulty: "Impossible", score: Infinity, breakdown: {} };
     const nonUnique = solveResult.solutions.length > 1;
 
-    let singlesUsed = 0;
-    let cageElims   = 0;
-    let guesses     = 0;  // every branch tried during bifurcation, not just correct ones
-
-    // Build cell→cage map
+    // Precompute combos ONCE — reused throughout logic simulation
     const cellToCage = Array.from({length: size}, () => new Array(size).fill(-1));
     cages.forEach((cage, ci) => cage.cells.forEach(([r,c]) => cellToCage[r][c] = ci));
 
-    // ── helpers that operate on a state object { cands, placed } ──
+    // Cache: for each cage, current valid combos (filtered as candidates shrink)
+    const cacheC = cages.map(cage => precomputeCombos(cage, size));
 
-    function cloneState(st) {
-      return {
-        cands:  st.cands.map(row => row.map(s => new Set(s))),
-        placed: st.placed.map(r => r.slice()),
-      };
-    }
+    const cands  = Array.from({length: size}, () =>
+      Array.from({length: size}, () => new Set(Array.from({length: size}, (_,i) => i+1)))
+    );
+    const placed = Array.from({length: size}, () => new Array(size).fill(0));
 
-    function placeCell(st, r, c, v) {
-      st.placed[r][c] = v;
-      st.cands[r][c]  = new Set([v]);
+    function placeCell(r, c, v) {
+      placed[r][c] = v;
+      cands[r][c]  = new Set([v]);
       for (let i = 0; i < size; i++) {
-        if (i !== c) st.cands[r][i].delete(v);
-        if (i !== r) st.cands[i][c].delete(v);
+        if (i !== c) cands[r][i].delete(v);
+        if (i !== r) cands[i][c].delete(v);
       }
     }
 
-    // Returns valid combinations for a cage given current candidate sets
-    function validCombos(st, cage) {
-      const n = cage.cells.length, combos = [];
-      function gen(idx, cur) {
-        if (idx === n) {
-          if (checkCage(cur, cage.op, cage.target)) combos.push(cur.slice());
-          return;
-        }
-        const [r,c] = cage.cells[idx];
-        for (const v of st.cands[r][c]) { cur.push(v); gen(idx+1, cur); cur.pop(); }
-      }
-      gen(0, []);
-      return combos;
+    (puzzle.givens || []).forEach(g => placeCell(g.row, g.col, g.value));
+
+    let singlesUsed = 0, cageElims = 0, guesses = 0;
+
+    // Filter cached combos using current candidates
+    function filterCombos(ci) {
+      const cage = cages[ci];
+      cacheC[ci] = cacheC[ci].filter(combo =>
+        cage.cells.every(([r,c], idx) =>
+          placed[r][c] ? placed[r][c] === combo[idx] : cands[r][c].has(combo[idx])
+        )
+      );
+      return cacheC[ci];
     }
 
-    // Apply one full round of singles + cage logic.
-    // Returns true if anything changed.
     function applyLogic(st) {
       let changed = false;
 
-      // Cage elimination (tier 2)
+      // Cage elimination using filtered combos
       for (let ci = 0; ci < cages.length; ci++) {
-        const cage = cages[ci];
-        const combos = validCombos(st, cage);
+        const cage   = cages[ci];
+        const combos = filterCombos(ci);
         cage.cells.forEach(([r,c], idx) => {
-          if (st.placed[r][c]) return;
+          if (placed[r][c]) return;
           const allowed = new Set(combos.map(k => k[idx]));
-          for (const v of [...st.cands[r][c]]) {
-            if (!allowed.has(v)) {
-              st.cands[r][c].delete(v);
-              cageElims++;
-              changed = true;
-            }
+          for (const v of [...cands[r][c]]) {
+            if (!allowed.has(v)) { cands[r][c].delete(v); cageElims++; changed = true; }
           }
         });
       }
 
-      // Naked singles (tier 1a)
+      // Naked singles
       for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
-        if (!st.placed[r][c] && st.cands[r][c].size === 1) {
-          placeCell(st, r, c, [...st.cands[r][c]][0]);
+        if (!placed[r][c] && cands[r][c].size === 1) {
+          placeCell(r, c, [...cands[r][c]][0]);
           singlesUsed++; changed = true;
         }
       }
 
-      // Hidden singles — rows (tier 1b)
-      for (let r = 0; r < size; r++) {
-        for (let v = 1; v <= size; v++) {
-          const cols = [];
-          for (let c = 0; c < size; c++)
-            if (!st.placed[r][c] && st.cands[r][c].has(v)) cols.push(c);
-          if (cols.length === 1) {
-            placeCell(st, r, cols[0], v);
-            singlesUsed++; changed = true;
-          }
-        }
+      // Hidden singles rows
+      for (let r = 0; r < size; r++) for (let v = 1; v <= size; v++) {
+        const cols = [];
+        for (let c = 0; c < size; c++) if (!placed[r][c] && cands[r][c].has(v)) cols.push(c);
+        if (cols.length === 1) { placeCell(r, cols[0], v); singlesUsed++; changed = true; }
       }
 
-      // Hidden singles — cols (tier 1b)
-      for (let c = 0; c < size; c++) {
-        for (let v = 1; v <= size; v++) {
-          const rows = [];
-          for (let r = 0; r < size; r++)
-            if (!st.placed[r][c] && st.cands[r][c].has(v)) rows.push(r);
-          if (rows.length === 1) {
-            placeCell(st, rows[0], c, v);
-            singlesUsed++; changed = true;
-          }
-        }
+      // Hidden singles cols
+      for (let c = 0; c < size; c++) for (let v = 1; v <= size; v++) {
+        const rows = [];
+        for (let r = 0; r < size; r++) if (!placed[r][c] && cands[r][c].has(v)) rows.push(r);
+        if (rows.length === 1) { placeCell(rows[0], c, v); singlesUsed++; changed = true; }
       }
 
       return changed;
     }
 
-    // Run logic to fixpoint
-    function logicFixpoint(st) {
-      while (applyLogic(st)) { /* keep going */ }
+    function cloneState() {
+      return {
+        cands:  cands.map(row => row.map(s => new Set(s))),
+        placed: placed.map(r => r.slice()),
+        cache:  cacheC.map(combos => combos.map(c => c.slice())),
+      };
     }
 
-    function isSolved(st) {
-      for (let r = 0; r < size; r++)
-        for (let c = 0; c < size; c++)
-          if (!st.placed[r][c]) return false;
-      return true;
-    }
-
-    function isContradiction(st) {
-      for (let r = 0; r < size; r++)
-        for (let c = 0; c < size; c++)
-          if (!st.placed[r][c] && st.cands[r][c].size === 0) return true;
-      return false;
-    }
-
-    // Pick most-constrained unplaced cell (MRV heuristic)
-    function pickCell(st) {
-      let best = null, bestSize = Infinity;
+    function restoreState(st) {
       for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
-        if (!st.placed[r][c]) {
-          const s = st.cands[r][c].size;
-          if (s < bestSize) { bestSize = s; best = [r,c]; }
-        }
+        cands[r][c]  = new Set(st.cands[r][c]);
+        placed[r][c] = st.placed[r][c];
       }
+      for (let ci = 0; ci < cages.length; ci++) cacheC[ci] = st.cache[ci].map(c => c.slice());
+    }
+
+    function logicFixpoint() { while (applyLogic()) {} }
+
+    function isSolved()        { return placed.every(row => row.every(v => v !== 0)); }
+    function isContradiction() { return cands.some(row => row.some((s,c) => !placed[Math.floor(row.indexOf?.(s)/1)][c] && s.size===0)); }
+
+    function pickCell() {
+      let best = null, bestSz = Infinity;
+      for (let r = 0; r < size; r++) for (let c = 0; c < size; c++)
+        if (!placed[r][c] && cands[r][c].size < bestSz) { bestSz = cands[r][c].size; best = [r,c]; }
       return best;
     }
 
-    // Recursive guess-and-check; explores ALL branches, counts every wrong one
-    function search(st) {
-      logicFixpoint(st);
-      if (isContradiction(st)) return false;
-      if (isSolved(st)) return true;
-
-      const [r,c] = pickCell(st);
-      let anySuccess = false;
-      for (const v of [...st.cands[r][c]]) {
-        const branch = cloneState(st);
-        placeCell(branch, r, c, v);
-        guesses++; // count every branch — human doesn't know which is correct
-        const ok = search(branch);
-        if (ok) anySuccess = true;
+    function search() {
+      logicFixpoint();
+      // Contradiction check
+      for (let r = 0; r < size; r++) for (let c = 0; c < size; c++)
+        if (!placed[r][c] && cands[r][c].size === 0) return false;
+      if (isSolved()) return true;
+      const cell = pickCell();
+      if (!cell) return false;
+      const [r,c] = cell;
+      for (const v of [...cands[r][c]]) {
+        guesses++;
+        const snap = cloneState();
+        placeCell(r, c, v);
+        if (search()) return true; // keep going to count all branches? no — just count guesses
+        restoreState(snap);
       }
-      return anySuccess;
+      return false;
     }
 
-    // Build initial state
-    const initState = {
-      cands:  Array.from({length: size}, () =>
-                Array.from({length: size}, () => new Set(Array.from({length: size}, (_,i) => i+1)))),
-      placed: Array.from({length: size}, () => new Array(size).fill(0)),
-    };
-    (puzzle.givens || []).forEach(g => placeCell(initState, g.row, g.col, g.value));
-
-    const hasConstraints = cages.length > 0;
-    search(initState);
-
-    // An empty/uncaged puzzle gives a human zero information — always Beyond Diabolical
-    if (!hasConstraints) return {
-      difficulty: "Non-unique (Beyond Diabolical)",
-      score: 100, raw: Infinity,
-      breakdown: { singlesUsed: 0, cageElims: 0, guesses: 0, solutionCount: solveResult.solutions.length }
-    };
+    search();
 
     const raw   = singlesUsed + cageElims + guesses * 20;
     const score = +(raw / Math.pow(size, 4)).toFixed(3);
@@ -323,6 +300,27 @@
 
   // ── Public API ────────────────────────────────────────────────────────────
 
-  global.MathdokuSolver = { solve, rate };
+  const MathdokuSolver = { solve, rate };
 
-})(typeof window !== "undefined" ? window : global);
+  // Expose as global when used as a normal script
+  if (typeof window !== 'undefined') window.MathdokuSolver = MathdokuSolver;
+
+  // Web Worker message handler
+  if (typeof self !== 'undefined' && typeof window === 'undefined') {
+    self.onmessage = function(e) {
+      const { type, puzzle, opts, callId } = e.data;
+      if (type === 'solve') {
+        const result = solve(puzzle, opts);
+        self.postMessage({ type: 'solveResult', result, callId });
+      } else if (type === 'rate') {
+        const result = rate(puzzle);
+        self.postMessage({ type: 'rateResult', result, callId });
+      } else if (type === 'solveAndRate') {
+        const solveResult = solve(puzzle, opts);
+        const rateResult  = solveResult ? rate(puzzle) : null;
+        self.postMessage({ type: 'solveAndRateResult', solveResult, rateResult, callId });
+      }
+    };
+  }
+
+})(typeof window !== 'undefined' ? window : self);
