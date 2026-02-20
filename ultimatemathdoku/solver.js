@@ -265,20 +265,22 @@
       return best;
     }
 
-    // Recursive guess-and-check; counts every branch attempted
+    // Recursive guess-and-check; explores ALL branches, counts every wrong one
     function search(st) {
       logicFixpoint(st);
       if (isContradiction(st)) return false;
       if (isSolved(st)) return true;
 
       const [r,c] = pickCell(st);
+      let anySuccess = false;
       for (const v of [...st.cands[r][c]]) {
-        guesses++;                          // count EVERY attempt
         const branch = cloneState(st);
         placeCell(branch, r, c, v);
-        if (search(branch)) return true;
+        const ok = search(branch);
+        if (!ok) guesses++; // only count dead-end branches
+        else anySuccess = true;
       }
-      return false;
+      return anySuccess;
     }
 
     // Build initial state
@@ -289,11 +291,18 @@
     };
     (puzzle.givens || []).forEach(g => placeCell(initState, g.row, g.col, g.value));
 
+    const hasConstraints = cages.length > 0;
     search(initState);
 
-    // Score: guesses dominate (each is expensive), logic steps are cheap
+    // An empty/uncaged puzzle gives a human zero information — always Beyond Diabolical
+    if (!hasConstraints) return {
+      difficulty: "Non-unique (Beyond Diabolical)",
+      score: 100, raw: Infinity,
+      breakdown: { singlesUsed: 0, cageElims: 0, guesses: 0, solutionCount: solveResult.solutions.length }
+    };
+
     const raw   = singlesUsed + cageElims + guesses * 20;
-    const maxRaw = size * size * (size * 20);   // normalise per grid size
+    const maxRaw = size * size * (size * 20);
     const score  = Math.min(100, Math.round((raw / maxRaw) * 100));
 
     let difficulty;
@@ -318,5 +327,3 @@
   global.MathdokuSolver = { solve, rate };
 
 })(typeof window !== "undefined" ? window : global);
-
-//stupid github that didnt update the first time made me add this
