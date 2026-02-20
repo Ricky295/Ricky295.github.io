@@ -305,13 +305,13 @@
     const score = +(raw / Math.pow(size, 4)).toFixed(3);
 
     let difficulty;
-    if (raw === 0)        difficulty = "Easy";
-    else if (score < 0.05) difficulty = "Easy";
-    else if (score < 0.15) difficulty = "Medium";
-    else if (score < 0.30) difficulty = "Hard";
-    else if (score < 0.50) difficulty = "Vicious";
-    else if (score < 0.68) difficulty = "Devilish";
-    else if (score < 0.85) difficulty = "Diabolical";
+    if (raw === 0)         difficulty = "Easy";
+    else if (score < 0.5)  difficulty = "Easy";
+    else if (score < 1.2)  difficulty = "Medium";
+    else if (score < 1.6)  difficulty = "Hard";
+    else if (score < 2.5)  difficulty = "Vicious";
+    else if (score < 3.4)  difficulty = "Devilish";
+    else if (score < 5.0)  difficulty = "Diabolical";
     else                   difficulty = "Beyond Diabolical";
 
     return {
