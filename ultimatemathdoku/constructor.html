@@ -1,40 +1,524 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mathdoku Constructor</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .grid-cell {
-            aspect-ratio: 1 / 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            font-weight: bold;
-            position: relative;
-            cursor: pointer;
-            border: 1px solid #e5e7eb;
-            background: white;
-            transition: all 0.2s;
-            user-select: none;
-        }
-        .grid-cell:hover { background-color: #f3f4f6; }
-        .grid-cell.selected { background-color: #dbeafe; outline: 2px solid #3b82f6; z-index: 10; }
-        .grid-cell.given { color: #2563eb; }
-        .cage-label { position: absolute; top: 2px; left: 4px; font-size: 0.7rem; font-weight: 800; color: #374151; pointer-events: none; }
-        
-        .border-t-heavy { border-top: 3.5px solid #0f172a; }
-        .border-b-heavy { border-bottom: 3.5px solid #0f172a; }
-        .border-l-heavy { border-left: 3.5px solid #0f172a; }
-        .border-r-heavy { border-right: 3.5px solid #0f172a; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mathdoku Constructor</title>
+<script src="solver.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0e0e10;
+    --surface: #18181b;
+    --surface2: #222226;
+    --border: #2e2e34;
+    --accent: #f97316;
+    --accent2: #fb923c;
+    --text: #f4f4f5;
+    --muted: #71717a;
+    --danger: #ef4444;
+    --success: #22c55e;
+    --easy: #22c55e;
+    --medium: #3b82f6;
+    --hard: #eab308;
+    --vicious: #f97316;
+    --devilish: #ef4444;
+    --diabolical: #a855f7;
+    --beyond: #ec4899;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; padding: 16px; }
+  h1 { font-size: 1.6rem; font-weight: 900; letter-spacing: -0.04em; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); font-size: .8rem; margin-top: 2px; }
 
-        .solution-cell {
-            aspect-ratio: 1 / 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+  header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+  .header-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 8px 16px; border-radius: 8px; font-size: .82rem; font-weight: 700; cursor: pointer; transition: background .15s, transform .1s; user-select: none; }
+  .btn:hover { background: #2e2e36; }
+  .btn:active { transform: scale(.97); }
+  .btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-accent:hover { background: var(--accent2); }
+  .btn-danger { border-color: #3f1818; color: var(--danger); }
+  .btn-danger:hover { background: #1f1010; }
+
+  .layout { display: grid; grid-template-columns: 1fr; gap: 20px; }
+  @media(min-width: 900px) { .layout { grid-template-columns: 1fr 380px; } }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+  .card-title { font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 14px; }
+
+  /* Grid */
+  #gridWrap { display: flex; justify-content: center; }
+  #gridEl { display: grid; border: 3px solid var(--text); background: var(--border); gap: 1px; touch-action: none; user-select: none; }
+  .cell {
+    width: 100%; aspect-ratio: 1;
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(.9rem, 3vw, 1.4rem); font-weight: 800;
+    position: relative; cursor: pointer;
+    transition: background .1s;
+    border: 2px solid transparent;
+  }
+  .cell.free:hover { background: #222228; }
+  .cell.selected { background: #1c2a3a; border-color: #3b82f6; z-index: 2; }
+  .cell.given { color: var(--accent); }
+  .cell.caged { cursor: default; }
+  .cage-label {
+    position: absolute; top: 2px; left: 4px;
+    font-size: clamp(.45rem, 1.2vw, .65rem); font-weight: 900;
+    color: var(--text); pointer-events: none; line-height: 1;
+  }
+  /* thick cage borders */
+  .bt { border-top: 3px solid var(--text) !important; }
+  .bb { border-bottom: 3px solid var(--text) !important; }
+  .bl { border-left: 3px solid var(--text) !important; }
+  .br { border-right: 3px solid var(--text) !important; }
+
+  /* Cage form */
+  .cage-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-top: 16px; padding: 16px; background: var(--surface2); border-radius: 12px; border: 1px solid var(--border); }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group label { font-size: .65rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .form-group input, .form-group select {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 12px; border-radius: 8px; font-size: .88rem; font-weight: 700;
+    outline: none; width: 110px;
+  }
+  .form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+  .sel-status { font-size: .7rem; font-weight: 700; color: var(--muted); margin-left: auto; align-self: center; }
+
+  /* Solution map */
+  #solMap { display: grid; gap: 2px; margin-top: 8px; }
+  .sol-cell {
+    aspect-ratio: 1; background: var(--surface2); border: 1px solid var(--border);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-weight: 900; font-size: clamp(.7rem, 2vw, 1rem); border-radius: 4px;
+  }
+  .sol-cell.confirmed { color: var(--success); }
+  .sol-cell.ambiguous { color: #f472b6; }
+  .sol-cands { font-size: clamp(.35rem, 1vw, .5rem); color: var(--muted); line-height: 1.2; text-align: center; }
+
+  /* Rating */
+  #ratingBox { border-radius: 12px; padding: 20px; text-align: center; border: 2px solid var(--border); margin-bottom: 12px; }
+  #ratingBox .rank { font-size: 1.5rem; font-weight: 900; letter-spacing: -.03em; }
+  #ratingBox .score { font-size: .75rem; color: var(--muted); font-weight: 700; margin-top: 4px; }
+
+  /* Cage list */
+  #cageList { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; }
+  #cageList::-webkit-scrollbar { width: 4px; }
+  #cageList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .cage-item { display: flex; justify-content: space-between; align-items: center; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: .8rem; }
+  .cage-item .cage-name { font-weight: 800; color: var(--accent); }
+  .cage-item .cage-meta { color: var(--muted); font-size: .72rem; margin-top: 1px; }
+  .cage-rm { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1; padding: 2px 6px; border-radius: 4px; transition: color .15s; }
+  .cage-rm:hover { color: var(--danger); }
+
+  /* Coverage bar */
+  .cov-bar-wrap { height: 4px; background: var(--border); border-radius: 4px; margin-bottom: 6px; overflow: hidden; }
+  .cov-bar { height: 100%; background: var(--accent); border-radius: 4px; transition: width .3s; }
+
+  /* Modal */
+  #modalOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(6px); z-index: 100; align-items: center; justify-content: center; }
+  #modalOverlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; width: 100%; max-width: 440px; margin: 16px; }
+  .modal h3 { font-size: 1rem; font-weight: 800; margin-bottom: 8px; }
+  .modal p { font-size: .8rem; color: var(--muted); margin-bottom: 12px; }
+  .modal textarea { width: 100%; height: 100px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 10px; font-family: monospace; font-size: .75rem; outline: none; resize: none; }
+  .modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+  /* Size selector */
+  .size-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .size-row label { font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .size-row select { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: 8px; font-size: .85rem; font-weight: 700; outline: none; }
+
+  .given-hint { font-size: .68rem; color: var(--muted); margin-top: 8px; }
+  .given-hint span { color: var(--accent); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div id="modalOverlay">
+  <div class="modal">
+    <h3 id="modalTitle">Export</h3>
+    <p id="modalDesc">Copy the string below.</p>
+    <textarea id="modalTA"></textarea>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeModal()">Close</button>
+      <button class="btn btn-accent" id="modalAction">Copy</button>
+    </div>
+  </div>
+</div>
+
+<header>
+  <div>
+    <h1>MATHDOKU<span>.BUILD</span></h1>
+    <p class="sub">Design · Solve · Rate</p>
+  </div>
+  <div class="header-btns">
+    <button class="btn" onclick="openExport()">Export</button>
+    <button class="btn" onclick="openImport()">Import</button>
+    <button class="btn btn-danger" onclick="resetAll()">Reset</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- LEFT -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <div class="card">
+      <div class="size-row">
+        <label>Grid Size</label>
+        <select id="sizeSelect">
+          <option value="4" selected>4×4</option>
+          <option value="5">5×5</option>
+          <option value="6">6×6</option>
+          <option value="7">7×7</option>
+          <option value="8">8×8</option>
+          <option value="9">9×9</option>
+        </select>
+        <span id="selStatus" style="margin-left:auto;font-size:.75rem;font-weight:700;color:var(--muted);">0 selected</span>
+      </div>
+      <div id="gridWrap">
+        <div id="gridEl"></div>
+      </div>
+      <div class="cage-form">
+        <div class="form-group">
+          <label>Target</label>
+          <input id="fTarget" type="number" min="1" placeholder="e.g. 12">
+        </div>
+        <div class="form-group">
+          <label>Operation</label>
+          <select id="fOp">
+            <option value="+">+ Add</option>
+            <option value="-">− Sub</option>
+            <option value="*">× Mul</option>
+            <option value="/">÷ Div</option>
+          </select>
+        </div>
+        <button class="btn btn-accent" onclick="addCage()">Add Cage</button>
+      </div>
+      <p class="given-hint">💡 Select a single free cell and press <span>1–9</span> to set a given. <span>Backspace</span> to clear.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Solution Map</div>
+      <div id="solMap"><p style="color:var(--muted);font-size:.8rem;text-align:center;padding:32px 0;">Run solver to see candidates.</p></div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <div class="card">
+      <div class="card-title">Analysis</div>
+      <div id="ratingBox" style="display:none;"></div>
+      <button class="btn btn-accent" style="width:100%;padding:12px;" onclick="runSolver()">▶ Run Solver</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Cage Registry</div>
+      <div class="cov-bar-wrap"><div class="cov-bar" id="covBar" style="width:0%"></div></div>
+      <p id="covLabel" style="font-size:.72rem;color:var(--muted);margin-bottom:10px;">0 / 0 cells covered</p>
+      <div id="cageList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let N = 4;
+let cages = [];       // { id, cells:[[r,c],...], op, target }
+let givens = [];      // { row, col, value }
+let selected = new Set(); // flat indices r*N+c
+let isDragging = false;
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const flat = (r, c) => r * N + c;
+const unflat = f => ({ r: Math.floor(f / N), c: f % N });
+
+function cellToCageIdx(r, c) {
+  return cages.findIndex(cage => cage.cells.some(([cr, cc]) => cr === r && cc === c));
+}
+
+function cellIsGiven(r, c) {
+  return givens.some(g => g.row === r && g.col === c);
+}
+
+function givenValue(r, c) {
+  const g = givens.find(g => g.row === r && g.col === c);
+  return g ? g.value : null;
+}
+
+function isFree(r, c) {
+  return cellToCageIdx(r, c) === -1 && !cellIsGiven(r, c);
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function render() {
+  const el = $('gridEl');
+  const maxW = Math.min(window.innerWidth - 48, 480);
+  const cellPx = Math.floor((maxW - N * 1) / N);
+  el.style.gridTemplateColumns = `repeat(${N}, ${cellPx}px)`;
+  el.style.width = (cellPx * N + N - 1) + 'px';
+  el.innerHTML = '';
+
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const f = flat(r, c);
+      const ci = cellToCageIdx(r, c);
+      const isGiven = cellIsGiven(r, c);
+      const isSel = selected.has(f);
+
+      const div = document.createElement('div');
+      div.className = 'cell' +
+        (isFree(r,c) && !isGiven ? ' free' : '') +
+        (ci !== -1 ? ' caged' : '') +
+        (isGiven ? ' given' : '') +
+        (isSel ? ' selected' : '');
+      div.dataset.f = f;
+
+      // Cage borders
+      if (ci !== -1) {
+        const cage = cages[ci];
+        const inCage = (rr, cc) => cage.cells.some(([a,b]) => a===rr && b===cc);
+        if (r === 0 || !inCage(r-1, c)) div.classList.add('bt');
+        if (r === N-1 || !inCage(r+1, c)) div.classList.add('bb');
+        if (c === 0 || !inCage(r, c-1)) div.classList.add('bl');
+        if (c === N-1 || !inCage(r, c+1)) div.classList.add('br');
+
+        // Label on top-left cell
+        const sorted = [...cage.cells].sort((a,b) => flat(a[0],a[1]) - flat(b[0],b[1]));
+        if (sorted[0][0] === r && sorted[0][1] === c) {
+          const lbl = document.createElement('span');
+          lbl.className = 'cage-label';
+          lbl.textContent = cage.target + cage.op;
+          div.appendChild(lbl);
+        }
+      }
+
+      // Given borders (full box)
+      if (isGiven) {
+        div.classList.add('bt','bb','bl','br');
+        div.append(givenValue(r, c));
+      }
+
+      el.appendChild(div);
+    }
+  }
+
+  updateSelStatus();
+  updateCageList();
+}
+
+function updateSelStatus() {
+  $('selStatus').textContent = selected.size + ' selected';
+}
+
+// ── Grid interaction ───────────────────────────────────────────────────────
+function cellFromPoint(x, y) {
+  const el = document.elementFromPoint(x, y);
+  if (!el) return null;
+  const cell = el.closest('[data-f]');
+  if (!cell) return null;
+  const f = parseInt(cell.dataset.f);
+  const { r, c } = unflat(f);
+  return isFree(r, c) ? f : null;
+}
+
+function toggleSelect(f) {
+  const { r, c } = unflat(f);
+  if (!isFree(r, c)) return;
+  if (selected.has(f)) selected.delete(f);
+  else selected.add(f);
+  render();
+}
+
+$('gridEl').addEventListener('mousedown', e => {
+  const cell = e.target.closest('[data-f]');
+  if (!cell) return;
+  const f = parseInt(cell.dataset.f);
+  const { r, c } = unflat(f);
+  if (!isFree(r, c)) return;
+  isDragging = true;
+  if (!e.shiftKey) selected.clear();
+  selected.add(f);
+  render();
+});
+
+$('gridEl').addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const f = cellFromPoint(e.clientX, e.clientY);
+  if (f !== null && !selected.has(f)) { selected.add(f); render(); }
+});
+
+document.addEventListener('mouseup', () => { isDragging = false; });
+
+// Touch
+$('gridEl').addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  const f = cellFromPoint(t.clientX, t.clientY);
+  if (f === null) return;
+  isDragging = true;
+  selected.clear();
+  selected.add(f);
+  render();
+}, { passive: false });
+
+$('gridEl').addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (!isDragging) return;
+  const t = e.touches[0];
+  const f = cellFromPoint(t.clientX, t.clientY);
+  if (f !== null && !selected.has(f)) { selected.add(f); render(); }
+}, { passive: false });
+
+document.addEventListener('touchend', () => { isDragging = false; });
+
+// ── Givens via keyboard ────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  // Don't intercept if typing in an input/select
+  if (['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if (selected.size !== 1) return;
+
+  const f = [...selected][0];
+  const { r, c } = unflat(f);
+  const digit = parseInt(e.key);
+
+  if (!isNaN(digit) && digit >= 1 && digit <= N) {
+    // Remove existing given if any (shouldn't be since cell is free, but safety)
+    givens = givens.filter(g => !(g.row === r && g.col === c));
+    givens.push({ row: r, col: c, value: digit });
+    selected.clear();
+    render();
+  } else if (e.key === 'Backspace' || e.key === 'Delete') {
+    givens = givens.filter(g => !(g.row === r && g.col === c));
+    render();
+  }
+});
+
+// ── Cage operations ────────────────────────────────────────────────────────
+function addCage() {
+  const target = parseInt($('fTarget').value);
+  const op = $('fOp').value;
+  if (isNaN(target) || selected.size === 0) return;
+
+  const cells = [...selected].map(f => { const {r,c} = unflat(f); return [r,c]; });
+
+  // Validate: -, / need exactly 2 cells
+  if ((op === '-' || op === '/') && cells.length !== 2) {
+    alert(`${op} cages must have exactly 2 cells.`); return;
+  }
+
+  cages.push({ id: Date.now(), cells, op, target });
+  selected.clear();
+  $('fTarget').value = '';
+  render();
+}
+
+function removeCage(id) {
+  cages = cages.filter(c => c.id !== id);
+  render();
+}
+
+function removeGiven(r, c) {
+  givens = givens.filter(g => !(g.row === r && g.col === c));
+  render();
+}
+
+function updateCageList() {
+  const list = $('cageList');
+  list.innerHTML = '';
+  const total = N * N;
+  let covered = givens.length + cages.reduce((s, c) => s + c.cells.length, 0);
+
+  // Cages
+  cages.forEach(cage => {
+    const div = document.createElement('div');
+    div.className = 'cage-item';
+    div.innerHTML = `
+      <div>
+        <div class="cage-name">${cage.target}${cage.op}</div>
+        <div class="cage-meta">${cage.cells.length} cell${cage.cells.length>1?'s':''} · ${cage.cells.map(([r,c])=>`(${r},${c})`).join(' ')}</div>
+      </div>
+      <button class="cage-rm" title="Remove">✕</button>`;
+    div.querySelector('.cage-rm').onclick = () => removeCage(cage.id);
+    list.appendChild(div);
+  });
+
+  // Givens
+  givens.forEach(g => {
+    const div = document.createElement('div');
+    div.className = 'cage-item';
+    div.innerHTML = `
+      <div>
+        <div class="cage-name" style="color:#f97316;">Given: ${g.value}</div>
+        <div class="cage-meta">row ${g.row}, col ${g.col}</div>
+      </div>
+      <button class="cage-rm" title="Remove">✕</button>`;
+    div.querySelector('.cage-rm').onclick = () => removeGiven(g.row, g.col);
+    list.appendChild(div);
+  });
+
+  const pct = Math.min(100, Math.round(covered / total * 100));
+  $('covBar').style.width = pct + '%';
+  $('covLabel').textContent = `${covered} / ${total} cells covered`;
+}
+
+// ── Solver ─────────────────────────────────────────────────────────────────
+function buildPuzzle() {
+  return { size: N, cages, givens };
+}
+
+async function runSolver() {
+  const btn = document.querySelector('[onclick="runSolver()"]');
+  btn.textContent = 'Solving…'; btn.disabled = true;
+  await new Promise(r => setTimeout(r, 30));
+
+  const puzzle = buildPuzzle();
+
+  // Solve up to 10k
+  const result = MathdokuSolver.solve(puzzle, { maxSolutions: 10000 });
+  const rating = MathdokuSolver.rate(puzzle);
+
+  renderRating(rating, result);
+  if (result && result.solutions.length > 0 && result.solutions.length < 10000) {
+    renderSolMap(result.solutions);
+  } else {
+    $('solMap').innerHTML = '<p style="color:var(--muted);font-size:.8rem;text-align:center;padding:32px 0;">' +
+      ((!result || result.solutions.length === 0) ? 'No solution found.' : '10,000+ solutions — candidate map hidden.') + '</p>';
+  }
+
+  btn.textContent = '▶ Run Solver'; btn.disabled = false;
+}
+
+const RANK_COLORS = {
+  'Impossible':        '#ef4444',
+  'Non-unique':        '#f472b6',
+  'Easy':              '#22c55e',
+  'Medium':            '#3b82f6',
+  'Hard':              '#eab308',
+  'Vicious':           '#f97316',
+  'Devilish':          '#ef4444',
+  'Diabolical':        '#a855f7',
+  'Beyond Diabolical': '#ec4899',
+};
+
+function rankColor(difficulty) {
+  if (!difficulty) return '#71717a';
+  for (const [key, val] of Object.entries(RANK_COLORS)) {
+    if (difficulty.startsWith(key)) return val;
+  }
+  return '#71717a';
+}
+
+function renderRating(rating, result) {
+  const box = $('ratingBox');
+  box.style.display = 'block';
+  const color = rankColor(rating.difficulty);
+  box.style.borderColor = color;
+  const sols = result ? result.solutions.length : 0;
+  box.innerHTML = `
+    <div class="r            align-items: center;
             justify-content: center;
             background: #1e293b;
             border: 1px solid #334155;
