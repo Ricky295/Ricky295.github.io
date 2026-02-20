@@ -302,18 +302,17 @@
     };
 
     const raw   = singlesUsed + cageElims + guesses * 20;
-    const maxRaw = size * size * (size * 20);
-    const score  = Math.min(100, Math.round((raw / maxRaw) * 100));
+    const score = +(raw / Math.pow(size, 4)).toFixed(3);
 
     let difficulty;
-    if (raw === 0)       difficulty = "Easy";
-    else if (score < 5)  difficulty = "Easy";
-    else if (score < 15) difficulty = "Medium";
-    else if (score < 30) difficulty = "Hard";
-    else if (score < 50) difficulty = "Vicious";
-    else if (score < 68) difficulty = "Devilish";
-    else if (score < 85) difficulty = "Diabolical";
-    else                 difficulty = "Beyond Diabolical";
+    if (raw === 0)        difficulty = "Easy";
+    else if (score < 0.05) difficulty = "Easy";
+    else if (score < 0.15) difficulty = "Medium";
+    else if (score < 0.30) difficulty = "Hard";
+    else if (score < 0.50) difficulty = "Vicious";
+    else if (score < 0.68) difficulty = "Devilish";
+    else if (score < 0.85) difficulty = "Diabolical";
+    else                   difficulty = "Beyond Diabolical";
 
     return {
       difficulty: nonUnique ? "Non-unique (" + difficulty + ")" : difficulty,
