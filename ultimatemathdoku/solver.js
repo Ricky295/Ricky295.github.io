@@ -115,119 +115,201 @@
   }
 
   // ── Rater (logic simulation) ──────────────────────────────────────────────
+  //
+  // Three-tier simulation:
+  //   1. Singles  — naked single (one candidate left in cell),
+  //                 hidden single (value has only one cell in row/col)
+  //   2. Cage logic — eliminate candidates not present in ANY valid combo
+  //                   for that cage given current candidates (naked sets per cage)
+  //   3. Guessing — when neither singles nor cage logic make progress,
+  //                 pick the most-constrained cell and try each candidate;
+  //                 every branch attempted counts as a guess (not just the final).
 
   function rate(puzzle) {
     const { size, cages } = puzzle;
 
-    // Step 1: solvability check
+    // Step 0: solvability
     const solveResult = solve(puzzle, { maxSolutions: 2 });
     if (!solveResult || !solveResult.solutions.length)
       return { difficulty: "Impossible", score: Infinity, breakdown: {} };
     const nonUnique = solveResult.solutions.length > 1;
 
-    // Step 2: simulate logical solving
-    const cands = Array.from({length: size}, () =>
-      Array.from({length: size}, () => new Set(Array.from({length: size}, (_,i) => i+1)))
-    );
-    const placed = Array.from({length: size}, () => new Array(size).fill(0));
+    let singlesUsed = 0;
+    let cageElims   = 0;
+    let guesses     = 0;  // every branch tried during bifurcation, not just correct ones
 
+    // Build cell→cage map
     const cellToCage = Array.from({length: size}, () => new Array(size).fill(-1));
     cages.forEach((cage, ci) => cage.cells.forEach(([r,c]) => cellToCage[r][c] = ci));
 
-    function validCombos(cage) {
+    // ── helpers that operate on a state object { cands, placed } ──
+
+    function cloneState(st) {
+      return {
+        cands:  st.cands.map(row => row.map(s => new Set(s))),
+        placed: st.placed.map(r => r.slice()),
+      };
+    }
+
+    function placeCell(st, r, c, v) {
+      st.placed[r][c] = v;
+      st.cands[r][c]  = new Set([v]);
+      for (let i = 0; i < size; i++) {
+        if (i !== c) st.cands[r][i].delete(v);
+        if (i !== r) st.cands[i][c].delete(v);
+      }
+    }
+
+    // Returns valid combinations for a cage given current candidate sets
+    function validCombos(st, cage) {
       const n = cage.cells.length, combos = [];
       function gen(idx, cur) {
-        if (idx === n) { if (checkCage(cur, cage.op, cage.target)) combos.push(cur.slice()); return; }
+        if (idx === n) {
+          if (checkCage(cur, cage.op, cage.target)) combos.push(cur.slice());
+          return;
+        }
         const [r,c] = cage.cells[idx];
-        for (const v of cands[r][c]) { cur.push(v); gen(idx+1, cur); cur.pop(); }
+        for (const v of st.cands[r][c]) { cur.push(v); gen(idx+1, cur); cur.pop(); }
       }
       gen(0, []);
       return combos;
     }
 
-    function placeCell(r, c, v) {
-      placed[r][c] = v;
-      cands[r][c] = new Set([v]);
-      for (let i = 0; i < size; i++) {
-        if (i !== c) cands[r][i].delete(v);
-        if (i !== r) cands[i][c].delete(v);
-      }
-    }
+    // Apply one full round of singles + cage logic.
+    // Returns true if anything changed.
+    function applyLogic(st) {
+      let changed = false;
 
-    (puzzle.givens || []).forEach(g => placeCell(g.row, g.col, g.value));
-
-    let iterations = 0;
-    let bifurcations = 0;
-
-    function logicPass() {
-      let anyChange = true;
-      while (anyChange) {
-        anyChange = false;
-
-        // Cage elimination
-        for (let ci = 0; ci < cages.length; ci++) {
-          const cage = cages[ci];
-          const combos = validCombos(cage);
-          cage.cells.forEach(([r,c], idx) => {
-            if (placed[r][c]) return;
-            const allowed = new Set(combos.map(combo => combo[idx]));
-            for (const v of [...cands[r][c]]) {
-              if (!allowed.has(v)) { cands[r][c].delete(v); iterations++; anyChange = true; }
+      // Cage elimination (tier 2)
+      for (let ci = 0; ci < cages.length; ci++) {
+        const cage = cages[ci];
+        const combos = validCombos(st, cage);
+        cage.cells.forEach(([r,c], idx) => {
+          if (st.placed[r][c]) return;
+          const allowed = new Set(combos.map(k => k[idx]));
+          for (const v of [...st.cands[r][c]]) {
+            if (!allowed.has(v)) {
+              st.cands[r][c].delete(v);
+              cageElims++;
+              changed = true;
             }
-          });
-        }
-
-        // Naked singles
-        for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
-          if (!placed[r][c] && cands[r][c].size === 1) {
-            placeCell(r, c, [...cands[r][c]][0]);
-            iterations++; anyChange = true;
           }
-        }
+        });
+      }
 
-        // Hidden singles — rows
-        for (let r = 0; r < size; r++) {
-          for (let v = 1; v <= size; v++) {
-            const cols = [];
-            for (let c = 0; c < size; c++) if (!placed[r][c] && cands[r][c].has(v)) cols.push(c);
-            if (cols.length === 1) { placeCell(r, cols[0], v); iterations++; anyChange = true; }
-          }
+      // Naked singles (tier 1a)
+      for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
+        if (!st.placed[r][c] && st.cands[r][c].size === 1) {
+          placeCell(st, r, c, [...st.cands[r][c]][0]);
+          singlesUsed++; changed = true;
         }
+      }
 
-        // Hidden singles — cols
-        for (let c = 0; c < size; c++) {
-          for (let v = 1; v <= size; v++) {
-            const rows = [];
-            for (let r = 0; r < size; r++) if (!placed[r][c] && cands[r][c].has(v)) rows.push(r);
-            if (rows.length === 1) { placeCell(rows[0], c, v); iterations++; anyChange = true; }
+      // Hidden singles — rows (tier 1b)
+      for (let r = 0; r < size; r++) {
+        for (let v = 1; v <= size; v++) {
+          const cols = [];
+          for (let c = 0; c < size; c++)
+            if (!st.placed[r][c] && st.cands[r][c].has(v)) cols.push(c);
+          if (cols.length === 1) {
+            placeCell(st, r, cols[0], v);
+            singlesUsed++; changed = true;
           }
         }
       }
+
+      // Hidden singles — cols (tier 1b)
+      for (let c = 0; c < size; c++) {
+        for (let v = 1; v <= size; v++) {
+          const rows = [];
+          for (let r = 0; r < size; r++)
+            if (!st.placed[r][c] && st.cands[r][c].has(v)) rows.push(r);
+          if (rows.length === 1) {
+            placeCell(st, rows[0], c, v);
+            singlesUsed++; changed = true;
+          }
+        }
+      }
+
+      return changed;
     }
 
-    logicPass();
+    // Run logic to fixpoint
+    function logicFixpoint(st) {
+      while (applyLogic(st)) { /* keep going */ }
+    }
 
-    for (let r = 0; r < size; r++)
-      for (let c = 0; c < size; c++)
-        if (!placed[r][c]) bifurcations++;
+    function isSolved(st) {
+      for (let r = 0; r < size; r++)
+        for (let c = 0; c < size; c++)
+          if (!st.placed[r][c]) return false;
+      return true;
+    }
 
-    // Step 3: score
-    const score = iterations + bifurcations * 15;
+    function isContradiction(st) {
+      for (let r = 0; r < size; r++)
+        for (let c = 0; c < size; c++)
+          if (!st.placed[r][c] && st.cands[r][c].size === 0) return true;
+      return false;
+    }
+
+    // Pick most-constrained unplaced cell (MRV heuristic)
+    function pickCell(st) {
+      let best = null, bestSize = Infinity;
+      for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
+        if (!st.placed[r][c]) {
+          const s = st.cands[r][c].size;
+          if (s < bestSize) { bestSize = s; best = [r,c]; }
+        }
+      }
+      return best;
+    }
+
+    // Recursive guess-and-check; counts every branch attempted
+    function search(st) {
+      logicFixpoint(st);
+      if (isContradiction(st)) return false;
+      if (isSolved(st)) return true;
+
+      const [r,c] = pickCell(st);
+      for (const v of [...st.cands[r][c]]) {
+        guesses++;                          // count EVERY attempt
+        const branch = cloneState(st);
+        placeCell(branch, r, c, v);
+        if (search(branch)) return true;
+      }
+      return false;
+    }
+
+    // Build initial state
+    const initState = {
+      cands:  Array.from({length: size}, () =>
+                Array.from({length: size}, () => new Set(Array.from({length: size}, (_,i) => i+1)))),
+      placed: Array.from({length: size}, () => new Array(size).fill(0)),
+    };
+    (puzzle.givens || []).forEach(g => placeCell(initState, g.row, g.col, g.value));
+
+    search(initState);
+
+    // Score: guesses dominate (each is expensive), logic steps are cheap
+    const raw   = singlesUsed + cageElims + guesses * 20;
+    const maxRaw = size * size * (size * 20);   // normalise per grid size
+    const score  = Math.min(100, Math.round((raw / maxRaw) * 100));
 
     let difficulty;
-    if (bifurcations === 0 && iterations === 0) difficulty = "Easy";
-    else if (score < 20)  difficulty = "Easy";
-    else if (score < 50)  difficulty = "Medium";
-    else if (score < 100) difficulty = "Hard";
-    else if (score < 180) difficulty = "Vicious";
-    else if (score < 280) difficulty = "Devilish";
-    else if (score < 420) difficulty = "Diabolical";
-    else                  difficulty = "Beyond Diabolical";
+    if (raw === 0)       difficulty = "Easy";
+    else if (score < 5)  difficulty = "Easy";
+    else if (score < 15) difficulty = "Medium";
+    else if (score < 30) difficulty = "Hard";
+    else if (score < 50) difficulty = "Vicious";
+    else if (score < 68) difficulty = "Devilish";
+    else if (score < 85) difficulty = "Diabolical";
+    else                 difficulty = "Beyond Diabolical";
 
     return {
       difficulty: nonUnique ? "Non-unique (" + difficulty + ")" : difficulty,
-      score,
-      breakdown: { iterations, bifurcations, solutionCount: solveResult.solutions.length }
+      score, raw,
+      breakdown: { singlesUsed, cageElims, guesses, solutionCount: solveResult.solutions.length }
     };
   }
 
