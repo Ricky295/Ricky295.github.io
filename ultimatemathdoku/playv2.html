@@ -397,31 +397,35 @@ function randomLatinSquare(size) {
 function carveCages(grid, size) {
   const assigned = Array.from({length: size}, () => new Array(size).fill(false));
   const cages = [];
-  const order = shuffle(Array.from({length: size*size}, (_,i) => i));
+  const MAX_COMBOS = 60; // cap combos per cage, not cell count
 
+  const order = shuffle(Array.from({length: size*size}, (_,i) => i));
   for (const flat of order) {
     const r = Math.floor(flat / size), c = flat % size;
     if (assigned[r][c]) continue;
-
-    // Snake walk: start from this cell, repeatedly step to a random
-    // unassigned neighbour, up to `size` cells total
     const cells = [[r, c]];
     assigned[r][c] = true;
-    let cur = [r, c];
 
-    for (let t = 1; t < size; t++) {
-      const [cr, cc] = cur;
-      const neighbours = [];
-      for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-        const nr = cr+dr, nc = cc+dc;
-        if (nr>=0 && nr<size && nc>=0 && nc<size && !assigned[nr][nc])
-          neighbours.push([nr, nc]);
-      }
-      if (!neighbours.length) break;
-      // Pick a random neighbour and continue the snake from there
-      cur = neighbours[Math.floor(Math.random() * neighbours.length)];
-      cells.push(cur);
-      assigned[cur[0]][cur[1]] = true;
+    for (let t = 0; t < size - 1; t++) {
+      const cands = [];
+      for (const [cr, cc] of cells)
+        for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+          const nr = cr+dr, nc = cc+dc;
+          if (nr>=0 && nr<size && nc>=0 && nc<size && !assigned[nr][nc])
+            cands.push([nr, nc]);
+        }
+      if (!cands.length) break;
+
+      // Try adding a neighbour — only commit if combos stay under cap
+      const candidate = cands[Math.floor(Math.random() * cands.length)];
+      const testCells = [...cells, candidate];
+      const testVals  = testCells.map(([cr,cc]) => grid[cr][cc]);
+      const { op, target } = chooseOp(testVals);
+      const combos = countCombos(testCells, op, target, size);
+      if (combos > MAX_COMBOS) break; // too complex, stop growing
+
+      cells.push(candidate);
+      assigned[candidate[0]][candidate[1]] = true;
     }
 
     const vals = cells.map(([cr,cc]) => grid[cr][cc]);
@@ -429,6 +433,32 @@ function carveCages(grid, size) {
     cages.push({ id: Date.now() + cages.length, cells, op, target });
   }
   return cages;
+}
+
+function countCombos(cells, op, target, size) {
+  const n = cells.length;
+  let count = 0;
+  function gen(idx, cur) {
+    if (idx === n) {
+      // reuse checkCage from solver
+      if (checkCageLocal(cur, op, target)) count++;
+      return;
+    }
+    for (let v = 1; v <= size; v++) { cur.push(v); gen(idx+1, cur); cur.pop(); }
+  }
+  gen(0, []);
+  return count;
+}
+
+function checkCageLocal(values, op, target) {
+  switch(op) {
+    case '=': return values.length === 1 && values[0] === target;
+    case '+': return values.reduce((a,b) => a+b, 0) === target;
+    case '*': return values.reduce((a,b) => a*b, 1) === target;
+    case '-': { const s = [...values].sort((a,b)=>b-a); return s.slice(1).reduce((a,v)=>a-v, s[0]) === target; }
+    case '/': { const s = [...values].sort((a,b)=>b-a); return s.slice(1).reduce((a,v)=>a/v, s[0]) === target; }
+  }
+  return false;
 }
 
 function chooseOp(vals) {
