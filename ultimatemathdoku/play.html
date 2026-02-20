@@ -254,7 +254,27 @@ function loadFromString() {
 }
 
 // ── Generation ────────────────────────────────────────────────────────────────
-let genRunning = false, genBestPuzzle = null, genBestDiff = null;
+// Difficulty band boundaries [min, max) — used to compute proximity score
+const DIFF_BANDS = {
+  'Easy':              [0,      0.5],
+  'Medium':            [0.5,    1.2],
+  'Hard':              [1.2,    1.6],
+  'Vicious':           [1.6,    2.5],
+  'Devilish':          [2.5,    3.4],
+  'Diabolical':        [3.4,    5.0],
+  'Beyond Diabolical': [5.0,  Infinity],
+};
+
+function diffProximity(score, targetDiff) {
+  if (targetDiff === 'any') return 0; // all equally good
+  const band = DIFF_BANDS[targetDiff];
+  if (!band) return Infinity;
+  if (score >= band[0] && score < band[1]) return 0; // inside band
+  if (score < band[0]) return band[0] - score;       // below band
+  return score - band[1];                            // above band
+}
+
+let genRunning = false, genBestPuzzle = null, genBestProximity = Infinity, genBestLabel = '—';
 
 function stopGeneration() {
   genRunning = false;
@@ -267,9 +287,10 @@ async function generatePuzzle() {
   const diff = segVal('diffSegs');
   const uniq = segVal('uniqSegs');
 
-  genRunning    = true;
-  genBestPuzzle = null;
-  genBestDiff   = null;
+  genRunning       = true;
+  genBestPuzzle    = null;
+  genBestProximity = Infinity;
+  genBestLabel     = '—';
 
   $('genBtn').style.display       = 'none';
   $('genInline').style.display    = 'flex';
@@ -282,37 +303,51 @@ async function generatePuzzle() {
   while (genRunning) {
     attempt++;
 
-    const puz    = randomPuzzle(size);
-    const rating = MathdokuSolver.rate(puz);
-    const isUniq = !rating.difficulty.startsWith('Non-unique');
-    const label  = isUniq
+    const puz = randomPuzzle(size);
+
+    // Fast uniqueness check only — no full rate() yet
+    const solveResult = MathdokuSolver.solve(puz, { maxSolutions: 2 });
+    if (!solveResult) continue; // no solution at all, skip
+    const isUniq = solveResult.solutions.length === 1;
+
+    // Uniqueness filter — don't even consider these for best-so-far
+    if (uniq === 'guaranteed' && !isUniq) { await maybeYield(attempt); continue; }
+    if (uniq === 'only'       &&  isUniq) { await maybeYield(attempt); continue; }
+
+    // Now rate (only puzzles that pass uniqueness filter)
+    const rating  = MathdokuSolver.rate(puz);
+    const rawDiff = isUniq
       ? rating.difficulty
       : rating.difficulty.replace(/^Non-unique \(/, '').replace(/\)$/, '');
+    const proximity = diffProximity(rating.score, diff);
 
-    // Update best every iteration
-    genBestPuzzle = puz;
-    genBestDiff   = rating.difficulty;
-    $('genBestLabel').textContent   = label + ' (' + rating.score + ')';
-    $('genAcceptBtn').style.display = '';
-
-    // Update attempt counter every 3
-    if (attempt % 3 === 0) {
-      $('genAttempts').textContent = attempt;
-      await sleep(0);
-      if (!genRunning) return; // cancelled
+    // Update best-so-far if this is closer to target
+    if (proximity < genBestProximity) {
+      genBestProximity = proximity;
+      genBestPuzzle    = puz;
+      genBestLabel     = rawDiff + ' (' + rating.score + ')';
+      $('genBestLabel').textContent   = genBestLabel;
+      $('genAcceptBtn').style.display = '';
     }
 
-    // Filter checks
-    if (uniq === 'guaranteed' && !isUniq) continue;
-    if (uniq === 'only'       &&  isUniq) continue;
-    if (diff !== 'any'        && label !== diff) continue;
+    await maybeYield(attempt);
+    if (!genRunning) return;
 
-    // Match — go
-    genRunning = false;
-    $('genInline').style.display = 'none';
-    $('genBtn').style.display    = '';
-    startGame(puz);
-    return;
+    // Exact match
+    if (proximity === 0) {
+      genRunning = false;
+      $('genInline').style.display = 'none';
+      $('genBtn').style.display    = '';
+      startGame(puz);
+      return;
+    }
+  }
+}
+
+async function maybeYield(attempt) {
+  if (attempt % 3 === 0) {
+    $('genAttempts').textContent = attempt;
+    await sleep(0);
   }
 }
 
@@ -332,18 +367,26 @@ function randomPuzzle(size) {
 }
 
 function randomLatinSquare(size) {
-  const grid = Array.from({length: size}, () => new Array(size).fill(0));
+  // Use a row-by-row approach with bitmasks for fast conflict checking
+  const grid    = Array.from({length: size}, () => new Array(size).fill(0));
+  const rowUsed = new Array(size).fill(0);  // bitmask of used values per row
+  const colUsed = new Array(size).fill(0);  // bitmask of used values per col
+
   function bt(pos) {
     if (pos === size * size) return true;
     const r = Math.floor(pos / size), c = pos % size;
-    for (const v of shuffle(Array.from({length: size}, (_,i) => i+1))) {
-      let ok = true;
-      for (let i = 0; i < c; i++) if (grid[r][i] === v) { ok = false; break; }
-      if (ok) for (let i = 0; i < r; i++) if (grid[i][c] === v) { ok = false; break; }
-      if (!ok) continue;
-      grid[r][c] = v;
+    const used = rowUsed[r] | colUsed[c];
+    const vals = shuffle(Array.from({length: size}, (_,i) => i+1));
+    for (const v of vals) {
+      const bit = 1 << v;
+      if (used & bit) continue;
+      grid[r][c]  = v;
+      rowUsed[r] |= bit;
+      colUsed[c] |= bit;
       if (bt(pos+1)) return true;
-      grid[r][c] = 0;
+      grid[r][c]  = 0;
+      rowUsed[r] &= ~bit;
+      colUsed[c] &= ~bit;
     }
     return false;
   }
@@ -354,18 +397,23 @@ function randomLatinSquare(size) {
 function carveCages(grid, size) {
   const assigned = Array.from({length: size}, () => new Array(size).fill(false));
   const cages = [];
-  for (const flat of shuffle(Array.from({length: size*size}, (_,i) => i))) {
+  // Process cells in random order
+  const order = shuffle(Array.from({length: size*size}, (_,i) => i));
+  for (const flat of order) {
     const r = Math.floor(flat / size), c = flat % size;
     if (assigned[r][c]) continue;
     const cells = [[r, c]];
     assigned[r][c] = true;
-    const maxSz = Math.min(4, size);
+    // Grow cage: prefer smaller cages on larger grids to keep solve tractable
+    const maxSz = size <= 5 ? 4 : size <= 7 ? 3 : 2;
     for (let t = 0; t < maxSz - 1; t++) {
+      // Collect unassigned neighbours of any cell already in cage
       const cands = [];
       for (const [cr, cc] of cells)
         for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
           const nr = cr+dr, nc = cc+dc;
-          if (nr>=0 && nr<size && nc>=0 && nc<size && !assigned[nr][nc]) cands.push([nr,nc]);
+          if (nr>=0 && nr<size && nc>=0 && nc<size && !assigned[nr][nc])
+            cands.push([nr, nc]);
         }
       if (!cands.length) break;
       const [nr, nc] = cands[Math.floor(Math.random() * cands.length)];
