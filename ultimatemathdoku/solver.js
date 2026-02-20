@@ -276,9 +276,9 @@
       for (const v of [...st.cands[r][c]]) {
         const branch = cloneState(st);
         placeCell(branch, r, c, v);
+        guesses++; // count every branch — human doesn't know which is correct
         const ok = search(branch);
-        if (!ok) guesses++; // only count dead-end branches
-        else anySuccess = true;
+        if (ok) anySuccess = true;
       }
       return anySuccess;
     }
