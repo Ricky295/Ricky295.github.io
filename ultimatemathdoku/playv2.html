@@ -14,7 +14,6 @@
   }
   body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; }
 
-  /* ── Lobby ── */
   #lobby { display: flex; flex-direction: column; align-items: center; gap: 28px; width: 100%; max-width: 420px; }
   #lobby h1 { font-size: 2rem; font-weight: 900; letter-spacing: -0.04em; }
   #lobby h1 span { color: var(--accent); }
@@ -33,6 +32,7 @@
   .seg { display: flex; gap: 4px; flex-wrap: wrap; }
   .seg-btn { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 9px 4px; border-radius: 8px; font-size: .78rem; font-weight: 800; cursor: pointer; transition: all .15s; text-align: center; min-width: 36px; }
   .seg-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .seg-btn.disabled { opacity: .3; cursor: not-allowed; pointer-events: none; }
 
   .btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 12px 20px; border-radius: 10px; font-size: .88rem; font-weight: 700; cursor: pointer; transition: background .15s, transform .1s; user-select: none; width: 100%; }
   .btn:hover { background: #2e2e36; }
@@ -53,7 +53,6 @@
   .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ── Game ── */
   #game { display: none; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 540px; }
 
   .game-topbar { width: 100%; display: flex; justify-content: space-between; align-items: center; }
@@ -121,7 +120,6 @@
 </head>
 <body>
 
-<!-- ── Lobby ── -->
 <div id="lobby">
   <div style="text-align:center;">
     <h1>MATHDOKU<span>.PLAY</span></h1>
@@ -194,7 +192,6 @@
   </div>
 </div>
 
-<!-- ── Game ── -->
 <div id="game">
   <div class="game-topbar">
     <button class="back-btn" onclick="goLobby()">← Back</button>
@@ -207,7 +204,6 @@
   <div id="numpad"></div>
 </div>
 
-<!-- Win overlay -->
 <div id="winOverlay">
   <div class="win-box">
     <div class="emoji">🎉</div>
@@ -222,7 +218,6 @@
 
 <script src="solver.js"></script>
 <script>
-// ── Helpers ───────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -231,13 +226,47 @@ function segVal(id) { return $(id).querySelector('.seg-btn.active')?.dataset.val
 document.querySelectorAll('.seg').forEach(seg => {
   seg.addEventListener('click', e => {
     const btn = e.target.closest('.seg-btn');
-    if (!btn) return;
+    if (!btn || btn.classList.contains('disabled')) return;
     seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
   });
 });
 
-// ── URL load ───────────────────────────────────────────────────────────────────
+// ── Size-based difficulty restrictions ───────────────────────────────────────
+// 8×8: BD disabled. 9×9: everything except "Any" disabled.
+const DIFF_BTNS = () => [...$('diffSegs').querySelectorAll('.seg-btn')];
+
+function applyDiffRestrictions(size) {
+  const btns = DIFF_BTNS();
+  // Reset all first
+  btns.forEach(b => b.classList.remove('disabled'));
+
+  if (size === 9) {
+    // Only "Any" allowed — disable everything else
+    btns.forEach(b => { if (b.dataset.val !== 'any') b.classList.add('disabled'); });
+    // Force active to "Any" if current selection is now disabled
+    if (segVal('diffSegs') !== 'any') {
+      btns.forEach(b => b.classList.remove('active'));
+      $('diffSegs').querySelector('[data-val="any"]').classList.add('active');
+    }
+  } else if (size === 8) {
+    // Disable BD only
+    btns.forEach(b => { if (b.dataset.val === 'Beyond Diabolical') b.classList.add('disabled'); });
+    if (segVal('diffSegs') === 'Beyond Diabolical') {
+      btns.forEach(b => b.classList.remove('active'));
+      $('diffSegs').querySelector('[data-val="any"]').classList.add('active');
+    }
+  }
+}
+
+// Hook size seg clicks to trigger restriction updates
+$('sizeSegs').addEventListener('click', e => {
+  const btn = e.target.closest('.seg-btn');
+  if (!btn) return;
+  applyDiffRestrictions(parseInt(btn.dataset.val));
+});
+
+// ── URL load ──────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   const p = new URLSearchParams(location.search).get('p');
   if (p) { try { startGame(JSON.parse(atob(p))); } catch(e) {} }
@@ -251,7 +280,7 @@ function loadFromString() {
   catch(e) { alert('Invalid puzzle string.'); }
 }
 
-// ── Difficulty bands ──────────────────────────────────────────────────────────
+// ── Generation ────────────────────────────────────────────────────────────────
 const DIFF_BANDS = {
   'Easy':              [0,      0.5],
   'Medium':            [0.5,    1.2],
@@ -260,12 +289,6 @@ const DIFF_BANDS = {
   'Devilish':          [2.5,    3.4],
   'Diabolical':        [3.4,    5.0],
   'Beyond Diabolical': [5.0,  Infinity],
-};
-
-// Midpoint of each band — used to bias cage carving toward target difficulty
-const DIFF_MIDPOINTS = {
-  'Easy': 0.25, 'Medium': 0.85, 'Hard': 1.4, 'Vicious': 2.0,
-  'Devilish': 2.95, 'Diabolical': 4.2, 'Beyond Diabolical': 7.0,
 };
 
 function diffProximity(score, targetDiff) {
@@ -277,43 +300,6 @@ function diffProximity(score, targetDiff) {
   return score - band[1];
 }
 
-// ── Cheap structural pre-filter ───────────────────────────────────────────────
-// Estimates approximate difficulty bucket WITHOUT calling rate().
-// Returns a score bucket: 0=very_easy, 1=easy/med, 2=med/hard, 3=hard+
-// so we can skip rating puzzles that are structurally too far from target.
-function cheapDiffEstimate(puz) {
-  const { size, cages } = puz;
-  let singleCount = 0, opMix = 0, totalCells = 0;
-  for (const cage of cages) {
-    const n = cage.cells.length;
-    totalCells += n;
-    if (n === 1) singleCount++;
-    if (cage.op === '-' || cage.op === '/') opMix++;
-  }
-  const singleRatio = singleCount / cages.length;
-  const opRatio     = opMix / cages.length;
-  const avgSize     = totalCells / cages.length;
-  // Rough heuristic: more singles & fewer hard ops → easier
-  const easyScore   = singleRatio * 3 - opRatio * 2 - (avgSize - 1) * 0.5;
-  if (easyScore >  1.5) return 0; // very easy
-  if (easyScore >  0.5) return 1; // easy-medium range
-  if (easyScore > -0.5) return 2; // medium-hard range
-  return 3;                       // hard+
-}
-
-// Per-difficulty: which cheap bucket values to SKIP (not worth rating)
-const CHEAP_SKIP = {
-  'Easy':              new Set([2, 3]),
-  'Medium':            new Set([3]),
-  'Hard':              new Set([0]),
-  'Vicious':           new Set([0]),
-  'Devilish':          new Set([0, 1]),
-  'Diabolical':        new Set([0, 1]),
-  'Beyond Diabolical': new Set([0, 1]),
-  'any':               new Set(),
-};
-
-// ── Generation ────────────────────────────────────────────────────────────────
 let genRunning = false, genBestPuzzle = null, genBestProximity = Infinity, genBestLabel = '—';
 
 function stopGeneration() {
@@ -339,37 +325,19 @@ async function generatePuzzle() {
   $('genAcceptBtn').style.display = 'none';
   await sleep(0);
 
-  // Cage carving params steered by target difficulty
-  const targetMid  = DIFF_MIDPOINTS[diff] ?? 1.5;
-  // Higher difficulty → prefer larger cages + more hard ops
-  // targetMid range roughly 0.25 (Easy) to 7 (BD)
-  const hardness   = Math.min(1, targetMid / 5); // 0..1
-  const maxCageSz  = Math.round(2 + hardness * (Math.min(size, 5) - 2)); // 2..5
-  // op bias: at hardness=0 strongly prefer +/*, at hardness=1 strongly prefer -//
-  const hardOpProb = 0.1 + hardness * 0.7; // 0.1..0.8
-
-  const skipSet = CHEAP_SKIP[diff] ?? new Set();
-
   let attempt = 0;
   while (genRunning) {
     attempt++;
 
-    const puz = randomPuzzle(size, maxCageSz, hardOpProb);
+    const puz = randomPuzzle(size);
 
-    // ── Cheap pre-filter: skip structurally wrong puzzles before solve/rate ──
-    if (diff !== 'any') {
-      const bucket = cheapDiffEstimate(puz);
-      if (skipSet.has(bucket)) { await maybeYield(attempt); continue; }
-    }
-
-    // ── Uniqueness check ──────────────────────────────────────────────────────
     const solveResult = MathdokuSolver.solve(puz, { maxSolutions: 2 });
     if (!solveResult) { await maybeYield(attempt); continue; }
     const isUniq = solveResult.solutions.length === 1;
+
     if (uniq === 'guaranteed' && !isUniq) { await maybeYield(attempt); continue; }
     if (uniq === 'only'       &&  isUniq) { await maybeYield(attempt); continue; }
 
-    // ── Rate ──────────────────────────────────────────────────────────────────
     const rating   = MathdokuSolver.rate(puz);
     const rawDiff  = isUniq
       ? rating.difficulty
@@ -413,125 +381,91 @@ function acceptBest() {
 }
 
 // ── Puzzle generation helpers ─────────────────────────────────────────────────
-function randomPuzzle(size, maxCageSz, hardOpProb) {
-  const grid  = fastLatinSquare(size);
-  const cages = carveCages(grid, size, maxCageSz, hardOpProb);
+function randomPuzzle(size) {
+  const grid  = randomLatinSquare(size);
+  const cages = carveCages(grid, size);
   return { size, cages, givens: [] };
 }
 
-// ── Fast Latin square: no backtracking ───────────────────────────────────────
-// Build via cyclic base then shuffle rows, cols, and value labels.
-function fastLatinSquare(size) {
-  // Start with row i = [(i + j) % size + 1 for j in 0..size]
-  const grid = Array.from({length: size}, (_, i) =>
-    Array.from({length: size}, (_, j) => (i + j) % size + 1)
-  );
-  // Shuffle row groups (for sizes with natural groups) and individual rows
-  shuffleArr(grid);
-  // Shuffle columns
-  const colPerm = shuffle(Array.from({length: size}, (_, i) => i));
-  for (let r = 0; r < size; r++) {
-    const row = grid[r].slice();
-    for (let c = 0; c < size; c++) grid[r][c] = row[colPerm[c]];
+function randomLatinSquare(size) {
+  const grid    = Array.from({length: size}, () => new Array(size).fill(0));
+  const rowUsed = new Array(size).fill(0);
+  const colUsed = new Array(size).fill(0);
+
+  function bt(pos) {
+    if (pos === size * size) return true;
+    const r = Math.floor(pos / size), c = pos % size;
+    const used = rowUsed[r] | colUsed[c];
+    const vals = shuffle(Array.from({length: size}, (_,i) => i+1));
+    for (const v of vals) {
+      const bit = 1 << v;
+      if (used & bit) continue;
+      grid[r][c]  = v;
+      rowUsed[r] |= bit;
+      colUsed[c] |= bit;
+      if (bt(pos+1)) return true;
+      grid[r][c]  = 0;
+      rowUsed[r] &= ~bit;
+      colUsed[c] &= ~bit;
+    }
+    return false;
   }
-  // Relabel values (permute 1..size)
-  const valPerm = shuffle(Array.from({length: size}, (_, i) => i + 1));
-  for (let r = 0; r < size; r++)
-    for (let c = 0; c < size; c++)
-      grid[r][c] = valPerm[grid[r][c] - 1];
+  bt(0);
   return grid;
 }
 
-// ── Cage carving with difficulty steering ────────────────────────────────────
-function carveCages(grid, size, maxCageSz, hardOpProb) {
-  const assigned = Array.from({length: size}, () => new Uint8Array(size));
+function carveCages(grid, size) {
+  const assigned = Array.from({length: size}, () => new Array(size).fill(false));
   const cages = [];
-
-  // Scan in random order
-  const order = shuffle(Array.from({length: size * size}, (_, i) => i));
-
+  const order = shuffle(Array.from({length: size*size}, (_,i) => i));
   for (const flat of order) {
-    const r0 = Math.floor(flat / size), c0 = flat % size;
-    if (assigned[r0][c0]) continue;
-
-    const cells = [[r0, c0]];
-    assigned[r0][c0] = 1;
-
-    // Grow cage using a BFS frontier, pick randomly
-    // Larger maxCageSz → harder puzzle (more ambiguity per cage)
-    const targetSz = 1 + Math.floor(Math.random() * maxCageSz);
-    while (cells.length < targetSz) {
-      // Collect all unassigned orthogonal neighbours of cells already in cage
-      const frontier = [];
-      for (const [cr, cc] of cells) {
+    const r = Math.floor(flat / size), c = flat % size;
+    if (assigned[r][c]) continue;
+    const cells = [[r, c]];
+    assigned[r][c] = true;
+    const maxSz = size <= 5 ? 4 : size <= 7 ? 3 : 2;
+    for (let t = 0; t < maxSz - 1; t++) {
+      const cands = [];
+      for (const [cr, cc] of cells)
         for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-          const nr = cr + dr, nc = cc + dc;
-          if (nr >= 0 && nr < size && nc >= 0 && nc < size && !assigned[nr][nc]) {
-            // Avoid duplicates in frontier
-            if (!frontier.some(([a,b]) => a===nr && b===nc))
-              frontier.push([nr, nc]);
-          }
+          const nr = cr+dr, nc = cc+dc;
+          if (nr>=0 && nr<size && nc>=0 && nc<size && !assigned[nr][nc])
+            cands.push([nr, nc]);
         }
-      }
-      if (!frontier.length) break;
-      const [nr, nc] = frontier[Math.floor(Math.random() * frontier.length)];
+      if (!cands.length) break;
+      const [nr, nc] = cands[Math.floor(Math.random() * cands.length)];
       cells.push([nr, nc]);
-      assigned[nr][nc] = 1;
+      assigned[nr][nc] = true;
     }
-
-    const vals = cells.map(([cr, cc]) => grid[cr][cc]);
-    const { op, target } = chooseOp(vals, hardOpProb);
+    const vals = cells.map(([cr,cc]) => grid[cr][cc]);
+    const { op, target } = chooseOp(vals);
     cages.push({ id: Date.now() + cages.length, cells, op, target });
   }
   return cages;
 }
 
-// ── Operation selection with hard-op bias ────────────────────────────────────
-function chooseOp(vals, hardOpProb = 0.4) {
+function chooseOp(vals) {
   if (vals.length === 1) return { op: '=', target: vals[0] };
-
-  const sorted = [...vals].sort((a, b) => b - a);
-  const sub    = sorted.slice(1).reduce((a, v) => a - v, sorted[0]);
-  const div    = sorted.slice(1).reduce((a, v) => a / v, sorted[0]);
-
-  const canSub = sub > 0;
-  const canDiv = Number.isInteger(div) && div > 0;
-
-  // Build weighted op list
-  // Hard ops (- /) get weight = hardOpProb share; soft ops (+, *) share the rest
-  const opts = [];
-  const softW = (1 - hardOpProb) / 2;
-  const hardW = canSub || canDiv
-    ? hardOpProb / (canSub && canDiv ? 2 : 1)
-    : 0;
-  const softBoost = canSub || canDiv ? 0 : (1 - hardW) / 2;
-
-  opts.push({ op: '+', w: softW + softBoost });
-  opts.push({ op: '*', w: softW + softBoost });
-  if (canSub) opts.push({ op: '-', w: hardW });
-  if (canDiv) opts.push({ op: '/', w: hardW });
-
-  // Weighted random pick
-  let r = Math.random();
-  let op = '+';
-  for (const o of opts) {
-    r -= o.w;
-    if (r <= 0) { op = o.op; break; }
-  }
-
-  const target = op === '+' ? vals.reduce((a, b) => a + b, 0)
-               : op === '*' ? vals.reduce((a, b) => a * b, 1)
-               : op === '-' ? sub : div;
+  const ops = ['+', '*'];
+  const sorted = [...vals].sort((a,b) => b-a);
+  const sub = sorted.slice(1).reduce((a,v) => a-v, sorted[0]);
+  const div = sorted.slice(1).reduce((a,v) => a/v, sorted[0]);
+  if (sub > 0) ops.push('-');
+  if (Number.isInteger(div) && div > 0) ops.push('/');
+  const op = ops[Math.floor(Math.random() * ops.length)];
+  const target = op==='+' ? vals.reduce((a,b)=>a+b,0)
+               : op==='*' ? vals.reduce((a,b)=>a*b,1)
+               : op==='-' ? sub : div;
   return { op, target };
 }
 
-function shuffleArr(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+function shuffle(arr) {
+  for (let i = arr.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i+1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
+  return arr;
 }
-function shuffle(arr) { shuffleArr(arr); return arr; }
 
 // ── Game state ────────────────────────────────────────────────────────────────
 let puzzle, solution, userGrid, pencilGrid, selected, pencilMode, timerSec, timerInt, solved, difficulty;
@@ -692,7 +626,7 @@ function renderNumpad() {
   np.style.gridTemplateColumns = 'repeat(' + (N + 2) + ', 1fr)';
   for (let v = 1; v <= N; v++) {
     const btn = document.createElement('button');
-    btn.className = 'np-btn' + (pencilMode ? ' pencil-mode' : '');
+    btn.className = 'np-btn';
     btn.textContent = v;
     btn.onclick = () => inputValue(v);
     np.appendChild(btn);
