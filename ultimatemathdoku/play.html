@@ -14,7 +14,6 @@
   }
   body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; }
 
-  /* ── Lobby ── */
   #lobby { display: flex; flex-direction: column; align-items: center; gap: 28px; width: 100%; max-width: 420px; }
   #lobby h1 { font-size: 2rem; font-weight: 900; letter-spacing: -0.04em; }
   #lobby h1 span { color: var(--accent); }
@@ -33,6 +32,7 @@
   .seg { display: flex; gap: 4px; flex-wrap: wrap; }
   .seg-btn { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 9px 4px; border-radius: 8px; font-size: .78rem; font-weight: 800; cursor: pointer; transition: all .15s; text-align: center; min-width: 36px; }
   .seg-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .seg-btn.disabled { opacity: .3; cursor: not-allowed; pointer-events: none; }
 
   .btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 12px 20px; border-radius: 10px; font-size: .88rem; font-weight: 700; cursor: pointer; transition: background .15s, transform .1s; user-select: none; width: 100%; }
   .btn:hover { background: #2e2e36; }
@@ -53,13 +53,22 @@
   .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ── Game ── */
   #game { display: none; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 540px; }
 
-  .game-topbar { width: 100%; display: flex; justify-content: space-between; align-items: center; }
+  .game-topbar { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .back-btn { background: none; border: none; color: var(--muted); font-size: .8rem; font-weight: 700; cursor: pointer; padding: 4px 0; }
   .back-btn:hover { color: var(--text); }
-  #timerDisplay { font-size: 1.1rem; font-weight: 900; letter-spacing: .05em; color: var(--text); font-variant-numeric: tabular-nums; }
+  #timerDisplay { font-size: 1.1rem; font-weight: 900; letter-spacing: .05em; color: var(--text); font-variant-numeric: tabular-nums; flex: 1; text-align: center; }
+
+  .topbar-btns { display: flex; gap: 6px; }
+  .icon-btn {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    width: 32px; height: 32px; border-radius: 8px; font-size: .85rem;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background .15s, opacity .15s; user-select: none;
+  }
+  .icon-btn:hover { background: #2e2e36; }
+  .icon-btn:disabled { opacity: .25; cursor: not-allowed; }
 
   .puzzle-wrap { position: relative; width: 100%; }
   #gridEl { display: grid; border: 3px solid var(--text); background: var(--border); gap: 1px; touch-action: none; user-select: none; margin: 0 auto; }
@@ -75,7 +84,6 @@
   .cell.selected { background: #1c2a3a; border-color: var(--blue); z-index: 2; }
   .cell.given { color: var(--accent); cursor: default; }
   .cell.given:hover { background: var(--surface); }
-  .cell.filled { color: var(--blue); }
   .cell.error { color: var(--danger) !important; background: #1f1010 !important; }
   .cell.correct { color: var(--success) !important; }
   .cell.highlight { background: #1a2030; }
@@ -121,7 +129,6 @@
 </head>
 <body>
 
-<!-- ── Lobby ── -->
 <div id="lobby">
   <div style="text-align:center;">
     <h1>MATHDOKU<span>.PLAY</span></h1>
@@ -166,10 +173,8 @@
       </div>
     </div>
 
-    <!-- Generate button -->
     <button class="btn btn-accent" id="genBtn" onclick="generatePuzzle()">▶ Generate Puzzle</button>
 
-    <!-- Inline generation status (hidden until generating) -->
     <div id="genInline" style="display:none; flex-direction:column; gap:10px;">
       <div class="gen-status">
         <div class="spinner"></div>
@@ -196,11 +201,14 @@
   </div>
 </div>
 
-<!-- ── Game ── -->
 <div id="game">
   <div class="game-topbar">
     <button class="back-btn" onclick="goLobby()">← Back</button>
     <div id="timerDisplay">0:00</div>
+    <div class="topbar-btns">
+      <button class="icon-btn" id="undoBtn" title="Undo (Ctrl+Z)" onclick="undo()" disabled>↩</button>
+      <button class="icon-btn" id="redoBtn" title="Redo (Ctrl+Y)" onclick="redo()" disabled>↪</button>
+    </div>
   </div>
   <div class="puzzle-wrap">
     <div id="gridEl"></div>
@@ -209,7 +217,6 @@
   <div id="numpad"></div>
 </div>
 
-<!-- Win overlay -->
 <div id="winOverlay">
   <div class="win-box">
     <div class="emoji">🎉</div>
@@ -224,7 +231,6 @@
 
 <script src="solver.js"></script>
 <script>
-// ── Helpers ───────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -233,13 +239,40 @@ function segVal(id) { return $(id).querySelector('.seg-btn.active')?.dataset.val
 document.querySelectorAll('.seg').forEach(seg => {
   seg.addEventListener('click', e => {
     const btn = e.target.closest('.seg-btn');
-    if (!btn) return;
+    if (!btn || btn.classList.contains('disabled')) return;
     seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
   });
 });
 
-// ── URL load ───────────────────────────────────────────────────────────────────
+// ── Size-based difficulty restrictions ────────────────────────────────────────
+const DIFF_BTNS = () => [...$('diffSegs').querySelectorAll('.seg-btn')];
+
+function applyDiffRestrictions(size) {
+  const btns = DIFF_BTNS();
+  btns.forEach(b => b.classList.remove('disabled'));
+  if (size === 9) {
+    btns.forEach(b => { if (b.dataset.val !== 'any') b.classList.add('disabled'); });
+    if (segVal('diffSegs') !== 'any') {
+      btns.forEach(b => b.classList.remove('active'));
+      $('diffSegs').querySelector('[data-val="any"]').classList.add('active');
+    }
+  } else if (size === 8) {
+    btns.forEach(b => { if (b.dataset.val === 'Beyond Diabolical') b.classList.add('disabled'); });
+    if (segVal('diffSegs') === 'Beyond Diabolical') {
+      btns.forEach(b => b.classList.remove('active'));
+      $('diffSegs').querySelector('[data-val="any"]').classList.add('active');
+    }
+  }
+}
+
+$('sizeSegs').addEventListener('click', e => {
+  const btn = e.target.closest('.seg-btn');
+  if (!btn) return;
+  applyDiffRestrictions(parseInt(btn.dataset.val));
+});
+
+// ── URL load ──────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   const p = new URLSearchParams(location.search).get('p');
   if (p) { try { startGame(JSON.parse(atob(p))); } catch(e) {} }
@@ -254,7 +287,6 @@ function loadFromString() {
 }
 
 // ── Generation ────────────────────────────────────────────────────────────────
-// Difficulty band boundaries [min, max) — used to compute proximity score
 const DIFF_BANDS = {
   'Easy':              [0,      0.5],
   'Medium':            [0.5,    1.2],
@@ -266,12 +298,12 @@ const DIFF_BANDS = {
 };
 
 function diffProximity(score, targetDiff) {
-  if (targetDiff === 'any') return 0; // all equally good
+  if (targetDiff === 'any') return 0;
   const band = DIFF_BANDS[targetDiff];
   if (!band) return Infinity;
-  if (score >= band[0] && score < band[1]) return 0; // inside band
-  if (score < band[0]) return band[0] - score;       // below band
-  return score - band[1];                            // above band
+  if (score >= band[0] && score < band[1]) return 0;
+  if (score < band[0]) return band[0] - score;
+  return score - band[1];
 }
 
 let genRunning = false, genBestPuzzle = null, genBestProximity = Infinity, genBestLabel = '—';
@@ -302,26 +334,17 @@ async function generatePuzzle() {
   let attempt = 0;
   while (genRunning) {
     attempt++;
-
     const puz = randomPuzzle(size);
-
-    // Fast uniqueness check only — no full rate() yet
     const solveResult = MathdokuSolver.solve(puz, { maxSolutions: 2 });
-    if (!solveResult) continue; // no solution at all, skip
+    if (!solveResult) { await maybeYield(attempt); continue; }
     const isUniq = solveResult.solutions.length === 1;
-
-    // Uniqueness filter — don't even consider these for best-so-far
     if (uniq === 'guaranteed' && !isUniq) { await maybeYield(attempt); continue; }
     if (uniq === 'only'       &&  isUniq) { await maybeYield(attempt); continue; }
-
-    // Now rate (only puzzles that pass uniqueness filter)
-    const rating  = MathdokuSolver.rate(puz);
-    const rawDiff = isUniq
+    const rating   = MathdokuSolver.rate(puz);
+    const rawDiff  = isUniq
       ? rating.difficulty
       : rating.difficulty.replace(/^Non-unique \(/, '').replace(/\)$/, '');
     const proximity = diffProximity(rating.score, diff);
-
-    // Update best-so-far if this is closer to target
     if (proximity < genBestProximity) {
       genBestProximity = proximity;
       genBestPuzzle    = puz;
@@ -329,11 +352,8 @@ async function generatePuzzle() {
       $('genBestLabel').textContent   = genBestLabel;
       $('genAcceptBtn').style.display = '';
     }
-
     await maybeYield(attempt);
     if (!genRunning) return;
-
-    // Exact match
     if (proximity === 0) {
       genRunning = false;
       $('genInline').style.display = 'none';
@@ -361,32 +381,22 @@ function acceptBest() {
 
 // ── Puzzle generation helpers ─────────────────────────────────────────────────
 function randomPuzzle(size) {
-  const grid  = randomLatinSquare(size);
-  const cages = carveCages(grid, size);
-  return { size, cages, givens: [] };
+  return { size, cages: carveCages(randomLatinSquare(size), size), givens: [] };
 }
 
 function randomLatinSquare(size) {
-  // Use a row-by-row approach with bitmasks for fast conflict checking
-  const grid    = Array.from({length: size}, () => new Array(size).fill(0));
-  const rowUsed = new Array(size).fill(0);  // bitmask of used values per row
-  const colUsed = new Array(size).fill(0);  // bitmask of used values per col
-
+  const grid = Array.from({length: size}, () => new Array(size).fill(0));
+  const rowUsed = new Array(size).fill(0), colUsed = new Array(size).fill(0);
   function bt(pos) {
     if (pos === size * size) return true;
     const r = Math.floor(pos / size), c = pos % size;
     const used = rowUsed[r] | colUsed[c];
-    const vals = shuffle(Array.from({length: size}, (_,i) => i+1));
-    for (const v of vals) {
+    for (const v of shuffle(Array.from({length: size}, (_,i) => i+1))) {
       const bit = 1 << v;
       if (used & bit) continue;
-      grid[r][c]  = v;
-      rowUsed[r] |= bit;
-      colUsed[c] |= bit;
+      grid[r][c] = v; rowUsed[r] |= bit; colUsed[c] |= bit;
       if (bt(pos+1)) return true;
-      grid[r][c]  = 0;
-      rowUsed[r] &= ~bit;
-      colUsed[c] &= ~bit;
+      grid[r][c] = 0; rowUsed[r] &= ~bit; colUsed[c] &= ~bit;
     }
     return false;
   }
@@ -397,32 +407,25 @@ function randomLatinSquare(size) {
 function carveCages(grid, size) {
   const assigned = Array.from({length: size}, () => new Array(size).fill(false));
   const cages = [];
-  // Process cells in random order
-  const order = shuffle(Array.from({length: size*size}, (_,i) => i));
-  for (const flat of order) {
+  for (const flat of shuffle(Array.from({length: size*size}, (_,i) => i))) {
     const r = Math.floor(flat / size), c = flat % size;
     if (assigned[r][c]) continue;
     const cells = [[r, c]];
     assigned[r][c] = true;
-    // Grow cage: prefer smaller cages on larger grids to keep solve tractable
     const maxSz = size <= 5 ? 4 : size <= 7 ? 3 : 2;
     for (let t = 0; t < maxSz - 1; t++) {
-      // Collect unassigned neighbours of any cell already in cage
       const cands = [];
       for (const [cr, cc] of cells)
         for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
           const nr = cr+dr, nc = cc+dc;
-          if (nr>=0 && nr<size && nc>=0 && nc<size && !assigned[nr][nc])
-            cands.push([nr, nc]);
+          if (nr>=0 && nr<size && nc>=0 && nc<size && !assigned[nr][nc]) cands.push([nr, nc]);
         }
       if (!cands.length) break;
       const [nr, nc] = cands[Math.floor(Math.random() * cands.length)];
-      cells.push([nr, nc]);
-      assigned[nr][nc] = true;
+      cells.push([nr, nc]); assigned[nr][nc] = true;
     }
     const vals = cells.map(([cr,cc]) => grid[cr][cc]);
-    const { op, target } = chooseOp(vals);
-    cages.push({ id: Date.now() + cages.length, cells, op, target });
+    cages.push({ id: Date.now() + cages.length, cells, ...chooseOp(vals) });
   }
   return cages;
 }
@@ -453,6 +456,48 @@ function shuffle(arr) {
 // ── Game state ────────────────────────────────────────────────────────────────
 let puzzle, solution, userGrid, pencilGrid, selected, pencilMode, timerSec, timerInt, solved, difficulty;
 
+// ── Undo/redo history ─────────────────────────────────────────────────────────
+let undoStack = [], redoStack = [];
+
+function snapshotState() {
+  return {
+    userGrid:   userGrid.map(r => r.slice()),
+    pencilGrid: pencilGrid.map(r => r.map(s => new Set(s))),
+  };
+}
+
+function restoreState(snap) {
+  userGrid   = snap.userGrid.map(r => r.slice());
+  pencilGrid = snap.pencilGrid.map(r => r.map(s => new Set(s)));
+}
+
+function pushUndo() {
+  undoStack.push(snapshotState());
+  redoStack = [];   // new move clears redo
+  updateUndoRedoBtns();
+}
+
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(snapshotState());
+  restoreState(undoStack.pop());
+  updateUndoRedoBtns();
+  renderGrid();
+}
+
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(snapshotState());
+  restoreState(redoStack.pop());
+  updateUndoRedoBtns();
+  renderGrid();
+}
+
+function updateUndoRedoBtns() {
+  $('undoBtn').disabled = undoStack.length === 0;
+  $('redoBtn').disabled = redoStack.length === 0;
+}
+
 function startGame(puz) {
   puzzle = puz;
   const N = puz.size;
@@ -465,6 +510,8 @@ function startGame(puz) {
   selected   = null;
   pencilMode = false;
   solved     = false;
+  undoStack  = [];
+  redoStack  = [];
   (puz.givens||[]).forEach(g => { userGrid[g.row][g.col] = g.value; });
   clearInterval(timerInt);
   timerSec = 0;
@@ -477,7 +524,7 @@ function startGame(puz) {
   $('lobby').style.display = 'none';
   $('game').style.display  = 'flex';
   $('difficultyLabel').textContent = difficulty;
-  // Update URL so the puzzle is shareable
+  updateUndoRedoBtns();
   const encoded = btoa(JSON.stringify({ size: puz.size, cages: puz.cages, givens: puz.givens || [] }));
   history.replaceState(null, '', '?p=' + encoded);
   renderGrid();
@@ -567,8 +614,9 @@ function inputValue(v) {
   if (!selected || solved) return;
   const [r, c] = selected;
   if ((puzzle.givens||[]).some(g => g.row===r && g.col===c)) return;
+  pushUndo();
   if (pencilMode) {
-    if (userGrid[r][c]) return;
+    if (userGrid[r][c]) { redoStack = []; undoStack.pop(); return; } // no-op, revert push
     if (pencilGrid[r][c].has(v)) pencilGrid[r][c].delete(v);
     else pencilGrid[r][c].add(v);
   } else {
@@ -577,6 +625,7 @@ function inputValue(v) {
     for (let i = 0; i < puzzle.size; i++) { pencilGrid[r][i].delete(v); pencilGrid[i][c].delete(v); }
     checkWin();
   }
+  updateUndoRedoBtns();
   renderGrid();
 }
 
@@ -584,8 +633,11 @@ function eraseCell() {
   if (!selected || solved) return;
   const [r, c] = selected;
   if ((puzzle.givens||[]).some(g => g.row===r && g.col===c)) return;
+  if (!userGrid[r][c] && pencilGrid[r][c].size === 0) return; // nothing to erase
+  pushUndo();
   userGrid[r][c] = 0;
   pencilGrid[r][c].clear();
+  updateUndoRedoBtns();
   renderGrid();
 }
 
@@ -610,7 +662,7 @@ function renderNumpad() {
   np.style.gridTemplateColumns = 'repeat(' + (N + 2) + ', 1fr)';
   for (let v = 1; v <= N; v++) {
     const btn = document.createElement('button');
-    btn.className = 'np-btn' + (pencilMode ? ' pencil-mode' : '');
+    btn.className = 'np-btn';
     btn.textContent = v;
     btn.onclick = () => inputValue(v);
     np.appendChild(btn);
@@ -631,6 +683,12 @@ function renderNumpad() {
 document.addEventListener('keydown', e => {
   if ($('game').style.display === 'none') return;
   if (['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+  // Undo/redo
+  if (e.key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) { e.preventDefault(); undo(); return; }
+  if ((e.key === 'y' && (e.ctrlKey || e.metaKey)) ||
+      (e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey)) { e.preventDefault(); redo(); return; }
+
   const N = puzzle?.size || 4;
   const digit = parseInt(e.key);
   if (!isNaN(digit) && digit >= 1 && digit <= N) { inputValue(digit); return; }
