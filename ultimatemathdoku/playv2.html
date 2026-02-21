@@ -166,10 +166,8 @@
       </div>
     </div>
 
-    <!-- Generate button -->
     <button class="btn btn-accent" id="genBtn" onclick="generatePuzzle()">▶ Generate Puzzle</button>
 
-    <!-- Inline generation status (hidden until generating) -->
     <div id="genInline" style="display:none; flex-direction:column; gap:10px;">
       <div class="gen-status">
         <div class="spinner"></div>
@@ -253,8 +251,7 @@ function loadFromString() {
   catch(e) { alert('Invalid puzzle string.'); }
 }
 
-
-// Difficulty band boundaries [min, max) — used to compute proximity score
+// ── Difficulty bands ──────────────────────────────────────────────────────────
 const DIFF_BANDS = {
   'Easy':              [0,      0.5],
   'Medium':            [0.5,    1.2],
@@ -265,15 +262,58 @@ const DIFF_BANDS = {
   'Beyond Diabolical': [5.0,  Infinity],
 };
 
+// Midpoint of each band — used to bias cage carving toward target difficulty
+const DIFF_MIDPOINTS = {
+  'Easy': 0.25, 'Medium': 0.85, 'Hard': 1.4, 'Vicious': 2.0,
+  'Devilish': 2.95, 'Diabolical': 4.2, 'Beyond Diabolical': 7.0,
+};
+
 function diffProximity(score, targetDiff) {
-  if (targetDiff === 'any') return 0; // all equally good
+  if (targetDiff === 'any') return 0;
   const band = DIFF_BANDS[targetDiff];
   if (!band) return Infinity;
-  if (score >= band[0] && score < band[1]) return 0; // inside band
-  if (score < band[0]) return band[0] - score;       // below band
-  return score - band[1];                            // above band
+  if (score >= band[0] && score < band[1]) return 0;
+  if (score < band[0]) return band[0] - score;
+  return score - band[1];
 }
 
+// ── Cheap structural pre-filter ───────────────────────────────────────────────
+// Estimates approximate difficulty bucket WITHOUT calling rate().
+// Returns a score bucket: 0=very_easy, 1=easy/med, 2=med/hard, 3=hard+
+// so we can skip rating puzzles that are structurally too far from target.
+function cheapDiffEstimate(puz) {
+  const { size, cages } = puz;
+  let singleCount = 0, opMix = 0, totalCells = 0;
+  for (const cage of cages) {
+    const n = cage.cells.length;
+    totalCells += n;
+    if (n === 1) singleCount++;
+    if (cage.op === '-' || cage.op === '/') opMix++;
+  }
+  const singleRatio = singleCount / cages.length;
+  const opRatio     = opMix / cages.length;
+  const avgSize     = totalCells / cages.length;
+  // Rough heuristic: more singles & fewer hard ops → easier
+  const easyScore   = singleRatio * 3 - opRatio * 2 - (avgSize - 1) * 0.5;
+  if (easyScore >  1.5) return 0; // very easy
+  if (easyScore >  0.5) return 1; // easy-medium range
+  if (easyScore > -0.5) return 2; // medium-hard range
+  return 3;                       // hard+
+}
+
+// Per-difficulty: which cheap bucket values to SKIP (not worth rating)
+const CHEAP_SKIP = {
+  'Easy':              new Set([2, 3]),
+  'Medium':            new Set([3]),
+  'Hard':              new Set([0]),
+  'Vicious':           new Set([0]),
+  'Devilish':          new Set([0, 1]),
+  'Diabolical':        new Set([0, 1]),
+  'Beyond Diabolical': new Set([0, 1]),
+  'any':               new Set(),
+};
+
+// ── Generation ────────────────────────────────────────────────────────────────
 let genRunning = false, genBestPuzzle = null, genBestProximity = Infinity, genBestLabel = '—';
 
 function stopGeneration() {
@@ -299,41 +339,43 @@ async function generatePuzzle() {
   $('genAcceptBtn').style.display = 'none';
   await sleep(0);
 
+  // Cage carving params steered by target difficulty
+  const targetMid  = DIFF_MIDPOINTS[diff] ?? 1.5;
+  // Higher difficulty → prefer larger cages + more hard ops
+  // targetMid range roughly 0.25 (Easy) to 7 (BD)
+  const hardness   = Math.min(1, targetMid / 5); // 0..1
+  const maxCageSz  = Math.round(2 + hardness * (Math.min(size, 5) - 2)); // 2..5
+  // op bias: at hardness=0 strongly prefer +/*, at hardness=1 strongly prefer -//
+  const hardOpProb = 0.1 + hardness * 0.7; // 0.1..0.8
+
+  const skipSet = CHEAP_SKIP[diff] ?? new Set();
+
   let attempt = 0;
   while (genRunning) {
     attempt++;
-    await sleep(0); // always yield so console flushes and UI stays responsive
 
-    const puz = randomPuzzle(size);
+    const puz = randomPuzzle(size, maxCageSz, hardOpProb);
 
-    // Fast uniqueness check
+    // ── Cheap pre-filter: skip structurally wrong puzzles before solve/rate ──
+    if (diff !== 'any') {
+      const bucket = cheapDiffEstimate(puz);
+      if (skipSet.has(bucket)) { await maybeYield(attempt); continue; }
+    }
+
+    // ── Uniqueness check ──────────────────────────────────────────────────────
     const solveResult = MathdokuSolver.solve(puz, { maxSolutions: 2 });
-    if (!solveResult) continue;
+    if (!solveResult) { await maybeYield(attempt); continue; }
     const isUniq = solveResult.solutions.length === 1;
-
-    // Uniqueness filter
     if (uniq === 'guaranteed' && !isUniq) { await maybeYield(attempt); continue; }
     if (uniq === 'only'       &&  isUniq) { await maybeYield(attempt); continue; }
 
-    // Full rate
-    const rating  = MathdokuSolver.rate(puz);
-
-    // Early discard: if targeting hard+ and no guesses needed, skip
-    const hardTargets = ['Hard','Vicious','Devilish','Diabolical','Beyond Diabolical'];
-    if (diff !== 'any' && hardTargets.includes(diff) && (rating.breakdown?.guesses || 0) === 0) {
-      await maybeYield(attempt); continue;
-    }
-    // Also discard if score is way too low for target (avoid wasting best-so-far slot)
-    const minScore = { Hard:1.2, Vicious:1.6, Devilish:2.5, Diabolical:3.4, 'Beyond Diabolical':5.0 };
-    if (minScore[diff] && rating.score < minScore[diff] * 0.5) {
-      await maybeYield(attempt); continue;
-    }
-    const rawDiff = isUniq
+    // ── Rate ──────────────────────────────────────────────────────────────────
+    const rating   = MathdokuSolver.rate(puz);
+    const rawDiff  = isUniq
       ? rating.difficulty
       : rating.difficulty.replace(/^Non-unique \(/, '').replace(/\)$/, '');
     const proximity = diffProximity(rating.score, diff);
 
-    // Update best-so-far if this is closer to target
     if (proximity < genBestProximity) {
       genBestProximity = proximity;
       genBestPuzzle    = puz;
@@ -345,7 +387,6 @@ async function generatePuzzle() {
     await maybeYield(attempt);
     if (!genRunning) return;
 
-    // Exact match
     if (proximity === 0) {
       genRunning = false;
       $('genInline').style.display = 'none';
@@ -372,110 +413,133 @@ function acceptBest() {
 }
 
 // ── Puzzle generation helpers ─────────────────────────────────────────────────
-function randomPuzzle(size) {
-  const grid  = randomLatinSquare(size);
-  const cages = carveCages(grid, size);
-  return { size, cages, givens:[] };
+function randomPuzzle(size, maxCageSz, hardOpProb) {
+  const grid  = fastLatinSquare(size);
+  const cages = carveCages(grid, size, maxCageSz, hardOpProb);
+  return { size, cages, givens: [] };
 }
 
-function randomLatinSquare(size) {
-  // Use a row-by-row approach with bitmasks for fast conflict checking
-  const grid    = Array.from({length: size}, () => new Array(size).fill(0));
-  const rowUsed = new Array(size).fill(0);  // bitmask of used values per row
-  const colUsed = new Array(size).fill(0);  // bitmask of used values per col
-
-  function bt(pos) {
-    if (pos === size * size) return true;
-    const r = Math.floor(pos / size), c = pos % size;
-    const used = rowUsed[r] | colUsed[c];
-    const vals = shuffle(Array.from({length: size}, (_,i) => i+1));
-    for (const v of vals) {
-      const bit = 1 << v;
-      if (used & bit) continue;
-      grid[r][c]  = v;
-      rowUsed[r] |= bit;
-      colUsed[c] |= bit;
-      if (bt(pos+1)) return true;
-      grid[r][c]  = 0;
-      rowUsed[r] &= ~bit;
-      colUsed[c] &= ~bit;
-    }
-    return false;
+// ── Fast Latin square: no backtracking ───────────────────────────────────────
+// Build via cyclic base then shuffle rows, cols, and value labels.
+function fastLatinSquare(size) {
+  // Start with row i = [(i + j) % size + 1 for j in 0..size]
+  const grid = Array.from({length: size}, (_, i) =>
+    Array.from({length: size}, (_, j) => (i + j) % size + 1)
+  );
+  // Shuffle row groups (for sizes with natural groups) and individual rows
+  shuffleArr(grid);
+  // Shuffle columns
+  const colPerm = shuffle(Array.from({length: size}, (_, i) => i));
+  for (let r = 0; r < size; r++) {
+    const row = grid[r].slice();
+    for (let c = 0; c < size; c++) grid[r][c] = row[colPerm[c]];
   }
-  bt(0);
+  // Relabel values (permute 1..size)
+  const valPerm = shuffle(Array.from({length: size}, (_, i) => i + 1));
+  for (let r = 0; r < size; r++)
+    for (let c = 0; c < size; c++)
+      grid[r][c] = valPerm[grid[r][c] - 1];
   return grid;
 }
 
-function carveCages(grid, size) {
-  const assigned = Array.from({length: size}, () => new Array(size).fill(false));
+// ── Cage carving with difficulty steering ────────────────────────────────────
+function carveCages(grid, size, maxCageSz, hardOpProb) {
+  const assigned = Array.from({length: size}, () => new Uint8Array(size));
   const cages = [];
-  // Process cells in random order
-  const order = shuffle(Array.from({length: size*size}, (_,i) => i));
+
+  // Scan in random order
+  const order = shuffle(Array.from({length: size * size}, (_, i) => i));
+
   for (const flat of order) {
-    const r = Math.floor(flat / size), c = flat % size;
-    if (assigned[r][c]) continue;
-    const cells = [[r, c]];
-    assigned[r][c] = true;
-    // Grow cage: max 4 cells on any size, but larger grids bias toward smaller cages
-    const maxSz = 4;
-    const growProb = size <= 5 ? 0.8 : size <= 7 ? 0.65 : 0.5;
-    for (let t = 0; t < maxSz - 1; t++) {
-      if (t > 0 && Math.random() > growProb) break; // always try at least once
-      // Collect unassigned neighbours of any cell already in cage
-      const cands = [];
-      for (const [cr, cc] of cells)
+    const r0 = Math.floor(flat / size), c0 = flat % size;
+    if (assigned[r0][c0]) continue;
+
+    const cells = [[r0, c0]];
+    assigned[r0][c0] = 1;
+
+    // Grow cage using a BFS frontier, pick randomly
+    // Larger maxCageSz → harder puzzle (more ambiguity per cage)
+    const targetSz = 1 + Math.floor(Math.random() * maxCageSz);
+    while (cells.length < targetSz) {
+      // Collect all unassigned orthogonal neighbours of cells already in cage
+      const frontier = [];
+      for (const [cr, cc] of cells) {
         for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-          const nr = cr+dr, nc = cc+dc;
-          if (nr>=0 && nr<size && nc>=0 && nc<size && !assigned[nr][nc])
-            cands.push([nr, nc]);
+          const nr = cr + dr, nc = cc + dc;
+          if (nr >= 0 && nr < size && nc >= 0 && nc < size && !assigned[nr][nc]) {
+            // Avoid duplicates in frontier
+            if (!frontier.some(([a,b]) => a===nr && b===nc))
+              frontier.push([nr, nc]);
+          }
         }
-      if (!cands.length) break;
-      const [nr, nc] = cands[Math.floor(Math.random() * cands.length)];
+      }
+      if (!frontier.length) break;
+      const [nr, nc] = frontier[Math.floor(Math.random() * frontier.length)];
       cells.push([nr, nc]);
-      assigned[nr][nc] = true;
+      assigned[nr][nc] = 1;
     }
-    const vals = cells.map(([cr,cc]) => grid[cr][cc]);
-    const { op, target } = chooseOp(vals);
+
+    const vals = cells.map(([cr, cc]) => grid[cr][cc]);
+    const { op, target } = chooseOp(vals, hardOpProb);
     cages.push({ id: Date.now() + cages.length, cells, op, target });
   }
   return cages;
 }
 
-function chooseOp(vals) {
+// ── Operation selection with hard-op bias ────────────────────────────────────
+function chooseOp(vals, hardOpProb = 0.4) {
   if (vals.length === 1) return { op: '=', target: vals[0] };
-  const sorted = [...vals].sort((a,b) => b-a);
-  const sub = sorted.slice(1).reduce((a,v) => a-v, sorted[0]);
-  const div = sorted.slice(1).reduce((a,v) => a/v, sorted[0]);
 
-  const ops = [];
-  // Always allow + and *
-  ops.push('+', '+', '*'); // weighted: + appears twice to balance
-  // Heavily bias toward - and / for difficulty
-  if (sub > 0)                          ops.push('-', '-', '-');
-  if (Number.isInteger(div) && div > 0) ops.push('/', '/', '/');
+  const sorted = [...vals].sort((a, b) => b - a);
+  const sub    = sorted.slice(1).reduce((a, v) => a - v, sorted[0]);
+  const div    = sorted.slice(1).reduce((a, v) => a / v, sorted[0]);
 
-  const op = ops[Math.floor(Math.random() * ops.length)];
-  const target = op==='+' ? vals.reduce((a,b)=>a+b,0)
-               : op==='*' ? vals.reduce((a,b)=>a*b,1)
-               : op==='-' ? sub : div;
+  const canSub = sub > 0;
+  const canDiv = Number.isInteger(div) && div > 0;
+
+  // Build weighted op list
+  // Hard ops (- /) get weight = hardOpProb share; soft ops (+, *) share the rest
+  const opts = [];
+  const softW = (1 - hardOpProb) / 2;
+  const hardW = canSub || canDiv
+    ? hardOpProb / (canSub && canDiv ? 2 : 1)
+    : 0;
+  const softBoost = canSub || canDiv ? 0 : (1 - hardW) / 2;
+
+  opts.push({ op: '+', w: softW + softBoost });
+  opts.push({ op: '*', w: softW + softBoost });
+  if (canSub) opts.push({ op: '-', w: hardW });
+  if (canDiv) opts.push({ op: '/', w: hardW });
+
+  // Weighted random pick
+  let r = Math.random();
+  let op = '+';
+  for (const o of opts) {
+    r -= o.w;
+    if (r <= 0) { op = o.op; break; }
+  }
+
+  const target = op === '+' ? vals.reduce((a, b) => a + b, 0)
+               : op === '*' ? vals.reduce((a, b) => a * b, 1)
+               : op === '-' ? sub : div;
   return { op, target };
 }
 
-function shuffle(arr) {
-  for (let i = arr.length-1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i+1));
+function shuffleArr(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
-  return arr;
 }
+function shuffle(arr) { shuffleArr(arr); return arr; }
 
 // ── Game state ────────────────────────────────────────────────────────────────
 let puzzle, solution, userGrid, pencilGrid, selected, pencilMode, timerSec, timerInt, solved, difficulty;
 
-async function startGame(puz) {
+function startGame(puz) {
   puzzle = puz;
   const N = puz.size;
-  const result = MathdokuSolver.solve(puz, { maxSolutions: 1, timeLimitMs: 5000 });
+  const result = MathdokuSolver.solve(puz, { maxSolutions: 1 });
   if (!result) { alert('This puzzle has no solution.'); return; }
   solution   = result.grid;
   difficulty = MathdokuSolver.rate(puz).difficulty;
@@ -496,7 +560,6 @@ async function startGame(puz) {
   $('lobby').style.display = 'none';
   $('game').style.display  = 'flex';
   $('difficultyLabel').textContent = difficulty;
-  // Update URL so the puzzle is shareable
   const encoded = btoa(JSON.stringify({ size: puz.size, cages: puz.cages, givens: puz.givens || [] }));
   history.replaceState(null, '', '?p=' + encoded);
   renderGrid();
