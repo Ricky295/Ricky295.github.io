@@ -1,672 +1,328 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mathdoku Play</title>
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg: #0e0e10; --surface: #18181b; --surface2: #222226;
-    --border: #2e2e34; --accent: #f97316; --accent2: #fb923c;
-    --text: #f4f4f5; --muted: #71717a; --danger: #ef4444; --success: #22c55e;
-    --blue: #3b82f6;
-  }
-  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; }
+/**
+ * solver.js — Mathdoku (KenKen) Solver + Rater
+ *
+ * API:
+ *   MathdokuSolver.solve(puzzle, opts)  → { grid, solutions } | null
+ *   MathdokuSolver.rate(puzzle)         → { difficulty, score, breakdown }
+ *
+ * Puzzle format:
+ *   {
+ *     size: 4,
+ *     cages: [
+ *       { cells: [[0,0],[0,1]], op: '+', target: 5 },
+ *       ...
+ *     ],
+ *     givens: [          // optional
+ *       { row: 0, col: 2, value: 3 },
+ *       ...
+ *     ]
+ *   }
+ *
+ * Ops: '+', '-', '*', '/'
+ * '-' and '/' sort values highest→lowest before applying left-to-right.
+ */
 
-  /* ── Lobby ── */
-  #lobby { display: flex; flex-direction: column; align-items: center; gap: 28px; width: 100%; max-width: 420px; }
-  #lobby h1 { font-size: 2rem; font-weight: 900; letter-spacing: -0.04em; }
-  #lobby h1 span { color: var(--accent); }
+(function(global) {
+  "use strict";
 
-  .lobby-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 24px; width: 100%; display: flex; flex-direction: column; gap: 16px; }
-  .lobby-card h2 { font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  // ── Cage constraint checker ───────────────────────────────────────────────
 
-  .option-row { display: flex; flex-direction: column; gap: 6px; }
-  .option-row label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-  .option-row input {
-    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
-    padding: 10px 14px; border-radius: 10px; font-size: .9rem; font-weight: 700; outline: none; width: 100%;
-  }
-  .option-row input:focus { border-color: var(--accent); }
-
-  .seg { display: flex; gap: 4px; flex-wrap: wrap; }
-  .seg-btn { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 9px 4px; border-radius: 8px; font-size: .78rem; font-weight: 800; cursor: pointer; transition: all .15s; text-align: center; min-width: 36px; }
-  .seg-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-
-  .btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 12px 20px; border-radius: 10px; font-size: .88rem; font-weight: 700; cursor: pointer; transition: background .15s, transform .1s; user-select: none; width: 100%; }
-  .btn:hover { background: #2e2e36; }
-  .btn:active { transform: scale(.97); }
-  .btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn-accent:hover { background: var(--accent2); }
-  .btn-danger { border-color: #3f1818; color: var(--danger); }
-  .btn-danger:hover { background: #1f1010; }
-
-  .or-divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .75rem; font-weight: 700; width: 100%; }
-  .or-divider::before, .or-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-
-  .gen-status { display: flex; align-items: center; gap: 10px; }
-  .gen-info { display: flex; justify-content: space-between; font-size: .78rem; font-weight: 700; color: var(--muted); }
-  .gen-info span b { color: var(--text); }
-  .gen-info span.best b { color: var(--accent); }
-
-  .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── Game ── */
-  #game { display: none; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 540px; }
-
-  .game-topbar { width: 100%; display: flex; justify-content: space-between; align-items: center; }
-  .back-btn { background: none; border: none; color: var(--muted); font-size: .8rem; font-weight: 700; cursor: pointer; padding: 4px 0; }
-  .back-btn:hover { color: var(--text); }
-  #timerDisplay { font-size: 1.1rem; font-weight: 900; letter-spacing: .05em; color: var(--text); font-variant-numeric: tabular-nums; }
-
-  .puzzle-wrap { position: relative; width: 100%; }
-  #gridEl { display: grid; border: 3px solid var(--text); background: var(--border); gap: 1px; touch-action: none; user-select: none; margin: 0 auto; }
-
-  .cell {
-    width: 100%; aspect-ratio: 1; background: var(--surface);
-    display: flex; align-items: center; justify-content: center;
-    font-size: clamp(.9rem, 4vw, 1.5rem); font-weight: 900;
-    position: relative; cursor: pointer; transition: background .1s;
-    border: 2px solid transparent;
-  }
-  .cell:hover { background: #1e1e22; }
-  .cell.selected { background: #1c2a3a; border-color: var(--blue); z-index: 2; }
-  .cell.given { color: var(--accent); cursor: default; }
-  .cell.given:hover { background: var(--surface); }
-  .cell.filled { color: var(--blue); }
-  .cell.error { color: var(--danger) !important; background: #1f1010 !important; }
-  .cell.correct { color: var(--success) !important; }
-  .cell.highlight { background: #1a2030; }
-
-  .cage-label {
-    position: absolute; top: 2px; left: 3px;
-    font-size: clamp(.4rem, 1.1vw, .6rem); font-weight: 900;
-    color: var(--text); pointer-events: none; line-height: 1;
-  }
-  .bt { border-top: 3px solid var(--text) !important; }
-  .bb { border-bottom: 3px solid var(--text) !important; }
-  .bl { border-left: 3px solid var(--text) !important; }
-  .br { border-right: 3px solid var(--text) !important; }
-
-  .pencil-grid { display: grid; width: 90%; height: 90%; position: absolute; inset: 5%; }
-  .pencil-digit { display: flex; align-items: center; justify-content: center; font-size: clamp(.3rem, .9vw, .5rem); font-weight: 700; color: var(--muted); line-height: 1; }
-
-  #difficultyLabel { text-align: center; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin-top: 6px; }
-
-  #numpad { display: grid; gap: 6px; width: 100%; }
-  .np-btn {
-    background: var(--surface); border: 1px solid var(--border); color: var(--text);
-    aspect-ratio: 1; border-radius: 10px; font-size: clamp(1rem, 4vw, 1.4rem);
-    font-weight: 900; cursor: pointer; transition: background .1s, transform .1s;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .np-btn:hover { background: var(--surface2); }
-  .np-btn:active { transform: scale(.93); }
-  .np-erase { background: var(--surface2); color: var(--muted); font-size: clamp(.7rem, 2.5vw, 1rem); }
-  .np-pencil { background: var(--surface2); font-size: clamp(.65rem, 2vw, .85rem); }
-  .np-pencil.active { background: #1c2a3a; border-color: var(--blue); color: var(--blue); }
-
-  #winOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.8); backdrop-filter: blur(8px); z-index: 200; align-items: center; justify-content: center; }
-  #winOverlay.open { display: flex; }
-  .win-box { background: var(--surface); border: 1px solid var(--border); border-radius: 24px; padding: 40px 32px; text-align: center; max-width: 340px; margin: 16px; }
-  .win-box .emoji { font-size: 3rem; margin-bottom: 12px; }
-  .win-box h2 { font-size: 1.6rem; font-weight: 900; margin-bottom: 6px; }
-  .win-box p { color: var(--muted); font-size: .85rem; margin-bottom: 20px; }
-  .win-stats { display: flex; justify-content: center; gap: 24px; margin-bottom: 24px; }
-  .win-stat .val { font-size: 1.2rem; font-weight: 900; color: var(--accent); }
-  .win-stat .lbl { font-size: .65rem; font-weight: 700; text-transform: uppercase; color: var(--muted); }
-</style>
-</head>
-<body>
-
-<!-- ── Lobby ── -->
-<div id="lobby">
-  <div style="text-align:center;">
-    <h1>MATHDOKU<span>.PLAY</span></h1>
-    <p style="color:var(--muted);font-size:.85rem;margin-top:6px;">Train your mind.</p>
-  </div>
-
-  <div class="lobby-card">
-    <h2>New Puzzle</h2>
-
-    <div class="option-row">
-      <label>Grid Size</label>
-      <div class="seg" id="sizeSegs">
-        <div class="seg-btn active" data-val="4">4×4</div>
-        <div class="seg-btn" data-val="5">5×5</div>
-        <div class="seg-btn" data-val="6">6×6</div>
-        <div class="seg-btn" data-val="7">7×7</div>
-        <div class="seg-btn" data-val="8">8×8</div>
-        <div class="seg-btn" data-val="9">9×9</div>
-      </div>
-    </div>
-
-    <div class="option-row">
-      <label>Difficulty</label>
-      <div class="seg" id="diffSegs">
-        <div class="seg-btn active" data-val="any">Any</div>
-        <div class="seg-btn" data-val="Easy">Easy</div>
-        <div class="seg-btn" data-val="Medium">Med</div>
-        <div class="seg-btn" data-val="Hard">Hard</div>
-        <div class="seg-btn" data-val="Vicious">Vic</div>
-        <div class="seg-btn" data-val="Devilish">Dev</div>
-        <div class="seg-btn" data-val="Diabolical">Dia</div>
-        <div class="seg-btn" data-val="Beyond Diabolical">BD</div>
-      </div>
-    </div>
-
-    <div class="option-row">
-      <label>Uniqueness</label>
-      <div class="seg" id="uniqSegs">
-        <div class="seg-btn active" data-val="guaranteed">Guaranteed</div>
-        <div class="seg-btn" data-val="any">Allow non-unique</div>
-        <div class="seg-btn" data-val="only">Only non-unique</div>
-      </div>
-    </div>
-
-    <!-- Generate button -->
-    <button class="btn btn-accent" id="genBtn" onclick="generatePuzzle()">▶ Generate Puzzle</button>
-
-    <!-- Inline generation status (hidden until generating) -->
-    <div id="genInline" style="display:none; flex-direction:column; gap:10px;">
-      <div class="gen-status">
-        <div class="spinner"></div>
-        <span style="font-size:.85rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;">Generating…</span>
-      </div>
-      <div class="gen-info">
-        <span>Attempts: <b id="genAttempts">0</b></span>
-        <span class="best">Best so far: <b id="genBestLabel">—</b></span>
-      </div>
-      <button class="btn" id="genAcceptBtn" style="display:none;" onclick="acceptBest()">Accept Best</button>
-      <button class="btn btn-danger" onclick="stopGeneration()">✕ Cancel</button>
-    </div>
-  </div>
-
-  <div class="or-divider">or</div>
-
-  <div class="lobby-card">
-    <h2>Load from String</h2>
-    <div class="option-row">
-      <label>Puzzle String</label>
-      <input id="importStr" type="text" placeholder="Paste export string…">
-    </div>
-    <button class="btn" onclick="loadFromString()">Load Puzzle</button>
-  </div>
-</div>
-
-<!-- ── Game ── -->
-<div id="game">
-  <div class="game-topbar">
-    <button class="back-btn" onclick="goLobby()">← Back</button>
-    <div id="timerDisplay">0:00</div>
-  </div>
-  <div class="puzzle-wrap">
-    <div id="gridEl"></div>
-    <div id="difficultyLabel">—</div>
-  </div>
-  <div id="numpad"></div>
-</div>
-
-<!-- Win overlay -->
-<div id="winOverlay">
-  <div class="win-box">
-    <div class="emoji">🎉</div>
-    <h2>Solved!</h2>
-    <p id="winDiff"></p>
-    <div class="win-stats">
-      <div class="win-stat"><div class="val" id="winTime">—</div><div class="lbl">Time</div></div>
-    </div>
-    <button class="btn btn-accent" style="margin-top:8px;" onclick="goLobby()">Play Again</button>
-  </div>
-</div>
-
-<script src="solver.js"></script>
-<script>
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const $ = id => document.getElementById(id);
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-// ── Segment controls ──────────────────────────────────────────────────────────
-function segVal(id) { return $(id).querySelector('.seg-btn.active')?.dataset.val; }
-document.querySelectorAll('.seg').forEach(seg => {
-  seg.addEventListener('click', e => {
-    const btn = e.target.closest('.seg-btn');
-    if (!btn) return;
-    seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  });
-});
-
-// ── URL load ───────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-  const p = new URLSearchParams(location.search).get('p');
-  if (p) { try { startGame(JSON.parse(atob(p))); } catch(e) {} }
-});
-
-// ── Lobby ─────────────────────────────────────────────────────────────────────
-function loadFromString() {
-  const str = $('importStr').value.trim();
-  if (!str) return;
-  try { startGame(JSON.parse(atob(str))); }
-  catch(e) { alert('Invalid puzzle string.'); }
-}
-
-
-// Difficulty band boundaries [min, max) — used to compute proximity score
-const DIFF_BANDS = {
-  'Easy':              [0,      0.5],
-  'Medium':            [0.5,    1.2],
-  'Hard':              [1.2,    1.6],
-  'Vicious':           [1.6,    2.5],
-  'Devilish':          [2.5,    3.4],
-  'Diabolical':        [3.4,    5.0],
-  'Beyond Diabolical': [5.0,  Infinity],
-};
-
-function diffProximity(score, targetDiff) {
-  if (targetDiff === 'any') return 0; // all equally good
-  const band = DIFF_BANDS[targetDiff];
-  if (!band) return Infinity;
-  if (score >= band[0] && score < band[1]) return 0; // inside band
-  if (score < band[0]) return band[0] - score;       // below band
-  return score - band[1];                            // above band
-}
-
-let genRunning = false, genBestPuzzle = null, genBestProximity = Infinity, genBestLabel = '—';
-
-function stopGeneration() {
-  genRunning = false;
-  $('genInline').style.display = 'none';
-  $('genBtn').style.display    = '';
-}
-
-async function generatePuzzle() {
-  const size = parseInt(segVal('sizeSegs'));
-  const diff = segVal('diffSegs');
-  const uniq = segVal('uniqSegs');
-
-  genRunning       = true;
-  genBestPuzzle    = null;
-  genBestProximity = Infinity;
-  genBestLabel     = '—';
-
-  $('genBtn').style.display       = 'none';
-  $('genInline').style.display    = 'flex';
-  $('genAttempts').textContent    = '0';
-  $('genBestLabel').textContent   = '—';
-  $('genAcceptBtn').style.display = 'none';
-  await sleep(0);
-
-  let attempt = 0;
-  while (genRunning) {
-    attempt++;
-    await sleep(0); // always yield so console flushes and UI stays responsive
-
-    const puz = randomPuzzle(size);
-
-    // Fast uniqueness check
-    const solveResult = MathdokuSolver.solve(puz, { maxSolutions: 2 });
-    if (!solveResult) continue;
-    const isUniq = solveResult.solutions.length === 1;
-
-    // Uniqueness filter
-    if (uniq === 'guaranteed' && !isUniq) { await maybeYield(attempt); continue; }
-    if (uniq === 'only'       &&  isUniq) { await maybeYield(attempt); continue; }
-
-    // Full rate
-    const rating  = MathdokuSolver.rate(puz);
-
-    // Early discard: if targeting hard+ and no guesses needed, skip
-    const hardTargets = ['Hard','Vicious','Devilish','Diabolical','Beyond Diabolical'];
-    if (diff !== 'any' && hardTargets.includes(diff) && (rating.breakdown?.guesses || 0) === 0) {
-      await maybeYield(attempt); continue;
-    }
-    // Also discard if score is way too low for target (avoid wasting best-so-far slot)
-    const minScore = { Hard:1.2, Vicious:1.6, Devilish:2.5, Diabolical:3.4, 'Beyond Diabolical':5.0 };
-    if (minScore[diff] && rating.score < minScore[diff] * 0.5) {
-      await maybeYield(attempt); continue;
-    }
-    const rawDiff = isUniq
-      ? rating.difficulty
-      : rating.difficulty.replace(/^Non-unique \(/, '').replace(/\)$/, '');
-    const proximity = diffProximity(rating.score, diff);
-
-    // Update best-so-far if this is closer to target
-    if (proximity < genBestProximity) {
-      genBestProximity = proximity;
-      genBestPuzzle    = puz;
-      genBestLabel     = rawDiff + ' (' + rating.score + ')';
-      $('genBestLabel').textContent   = genBestLabel;
-      $('genAcceptBtn').style.display = '';
-    }
-
-    await maybeYield(attempt);
-    if (!genRunning) return;
-
-    // Exact match
-    if (proximity === 0) {
-      genRunning = false;
-      $('genInline').style.display = 'none';
-      $('genBtn').style.display    = '';
-      startGame(puz);
-      return;
-    }
-  }
-}
-
-async function maybeYield(attempt) {
-  if (attempt % 3 === 0) {
-    $('genAttempts').textContent = attempt;
-    await sleep(0);
-  }
-}
-
-function acceptBest() {
-  if (!genBestPuzzle) return;
-  genRunning = false;
-  $('genInline').style.display = 'none';
-  $('genBtn').style.display    = '';
-  startGame(genBestPuzzle);
-}
-
-// ── Puzzle generation helpers ─────────────────────────────────────────────────
-function randomPuzzle(size) {
-  const grid  = randomLatinSquare(size);
-  const cages = carveCages(grid, size);
-  return { size, cages, givens:[] };
-}
-
-function randomLatinSquare(size) {
-  // Use a row-by-row approach with bitmasks for fast conflict checking
-  const grid    = Array.from({length: size}, () => new Array(size).fill(0));
-  const rowUsed = new Array(size).fill(0);  // bitmask of used values per row
-  const colUsed = new Array(size).fill(0);  // bitmask of used values per col
-
-  function bt(pos) {
-    if (pos === size * size) return true;
-    const r = Math.floor(pos / size), c = pos % size;
-    const used = rowUsed[r] | colUsed[c];
-    const vals = shuffle(Array.from({length: size}, (_,i) => i+1));
-    for (const v of vals) {
-      const bit = 1 << v;
-      if (used & bit) continue;
-      grid[r][c]  = v;
-      rowUsed[r] |= bit;
-      colUsed[c] |= bit;
-      if (bt(pos+1)) return true;
-      grid[r][c]  = 0;
-      rowUsed[r] &= ~bit;
-      colUsed[c] &= ~bit;
+  function checkCage(values, op, target) {
+    if (!values.length) return false;
+    switch(op) {
+      case "=": return values.length === 1 && values[0] === target;
+      case "+": return values.reduce((a,b) => a+b, 0) === target;
+      case "*": return values.reduce((a,b) => a*b, 1) === target;
+      case "-": {
+        const s = [...values].sort((a,b) => b-a);
+        return s.slice(1).reduce((acc,v) => acc-v, s[0]) === target;
+      }
+      case "/": {
+        const s = [...values].sort((a,b) => b-a);
+        return s.slice(1).reduce((acc,v) => acc/v, s[0]) === target;
+      }
     }
     return false;
   }
-  bt(0);
-  return grid;
-}
 
-function carveCages(grid, size) {
-  const assigned = Array.from({length: size}, () => new Array(size).fill(false));
-  const cages = [];
-  // Process cells in random order
-  const order = shuffle(Array.from({length: size*size}, (_,i) => i));
-  for (const flat of order) {
-    const r = Math.floor(flat / size), c = flat % size;
-    if (assigned[r][c]) continue;
-    const cells = [[r, c]];
-    assigned[r][c] = true;
-    // Grow cage: max 4 cells on any size, but larger grids bias toward smaller cages
-    const maxSz = 4;
-    const growProb = size <= 5 ? 0.8 : size <= 7 ? 0.65 : 0.5;
-    for (let t = 0; t < maxSz - 1; t++) {
-      if (t > 0 && Math.random() > growProb) break; // always try at least once
-      // Collect unassigned neighbours of any cell already in cage
-      const cands = [];
-      for (const [cr, cc] of cells)
-        for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-          const nr = cr+dr, nc = cc+dc;
-          if (nr>=0 && nr<size && nc>=0 && nc<size && !assigned[nr][nc])
-            cands.push([nr, nc]);
-        }
-      if (!cands.length) break;
-      const [nr, nc] = cands[Math.floor(Math.random() * cands.length)];
-      cells.push([nr, nc]);
-      assigned[nr][nc] = true;
+  function partialCageOk(values, op, target) {
+    if (!values.length) return true;
+    switch(op) {
+      case "+": return values.reduce((a,b) => a+b, 0) <= target;
+      case "*": return values.reduce((a,b) => a*b, 1) <= target;
     }
-    const vals = cells.map(([cr,cc]) => grid[cr][cc]);
-    const { op, target } = chooseOp(vals);
-    cages.push({ id: Date.now() + cages.length, cells, op, target });
+    return true;
   }
-  return cages;
-}
 
-function chooseOp(vals) {
-  if (vals.length === 1) return { op: '=', target: vals[0] };
-  const sorted = [...vals].sort((a,b) => b-a);
-  const sub = sorted.slice(1).reduce((a,v) => a-v, sorted[0]);
-  const div = sorted.slice(1).reduce((a,v) => a/v, sorted[0]);
+  // ── Solver (backtracking) ─────────────────────────────────────────────────
 
-  const ops = [];
-  // Always allow + and *
-  ops.push('+', '+', '*'); // weighted: + appears twice to balance
-  // Heavily bias toward - and / for difficulty
-  if (sub > 0)                          ops.push('-', '-', '-');
-  if (Number.isInteger(div) && div > 0) ops.push('/', '/', '/');
+  function solve(puzzle, opts) {
+    opts = opts || {};
+    const maxSolutions = opts.maxSolutions || 2;
+    const { size, cages, givens } = puzzle;
 
-  const op = ops[Math.floor(Math.random() * ops.length)];
-  const target = op==='+' ? vals.reduce((a,b)=>a+b,0)
-               : op==='*' ? vals.reduce((a,b)=>a*b,1)
-               : op==='-' ? sub : div;
-  return { op, target };
-}
+    const cellToCage = Array.from({length: size}, () => new Array(size).fill(-1));
+    cages.forEach((cage, ci) => cage.cells.forEach(([r,c]) => cellToCage[r][c] = ci));
 
-function shuffle(arr) {
-  for (let i = arr.length-1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i+1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
+    const givenSet = new Set();
+    const grid = Array.from({length: size}, () => new Array(size).fill(0));
+    if (givens) {
+      givens.forEach(g => {
+        grid[g.row][g.col] = g.value;
+        givenSet.add(g.row * size + g.col);
+      });
+    }
 
-// ── Game state ────────────────────────────────────────────────────────────────
-let puzzle, solution, userGrid, pencilGrid, selected, pencilMode, timerSec, timerInt, solved, difficulty;
+    const cageFilled = cages.map(() => []);
+    const solutions = [];
 
-async function startGame(puz) {
-  puzzle = puz;
-  const N = puz.size;
-  const result = MathdokuSolver.solve(puz, { maxSolutions: 1, timeLimitMs: 5000 });
-  if (!result) { alert('This puzzle has no solution.'); return; }
-  solution   = result.grid;
-  difficulty = MathdokuSolver.rate(puz).difficulty;
-  userGrid   = Array.from({length: N}, () => new Array(N).fill(0));
-  pencilGrid = Array.from({length: N}, () => Array.from({length: N}, () => new Set()));
-  selected   = null;
-  pencilMode = false;
-  solved     = false;
-  (puz.givens||[]).forEach(g => { userGrid[g.row][g.col] = g.value; });
-  clearInterval(timerInt);
-  timerSec = 0;
-  $('timerDisplay').textContent = '0:00';
-  timerInt = setInterval(() => {
-    if (solved) return;
-    timerSec++;
-    $('timerDisplay').textContent = Math.floor(timerSec/60) + ':' + String(timerSec%60).padStart(2,'0');
-  }, 1000);
-  $('lobby').style.display = 'none';
-  $('game').style.display  = 'flex';
-  $('difficultyLabel').textContent = difficulty;
-  // Update URL so the puzzle is shareable
-  const encoded = btoa(JSON.stringify({ size: puz.size, cages: puz.cages, givens: puz.givens || [] }));
-  history.replaceState(null, '', '?p=' + encoded);
-  renderGrid();
-  renderNumpad();
-}
-
-function goLobby() {
-  clearInterval(timerInt);
-  $('winOverlay').classList.remove('open');
-  $('game').style.display  = 'none';
-  $('lobby').style.display = 'flex';
-}
-
-// ── Render grid ───────────────────────────────────────────────────────────────
-function renderGrid() {
-  const N  = puzzle.size;
-  const el = $('gridEl');
-  const maxW  = Math.min(window.innerWidth - 32, 480);
-  const cellPx = Math.floor((maxW - N) / N);
-  el.style.gridTemplateColumns = 'repeat(' + N + ', ' + cellPx + 'px)';
-  el.style.width = (cellPx * N + N - 1) + 'px';
-  el.innerHTML = '';
-
-  const cellToCage = Array.from({length:N}, () => new Array(N).fill(-1));
-  puzzle.cages.forEach((cage,ci) => cage.cells.forEach(([r,c]) => cellToCage[r][c] = ci));
-
-  for (let r = 0; r < N; r++) {
-    for (let c = 0; c < N; c++) {
-      const ci      = cellToCage[r][c];
-      const isGiven = (puzzle.givens||[]).some(g => g.row===r && g.col===c);
-      const val     = userGrid[r][c];
-      const isSel   = selected && selected[0]===r && selected[1]===c;
-      const isHl    = selected && !isSel && (selected[0]===r || selected[1]===c);
-
-      const div = document.createElement('div');
-      let cls = 'cell';
-      if (isGiven)                          cls += ' given';
-      else if (val && val===solution[r][c]) cls += ' correct';
-      else if (val)                         cls += ' error';
-      if (isSel) cls += ' selected';
-      else if (isHl) cls += ' highlight';
-      div.className = cls;
-
-      if (ci !== -1) {
-        const cage = puzzle.cages[ci];
-        const inCage = (rr,cc) => cage.cells.some(([a,b]) => a===rr && b===cc);
-        if (r===0    || !inCage(r-1,c)) div.classList.add('bt');
-        if (r===N-1  || !inCage(r+1,c)) div.classList.add('bb');
-        if (c===0    || !inCage(r,c-1)) div.classList.add('bl');
-        if (c===N-1  || !inCage(r,c+1)) div.classList.add('br');
-        const sorted = [...cage.cells].sort((a,b) => (a[0]*N+a[1])-(b[0]*N+b[1]));
-        if (sorted[0][0]===r && sorted[0][1]===c) {
-          const lbl = document.createElement('span');
-          lbl.className = 'cage-label';
-          lbl.textContent = cage.target + (cage.op==='=' ? '' : cage.op);
-          div.appendChild(lbl);
+    function bt(pos) {
+      if (solutions.length >= maxSolutions) return;
+      if (pos === size * size) {
+        for (let ci = 0; ci < cages.length; ci++) {
+          if (!checkCage(cageFilled[ci], cages[ci].op, cages[ci].target)) return;
         }
+        solutions.push(grid.map(r => r.slice()));
+        return;
       }
+      const row = Math.floor(pos / size), col = pos % size;
+      if (givenSet.has(pos)) { bt(pos+1); return; }
+      const ci = cellToCage[row][col];
+      for (let v = 1; v <= size; v++) {
+        let ok = true;
+        for (let c = 0; c < col; c++) if (grid[row][c] === v) { ok = false; break; }
+        if (ok) for (let r = 0; r < row; r++) if (grid[r][col] === v) { ok = false; break; }
+        if (!ok) continue;
+        if (ci === -1) {
+          grid[row][col] = v; bt(pos+1); grid[row][col] = 0;
+        } else {
+          const cage = cages[ci];
+          const filled = cageFilled[ci];
+          filled.push(v);
+          const partial = filled.length < cage.cells.length
+            ? partialCageOk(filled, cage.op, cage.target)
+            : checkCage(filled, cage.op, cage.target);
+          if (partial) { grid[row][col] = v; bt(pos+1); }
+          filled.pop();
+        }
+        grid[row][col] = 0;
+        if (solutions.length >= maxSolutions) return;
+      }
+    }
 
-      if (val) {
-        div.append(val);
-      } else {
-        const marks = pencilGrid[r][c];
-        if (marks.size > 0) {
-          const cols = Math.ceil(Math.sqrt(N));
-          const pg = document.createElement('div');
-          pg.className = 'pencil-grid';
-          pg.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
-          for (let v = 1; v <= N; v++) {
-            const pd = document.createElement('div');
-            pd.className = 'pencil-digit';
-            pd.textContent = marks.has(v) ? v : '';
-            pg.appendChild(pd);
+    bt(0);
+    return solutions.length === 0 ? null : { grid: solutions[0], solutions };
+  }
+
+  // ── Rater (logic simulation) ──────────────────────────────────────────────
+  //
+  // Three-tier simulation:
+  //   1. Singles  — naked single (one candidate left in cell),
+  //                 hidden single (value has only one cell in row/col)
+  //   2. Cage logic — eliminate candidates not present in ANY valid combo
+  //                   for that cage given current candidates (naked sets per cage)
+  //   3. Guessing — when neither singles nor cage logic make progress,
+  //                 pick the most-constrained cell and try each candidate;
+  //                 every branch attempted counts as a guess (not just the final).
+
+  function rate(puzzle) {
+    const { size, cages } = puzzle;
+
+    // Step 0: solvability
+    const solveResult = solve(puzzle, { maxSolutions: 2 });
+    if (!solveResult || !solveResult.solutions.length)
+      return { difficulty: "Impossible", score: Infinity, breakdown: {} };
+    const nonUnique = solveResult.solutions.length > 1;
+
+    let singlesUsed = 0;
+    let cageElims   = 0;
+    let guesses     = 0;  // every branch tried during bifurcation, not just correct ones
+
+    // Build cell→cage map
+    const cellToCage = Array.from({length: size}, () => new Array(size).fill(-1));
+    cages.forEach((cage, ci) => cage.cells.forEach(([r,c]) => cellToCage[r][c] = ci));
+
+    // ── helpers that operate on a state object { cands, placed } ──
+
+    function cloneState(st) {
+      return {
+        cands:  st.cands.map(row => row.map(s => new Set(s))),
+        placed: st.placed.map(r => r.slice()),
+      };
+    }
+
+    function placeCell(st, r, c, v) {
+      st.placed[r][c] = v;
+      st.cands[r][c]  = new Set([v]);
+      for (let i = 0; i < size; i++) {
+        if (i !== c) st.cands[r][i].delete(v);
+        if (i !== r) st.cands[i][c].delete(v);
+      }
+    }
+
+    // Returns valid combinations for a cage given current candidate sets
+    function validCombos(st, cage) {
+      const n = cage.cells.length, combos = [];
+      function gen(idx, cur) {
+        if (idx === n) {
+          if (checkCage(cur, cage.op, cage.target)) combos.push(cur.slice());
+          return;
+        }
+        const [r,c] = cage.cells[idx];
+        for (const v of st.cands[r][c]) { cur.push(v); gen(idx+1, cur); cur.pop(); }
+      }
+      gen(0, []);
+      return combos;
+    }
+
+    // Apply one full round of singles + cage logic.
+    // Returns true if anything changed.
+    function applyLogic(st) {
+      let changed = false;
+
+      // Cage elimination (tier 2)
+      for (let ci = 0; ci < cages.length; ci++) {
+        const cage = cages[ci];
+        const combos = validCombos(st, cage);
+        cage.cells.forEach(([r,c], idx) => {
+          if (st.placed[r][c]) return;
+          const allowed = new Set(combos.map(k => k[idx]));
+          for (const v of [...st.cands[r][c]]) {
+            if (!allowed.has(v)) {
+              st.cands[r][c].delete(v);
+              cageElims++;
+              changed = true;
+            }
           }
-          div.appendChild(pg);
+        });
+      }
+
+      // Naked singles (tier 1a)
+      for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
+        if (!st.placed[r][c] && st.cands[r][c].size === 1) {
+          placeCell(st, r, c, [...st.cands[r][c]][0]);
+          singlesUsed++; changed = true;
         }
       }
 
-      if (!isGiven) div.addEventListener('click', () => { selected = [r,c]; renderGrid(); });
-      el.appendChild(div);
+      // Hidden singles — rows (tier 1b)
+      for (let r = 0; r < size; r++) {
+        for (let v = 1; v <= size; v++) {
+          const cols = [];
+          for (let c = 0; c < size; c++)
+            if (!st.placed[r][c] && st.cands[r][c].has(v)) cols.push(c);
+          if (cols.length === 1) {
+            placeCell(st, r, cols[0], v);
+            singlesUsed++; changed = true;
+          }
+        }
+      }
+
+      // Hidden singles — cols (tier 1b)
+      for (let c = 0; c < size; c++) {
+        for (let v = 1; v <= size; v++) {
+          const rows = [];
+          for (let r = 0; r < size; r++)
+            if (!st.placed[r][c] && st.cands[r][c].has(v)) rows.push(r);
+          if (rows.length === 1) {
+            placeCell(st, rows[0], c, v);
+            singlesUsed++; changed = true;
+          }
+        }
+      }
+
+      return changed;
     }
-  }
-}
 
-// ── Input ─────────────────────────────────────────────────────────────────────
-function inputValue(v) {
-  if (!selected || solved) return;
-  const [r, c] = selected;
-  if ((puzzle.givens||[]).some(g => g.row===r && g.col===c)) return;
-  if (pencilMode) {
-    if (userGrid[r][c]) return;
-    if (pencilGrid[r][c].has(v)) pencilGrid[r][c].delete(v);
-    else pencilGrid[r][c].add(v);
-  } else {
-    userGrid[r][c] = v;
-    pencilGrid[r][c].clear();
-    for (let i = 0; i < puzzle.size; i++) { pencilGrid[r][i].delete(v); pencilGrid[i][c].delete(v); }
-    checkWin();
-  }
-  renderGrid();
-}
-
-function eraseCell() {
-  if (!selected || solved) return;
-  const [r, c] = selected;
-  if ((puzzle.givens||[]).some(g => g.row===r && g.col===c)) return;
-  userGrid[r][c] = 0;
-  pencilGrid[r][c].clear();
-  renderGrid();
-}
-
-function checkWin() {
-  const N = puzzle.size;
-  for (let r = 0; r < N; r++)
-    for (let c = 0; c < N; c++)
-      if (userGrid[r][c] !== solution[r][c]) return;
-  solved = true;
-  clearInterval(timerInt);
-  const m = Math.floor(timerSec/60), s = timerSec%60;
-  $('winTime').textContent = m + ':' + String(s).padStart(2,'0');
-  $('winDiff').textContent = difficulty;
-  setTimeout(() => $('winOverlay').classList.add('open'), 400);
-}
-
-// ── Numpad ────────────────────────────────────────────────────────────────────
-function renderNumpad() {
-  const N  = puzzle.size;
-  const np = $('numpad');
-  np.innerHTML = '';
-  np.style.gridTemplateColumns = 'repeat(' + (N + 2) + ', 1fr)';
-  for (let v = 1; v <= N; v++) {
-    const btn = document.createElement('button');
-    btn.className = 'np-btn' + (pencilMode ? ' pencil-mode' : '');
-    btn.textContent = v;
-    btn.onclick = () => inputValue(v);
-    np.appendChild(btn);
-  }
-  const pencilBtn = document.createElement('button');
-  pencilBtn.className = 'np-btn np-pencil' + (pencilMode ? ' active' : '');
-  pencilBtn.textContent = '✏️';
-  pencilBtn.onclick = () => { pencilMode = !pencilMode; renderNumpad(); };
-  np.appendChild(pencilBtn);
-  const eraseBtn = document.createElement('button');
-  eraseBtn.className = 'np-btn np-erase';
-  eraseBtn.textContent = '⌫';
-  eraseBtn.onclick = () => eraseCell();
-  np.appendChild(eraseBtn);
-}
-
-// ── Keyboard ──────────────────────────────────────────────────────────────────
-document.addEventListener('keydown', e => {
-  if ($('game').style.display === 'none') return;
-  if (['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
-  const N = puzzle?.size || 4;
-  const digit = parseInt(e.key);
-  if (!isNaN(digit) && digit >= 1 && digit <= N) { inputValue(digit); return; }
-  if (e.key==='Backspace'||e.key==='Delete'||e.key==='0') { eraseCell(); return; }
-  if (e.key==='p'||e.key==='P') { pencilMode = !pencilMode; renderNumpad(); renderGrid(); return; }
-  if (selected) {
-    const dirs = { ArrowUp:[-1,0], ArrowDown:[1,0], ArrowLeft:[0,-1], ArrowRight:[0,1] };
-    if (dirs[e.key]) {
-      e.preventDefault();
-      const [dr,dc] = dirs[e.key];
-      selected = [Math.max(0,Math.min(N-1,selected[0]+dr)), Math.max(0,Math.min(N-1,selected[1]+dc))];
-      renderGrid();
+    // Run logic to fixpoint
+    function logicFixpoint(st) {
+      while (applyLogic(st)) { /* keep going */ }
     }
-  }
-});
 
-window.addEventListener('resize', () => { if (puzzle) renderGrid(); });
-</script>
-</body>
-</html>
+    function isSolved(st) {
+      for (let r = 0; r < size; r++)
+        for (let c = 0; c < size; c++)
+          if (!st.placed[r][c]) return false;
+      return true;
+    }
+
+    function isContradiction(st) {
+      for (let r = 0; r < size; r++)
+        for (let c = 0; c < size; c++)
+          if (!st.placed[r][c] && st.cands[r][c].size === 0) return true;
+      return false;
+    }
+
+    // Pick most-constrained unplaced cell (MRV heuristic)
+    function pickCell(st) {
+      let best = null, bestSize = Infinity;
+      for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
+        if (!st.placed[r][c]) {
+          const s = st.cands[r][c].size;
+          if (s < bestSize) { bestSize = s; best = [r,c]; }
+        }
+      }
+      return best;
+    }
+
+    // Recursive guess-and-check; explores ALL branches, counts every wrong one
+    function search(st) {
+      logicFixpoint(st);
+      if (isContradiction(st)) return false;
+      if (isSolved(st)) return true;
+
+      const [r,c] = pickCell(st);
+      let anySuccess = false;
+      for (const v of [...st.cands[r][c]]) {
+        const branch = cloneState(st);
+        placeCell(branch, r, c, v);
+        guesses++; // count every branch — human doesn't know which is correct
+        const ok = search(branch);
+        if (ok) anySuccess = true;
+      }
+      return anySuccess;
+    }
+
+    // Build initial state
+    const initState = {
+      cands:  Array.from({length: size}, () =>
+                Array.from({length: size}, () => new Set(Array.from({length: size}, (_,i) => i+1)))),
+      placed: Array.from({length: size}, () => new Array(size).fill(0)),
+    };
+    (puzzle.givens || []).forEach(g => placeCell(initState, g.row, g.col, g.value));
+
+    const hasConstraints = cages.length > 0;
+    search(initState);
+
+    // An empty/uncaged puzzle gives a human zero information — always Beyond Diabolical
+    if (!hasConstraints) return {
+      difficulty: "Non-unique (Beyond Diabolical)",
+      score: 100, raw: Infinity,
+      breakdown: { singlesUsed: 0, cageElims: 0, guesses: 0, solutionCount: solveResult.solutions.length }
+    };
+
+    const raw   = singlesUsed + cageElims + guesses * 20;
+    const score = +(raw / Math.pow(size, 4)).toFixed(3);
+
+    let difficulty;
+    if (raw === 0)         difficulty = "Easy";
+    else if (score < 0.5)  difficulty = "Easy";
+    else if (score < 1.2)  difficulty = "Medium";
+    else if (score < 1.6)  difficulty = "Hard";
+    else if (score < 2.5)  difficulty = "Vicious";
+    else if (score < 3.4)  difficulty = "Devilish";
+    else if (score < 5.0)  difficulty = "Diabolical";
+    else                   difficulty = "Beyond Diabolical";
+
+    return {
+      difficulty: nonUnique ? "Non-unique (" + difficulty + ")" : difficulty,
+      score, raw,
+      breakdown: { singlesUsed, cageElims, guesses, solutionCount: solveResult.solutions.length }
+    };
+  }
+
+  // ── Public API ────────────────────────────────────────────────────────────
+
+  global.MathdokuSolver = { solve, rate };
+
+})(typeof window !== "undefined" ? window : global);
