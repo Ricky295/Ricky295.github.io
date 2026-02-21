@@ -253,32 +253,7 @@ function loadFromString() {
   catch(e) { alert('Invalid puzzle string.'); }
 }
 
-// ── Web Worker pool ───────────────────────────────────────────────────────────
-// Wraps solver.js in a worker so solve+rate never freezes the UI
-const worker = new Worker('solver.js');
-let workerCallbacks = {};
-let workerCallId = 0;
 
-worker.onmessage = e => {
-  const cb = workerCallbacks[e.data.callId];
-  if (cb) { delete workerCallbacks[e.data.callId]; cb(e.data); }
-};
-
-function workerSolveAndRate(puzzle, timeLimitMs) {
-  return new Promise(resolve => {
-    const callId = workerCallId++;
-    workerCallbacks[callId] = resolve;
-    worker.postMessage({ type: 'solveAndRate', puzzle, opts: { maxSolutions: 2, timeLimitMs }, callId });
-  });
-}
-
-function workerSolve(puzzle, timeLimitMs) {
-  return new Promise(resolve => {
-    const callId = workerCallId++;
-    workerCallbacks[callId] = resolve;
-    worker.postMessage({ type: 'solve', puzzle, opts: { maxSolutions: 1, timeLimitMs }, callId });
-  });
-}
 // Difficulty band boundaries [min, max) — used to compute proximity score
 const DIFF_BANDS = {
   'Easy':              [0,      0.5],
@@ -500,10 +475,10 @@ let puzzle, solution, userGrid, pencilGrid, selected, pencilMode, timerSec, time
 async function startGame(puz) {
   puzzle = puz;
   const N = puz.size;
-  const { solveResult, rateResult } = await workerSolveAndRate(puz, 2000);
-  if (!solveResult) { alert('This puzzle has no solution.'); return; }
-  solution   = solveResult.grid;
-  difficulty = rateResult ? rateResult.difficulty : '?';
+  const result = MathdokuSolver.solve(puz, { maxSolutions: 1, timeLimitMs: 5000 });
+  if (!result) { alert('This puzzle has no solution.'); return; }
+  solution   = result.grid;
+  difficulty = MathdokuSolver.rate(puz).difficulty;
   userGrid   = Array.from({length: N}, () => new Array(N).fill(0));
   pencilGrid = Array.from({length: N}, () => Array.from({length: N}, () => new Set()));
   selected   = null;
