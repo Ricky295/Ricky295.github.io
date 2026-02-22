@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mathdoku Print</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -21,7 +20,7 @@
   header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
 
   .layout { display: grid; grid-template-columns: 1fr; gap: 20px; }
-  @media(min-width: 1000px) { .layout { grid-template-columns: 1fr 360px; } }
+  @media(min-width: 1100px) { .layout { grid-template-columns: 1fr 380px; } }
 
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
   .card-title { font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 14px; }
@@ -34,19 +33,18 @@
   .btn-danger { border-color: #3f1818; color: var(--danger); }
   .btn-danger:hover { background: #1f1010; }
   .btn-full { width: 100%; padding: 12px; }
-  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; pointer-events: none; }
 
   .option-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
   .option-row label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-  .option-row input, .option-row select, .option-row textarea {
+  .option-row input, .option-row select {
     background: var(--surface2); border: 1px solid var(--border); color: var(--text);
     padding: 9px 12px; border-radius: 8px; font-size: .88rem; font-weight: 700; outline: none; width: 100%;
   }
-  .option-row input:focus, .option-row select:focus, .option-row textarea:focus { border-color: var(--accent); }
-  .option-row textarea { resize: vertical; min-height: 60px; font-family: monospace; font-size: .75rem; }
+  .option-row input:focus, .option-row select:focus { border-color: var(--accent); }
 
   .seg { display: flex; gap: 4px; flex-wrap: wrap; }
-  .seg-btn { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 8px 4px; border-radius: 8px; font-size: .78rem; font-weight: 800; cursor: pointer; transition: all .15s; text-align: center; min-width: 36px; }
+  .seg-btn { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 8px 4px; border-radius: 8px; font-size: .78rem; font-weight: 800; cursor: pointer; transition: all .15s; text-align: center; min-width: 32px; }
   .seg-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .seg-btn.disabled { opacity: .3; cursor: not-allowed; pointer-events: none; }
 
@@ -55,16 +53,13 @@
   .q-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
   .q-item-info .q-name { font-size: .85rem; font-weight: 800; }
   .q-item-info .q-meta { font-size: .7rem; color: var(--muted); margin-top: 2px; }
-  .q-item-btns { display: flex; gap: 6px; flex-shrink: 0; }
   .q-rm { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; }
   .q-rm:hover { color: var(--danger); }
-  #emptyQueue { color: var(--muted); font-size: .8rem; text-align: center; padding: 24px 0; }
 
   .add-row { display: flex; gap: 8px; margin-top: 12px; }
   .add-row input { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 9px 12px; border-radius: 8px; font-size: .82rem; font-weight: 700; outline: none; }
   .add-row input:focus { border-color: var(--accent); }
 
-  /* Gen inline */
   .gen-inline { display: none; flex-direction: column; gap: 8px; margin-top: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
   .gen-inline.open { display: flex; }
   .gen-status { display: flex; align-items: center; gap: 8px; font-size: .8rem; font-weight: 700; color: var(--muted); }
@@ -73,65 +68,38 @@
   .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Settings */
-  .settings-section { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 4px; }
-  .settings-section:first-child { border-top: none; padding-top: 0; }
+  .fmt-opts { display: none; padding-top: 10px; }
+  .fmt-opts.open { display: block; }
 
-  /* Format options */
-  .format-opts { display: none; }
-  .format-opts.open { display: block; }
+  #preview { background: #fff; border-radius: 12px; overflow: hidden; padding: 12px; }
+  .prev-page { background: #fff; display: grid; gap: 10px; margin-bottom: 10px; }
+  .prev-puzzle { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 
-  /* Preview */
-  #preview { background: #fff; border-radius: 12px; overflow: hidden; }
-  .preview-page { background: #fff; padding: 32px; display: grid; gap: 24px; }
-  .preview-page.layout-1 { grid-template-columns: 1fr; }
-  .preview-page.layout-2 { grid-template-columns: 1fr 1fr; }
-  .preview-page.layout-4 { grid-template-columns: 1fr 1fr; }
-  .preview-puzzle { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-  .preview-title { font-size: 11px; font-weight: 900; color: #111; text-align: center; font-family: 'Segoe UI', sans-serif; }
-  .preview-diff { font-size: 9px; color: #666; font-family: 'Segoe UI', sans-serif; text-align: center; }
-  .preview-num { font-size: 9px; color: #999; font-family: 'Segoe UI', sans-serif; }
-
-  /* Print */
   @media print {
     body { background: #fff; padding: 0; }
-    header, .layout > :last-child, #previewCard { display: none !important; }
+    header, .layout { display: none !important; }
     #printArea { display: block !important; }
   }
   #printArea { display: none; }
-  .print-page { page-break-after: always; padding: 20mm; display: grid; gap: 16mm; background: #fff; }
-  .print-page.layout-1 { grid-template-columns: 1fr; }
-  .print-page.layout-2 { grid-template-columns: 1fr 1fr; }
-  .print-page.layout-4 { grid-template-columns: 1fr 1fr; }
-  .print-puzzle { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-  .print-label { font-size: 10pt; font-weight: 900; color: #111; font-family: 'Segoe UI', sans-serif; }
-  .print-diff { font-size: 8pt; color: #555; font-family: 'Segoe UI', sans-serif; }
-
-  .export-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .print-page { page-break-after: always; padding: 12mm; display: grid; gap: 8mm; background: #fff; }
+  .print-puzzle { display: flex; flex-direction: column; align-items: center; gap: 4pt; }
 </style>
 </head>
 <body>
-
 <header>
-  <div>
-    <h1>MATHDOKU<span>.PRINT</span></h1>
-    <p class="sub">Build · Configure · Export</p>
-  </div>
+  <div><h1>MATHDOKU<span>.PRINT</span></h1><p class="sub">Build · Configure · Export</p></div>
   <a href="play.html" class="btn">← Back to Play</a>
 </header>
 
 <div id="printArea"></div>
 
 <div class="layout">
-  <!-- LEFT: Queue + Add -->
   <div style="display:flex;flex-direction:column;gap:16px;">
 
-    <!-- Puzzle Queue -->
     <div class="card">
       <div class="card-title">Puzzle Queue</div>
-      <div id="queueList"><div id="emptyQueue">No puzzles added yet.</div></div>
+      <div id="queueList"><p id="emptyQ" style="color:var(--muted);font-size:.8rem;text-align:center;padding:20px 0;">No puzzles yet.</p></div>
 
-      <!-- Add via string -->
       <div style="margin-top:16px;">
         <div class="card-title" style="margin-bottom:8px;">Add via String</div>
         <div class="add-row">
@@ -140,99 +108,88 @@
         </div>
       </div>
 
-      <!-- Add via generate -->
       <div style="margin-top:16px;">
         <div class="card-title" style="margin-bottom:8px;">Add via Generate</div>
         <div class="option-row" style="margin-bottom:8px;">
           <label>Grid Size</label>
-          <div class="seg" id="genSizeSegs">
-            <div class="seg-btn active" data-val="4">4×4</div>
-            <div class="seg-btn" data-val="5">5×5</div>
-            <div class="seg-btn" data-val="6">6×6</div>
-            <div class="seg-btn" data-val="7">7×7</div>
-            <div class="seg-btn" data-val="8">8×8</div>
-            <div class="seg-btn" data-val="9">9×9</div>
+          <div class="seg" id="gSzSegs">
+            <div class="seg-btn active" data-val="4">4×4</div><div class="seg-btn" data-val="5">5×5</div>
+            <div class="seg-btn" data-val="6">6×6</div><div class="seg-btn" data-val="7">7×7</div>
+            <div class="seg-btn" data-val="8">8×8</div><div class="seg-btn" data-val="9">9×9</div>
           </div>
         </div>
         <div class="option-row" style="margin-bottom:8px;">
           <label>Difficulty</label>
-          <div class="seg" id="genDiffSegs">
-            <div class="seg-btn active" data-val="any">Any</div>
-            <div class="seg-btn" data-val="Easy">Easy</div>
-            <div class="seg-btn" data-val="Medium">Med</div>
-            <div class="seg-btn" data-val="Hard">Hard</div>
-            <div class="seg-btn" data-val="Vicious">Vic</div>
-            <div class="seg-btn" data-val="Devilish">Dev</div>
-            <div class="seg-btn" data-val="Diabolical">Dia</div>
-            <div class="seg-btn" data-val="Beyond Diabolical">BD</div>
+          <div class="seg" id="gDfSegs">
+            <div class="seg-btn active" data-val="any">Any</div><div class="seg-btn" data-val="Easy">Easy</div>
+            <div class="seg-btn" data-val="Medium">Med</div><div class="seg-btn" data-val="Hard">Hard</div>
+            <div class="seg-btn" data-val="Vicious">Vic</div><div class="seg-btn" data-val="Devilish">Dev</div>
+            <div class="seg-btn" data-val="Diabolical">Dia</div><div class="seg-btn" data-val="Beyond Diabolical">BD</div>
           </div>
         </div>
         <div class="option-row" style="margin-bottom:10px;">
           <label>Uniqueness</label>
-          <div class="seg" id="genUniqSegs">
+          <div class="seg" id="gUnSegs">
             <div class="seg-btn active" data-val="guaranteed">Guaranteed</div>
             <div class="seg-btn" data-val="any">Allow non-unique</div>
             <div class="seg-btn" data-val="only">Only non-unique</div>
           </div>
         </div>
-        <button class="btn btn-accent" id="genStartBtn" onclick="startGenerate()" style="width:100%;">▶ Generate &amp; Add</button>
+        <button class="btn btn-accent" id="genBtn" onclick="startGen()" style="width:100%;">▶ Generate &amp; Add</button>
         <div class="gen-inline" id="genInline">
           <div class="gen-status"><div class="spinner"></div><span>Generating…</span></div>
-          <div class="gen-info"><span>Attempts: <b id="genAttempts">0</b></span><span>Best: <b id="genBest">—</b></span></div>
-          <button class="btn" id="genAcceptBtn" style="display:none;" onclick="acceptGenBest()">Accept Best</button>
-          <button class="btn btn-danger" onclick="stopGenerate()">✕ Cancel</button>
+          <div class="gen-info"><span>Attempts: <b id="genAtt">0</b></span><span>Best: <b id="genBst">—</b></span></div>
+          <button class="btn" id="genAccBtn" style="display:none;" onclick="acceptGen()">Accept Best</button>
+          <button class="btn btn-danger" onclick="stopGen()">✕ Cancel</button>
         </div>
       </div>
     </div>
 
-    <!-- Preview -->
-    <div class="card" id="previewCard">
+    <div class="card">
       <div class="card-title">Preview</div>
-      <div id="preview"><p style="color:var(--muted);font-size:.8rem;text-align:center;padding:32px 0;">Add puzzles to see a preview.</p></div>
+      <div id="preview"><p style="color:#999;font-size:.8rem;text-align:center;padding:24px 0;">Add puzzles to preview.</p></div>
     </div>
   </div>
 
-  <!-- RIGHT: Settings -->
+  <!-- Settings -->
   <div style="display:flex;flex-direction:column;gap:16px;">
     <div class="card">
       <div class="card-title">Sheet Settings</div>
 
       <div class="option-row">
-        <label>Sheet Title (optional)</label>
-        <input id="sheetTitle" type="text" placeholder="e.g. Math Club Week 3" oninput="updatePreview()">
+        <label>Sheet Title</label>
+        <input id="sheetTitle" type="text" placeholder="Optional…" oninput="updatePreview()">
       </div>
-
       <div class="option-row">
         <label>Layout</label>
         <div class="seg" id="layoutSegs">
-          <div class="seg-btn active" data-val="1">1 per page</div>
-          <div class="seg-btn" data-val="2">2 per page</div>
-          <div class="seg-btn" data-val="4">4 per page</div>
+          <div class="seg-btn active" data-val="1">1pp</div>
+          <div class="seg-btn" data-val="2">2pp</div>
+          <div class="seg-btn" data-val="4">4pp</div>
+          <div class="seg-btn" data-val="6">6pp</div>
         </div>
       </div>
-
       <div class="option-row">
         <label>Solution</label>
-        <div class="seg" id="solutionSegs">
+        <div class="seg" id="solSegs">
           <div class="seg-btn active" data-val="none">None</div>
           <div class="seg-btn" data-val="below">Below each</div>
-          <div class="seg-btn" data-val="page">Separate page</div>
+          <div class="seg-btn" data-val="page">Sep. page</div>
         </div>
       </div>
-
       <div class="option-row">
-        <label>Show Puzzle Number</label>
+        <label>Puzzle Number</label>
         <div class="seg" id="numSegs">
           <div class="seg-btn active" data-val="yes">Yes</div>
           <div class="seg-btn" data-val="no">No</div>
         </div>
       </div>
-
-      <div class="option-row">
-        <label>Show Difficulty</label>
-        <div class="seg" id="diffLabelSegs">
-          <div class="seg-btn active" data-val="yes">Yes</div>
-          <div class="seg-btn" data-val="no">No</div>
+      <div class="option-row" style="margin-bottom:0;">
+        <label>Difficulty Label</label>
+        <div class="seg" id="diffSegs">
+          <div class="seg-btn active" data-val="none">None</div>
+          <div class="seg-btn" data-val="name">Name</div>
+          <div class="seg-btn" data-val="both">Name + Score</div>
         </div>
       </div>
     </div>
@@ -246,19 +203,49 @@
           <div class="seg-btn active" data-val="pdf">PDF</div>
           <div class="seg-btn" data-val="pdf-qr">PDF+QR</div>
           <div class="seg-btn" data-val="png">PNG</div>
-          <div class="seg-btn" data-val="qr">QR only</div>
+          <div class="seg-btn" data-val="qr">QR</div>
         </div>
       </div>
 
-      <!-- PNG options -->
-      <div class="format-opts" id="pngOpts">
+      <!-- PDF opts -->
+      <div class="fmt-opts open" id="optPdf">
+        <div class="option-row" style="margin-bottom:0;">
+          <label>Orientation</label>
+          <div class="seg" id="pdfOrientSegs">
+            <div class="seg-btn active" data-val="portrait">Portrait</div>
+            <div class="seg-btn" data-val="landscape">Landscape</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PDF+QR opts -->
+      <div class="fmt-opts" id="optPdfQr">
         <div class="option-row">
-          <label>Image Width (px)</label>
+          <label>Orientation</label>
+          <div class="seg" id="pdfqrOrientSegs">
+            <div class="seg-btn active" data-val="portrait">Portrait</div>
+            <div class="seg-btn" data-val="landscape">Landscape</div>
+          </div>
+        </div>
+        <div class="option-row" style="margin-bottom:0;">
+          <label>QR Size</label>
+          <div class="seg" id="qrSzSegs">
+            <div class="seg-btn" data-val="80">Small</div>
+            <div class="seg-btn active" data-val="140">Medium</div>
+            <div class="seg-btn" data-val="200">Large</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PNG opts -->
+      <div class="fmt-opts" id="optPng">
+        <div class="option-row">
+          <label>Width (px)</label>
           <input id="pngPx" type="number" value="1200" min="400" max="4000" step="100">
         </div>
-        <div class="option-row">
+        <div class="option-row" style="margin-bottom:0;">
           <label>ZIP</label>
-          <div class="seg" id="zipSegs">
+          <div class="seg" id="pngZipSegs">
             <div class="seg-btn" data-val="no">No</div>
             <div class="seg-btn active" data-val="auto">Auto</div>
             <div class="seg-btn" data-val="yes">Yes</div>
@@ -266,9 +253,13 @@
         </div>
       </div>
 
-      <!-- QR-only options -->
-      <div class="format-opts" id="qrOpts">
+      <!-- QR opts -->
+      <div class="fmt-opts" id="optQr">
         <div class="option-row">
+          <label>Width (px)</label>
+          <input id="qrPx" type="number" value="400" min="100" max="1000" step="50">
+        </div>
+        <div class="option-row" style="margin-bottom:0;">
           <label>ZIP</label>
           <div class="seg" id="qrZipSegs">
             <div class="seg-btn" data-val="no">No</div>
@@ -278,9 +269,7 @@
         </div>
       </div>
 
-      <div class="export-btns">
-        <button class="btn btn-accent btn-full" id="exportBtn" onclick="doExport()" disabled>Export</button>
-      </div>
+      <button class="btn btn-accent btn-full" id="exportBtn" onclick="doExport()" style="margin-top:14px;" disabled>Export</button>
     </div>
   </div>
 </div>
@@ -291,195 +280,154 @@ const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ── Seg controls ──────────────────────────────────────────────────────────────
-function segVal(id) { return $(id).querySelector('.seg-btn.active')?.dataset.val; }
+function segVal(id) { return $(id)?.querySelector('.seg-btn.active')?.dataset.val; }
 document.querySelectorAll('.seg').forEach(seg => {
   seg.addEventListener('click', e => {
     const btn = e.target.closest('.seg-btn');
     if (!btn || btn.classList.contains('disabled')) return;
     seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    if (seg.id === 'fmtSegs') updateFormatOpts();
-    if (['layoutSegs','solutionSegs','numSegs','diffLabelSegs'].includes(seg.id)) updatePreview();
-    if (seg.id === 'genSizeSegs') applyGenDiffRestrictions(parseInt(btn.dataset.val));
+    const id = seg.id;
+    if (id === 'fmtSegs') syncFmtOpts();
+    if (['layoutSegs','solSegs','numSegs','diffSegs'].includes(id)) updatePreview();
+    if (id === 'gSzSegs') applyGenRestrict(parseInt(btn.dataset.val));
   });
 });
 
-function updateFormatOpts() {
+function syncFmtOpts() {
   const fmt = segVal('fmtSegs');
-  $('pngOpts').classList.toggle('open', fmt === 'png');
-  $('qrOpts').classList.toggle('open', fmt === 'qr');
+  ['pdf','pdf-qr','png','qr'].forEach(f => {
+    const el = $('opt' + {pdf:'Pdf','pdf-qr':'PdfQr',png:'Png',qr:'Qr'}[f]);
+    if (el) el.classList.toggle('open', fmt === f);
+  });
 }
 
-// ── Gen diff restrictions (same as play) ──────────────────────────────────────
-function applyGenDiffRestrictions(size) {
-  const btns = [...$('genDiffSegs').querySelectorAll('.seg-btn')];
+// ── Gen restrictions ──────────────────────────────────────────────────────────
+function applyGenRestrict(size) {
+  const btns = [...$('gDfSegs').querySelectorAll('.seg-btn')];
   btns.forEach(b => b.classList.remove('disabled'));
   if (size === 9) {
     btns.forEach(b => { if (b.dataset.val !== 'any') b.classList.add('disabled'); });
-    if (segVal('genDiffSegs') !== 'any') {
-      btns.forEach(b => b.classList.remove('active'));
-      $('genDiffSegs').querySelector('[data-val="any"]').classList.add('active');
-    }
+    if (segVal('gDfSegs') !== 'any') { btns.forEach(b => b.classList.remove('active')); $('gDfSegs').querySelector('[data-val="any"]').classList.add('active'); }
   } else if (size === 8) {
-    btns.forEach(b => { if (b.dataset.val === 'Beyond Diabolical') b.classList.add('disabled'); });
-    if (segVal('genDiffSegs') === 'Beyond Diabolical') {
-      btns.forEach(b => b.classList.remove('active'));
-      $('genDiffSegs').querySelector('[data-val="any"]').classList.add('active');
-    }
+    const bd = $('gDfSegs').querySelector('[data-val="Beyond Diabolical"]');
+    bd.classList.add('disabled');
+    if (segVal('gDfSegs') === 'Beyond Diabolical') { btns.forEach(b => b.classList.remove('active')); $('gDfSegs').querySelector('[data-val="any"]').classList.add('active'); }
   }
 }
 
-// ── Puzzle queue ──────────────────────────────────────────────────────────────
-let queue = []; // { puz, difficulty, solution, encoded }
+// ── Queue ─────────────────────────────────────────────────────────────────────
+let queue = [];
 
 function addFromString() {
-  const str = $('strInput').value.trim();
-  if (!str) return;
-  try {
-    const puz = JSON.parse(atob(str));
-    addPuzzle(puz, str);
-    $('strInput').value = '';
-  } catch(e) { alert('Invalid puzzle string.'); }
+  const s = $('strInput').value.trim(); if (!s) return;
+  try { addPuzzle(JSON.parse(atob(s)), s); $('strInput').value = ''; }
+  catch(e) { alert('Invalid puzzle string.'); }
 }
 
-function addPuzzle(puz, encoded) {
-  const result = MathdokuSolver.solve(puz, { maxSolutions: 1 });
-  if (!result) { alert('This puzzle has no solution.'); return; }
+function addPuzzle(puz, enc) {
+  const res = MathdokuSolver.solve(puz, {maxSolutions:1});
+  if (!res) { alert('No solution found.'); return; }
   const rating = MathdokuSolver.rate(puz);
-  encoded = encoded || btoa(JSON.stringify({ size: puz.size, cages: puz.cages, givens: puz.givens || [] }));
-  queue.push({ puz, difficulty: rating.difficulty, solution: result.grid, encoded });
-  renderQueue();
-  updatePreview();
+  enc = enc || btoa(JSON.stringify({size:puz.size, cages:puz.cages, givens:puz.givens||[]}));
+  queue.push({puz, rating, solution:res.grid, enc});
+  renderQueue(); updatePreview();
 }
 
-function removePuzzle(idx) {
-  queue.splice(idx, 1);
-  renderQueue();
-  updatePreview();
-}
+function removePuzzle(i) { queue.splice(i,1); renderQueue(); updatePreview(); }
 
 function renderQueue() {
-  const list = $('queueList');
-  if (!queue.length) {
-    list.innerHTML = '<div id="emptyQueue">No puzzles added yet.</div>';
-    $('exportBtn').disabled = true;
-    return;
-  }
+  const el = $('queueList');
+  if (!queue.length) { el.innerHTML='<p id="emptyQ" style="color:var(--muted);font-size:.8rem;text-align:center;padding:20px 0;">No puzzles yet.</p>'; $('exportBtn').disabled=true; return; }
   $('exportBtn').disabled = false;
-  list.innerHTML = queue.map((item, i) =>
+  el.innerHTML = queue.map((item,i) =>
     `<div class="q-item">
       <div class="q-item-info">
         <div class="q-name">#${i+1} · ${item.puz.size}×${item.puz.size}</div>
-        <div class="q-meta">${item.difficulty}</div>
+        <div class="q-meta">${item.rating.difficulty} · ${item.rating.score}</div>
       </div>
-      <div class="q-item-btns">
-        <button class="q-rm" onclick="removePuzzle(${i})">✕</button>
-      </div>
+      <button class="q-rm" onclick="removePuzzle(${i})">✕</button>
     </div>`
   ).join('');
 }
 
 // ── Generation ────────────────────────────────────────────────────────────────
-const DIFF_BANDS = {
-  'Easy':[0,.5],'Medium':[.5,1.2],'Hard':[1.2,1.6],'Vicious':[1.6,2.5],
-  'Devilish':[2.5,3.4],'Diabolical':[3.4,5.0],'Beyond Diabolical':[5.0,Infinity],
-};
-function diffProximity(score, t) {
+const DIFF_BANDS = {'Easy':[0,.5],'Medium':[.5,1.2],'Hard':[1.2,1.6],'Vicious':[1.6,2.5],'Devilish':[2.5,3.4],'Diabolical':[3.4,5],'Beyond Diabolical':[5,Infinity]};
+function diffProx(score,t) {
   if (t==='any') return 0;
-  const b = DIFF_BANDS[t]; if (!b) return Infinity;
-  if (score>=b[0] && score<b[1]) return 0;
-  return score<b[0] ? b[0]-score : score-b[1];
+  const b=DIFF_BANDS[t]; if (!b) return Infinity;
+  if (score>=b[0]&&score<b[1]) return 0;
+  return score<b[0]?b[0]-score:score-b[1];
 }
 
 let genRunning=false, genBestPuz=null, genBestProx=Infinity;
 
-function stopGenerate() {
-  genRunning = false;
-  $('genInline').classList.remove('open');
-  $('genStartBtn').disabled = false;
-}
+function stopGen() { genRunning=false; $('genInline').classList.remove('open'); $('genBtn').disabled=false; }
 
-async function startGenerate() {
-  const size = parseInt(segVal('genSizeSegs'));
-  const diff = segVal('genDiffSegs');
-  const uniq = segVal('genUniqSegs');
+async function startGen() {
+  const size=parseInt(segVal('gSzSegs')), diff=segVal('gDfSegs'), uniq=segVal('gUnSegs');
   genRunning=true; genBestPuz=null; genBestProx=Infinity;
-  $('genStartBtn').disabled=true;
-  $('genInline').classList.add('open');
-  $('genAttempts').textContent='0'; $('genBest').textContent='—';
-  $('genAcceptBtn').style.display='none';
+  $('genBtn').disabled=true; $('genInline').classList.add('open');
+  $('genAtt').textContent='0'; $('genBst').textContent='—'; $('genAccBtn').style.display='none';
   await sleep(0);
   let att=0;
-  while(genRunning) {
+  while (genRunning) {
     att++;
-    const puz = randomPuzzle(size);
-    const sr = MathdokuSolver.solve(puz,{maxSolutions:2});
+    const puz=randomPuzzle(size);
+    const sr=MathdokuSolver.solve(puz,{maxSolutions:2});
     if (!sr) { await maybeYield(att); continue; }
-    const isUniq = sr.solutions.length===1;
+    const isUniq=sr.solutions.length===1;
     if (uniq==='guaranteed'&&!isUniq) { await maybeYield(att); continue; }
-    if (uniq==='only'&&isUniq)        { await maybeYield(att); continue; }
-    const rating = MathdokuSolver.rate(puz);
-    const prox = diffProximity(rating.score, diff);
-    if (prox < genBestProx) {
+    if (uniq==='only'&&isUniq) { await maybeYield(att); continue; }
+    const rating=MathdokuSolver.rate(puz);
+    const prox=diffProx(rating.score,diff);
+    if (prox<genBestProx) {
       genBestProx=prox; genBestPuz=puz;
-      $('genBest').textContent = rating.difficulty+' ('+rating.score+')';
-      $('genAcceptBtn').style.display='';
+      $('genBst').textContent=rating.difficulty+' ('+rating.score+')';
+      $('genAccBtn').style.display='';
     }
     await maybeYield(att);
     if (!genRunning) return;
-    if (prox===0) { stopGenerate(); addPuzzle(puz); return; }
+    if (prox===0) { stopGen(); addPuzzle(puz); return; }
   }
 }
+function acceptGen() { if (genBestPuz) { stopGen(); addPuzzle(genBestPuz); } }
+async function maybeYield(att) { if (att%3===0) { $('genAtt').textContent=att; await sleep(0); } }
 
-function acceptGenBest() {
-  if (!genBestPuz) return;
-  stopGenerate();
-  addPuzzle(genBestPuz);
-}
-
-async function maybeYield(att) {
-  if (att%3===0) { $('genAttempts').textContent=att; await sleep(0); }
-}
-
-// ── Latin square + cage carving (same as play) ────────────────────────────────
-function randomPuzzle(size) {
-  return { size, cages: carveCages(randomLatinSquare(size), size), givens: [] };
-}
+// ── Puzzle builders ───────────────────────────────────────────────────────────
+function randomPuzzle(size) { return {size,cages:carveCages(randomLatinSquare(size),size),givens:[]}; }
 function randomLatinSquare(size) {
-  const grid=Array.from({length:size},()=>new Array(size).fill(0));
-  const rU=new Array(size).fill(0), cU=new Array(size).fill(0);
+  const g=Array.from({length:size},()=>new Array(size).fill(0));
+  const rU=new Array(size).fill(0),cU=new Array(size).fill(0);
   function bt(pos) {
     if (pos===size*size) return true;
-    const r=Math.floor(pos/size),c=pos%size;
-    const used=rU[r]|cU[c];
+    const r=Math.floor(pos/size),c=pos%size,used=rU[r]|cU[c];
     for (const v of shuffle(Array.from({length:size},(_,i)=>i+1))) {
       const bit=1<<v; if (used&bit) continue;
-      grid[r][c]=v; rU[r]|=bit; cU[c]|=bit;
+      g[r][c]=v; rU[r]|=bit; cU[c]|=bit;
       if (bt(pos+1)) return true;
-      grid[r][c]=0; rU[r]&=~bit; cU[c]&=~bit;
+      g[r][c]=0; rU[r]&=~bit; cU[c]&=~bit;
     }
     return false;
   }
-  bt(0); return grid;
+  bt(0); return g;
 }
 function carveCages(grid,size) {
-  const assigned=Array.from({length:size},()=>new Array(size).fill(false));
-  const cages=[];
+  const asgn=Array.from({length:size},()=>new Array(size).fill(false)),cages=[];
   for (const flat of shuffle(Array.from({length:size*size},(_,i)=>i))) {
     const r=Math.floor(flat/size),c=flat%size;
-    if (assigned[r][c]) continue;
-    const cells=[[r,c]]; assigned[r][c]=true;
-    const maxSz=size<=5?4:size<=7?3:2;
-    for (let t=0;t<maxSz-1;t++) {
+    if (asgn[r][c]) continue;
+    const cells=[[r,c]]; asgn[r][c]=true;
+    const mx=size<=5?4:size<=7?3:2;
+    for (let t=0;t<mx-1;t++) {
       const cands=[];
-      for (const [cr,cc] of cells)
-        for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-          const nr=cr+dr,nc=cc+dc;
-          if (nr>=0&&nr<size&&nc>=0&&nc<size&&!assigned[nr][nc]) cands.push([nr,nc]);
-        }
+      for (const [cr,cc] of cells) for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const nr=cr+dr,nc=cc+dc;
+        if (nr>=0&&nr<size&&nc>=0&&nc<size&&!asgn[nr][nc]) cands.push([nr,nc]);
+      }
       if (!cands.length) break;
       const [nr,nc]=cands[Math.floor(Math.random()*cands.length)];
-      cells.push([nr,nc]); assigned[nr][nc]=true;
+      cells.push([nr,nc]); asgn[nr][nc]=true;
     }
     const vals=cells.map(([cr,cc])=>grid[cr][cc]);
     cages.push({id:Date.now()+cages.length,cells,...chooseOp(vals)});
@@ -488,212 +436,176 @@ function carveCages(grid,size) {
 }
 function chooseOp(vals) {
   if (vals.length===1) return {op:'=',target:vals[0]};
-  const ops=['+','*'];
-  const sorted=[...vals].sort((a,b)=>b-a);
-  const sub=sorted.slice(1).reduce((a,v)=>a-v,sorted[0]);
-  const div=sorted.slice(1).reduce((a,v)=>a/v,sorted[0]);
+  const ops=['+','*'],s=[...vals].sort((a,b)=>b-a);
+  const sub=s.slice(1).reduce((a,v)=>a-v,s[0]),div=s.slice(1).reduce((a,v)=>a/v,s[0]);
   if (sub>0) ops.push('-');
   if (Number.isInteger(div)&&div>0) ops.push('/');
   const op=ops[Math.floor(Math.random()*ops.length)];
-  const target=op==='+'?vals.reduce((a,b)=>a+b,0):op==='*'?vals.reduce((a,b)=>a*b,1):op==='-'?sub:div;
-  return {op,target};
+  return {op,target:op==='+'?vals.reduce((a,b)=>a+b,0):op==='*'?vals.reduce((a,b)=>a*b,1):op==='-'?sub:div};
 }
-function shuffle(arr) {
-  for (let i=arr.length-1;i>0;i--) { const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
-  return arr;
-}
+function shuffle(arr) { for (let i=arr.length-1;i>0;i--) { const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
 
-// ── Canvas puzzle renderer ────────────────────────────────────────────────────
-function renderPuzzleToCanvas(item, opts={}) {
-  const { puz, solution } = item;
-  const N = puz.size;
-  const showSolution = opts.showSolution || false;
-  const px = opts.px || 600;
+// ── Canvas renderer ───────────────────────────────────────────────────────────
+function puzzleToCanvas(item, px, showSol) {
+  const {puz,solution}=item, N=puz.size;
+  const PAD=Math.round(px*.045), g=px-PAD*2, cell=g/N;
+  const cv=document.createElement('canvas'); cv.width=px; cv.height=px;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,px,px);
 
-  const PAD = Math.round(px * 0.04);
-  const gridPx = px - PAD*2;
-  const cell = gridPx / N;
-  const canvas = document.createElement('canvas');
-  canvas.width = px;
-  canvas.height = px;
-  const ctx = canvas.getContext('2d');
+  const c2cage=Array.from({length:N},()=>new Array(N).fill(-1));
+  puz.cages.forEach((cage,ci)=>cage.cells.forEach(([r,c])=>c2cage[r][c]=ci));
 
-  // White background
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0,0,px,px);
+  const THIN=Math.max(1,Math.round(cell*.018)), THICK=Math.max(2,Math.round(cell*.065));
 
-  // Cell to cage map
-  const cellToCage = Array.from({length:N},()=>new Array(N).fill(-1));
-  puz.cages.forEach((cage,ci)=>cage.cells.forEach(([r,c])=>cellToCage[r][c]=ci));
-
-  const THIN = Math.max(1, Math.round(cell*0.02));
-  const THICK = Math.max(2, Math.round(cell*0.07));
-
-  // Draw cells
-  for (let r=0;r<N;r++) {
-    for (let c=0;c<N;c++) {
-      const x=PAD+c*cell, y=PAD+r*cell;
-      ctx.fillStyle='#fff';
-      ctx.fillRect(x,y,cell,cell);
-
-      if (showSolution) {
-        ctx.fillStyle='#111';
-        ctx.font=`bold ${Math.round(cell*0.5)}px Segoe UI,sans-serif`;
-        ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.fillText(solution[r][c], x+cell/2, y+cell/2);
-      }
+  for (let r=0;r<N;r++) for (let c=0;c<N;c++) {
+    const x=PAD+c*cell, y=PAD+r*cell;
+    const ci=c2cage[r][c], cage=ci!==-1?puz.cages[ci]:null;
+    const inC=(rr,cc)=>cage&&cage.cells.some(([a,b])=>a===rr&&b===cc);
+    ctx.strokeStyle='#111';
+    const sides=[
+      [r===0||!inC(r-1,c)?THICK:THIN, x,y,x+cell,y],
+      [r===N-1||!inC(r+1,c)?THICK:THIN, x,y+cell,x+cell,y+cell],
+      [c===0||!inC(r,c-1)?THICK:THIN, x,y,x,y+cell],
+      [c===N-1||!inC(r,c+1)?THICK:THIN, x+cell,y,x+cell,y+cell],
+    ];
+    for (const [lw,x1,y1,x2,y2] of sides) {
+      ctx.lineWidth=lw; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    }
+    if (showSol) {
+      ctx.fillStyle='#111'; ctx.font=`bold ${Math.round(cell*.48)}px Segoe UI,sans-serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(solution[r][c],x+cell/2,y+cell/2);
     }
   }
 
-  // Draw cage borders
-  for (let r=0;r<N;r++) {
-    for (let c=0;c<N;c++) {
-      const x=PAD+c*cell, y=PAD+r*cell;
-      const ci=cellToCage[r][c];
-      const cage=ci!==-1?puz.cages[ci]:null;
-      const inCage=(rr,cc)=>cage&&cage.cells.some(([a,b])=>a===rr&&b===cc);
-
-      ctx.strokeStyle='#111';
-
-      // Top
-      ctx.lineWidth=(r===0||!inCage(r-1,c))?THICK:THIN;
-      ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+cell,y); ctx.stroke();
-      // Bottom
-      ctx.lineWidth=(r===N-1||!inCage(r+1,c))?THICK:THIN;
-      ctx.beginPath(); ctx.moveTo(x,y+cell); ctx.lineTo(x+cell,y+cell); ctx.stroke();
-      // Left
-      ctx.lineWidth=(c===0||!inCage(r,c-1))?THICK:THIN;
-      ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x,y+cell); ctx.stroke();
-      // Right
-      ctx.lineWidth=(c===N-1||!inCage(r,c+1))?THICK:THIN;
-      ctx.beginPath(); ctx.moveTo(x+cell,y); ctx.lineTo(x+cell,y+cell); ctx.stroke();
-    }
+  // Cage labels
+  for (let r=0;r<N;r++) for (let c=0;c<N;c++) {
+    const ci=c2cage[r][c]; if (ci===-1) continue;
+    const cage=puz.cages[ci];
+    const sorted=[...cage.cells].sort((a,b)=>(a[0]*N+a[1])-(b[0]*N+b[1]));
+    if (sorted[0][0]!==r||sorted[0][1]!==c) continue;
+    const x=PAD+c*cell, y=PAD+r*cell;
+    const fs=Math.round(cell*.21);
+    ctx.fillStyle='#111'; ctx.font=`bold ${fs}px Segoe UI,sans-serif`;
+    ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillText(cage.target+(cage.op==='='?'':cage.op), x+THICK+2, y+THICK+1);
   }
 
-  // Draw cage labels
-  for (let r=0;r<N;r++) {
-    for (let c=0;c<N;c++) {
-      const ci=cellToCage[r][c];
-      if (ci===-1) continue;
-      const cage=puz.cages[ci];
-      const sorted=[...cage.cells].sort((a,b)=>(a[0]*N+a[1])-(b[0]*N+b[1]));
-      if (sorted[0][0]!==r||sorted[0][1]!==c) continue;
-      const x=PAD+c*cell, y=PAD+r*cell;
-      const lblSize=Math.round(cell*0.22);
-      ctx.fillStyle='#111';
-      ctx.font=`bold ${lblSize}px Segoe UI,sans-serif`;
-      ctx.textAlign='left'; ctx.textBaseline='top';
-      ctx.fillText(cage.target+(cage.op==='='?'':cage.op), x+THICK+2, y+THICK+1);
-    }
-  }
-
-  // Outer border
-  ctx.strokeStyle='#111';
-  ctx.lineWidth=THICK*1.5;
-  ctx.strokeRect(PAD,PAD,gridPx,gridPx);
-
-  return canvas;
+  ctx.strokeStyle='#111'; ctx.lineWidth=THICK*1.5;
+  ctx.strokeRect(PAD,PAD,g,g);
+  return cv;
 }
 
-// ── QR code generation ────────────────────────────────────────────────────────
-function makeQRCanvas(encoded, size=200) {
-  const wrap = document.createElement('div');
-  wrap.style.cssText='position:absolute;left:-9999px;top:-9999px;';
-  document.body.appendChild(wrap);
-  new QRCode(wrap, {
-    text: location.origin + location.pathname.replace('print.html','play.html') + '?p=' + encoded,
-    width: size, height: size, correctLevel: QRCode.CorrectLevel.M,
-  });
-  const img = wrap.querySelector('img') || wrap.querySelector('canvas');
-  return new Promise(res => {
-    const done = () => {
-      const c=document.createElement('canvas');
-      c.width=size; c.height=size;
-      const ctx=c.getContext('2d');
-      ctx.drawImage(img,0,0,size,size);
-      document.body.removeChild(wrap);
-      res(c);
+// ── QR via canvas (no external lib needed) ────────────────────────────────────
+// Uses the free QR API to get a PNG, draws it to a canvas
+function qrToCanvas(enc, size) {
+  return new Promise((res,rej) => {
+    const url = 'https://api.qrserver.com/v1/create-qr-code/?size='+size+'x'+size+'&data='
+      + encodeURIComponent(location.origin+location.pathname.replace('print.html','play.html')+'?p='+enc);
+    const img = new Image(); img.crossOrigin='anonymous';
+    img.onload = () => {
+      const cv=document.createElement('canvas'); cv.width=size; cv.height=size;
+      cv.getContext('2d').drawImage(img,0,0,size,size);
+      res(cv);
     };
-    if (img.tagName==='IMG') { if (img.complete) done(); else img.onload=done; }
-    else done();
+    img.onerror = () => rej(new Error('QR fetch failed'));
+    img.src = url;
   });
+}
+
+// ── Difficulty label text ─────────────────────────────────────────────────────
+function diffText(item) {
+  const mode = segVal('diffSegs');
+  if (mode==='none') return '';
+  if (mode==='name') return item.rating.difficulty;
+  return item.rating.difficulty+' ('+item.rating.score+')';
 }
 
 // ── Preview ───────────────────────────────────────────────────────────────────
 function updatePreview() {
-  const preview = $('preview');
-  if (!queue.length) {
-    preview.innerHTML='<p style="color:#999;font-size:.8rem;text-align:center;padding:32px 0;">Add puzzles to see a preview.</p>';
-    return;
-  }
-  const layout = parseInt(segVal('layoutSegs'));
-  const showNum = segVal('numSegs')==='yes';
-  const showDiff = segVal('diffLabelSegs')==='yes';
-  const showSol = segVal('solutionSegs');
-  const title = $('sheetTitle').value.trim();
-
-  preview.innerHTML='';
-
-  // Group into pages
+  const pv=$('preview');
+  if (!queue.length) { pv.innerHTML='<p style="color:#999;font-size:.8rem;text-align:center;padding:24px 0;">Add puzzles to preview.</p>'; return; }
+  const layout=parseInt(segVal('layoutSegs'));
+  const cols=layout<=2?layout:2;
+  const showSol=segVal('solSegs');
+  const showNum=segVal('numSegs')==='yes';
+  const title=$('sheetTitle').value.trim();
+  // px per puzzle in preview: smaller for more per page
+  const pvPx = layout===1?280:layout===2?220:160;
+  pv.innerHTML='';
   const pages=[];
   for (let i=0;i<queue.length;i+=layout) pages.push(queue.slice(i,i+layout));
-
   pages.forEach((page,pi) => {
     const pageEl=document.createElement('div');
-    pageEl.className='preview-page layout-'+layout;
-    pageEl.style.cssText='background:#fff;padding:16px;display:grid;gap:12px;grid-template-columns:repeat('+Math.min(layout,2)+',1fr);';
+    pageEl.className='prev-page';
+    pageEl.style.cssText=`background:#fff;padding:12px;display:grid;gap:8px;grid-template-columns:repeat(${cols},1fr);margin-bottom:8px;border-radius:8px;`;
     if (pi===0&&title) {
       const t=document.createElement('div');
-      t.style.cssText='grid-column:1/-1;text-align:center;font-size:13px;font-weight:900;color:#111;padding-bottom:8px;border-bottom:2px solid #111;margin-bottom:4px;font-family:sans-serif;';
-      t.textContent=title;
-      pageEl.appendChild(t);
+      t.style.cssText=`grid-column:1/-1;text-align:center;font-size:12px;font-weight:900;color:#111;padding-bottom:6px;border-bottom:2px solid #111;font-family:sans-serif;`;
+      t.textContent=title; pageEl.appendChild(t);
     }
     page.forEach((item,j) => {
       const idx=pi*layout+j;
       const wrap=document.createElement('div');
-      wrap.className='preview-puzzle';
-      const c=renderPuzzleToCanvas(item,{px:300,showSolution:false});
-      c.style.cssText='width:100%;height:auto;max-width:260px;border:1px solid #ddd;';
-      wrap.appendChild(c);
-      if (showNum||showDiff) {
+      wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:3px;';
+      const cv=puzzleToCanvas(item,pvPx,false);
+      cv.style.cssText='width:100%;height:auto;border:1px solid #ddd;';
+      wrap.appendChild(cv);
+      const dt=diffText(item);
+      if (showNum||dt) {
         const lbl=document.createElement('div');
         lbl.style.cssText='font-family:sans-serif;text-align:center;';
-        if (showNum) lbl.innerHTML+='<div style="font-size:10px;font-weight:900;color:#111;">#'+(idx+1)+'</div>';
-        if (showDiff) lbl.innerHTML+='<div style="font-size:9px;color:#666;">'+item.difficulty+'</div>';
+        if (showNum) lbl.innerHTML+=`<span style="font-size:9px;font-weight:900;color:#111;">#${idx+1}</span> `;
+        if (dt) lbl.innerHTML+=`<span style="font-size:8px;color:#555;">${dt}</span>`;
         wrap.appendChild(lbl);
       }
       if (showSol==='below') {
-        const sc=renderPuzzleToCanvas(item,{px:300,showSolution:true});
-        sc.style.cssText='width:100%;height:auto;max-width:260px;border:1px solid #ddd;margin-top:4px;opacity:.7;';
+        const sc=puzzleToCanvas(item,pvPx,true);
+        sc.style.cssText='width:100%;height:auto;border:1px solid #ddd;opacity:.75;margin-top:2px;';
         wrap.appendChild(sc);
       }
       pageEl.appendChild(wrap);
     });
-    preview.appendChild(pageEl);
-    if (pi<pages.length-1) {
-      const div=document.createElement('div');
-      div.style.cssText='height:2px;background:var(--border);margin:4px 0;';
-      preview.appendChild(div);
-    }
+    pv.appendChild(pageEl);
+    if (pi<pages.length-1) { const hr=document.createElement('div'); hr.style.cssText='height:1px;background:#ddd;margin:4px 0;'; pv.appendChild(hr); }
   });
 }
 
 // ── Export ────────────────────────────────────────────────────────────────────
 async function doExport() {
-  const fmt = segVal('fmtSegs');
-  if (fmt==='pdf'||fmt==='pdf-qr') await exportPDF(fmt==='pdf-qr');
-  else if (fmt==='png') await exportPNG();
-  else if (fmt==='qr') await exportQR();
+  const fmt=segVal('fmtSegs');
+  $('exportBtn').disabled=true;
+  $('exportBtn').textContent='Exporting…';
+  try {
+    if (fmt==='pdf'||fmt==='pdf-qr') await exportPDF(fmt==='pdf-qr');
+    else if (fmt==='png') await exportPNG();
+    else if (fmt==='qr') await exportQROnly();
+  } finally {
+    $('exportBtn').disabled=false;
+    $('exportBtn').textContent='Export';
+  }
 }
 
-async function exportPDF(withQR=false) {
+// cells-per-row for layout
+function layoutCols(layout) { return layout<=2?layout:2; }
+
+async function exportPDF(withQR) {
   const layout=parseInt(segVal('layoutSegs'));
-  const showSol=segVal('solutionSegs');
-  const showNum=segVal('numSegs')==='yes';
-  const showDiff=segVal('diffLabelSegs')==='yes';
+  const orient=segVal(withQR?'pdfqrOrientSegs':'pdfOrientSegs');
+  const isLand=orient==='landscape';
+  const qrSz=withQR?parseInt(segVal('qrSzSegs')):0;
+  const showSol=segVal('solSegs'), showNum=segVal('numSegs')==='yes';
   const title=$('sheetTitle').value.trim();
-  const area=$('printArea');
-  area.innerHTML='';
+  const cols=layoutCols(layout);
+  // px for canvas: higher res for print
+  const puzPx=900;
+  const area=$('printArea'); area.innerHTML='';
+
+  // inject orientation style
+  let styleEl=$('printOrientStyle');
+  if (!styleEl) { styleEl=document.createElement('style'); styleEl.id='printOrientStyle'; document.head.appendChild(styleEl); }
+  styleEl.textContent=`@media print { @page { size: ${isLand?'landscape':'portrait'}; } }`;
 
   const pages=[];
   for (let i=0;i<queue.length;i+=layout) pages.push(queue.slice(i,i+layout));
@@ -701,67 +613,69 @@ async function exportPDF(withQR=false) {
   for (let pi=0;pi<pages.length;pi++) {
     const page=pages[pi];
     const pageEl=document.createElement('div');
-    pageEl.className='print-page layout-'+layout;
-    pageEl.style.cssText='background:#fff;padding:20mm;display:grid;gap:16mm;grid-template-columns:repeat('+Math.min(layout,2)+',1fr);';
+    pageEl.style.cssText=`background:#fff;padding:12mm;display:grid;gap:8mm;grid-template-columns:repeat(${cols},1fr);page-break-after:always;`;
     if (pi===0&&title) {
       const t=document.createElement('div');
-      t.style.cssText='grid-column:1/-1;text-align:center;font-size:16pt;font-weight:900;color:#111;padding-bottom:8pt;border-bottom:3pt solid #111;margin-bottom:4pt;font-family:sans-serif;';
-      t.textContent=title;
-      pageEl.appendChild(t);
+      t.style.cssText=`grid-column:1/-1;text-align:center;font-size:15pt;font-weight:900;color:#111;padding-bottom:6pt;border-bottom:2pt solid #111;font-family:sans-serif;`;
+      t.textContent=title; pageEl.appendChild(t);
     }
     for (let j=0;j<page.length;j++) {
-      const item=page[j]; const idx=pi*layout+j;
+      const item=page[j], idx=pi*layout+j;
       const wrap=document.createElement('div');
-      wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:6pt;';
-      const c=renderPuzzleToCanvas(item,{px:800,showSolution:false});
-      c.style.cssText='width:100%;height:auto;';
-      wrap.appendChild(c);
-      const meta=document.createElement('div');
-      meta.style.cssText='font-family:sans-serif;text-align:center;';
-      if (showNum) meta.innerHTML+='<div style="font-size:9pt;font-weight:900;color:#111;">#'+(idx+1)+'</div>';
-      if (showDiff) meta.innerHTML+='<div style="font-size:8pt;color:#555;">'+item.difficulty+'</div>';
+      wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4pt;';
+      const cv=puzzleToCanvas(item,puzPx,false);
+      cv.style.cssText='width:100%;height:auto;';
+      wrap.appendChild(cv);
       if (withQR) {
-        const qc=await makeQRCanvas(item.encoded,120);
-        qc.style.cssText='margin-top:4pt;';
-        wrap.appendChild(qc);
+        try {
+          const qc=await qrToCanvas(item.enc,qrSz);
+          qc.style.cssText='margin-top:3pt;';
+          wrap.appendChild(qc);
+        } catch(e) { /* QR fetch failed, skip */ }
       }
-      wrap.appendChild(meta);
+      const dt=diffText(item);
+      if (showNum||dt) {
+        const lbl=document.createElement('div');
+        lbl.style.cssText='font-family:sans-serif;text-align:center;';
+        if (showNum) lbl.innerHTML+=`<div style="font-size:9pt;font-weight:900;color:#111;">#${idx+1}</div>`;
+        if (dt) lbl.innerHTML+=`<div style="font-size:8pt;color:#555;">${dt}</div>`;
+        wrap.appendChild(lbl);
+      }
       pageEl.appendChild(wrap);
     }
     area.appendChild(pageEl);
-
-    if (showSol==='below') { /* already included above */ }
   }
 
   // Solution pages
-  if (showSol==='page') {
-    const solPages=[];
-    for (let i=0;i<queue.length;i+=layout) solPages.push(queue.slice(i,i+layout));
-    solPages.forEach((page,pi) => {
+  if (showSol==='below') {
+    // already inline — add solution grids below each puzzle
+    const puzzleWraps=[...area.querySelectorAll('[style*="flex-direction:column"]')];
+    for (let i=0;i<queue.length;i++) {
+      const sc=puzzleToCanvas(queue[i],puzPx,true);
+      sc.style.cssText='width:100%;height:auto;opacity:.8;margin-top:3pt;';
+      if (puzzleWraps[i]) puzzleWraps[i].appendChild(sc);
+    }
+  } else if (showSol==='page') {
+    for (let pi=0;pi<pages.length;pi++) {
+      const page=pages[pi];
       const pageEl=document.createElement('div');
-      pageEl.className='print-page layout-'+layout;
-      pageEl.style.cssText='background:#fff;padding:20mm;display:grid;gap:16mm;grid-template-columns:repeat('+Math.min(layout,2)+',1fr);page-break-before:always;';
+      pageEl.style.cssText=`background:#fff;padding:12mm;display:grid;gap:8mm;grid-template-columns:repeat(${cols},1fr);page-break-before:always;`;
       const hdr=document.createElement('div');
-      hdr.style.cssText='grid-column:1/-1;text-align:center;font-size:14pt;font-weight:900;color:#111;font-family:sans-serif;';
+      hdr.style.cssText=`grid-column:1/-1;text-align:center;font-size:13pt;font-weight:900;color:#111;font-family:sans-serif;margin-bottom:4pt;`;
       hdr.textContent='Solutions'+(title?' — '+title:'');
       pageEl.appendChild(hdr);
-      page.forEach((item,j) => {
-        const idx=pi*layout+j;
+      for (let j=0;j<page.length;j++) {
+        const item=page[j],idx=pi*layout+j;
         const wrap=document.createElement('div');
-        wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4pt;';
-        const c=renderPuzzleToCanvas(item,{px:800,showSolution:true});
-        c.style.cssText='width:100%;height:auto;';
-        wrap.appendChild(c);
-        if (showNum) {
-          const lbl=document.createElement('div');
-          lbl.style.cssText='font-size:8pt;color:#555;font-family:sans-serif;';
-          lbl.textContent='#'+(idx+1);
-          wrap.appendChild(lbl);
-        }
+        wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:3pt;';
+        const sc=puzzleToCanvas(item,puzPx,true);
+        sc.style.cssText='width:100%;height:auto;';
+        wrap.appendChild(sc);
+        if (showNum) { const l=document.createElement('div'); l.style.cssText='font-size:8pt;color:#555;font-family:sans-serif;'; l.textContent='#'+(idx+1); wrap.appendChild(l); }
         pageEl.appendChild(wrap);
-      });
+      }
       area.appendChild(pageEl);
-    });
+    }
   }
 
   window.print();
@@ -769,91 +683,71 @@ async function exportPDF(withQR=false) {
 
 async function exportPNG() {
   const px=parseInt($('pngPx').value)||1200;
-  const zip=segVal('zipSegs');
-  const showSol=segVal('solutionSegs');
-  const showNum=segVal('numSegs')==='yes';
-  const showDiff=segVal('diffLabelSegs')==='yes';
-  const doZip=(zip==='yes')||(zip==='auto'&&queue.length>1);
-
+  const zip=segVal('pngZipSegs');
+  const showSol=segVal('solSegs'), showNum=segVal('numSegs')==='yes';
+  const doZip=zip==='yes'||(zip==='auto'&&queue.length>1);
   const blobs=[];
+
   for (let i=0;i<queue.length;i++) {
     const item=queue[i];
-    const c=renderPuzzleToCanvas(item,{px,showSolution:false});
-
-    // Add label bar below if needed
-    if (showNum||showDiff||showSol==='below') {
-      const labelH=Math.round(px*0.08);
-      const solH=showSol==='below'?px:0;
-      const total=document.createElement('canvas');
-      total.width=px; total.height=px+labelH+solH;
-      const ctx=total.getContext('2d');
-      ctx.fillStyle='#fff'; ctx.fillRect(0,0,total.width,total.height);
-      ctx.drawImage(c,0,0);
-      if (showNum||showDiff) {
-        ctx.fillStyle='#111';
-        if (showNum) { ctx.font=`bold ${Math.round(labelH*.45)}px Segoe UI,sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('#'+(i+1),px/2,px+labelH*.3); }
-        if (showDiff) { ctx.font=`${Math.round(labelH*.35)}px Segoe UI,sans-serif`; ctx.fillStyle='#555'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(item.difficulty,px/2,px+labelH*.7); }
-      }
-      if (showSol==='below') {
-        const sc=renderPuzzleToCanvas(item,{px,showSolution:true});
-        ctx.drawImage(sc,0,px+labelH);
-      }
-      blobs.push({name:'puzzle_'+(i+1)+'.png', canvas:total});
-    } else {
-      blobs.push({name:'puzzle_'+(i+1)+'.png', canvas:c});
+    const labelH=Math.round(px*.07);
+    const dt=diffText(item);
+    const hasLabel=showNum||dt;
+    const solH=showSol==='below'?px:0;
+    const totalH=px+(hasLabel?labelH:0)+solH;
+    const cv=document.createElement('canvas'); cv.width=px; cv.height=totalH;
+    const ctx=cv.getContext('2d');
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,px,totalH);
+    ctx.drawImage(puzzleToCanvas(item,px,false),0,0);
+    let y=px;
+    if (hasLabel) {
+      ctx.fillStyle='#111'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      if (showNum) { ctx.font=`bold ${Math.round(labelH*.42)}px Segoe UI,sans-serif`; ctx.fillText('#'+(i+1),px/2,y+labelH*.3); }
+      if (dt) { ctx.font=`${Math.round(labelH*.33)}px Segoe UI,sans-serif`; ctx.fillStyle='#555'; ctx.fillText(dt,px/2,y+labelH*(showNum?.72:.5)); }
+      y+=labelH;
     }
+    if (showSol==='below') ctx.drawImage(puzzleToCanvas(item,px,true),0,y);
+    blobs.push({name:`puzzle_${i+1}.png`,cv});
   }
 
-  if (doZip) {
-    const z=new JSZip();
-    for (const {name,canvas} of blobs) {
-      const data=canvas.toDataURL('image/png').split(',')[1];
-      z.file(name,data,{base64:true});
-    }
-    const blob=await z.generateAsync({type:'blob'});
-    downloadBlob(blob,'mathdoku_puzzles.zip');
-  } else {
-    for (const {name,canvas} of blobs) {
-      canvas.toBlob(b=>downloadBlob(b,name),'image/png');
-    }
-  }
+  await downloadCanvases(blobs, doZip, 'mathdoku_puzzles.zip');
 }
 
-async function exportQR() {
+async function exportQROnly() {
+  const px=parseInt($('qrPx').value)||400;
   const zip=segVal('qrZipSegs');
-  const doZip=(zip==='yes')||(zip==='auto'&&queue.length>1);
-  const size=300;
-  const canvases=[];
+  const doZip=zip==='yes'||(zip==='auto'&&queue.length>1);
+  const blobs=[];
   for (let i=0;i<queue.length;i++) {
-    const c=await makeQRCanvas(queue[i].encoded,size);
-    canvases.push({name:'qr_'+(i+1)+'.png',canvas:c});
+    try {
+      const cv=await qrToCanvas(queue[i].enc,px);
+      blobs.push({name:`qr_${i+1}.png`,cv});
+    } catch(e) { alert('QR generation failed for puzzle #'+(i+1)+'. Check your internet connection.'); return; }
   }
+  await downloadCanvases(blobs, doZip, 'mathdoku_qr.zip');
+}
+
+async function downloadCanvases(blobs, doZip, zipName) {
   if (doZip) {
     const z=new JSZip();
-    for (const {name,canvas} of canvases) {
-      z.file(name,canvas.toDataURL('image/png').split(',')[1],{base64:true});
-    }
+    for (const {name,cv} of blobs) z.file(name, cv.toDataURL('image/png').split(',')[1], {base64:true});
     const blob=await z.generateAsync({type:'blob'});
-    downloadBlob(blob,'mathdoku_qr.zip');
+    dlBlob(blob,zipName);
   } else {
-    for (const {name,canvas} of canvases) {
-      canvas.toBlob(b=>downloadBlob(b,name),'image/png');
-    }
+    for (const {name,cv} of blobs) cv.toBlob(b=>dlBlob(b,name),'image/png');
   }
 }
 
-function downloadBlob(blob,name) {
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=name; a.click();
+function dlBlob(blob,name) {
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
 }
 
-// ── URL param: load puzzle directly ──────────────────────────────────────────
-window.addEventListener('DOMContentLoaded',()=>{
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
   const p=new URLSearchParams(location.search).get('p');
   if (p) { try { addPuzzle(JSON.parse(atob(p)),p); } catch(e){} }
-  updateFormatOpts();
+  syncFmtOpts();
 });
 </script>
 </body>
