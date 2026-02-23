@@ -48,7 +48,6 @@
   .seg-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .seg-btn.disabled { opacity: .3; cursor: not-allowed; pointer-events: none; }
 
-  /* Queue */
   #queueList { display: flex; flex-direction: column; gap: 8px; min-height: 60px; }
   .q-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
   .q-item-info .q-name { font-size: .85rem; font-weight: 800; }
@@ -72,8 +71,6 @@
   .fmt-opts.open { display: block; }
 
   #preview { background: #fff; border-radius: 12px; overflow: hidden; padding: 12px; }
-  .prev-page { background: #fff; display: grid; gap: 10px; margin-bottom: 10px; }
-  .prev-puzzle { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 
   @media print {
     body { background: #fff; padding: 0; }
@@ -81,8 +78,6 @@
     #printArea { display: block !important; }
   }
   #printArea { display: none; }
-  .print-page { page-break-after: always; padding: 12mm; display: grid; gap: 8mm; background: #fff; }
-  .print-puzzle { display: flex; flex-direction: column; align-items: center; gap: 4pt; }
 </style>
 </head>
 <body>
@@ -207,7 +202,6 @@
         </div>
       </div>
 
-      <!-- PDF opts -->
       <div class="fmt-opts open" id="optPdf">
         <div class="option-row" style="margin-bottom:0;">
           <label>Orientation</label>
@@ -218,7 +212,6 @@
         </div>
       </div>
 
-      <!-- PDF+QR opts -->
       <div class="fmt-opts" id="optPdfQr">
         <div class="option-row">
           <label>Orientation</label>
@@ -237,7 +230,6 @@
         </div>
       </div>
 
-      <!-- PNG opts -->
       <div class="fmt-opts" id="optPng">
         <div class="option-row">
           <label>Width (px)</label>
@@ -253,7 +245,6 @@
         </div>
       </div>
 
-      <!-- QR opts -->
       <div class="fmt-opts" id="optQr">
         <div class="option-row">
           <label>Width (px)</label>
@@ -479,7 +470,6 @@ function puzzleToCanvas(item, px, showSol) {
     }
   }
 
-  // Cage labels
   for (let r=0;r<N;r++) for (let c=0;c<N;c++) {
     const ci=c2cage[r][c]; if (ci===-1) continue;
     const cage=puz.cages[ci];
@@ -497,8 +487,7 @@ function puzzleToCanvas(item, px, showSol) {
   return cv;
 }
 
-// ── QR via canvas (no external lib needed) ────────────────────────────────────
-// Uses the free QR API to get a PNG, draws it to a canvas
+// ── QR canvas ─────────────────────────────────────────────────────────────────
 function qrToCanvas(enc, size) {
   return new Promise((res,rej) => {
     const url = 'https://api.qrserver.com/v1/create-qr-code/?size='+size+'x'+size+'&data='
@@ -514,7 +503,7 @@ function qrToCanvas(enc, size) {
   });
 }
 
-// ── Difficulty label text ─────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function diffText(item) {
   const mode = segVal('diffSegs');
   if (mode==='none') return '';
@@ -522,73 +511,133 @@ function diffText(item) {
   return item.rating.difficulty+' ('+item.rating.score+')';
 }
 
+function layoutCols(layout) {
+  // 1pp→1col, 2pp→2col, 4pp→2col, 6pp→3col  (3 rows of 2 doesn't look right; 2 rows of 3 is cleaner)
+  if (layout === 1) return 1;
+  if (layout === 2) return 2;
+  if (layout === 4) return 2;
+  return 3; // 6pp
+}
+
 // ── Preview ───────────────────────────────────────────────────────────────────
 function updatePreview() {
   const pv=$('preview');
   if (!queue.length) { pv.innerHTML='<p style="color:#999;font-size:.8rem;text-align:center;padding:24px 0;">Add puzzles to preview.</p>'; return; }
   const layout=parseInt(segVal('layoutSegs'));
-  const cols=layout<=2?layout:2;
+  const cols=layoutCols(layout);
   const showSol=segVal('solSegs');
   const showNum=segVal('numSegs')==='yes';
   const title=$('sheetTitle').value.trim();
-  // px per puzzle in preview: smaller for more per page
-  const pvPx = layout===1?280:layout===2?220:160;
+  // scale preview cell size based on columns
+  const pvPx = cols===1?280:cols===2?200:150;
   pv.innerHTML='';
+
+  // ── Puzzle pages ──
   const pages=[];
   for (let i=0;i<queue.length;i+=layout) pages.push(queue.slice(i,i+layout));
+
   pages.forEach((page,pi) => {
     const pageEl=document.createElement('div');
-    pageEl.className='prev-page';
     pageEl.style.cssText=`background:#fff;padding:12px;display:grid;gap:8px;grid-template-columns:repeat(${cols},1fr);margin-bottom:8px;border-radius:8px;`;
+
     if (pi===0&&title) {
       const t=document.createElement('div');
       t.style.cssText=`grid-column:1/-1;text-align:center;font-size:12px;font-weight:900;color:#111;padding-bottom:6px;border-bottom:2px solid #111;font-family:sans-serif;`;
       t.textContent=title; pageEl.appendChild(t);
     }
+
     page.forEach((item,j) => {
       const idx=pi*layout+j;
       const wrap=document.createElement('div');
       wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:3px;';
+
+      // Number above puzzle
+      if (showNum) {
+        const num=document.createElement('div');
+        num.style.cssText='font-family:sans-serif;font-size:9px;font-weight:900;color:#111;align-self:flex-start;';
+        num.textContent='#'+(idx+1);
+        wrap.appendChild(num);
+      }
+
+      // Puzzle canvas
       const cv=puzzleToCanvas(item,pvPx,false);
       cv.style.cssText='width:100%;height:auto;border:1px solid #ddd;';
       wrap.appendChild(cv);
+
+      // Difficulty label below puzzle
       const dt=diffText(item);
-      if (showNum||dt) {
+      if (dt) {
         const lbl=document.createElement('div');
-        lbl.style.cssText='font-family:sans-serif;text-align:center;';
-        if (showNum) lbl.innerHTML+=`<span style="font-size:9px;font-weight:900;color:#111;">#${idx+1}</span> `;
-        if (dt) lbl.innerHTML+=`<span style="font-size:8px;color:#555;">${dt}</span>`;
+        lbl.style.cssText='font-family:sans-serif;font-size:8px;color:#555;text-align:center;';
+        lbl.textContent=dt;
         wrap.appendChild(lbl);
       }
+
+      // Solution directly below (if "below" mode)
       if (showSol==='below') {
         const sc=puzzleToCanvas(item,pvPx,true);
         sc.style.cssText='width:100%;height:auto;border:1px solid #ddd;opacity:.75;margin-top:2px;';
         wrap.appendChild(sc);
       }
+
       pageEl.appendChild(wrap);
     });
+
     pv.appendChild(pageEl);
-    if (pi<pages.length-1) { const hr=document.createElement('div'); hr.style.cssText='height:1px;background:#ddd;margin:4px 0;'; pv.appendChild(hr); }
+    if (pi<pages.length-1) {
+      const hr=document.createElement('div');
+      hr.style.cssText='height:1px;background:#ddd;margin:4px 0;';
+      pv.appendChild(hr);
+    }
   });
+
+  // ── Solution sep. page (preview) ──
+  if (showSol==='page') {
+    const hr=document.createElement('div');
+    hr.style.cssText='height:1px;background:#ddd;margin:4px 0;';
+    pv.appendChild(hr);
+
+    const solPages=[];
+    for (let i=0;i<queue.length;i+=layout) solPages.push(queue.slice(i,i+layout));
+    solPages.forEach((page,pi) => {
+      const pageEl=document.createElement('div');
+      pageEl.style.cssText=`background:#fff;padding:12px;display:grid;gap:8px;grid-template-columns:repeat(${cols},1fr);margin-bottom:8px;border-radius:8px;`;
+      const hdr=document.createElement('div');
+      hdr.style.cssText='grid-column:1/-1;text-align:center;font-size:10px;font-weight:900;color:#111;font-family:sans-serif;padding-bottom:4px;border-bottom:1px solid #ccc;';
+      hdr.textContent='Solutions'+(title?' — '+title:'');
+      pageEl.appendChild(hdr);
+      page.forEach((item,j) => {
+        const idx=pi*layout+j;
+        const wrap=document.createElement('div');
+        wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:3px;';
+        if (showNum) {
+          const num=document.createElement('div');
+          num.style.cssText='font-family:sans-serif;font-size:9px;font-weight:900;color:#111;align-self:flex-start;';
+          num.textContent='#'+(idx+1);
+          wrap.appendChild(num);
+        }
+        const sc=puzzleToCanvas(item,pvPx,true);
+        sc.style.cssText='width:100%;height:auto;border:1px solid #ddd;';
+        wrap.appendChild(sc);
+        pageEl.appendChild(wrap);
+      });
+      pv.appendChild(pageEl);
+    });
+  }
 }
 
 // ── Export ────────────────────────────────────────────────────────────────────
 async function doExport() {
   const fmt=segVal('fmtSegs');
-  $('exportBtn').disabled=true;
-  $('exportBtn').textContent='Exporting…';
+  $('exportBtn').disabled=true; $('exportBtn').textContent='Exporting…';
   try {
     if (fmt==='pdf'||fmt==='pdf-qr') await exportPDF(fmt==='pdf-qr');
     else if (fmt==='png') await exportPNG();
     else if (fmt==='qr') await exportQROnly();
   } finally {
-    $('exportBtn').disabled=false;
-    $('exportBtn').textContent='Export';
+    $('exportBtn').disabled=false; $('exportBtn').textContent='Export';
   }
 }
-
-// cells-per-row for layout
-function layoutCols(layout) { return layout<=2?layout:2; }
 
 async function exportPDF(withQR) {
   const layout=parseInt(segVal('layoutSegs'));
@@ -598,11 +647,9 @@ async function exportPDF(withQR) {
   const showSol=segVal('solSegs'), showNum=segVal('numSegs')==='yes';
   const title=$('sheetTitle').value.trim();
   const cols=layoutCols(layout);
-  // px for canvas: higher res for print
   const puzPx=900;
   const area=$('printArea'); area.innerHTML='';
 
-  // inject orientation style
   let styleEl=$('printOrientStyle');
   if (!styleEl) { styleEl=document.createElement('style'); styleEl.id='printOrientStyle'; document.head.appendChild(styleEl); }
   styleEl.textContent=`@media print { @page { size: ${isLand?'landscape':'portrait'}; } }`;
@@ -610,52 +657,93 @@ async function exportPDF(withQR) {
   const pages=[];
   for (let i=0;i<queue.length;i+=layout) pages.push(queue.slice(i,i+layout));
 
+  // ── Puzzle pages ──
   for (let pi=0;pi<pages.length;pi++) {
     const page=pages[pi];
     const pageEl=document.createElement('div');
     pageEl.style.cssText=`background:#fff;padding:12mm;display:grid;gap:8mm;grid-template-columns:repeat(${cols},1fr);page-break-after:always;`;
+
     if (pi===0&&title) {
       const t=document.createElement('div');
       t.style.cssText=`grid-column:1/-1;text-align:center;font-size:15pt;font-weight:900;color:#111;padding-bottom:6pt;border-bottom:2pt solid #111;font-family:sans-serif;`;
       t.textContent=title; pageEl.appendChild(t);
     }
+
     for (let j=0;j<page.length;j++) {
       const item=page[j], idx=pi*layout+j;
       const wrap=document.createElement('div');
-      wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4pt;';
+      wrap.style.cssText='display:flex;flex-direction:column;align-items:flex-start;gap:3pt;';
+
+      // Number above puzzle
+      if (showNum) {
+        const num=document.createElement('div');
+        num.style.cssText='font-family:sans-serif;font-size:10pt;font-weight:900;color:#111;';
+        num.textContent='#'+(idx+1);
+        wrap.appendChild(num);
+      }
+
+      // Puzzle canvas
       const cv=puzzleToCanvas(item,puzPx,false);
       cv.style.cssText='width:100%;height:auto;';
       wrap.appendChild(cv);
-      if (withQR) {
-        try {
-          const qc=await qrToCanvas(item.enc,qrSz);
-          qc.style.cssText='margin-top:3pt;';
-          wrap.appendChild(qc);
-        } catch(e) { /* QR fetch failed, skip */ }
-      }
+
+      // Difficulty label below puzzle
       const dt=diffText(item);
-      if (showNum||dt) {
+      if (dt) {
         const lbl=document.createElement('div');
-        lbl.style.cssText='font-family:sans-serif;text-align:center;';
-        if (showNum) lbl.innerHTML+=`<div style="font-size:9pt;font-weight:900;color:#111;">#${idx+1}</div>`;
-        if (dt) lbl.innerHTML+=`<div style="font-size:8pt;color:#555;">${dt}</div>`;
+        lbl.style.cssText='font-family:sans-serif;font-size:9pt;color:#555;align-self:center;margin-top:2pt;';
+        lbl.textContent=dt;
         wrap.appendChild(lbl);
       }
+
+      // Solution directly below (if "below" mode)
+      if (showSol==='below') {
+        const sc=puzzleToCanvas(item,puzPx,true);
+        sc.style.cssText='width:100%;height:auto;opacity:.8;margin-top:3pt;';
+        wrap.appendChild(sc);
+      }
+
       pageEl.appendChild(wrap);
     }
     area.appendChild(pageEl);
   }
 
-  // Solution pages
-  if (showSol==='below') {
-    // already inline — add solution grids below each puzzle
-    const puzzleWraps=[...area.querySelectorAll('[style*="flex-direction:column"]')];
+  // ── QR page (PDF+QR) — all QRs together at the end ──
+  if (withQR) {
+    const qrCols = Math.min(queue.length, 4);
+    const qrPage=document.createElement('div');
+    qrPage.style.cssText=`background:#fff;padding:12mm;page-break-before:always;`;
+
+    const hdr=document.createElement('div');
+    hdr.style.cssText='font-family:sans-serif;font-size:13pt;font-weight:900;color:#111;margin-bottom:8mm;';
+    hdr.textContent='Scan to play on mobile'+(title?' — '+title:'');
+    qrPage.appendChild(hdr);
+
+    const grid=document.createElement('div');
+    grid.style.cssText=`display:grid;grid-template-columns:repeat(${qrCols},auto);gap:8mm;align-items:start;`;
+
     for (let i=0;i<queue.length;i++) {
-      const sc=puzzleToCanvas(queue[i],puzPx,true);
-      sc.style.cssText='width:100%;height:auto;opacity:.8;margin-top:3pt;';
-      if (puzzleWraps[i]) puzzleWraps[i].appendChild(sc);
+      const cell=document.createElement('div');
+      cell.style.cssText='display:flex;flex-direction:column;align-items:center;gap:3pt;';
+      try {
+        const qc=await qrToCanvas(queue[i].enc,qrSz);
+        qc.style.cssText='display:block;';
+        cell.appendChild(qc);
+      } catch(e) { /* skip failed QR */ }
+      if (showNum) {
+        const lbl=document.createElement('div');
+        lbl.style.cssText='font-family:sans-serif;font-size:9pt;font-weight:900;color:#111;';
+        lbl.textContent='#'+(i+1);
+        cell.appendChild(lbl);
+      }
+      grid.appendChild(cell);
     }
-  } else if (showSol==='page') {
+    qrPage.appendChild(grid);
+    area.appendChild(qrPage);
+  }
+
+  // ── Solution sep. page ──
+  if (showSol==='page') {
     for (let pi=0;pi<pages.length;pi++) {
       const page=pages[pi];
       const pageEl=document.createElement('div');
@@ -665,13 +753,18 @@ async function exportPDF(withQR) {
       hdr.textContent='Solutions'+(title?' — '+title:'');
       pageEl.appendChild(hdr);
       for (let j=0;j<page.length;j++) {
-        const item=page[j],idx=pi*layout+j;
+        const item=page[j], idx=pi*layout+j;
         const wrap=document.createElement('div');
-        wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:3pt;';
+        wrap.style.cssText='display:flex;flex-direction:column;align-items:flex-start;gap:3pt;';
+        if (showNum) {
+          const num=document.createElement('div');
+          num.style.cssText='font-family:sans-serif;font-size:10pt;font-weight:900;color:#111;';
+          num.textContent='#'+(idx+1);
+          wrap.appendChild(num);
+        }
         const sc=puzzleToCanvas(item,puzPx,true);
         sc.style.cssText='width:100%;height:auto;';
         wrap.appendChild(sc);
-        if (showNum) { const l=document.createElement('div'); l.style.cssText='font-size:8pt;color:#555;font-family:sans-serif;'; l.textContent='#'+(idx+1); wrap.appendChild(l); }
         pageEl.appendChild(wrap);
       }
       area.appendChild(pageEl);
@@ -690,21 +783,28 @@ async function exportPNG() {
 
   for (let i=0;i<queue.length;i++) {
     const item=queue[i];
-    const labelH=Math.round(px*.07);
+    const numH=showNum?Math.round(px*.06):0;
     const dt=diffText(item);
-    const hasLabel=showNum||dt;
+    const lblH=dt?Math.round(px*.05):0;
     const solH=showSol==='below'?px:0;
-    const totalH=px+(hasLabel?labelH:0)+solH;
+    const totalH=numH+px+lblH+solH;
     const cv=document.createElement('canvas'); cv.width=px; cv.height=totalH;
     const ctx=cv.getContext('2d');
     ctx.fillStyle='#fff'; ctx.fillRect(0,0,px,totalH);
-    ctx.drawImage(puzzleToCanvas(item,px,false),0,0);
-    let y=px;
-    if (hasLabel) {
-      ctx.fillStyle='#111'; ctx.textAlign='center'; ctx.textBaseline='middle';
-      if (showNum) { ctx.font=`bold ${Math.round(labelH*.42)}px Segoe UI,sans-serif`; ctx.fillText('#'+(i+1),px/2,y+labelH*.3); }
-      if (dt) { ctx.font=`${Math.round(labelH*.33)}px Segoe UI,sans-serif`; ctx.fillStyle='#555'; ctx.fillText(dt,px/2,y+labelH*(showNum?.72:.5)); }
-      y+=labelH;
+    let y=0;
+    if (showNum) {
+      ctx.fillStyle='#111'; ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.font=`bold ${Math.round(numH*.6)}px Segoe UI,sans-serif`;
+      ctx.fillText('#'+(i+1), Math.round(px*.03), y+numH/2);
+      y+=numH;
+    }
+    ctx.drawImage(puzzleToCanvas(item,px,false),0,y);
+    y+=px;
+    if (dt) {
+      ctx.fillStyle='#555'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.font=`${Math.round(lblH*.55)}px Segoe UI,sans-serif`;
+      ctx.fillText(dt, px/2, y+lblH/2);
+      y+=lblH;
     }
     if (showSol==='below') ctx.drawImage(puzzleToCanvas(item,px,true),0,y);
     blobs.push({name:`puzzle_${i+1}.png`,cv});
