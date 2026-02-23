@@ -202,24 +202,9 @@
         </div>
       </div>
 
-      <div class="fmt-opts open" id="optPdf">
-        <div class="option-row" style="margin-bottom:0;">
-          <label>Orientation</label>
-          <div class="seg" id="pdfOrientSegs">
-            <div class="seg-btn active" data-val="portrait">Portrait</div>
-            <div class="seg-btn" data-val="landscape">Landscape</div>
-          </div>
-        </div>
-      </div>
+      <div class="fmt-opts open" id="optPdf"></div>
 
       <div class="fmt-opts" id="optPdfQr">
-        <div class="option-row">
-          <label>Orientation</label>
-          <div class="seg" id="pdfqrOrientSegs">
-            <div class="seg-btn active" data-val="portrait">Portrait</div>
-            <div class="seg-btn" data-val="landscape">Landscape</div>
-          </div>
-        </div>
         <div class="option-row" style="margin-bottom:0;">
           <label>QR Size</label>
           <div class="seg" id="qrSzSegs">
@@ -511,14 +496,11 @@ function diffText(item) {
   return item.rating.difficulty+' ('+item.rating.score+')';
 }
 
-function layoutGrid(layout, orient) {
-  const land = orient === 'landscape';
-  // returns [cols, rows]
-  if (layout === 1) return [1, 1];
-  if (layout === 2) return land ? [2, 1] : [1, 2];
-  if (layout === 4) return [2, 2];
-  // 6pp
-  return land ? [2, 3] : [3, 2];
+function layoutCols(layout) {
+  if (layout === 1) return 1;
+  if (layout === 2) return 1; // stacked
+  if (layout === 4) return 2;
+  return 3; // 6pp: 3 cols × 2 rows
 }
 
 // ── Preview ───────────────────────────────────────────────────────────────────
@@ -527,7 +509,7 @@ function updatePreview() {
   if (!queue.length) { pv.innerHTML='<p style="color:#999;font-size:.8rem;text-align:center;padding:24px 0;">Add puzzles to preview.</p>'; return; }
   const layout=parseInt(segVal('layoutSegs'));
   // preview always assumes portrait for display purposes
-  const [cols] = layoutGrid(layout, 'portrait');
+  const cols=layoutCols(layout);
   const showSol=segVal('solSegs');
   const showNum=segVal('numSegs')==='yes';
   const title=$('sheetTitle').value.trim();
@@ -654,7 +636,7 @@ async function exportPDF(withQR) {
 
   let styleEl=$('printOrientStyle');
   if (!styleEl) { styleEl=document.createElement('style'); styleEl.id='printOrientStyle'; document.head.appendChild(styleEl); }
-  styleEl.textContent=`@media print { @page { size: ${isLand?'landscape':'portrait'}; } }`;
+  styleEl.textContent=`@media print { @page { size: portrait; } }`;
 
   const pages=[];
   for (let i=0;i<queue.length;i+=layout) pages.push(queue.slice(i,i+layout));
@@ -750,8 +732,8 @@ async function exportPDF(withQR) {
     for (let pi=0;pi<pages.length;pi++) {
       const page=pages[pi];
       const pageEl=document.createElement('div');
-      const [solCols, solRows] = layoutGrid(layout, orient);
-      pageEl.style.cssText=`background:#fff;padding:12mm;display:grid;gap:8mm;grid-template-columns:repeat(${solCols},1fr);grid-template-rows:repeat(${solRows},1fr);height:calc(100vh - 24mm);page-break-before:always;box-sizing:border-box;`;
+      const solRows=Math.ceil(layout/cols);
+      pageEl.style.cssText=`background:#fff;padding:12mm;display:grid;gap:8mm;grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${solRows},1fr);height:calc(100vh - 24mm);page-break-before:always;box-sizing:border-box;`;
       const hdr=document.createElement('div');
       hdr.style.cssText=`grid-column:1/-1;text-align:center;font-size:13pt;font-weight:900;color:#111;font-family:sans-serif;margin-bottom:4pt;`;
       hdr.textContent='Solutions'+(title?' — '+title:'');
