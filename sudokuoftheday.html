@@ -109,6 +109,7 @@
   #timer { font-size: 1.8rem; color: #2c3e50; font-weight: bold; }
   #scoreDisplay { font-size: 1.1rem; font-weight: bold; color: #2c3e50; text-align: right; }
   #scoreDisplay span { font-size: 1.6rem; display: block; color: #8e44ad; }
+  #scoreMedal { font-size: 1.4rem; line-height: 1; }
   #diffLabel {
     font-size: 1.1rem;
     font-weight: bold;
@@ -252,6 +253,7 @@
     <div id="timer">0:00</div>
     <div id="diffLabel">—</div>
     <div id="scoreDisplay">score<span id="scoreLive">—</span></div>
+    <div id="scoreMedal"></div>
   </div>
   <table id="board"></table>
   <div class="numpad" id="numpad"></div>
@@ -270,9 +272,10 @@
   <div class="congrats-box">
     <div class="confetti">🎉🎊🥳</div>
     <h2>You did it!!</h2>
+    <div id="finalMedal" style="font-size:1.6rem;font-weight:bold;margin-bottom:8px;display:none"></div>
     <p>Solved in <strong id="finalTime"></strong>!</p>
     <p>Score: <strong id="finalScore" style="color:#8e44ad;font-size:1.3rem"></strong></p>
-    <p style="font-size:0.75rem;color:#bdc3c7">hints: ×0.9 each · mistakes: ×0.95 each</p>
+    <p style="font-size:0.75rem;color:#bdc3c7">hints: ×0.9 penalty · mistakes: ×0.95 penalty</p>
     <p style="font-size:0.8rem;color:#bdc3c7">Come back tomorrow for a new one 😊</p>
     <button class="btn btn-hint" style="margin-top:10px;width:100%" onclick="document.getElementById('congrats').classList.remove('show')">Close</button>
   </div>
@@ -515,18 +518,30 @@ let selected=null,notesMode=false,solved=false,seconds=0;
 let timerInterval=null,currentKey=todayKey();
 let mistakes=0,hintsUsed=0,diffScore=0;
 
+function getMedal(score){
+  if(score>=200000)return{label:'Platinum',color:'#a855f7',emoji:'🏅'};
+  if(score>=100000)return{label:'Gold',color:'#f59e0b',emoji:'🥇'};
+  if(score>=50000)return{label:'Silver',color:'#94a3b8',emoji:'🥈'};
+  if(score>=25000)return{label:'Bronze',color:'#b45309',emoji:'🥉'};
+  return null;
+}
+
 function calcScore(){
   if(seconds===0||diffScore===0)return 0;
   const minutes=Math.max(seconds/60,0.1);
   const raw=(1e6*diffScore)/minutes;
   const penalized=raw*Math.pow(0.95,mistakes)*Math.pow(0.9,hintsUsed);
-  return Math.min(Math.round(penalized),1000);
+  return Math.round(penalized);
 }
 
 function updateScore(){
   const el=document.getElementById('scoreLive');
-  if(!puzzle||solved){return;}
-  el.textContent=calcScore();
+  const medalEl=document.getElementById('scoreMedal');
+  if(!el||!medalEl||!puzzle||solved)return;
+  const score=calcScore();
+  el.textContent=score.toLocaleString();
+  const medal=getMedal(score);
+  medalEl.textContent=medal?medal.emoji:'';
 }
 
 // ===== Init =====
@@ -559,7 +574,7 @@ function loadPuzzle(key){
   }
 
   // Reset state
-  clearInterval(timerInterval);
+  clearInterval(timerInterval);cancelAnimationFrame(timerInterval);
   seconds=0;solved=false;selected=null;notesMode=false;
   notes=Array(9).fill(null).map(()=>Array(9).fill(null).map(()=>new Set()));
   document.getElementById('timer').textContent='0:00';
@@ -606,13 +621,16 @@ function pickDate(val){
 
 // ===== Timer =====
 function startTimer(){
-  timerInterval=setInterval(function(){
+  const startTime=Date.now()-seconds*1000;
+  function tick(){
     if(solved)return;
-    seconds++;
-    const m=Math.floor(seconds/60),s=seconds%60;
+    seconds=(Date.now()-startTime)/1000;
+    const m=Math.floor(seconds/60),s=Math.floor(seconds%60);
     document.getElementById('timer').textContent=m+':'+(s<10?'0':'')+s;
     updateScore();
-  },1000);
+    timerInterval=requestAnimationFrame(tick);
+  }
+  timerInterval=requestAnimationFrame(tick);
 }
 
 // ===== Board =====
@@ -732,12 +750,17 @@ function updateNumpad(){
 
 function checkWin(){
   for(let r=0;r<9;r++)for(let c=0;c<9;c++)if(board[r][c]===0||board[r][c]!==solution[r][c])return;
-  solved=true;clearInterval(timerInterval);
+  solved=true;cancelAnimationFrame(timerInterval);
   const finalScore=calcScore();
-  document.getElementById('scoreLive').textContent=finalScore;
-  const m=Math.floor(seconds/60),s=seconds%60;
+  const medal=getMedal(finalScore);
+  document.getElementById('scoreLive').textContent=finalScore.toLocaleString();
+  document.getElementById('scoreMedal').textContent=medal?medal.emoji:'';
+  const m=Math.floor(seconds/60),s=Math.floor(seconds%60);
   document.getElementById('finalTime').textContent=m+'m '+s+'s';
-  document.getElementById('finalScore').textContent=finalScore+' pts';
+  document.getElementById('finalScore').textContent=finalScore.toLocaleString()+' pts';
+  const medalBox=document.getElementById('finalMedal');
+  if(medal){medalBox.textContent=medal.emoji+' '+medal.label;medalBox.style.color=medal.color;medalBox.style.display='block';}
+  else{medalBox.style.display='none';}
   setTimeout(function(){document.getElementById('congrats').classList.add('show');},400);
 }
 
