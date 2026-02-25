@@ -12,7 +12,7 @@
 
   #topbar {
     background: #1a1a1a; border-bottom: 1px solid #2e2e2e;
-    padding: 10px 20px; display: flex; align-items: center; gap: 10px; z-index: 1000; flex-wrap: wrap;
+    padding: 10px 20px; display: flex; align-items: center; gap: 10px; z-index: 1000;
   }
   #topbar h1 { font-size: 1.1rem; color: #e6b84a; letter-spacing: 0.08em; text-transform: uppercase; }
   .badge {
@@ -22,7 +22,7 @@
   #coords { margin-left: auto; }
 
   #map { flex: 1; width: 100%; }
-  .leaflet-tile { filter: brightness(0.95); }
+  .leaflet-tile { filter: brightness(0.85) saturate(0.65); }
 
   .chest-dot {
     border-radius: 50%; border: 2px solid rgba(255,255,255,0.25);
@@ -53,6 +53,15 @@
     padding: 12px 16px; z-index: 2000; gap: 8px; align-items: center;
     box-shadow: 0 4px 24px #000c; max-width: 90vw;
   }
+
+  /* Pickup toast */
+  #toast {
+    display: none; position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+    padding: 8px 18px; border-radius: 20px; font-size: 0.85rem;
+    z-index: 2000; white-space: nowrap; pointer-events: none;
+    box-shadow: 0 4px 16px #000a; animation: fadeUp .3s ease;
+  }
+  @keyframes fadeUp { from { opacity:0; transform: translateX(-50%) translateY(8px); } }
 </style>
 </head>
 <body>
@@ -60,10 +69,12 @@
 <div id="topbar">
   <h1>🗺 Treasure Hunt</h1>
   <span class="badge" id="visibleCount">—</span>
+  <span class="badge" id="collectedCount">0 collected</span>
   <span class="badge" id="coords">—</span>
 </div>
 
 <div id="map"></div>
+<div id="toast"></div>
 
 <div id="gpsOverlay">
   <div class="icon">📡</div>
@@ -79,21 +90,19 @@
 </div>
 
 <script>
-  // ── Tiers ────────────────────────────────────────────────
   const TIERS = [
-    { name: 'Mythic',    from:    0, to:   49, minR: 0.068, color: '#ff4444', glow: '#ff000088', size: 14 },
-    { name: 'Legendary', from:   50, to:  299, minR: 0.045, color: '#ff9500', glow: '#ff950066', size: 12 },
-    { name: 'Epic',      from:  300, to:  799, minR: 0.027, color: '#bf5fff', glow: '#bf5fff55', size: 10 },
-    { name: 'Rare',      from:  800, to: 1799, minR: 0.014, color: '#4d9fff', glow: '#4d9fff44', size: 9  },
-    { name: 'Uncommon',  from: 1800, to: 3799, minR: 0.005, color: '#4caf50', glow: '#4caf5033', size: 8  },
-    { name: 'Common',    from: 3800, to: 9999, minR: 0.000, color: '#888888', glow: '#88888822', size: 7  },
+    { name: 'Mythic',    from:    0, to:   49, minR: 0.01802, minXP:  750, maxXP: 2500, color: '#ff4444', glow: '#ff000088', size: 14 },
+    { name: 'Legendary', from:   50, to:  299, minR: 0.00901, minXP:  400, maxXP: 1000, color: '#ff9500', glow: '#ff950066', size: 12 },
+    { name: 'Epic',      from:  300, to:  799, minR: 0.00450, minXP:  200, maxXP:  500, color: '#bf5fff', glow: '#bf5fff55', size: 10 },
+    { name: 'Rare',      from:  800, to: 1799, minR: 0.00225, minXP:  100, maxXP:  250, color: '#4d9fff', glow: '#4d9fff44', size: 9  },
+    { name: 'Uncommon',  from: 1800, to: 3799, minR: 0.00090, minXP:   50, maxXP:  120, color: '#4caf50', glow: '#4caf5033', size: 8  },
+    { name: 'Common',    from: 3800, to: 9999, minR: 0.00000, minXP:   20, maxXP:   60, color: '#888888', glow: '#88888822', size: 7  },
   ];
   function getTier(i) {
     for (const t of TIERS) if (i >= t.from && i <= t.to) return t;
     return TIERS[TIERS.length - 1];
   }
 
-  // ── Encoding ─────────────────────────────────────────────
   const XOR_KEY = 0x5F3A;
   function encodeLocation(lat, lng) {
     const str = `${lat.toFixed(6)},${lng.toFixed(6)}`;
@@ -114,7 +123,6 @@
     } catch { return null; }
   }
 
-  // ── PRNG ─────────────────────────────────────────────────
   function seededRNG(seed) {
     let s = seed;
     return () => {
@@ -125,7 +133,33 @@
     };
   }
 
-  // ── Boot ─────────────────────────────────────────────────
+  function haversine(lat1, lng1, lat2, lng2) {
+    const R = 6371000, rad = Math.PI / 180;
+    const dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*rad) * Math.cos(lat2*rad) * Math.sin(dLng/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  // ── Spawn schedule ────────────────────────────────────────
+  function lastSpawnTime(tierName) {
+    const now = new Date();
+    const h = now.getHours();
+    const d = new Date(now);
+    d.setMinutes(0, 0, 0); // floor to current :00
+
+    switch (tierName) {
+      case 'Common':    return d.getTime();
+      case 'Uncommon':  { const u = new Date(d); u.setHours(h - h % 3); return u.getTime(); }
+      case 'Rare':      { const r = new Date(d); r.setHours(h - h % 6); return r.getTime(); }
+      case 'Epic':      { const e = new Date(d); e.setHours(h < 8 ? 0 : h < 16 ? 8 : 16); return e.getTime(); }
+      case 'Legendary': { const l = new Date(d); l.setHours(h < 12 ? 0 : 12); return l.getTime(); }
+      case 'Mythic':    { const m = new Date(d); m.setHours(0); return m.getTime(); }
+    }
+  }
+
+  function isCollectedStillValid(tierName, collectedAt) {
+    return collectedAt >= lastSpawnTime(tierName);
+  }
   const params = new URLSearchParams(window.location.search);
   const locParam = params.get('home');
 
@@ -142,8 +176,7 @@
   }
 
   if (locParam) {
-    const decoded = decodeLocation(locParam);
-    boot(decoded || setHomeParam(41.9028, 12.4964));
+    boot(decodeLocation(locParam) || setHomeParam(41.9028, 12.4964));
   } else {
     document.getElementById('gpsOverlay').style.display = 'flex';
     navigator.geolocation.getCurrentPosition(
@@ -153,14 +186,11 @@
     );
   }
 
-  // ── Map init ─────────────────────────────────────────────
+  // ── Map ──────────────────────────────────────────────────
   function initMap(HOME) {
-    const SEED = 42;
-    const CHEST_COUNT = 10000;
-    const RADIUS = 0.1;
-    const RENDER_LIMIT = 400;
+    const SEED = 42, CHEST_COUNT = 10000, RADIUS = 0.1, RENDER_LIMIT = 400;
+    const PICKUP_RADIUS = 30; // metres
 
-    // Generate chests
     const rng = seededRNG(SEED);
     const chests = [];
     const tierCounts = {};
@@ -176,12 +206,13 @@
         r2 = dlat * dlat + dlng * dlng;
       } while (r2 > RADIUS * RADIUS || r2 < min2);
       tierCounts[tier.name]++;
-      chests.push({ lat: HOME.lat + dlat, lng: HOME.lng + dlng, id: i, tier });
+      const xp = Math.round(tier.minXP + rng() * (tier.maxXP - tier.minXP));
+      chests.push({ lat: HOME.lat + dlat, lng: HOME.lng + dlng, id: i, tier, xp, collected: false });
     }
 
     const map = L.map('map', { center: [HOME.lat, HOME.lng], zoom: 15 });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© OpenStreetMap contributors © CARTO', maxZoom: 19
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors', maxZoom: 19
     }).addTo(map);
 
     map.on('mousemove', e => {
@@ -202,13 +233,84 @@
     };
     legend.addTo(map);
 
-    // Chest rendering
+    // ── Player marker ─────────────────────────────────────
+    let playerMarker = null;
+    let playerLatLng = null;
+    let savedData = JSON.parse(localStorage.getItem('treasurehunt') || '{}');
+    const collectedMap = savedData.collected || {}; // { chestId: timestamp }
+    let collected = 0, totalXP = savedData.totalXP || 0;
+
+    function saveProgress() {
+      localStorage.setItem('treasurehunt', JSON.stringify({ collected: collectedMap, totalXP }));
+    }
+
+    // Restore collected state, respecting spawn schedule
+    for (const c of chests) {
+      const ts = collectedMap[c.id];
+      if (ts && isCollectedStillValid(c.tier.name, ts)) {
+        c.collected = true;
+        collected++;
+      }
+    }
+
+    function showToast(tier, xp) {
+      const toast = document.getElementById('toast');
+      toast.textContent = `✨ ${tier.name} chest — +${xp} XP`;
+      toast.style.display = 'block';
+      toast.style.background = tier.color;
+      toast.style.color = tier.name === 'Common' ? '#eee' : '#111';
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => toast.style.display = 'none', 2500);
+    }
+
+    function checkPickups(playerLat, playerLng) {
+      let changed = false;
+      for (const c of chests) {
+        if (c.collected) continue;
+        const d = haversine(playerLat, playerLng, c.lat, c.lng);
+        if (d <= PICKUP_RADIUS) {
+          c.collected = true;
+          collectedMap[c.id] = Date.now();
+          collected++;
+          totalXP += c.xp;
+          changed = true;
+          saveProgress();
+          showToast(c.tier, c.xp);
+          const newLevel = updateLevelUI(totalXP, currentLevel);
+          currentLevel = newLevel;
+          document.getElementById('collectedCount').textContent = `${collected} collected`;
+    let currentLevel = updateLevelUI(totalXP);
+        }
+      }
+      if (changed) renderChests();
+    }
+
+              document.getElementById('collectedCount').textContent = `${collected} collected`;
+          updateLevelUI(totalXP);
+
+    function onPosition(pos) {
+      const { latitude: lat, longitude: lng } = pos.coords;
+      playerLatLng = [lat, lng];
+      if (!playerMarker) {
+        playerMarker = L.marker([lat, lng]).addTo(map)
+          .bindPopup('<b>You are here</b>');
+      } else {
+        playerMarker.setLatLng([lat, lng]);
+      }
+      checkPickups(lat, lng);
+    }
+
+    navigator.geolocation.watchPosition(onPosition, null, {
+      enableHighAccuracy: true, maximumAge: 5000
+    });
+
+    // ── Chest rendering ───────────────────────────────────
     const chestLayer = L.layerGroup().addTo(map);
 
     function renderChests() {
       chestLayer.clearLayers();
       const b = map.getBounds().pad(0.1);
-      const visible = chests.filter(c => b.contains([c.lat, c.lng]));
+      const visible = chests.filter(c => !c.collected && b.contains([c.lat, c.lng]));
       const toRender = visible.slice(0, RENDER_LIMIT);
       toRender.forEach(c => {
         const t = c.tier;
@@ -217,7 +319,7 @@
           className: '', iconSize: [t.size, t.size], iconAnchor: [t.size/2, t.size/2]
         });
         L.marker([c.lat, c.lng], { icon })
-          .bindPopup(`<div class="popup-tier" style="color:${t.color}">${t.tier}</div><div class="popup-id">Chest #${c.id + 1}</div>`)
+          .bindPopup(`<div class="popup-tier" style="color:${t.color}">${t.name}</div><div class="popup-id">Chest #${c.id + 1}</div>`)
           .addTo(chestLayer);
       });
       document.getElementById('visibleCount').textContent =
@@ -230,14 +332,11 @@
     map.on('zoomend', renderChests);
     renderChests();
 
-
-
-    // Right-click to generate URL
+    // Right-click URL generator
     const urlBox = document.getElementById('urlBox');
     const urlOut = document.getElementById('urlOut');
     map.on('contextmenu', e => {
-      const url = `${location.origin}${location.pathname}?home=${encodeLocation(e.latlng.lat, e.latlng.lng)}`;
-      urlOut.value = url;
+      urlOut.value = `${location.origin}${location.pathname}?home=${encodeLocation(e.latlng.lat, e.latlng.lng)}`;
       urlBox.style.display = 'flex';
     });
     document.getElementById('copyBtn').onclick = () => {
