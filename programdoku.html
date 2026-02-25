@@ -65,16 +65,16 @@
             overflow-y: auto;
         }
 
-        .share-container button {
-            margin-top: 0;
-            padding: 8px;
-            font-size: 12px;
-        }
-
         .share-buttons {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
+        }
+
+        .share-buttons button {
+            margin-top: 0;
+            padding: 8px;
+            font-size: 12px;
         }
 
         .form-group {
@@ -296,6 +296,29 @@
             color: #0f0;
         }
 
+        .number-pad {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .number-pad button {
+            margin-top: 0;
+            padding: 12px;
+            font-size: 12px;
+        }
+
+        .pencil-btn {
+            grid-column: 5;
+            grid-row: 2;
+        }
+
+        .pencil-mode {
+            color: #ffff00;
+            border-color: #ffff00;
+        }
+
         .controls {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -425,9 +448,22 @@
 
             <div class="sudoku-board" id="sudokuBoard"></div>
 
+            <div class="number-pad" id="numberPad">
+                <button onclick="numberPadClick(1)">1</button>
+                <button onclick="numberPadClick(2)">2</button>
+                <button onclick="numberPadClick(3)">3</button>
+                <button onclick="numberPadClick(4)">4</button>
+                <button onclick="numberPadClick(5)">5</button>
+                <button onclick="numberPadClick(6)">6</button>
+                <button onclick="numberPadClick(7)">7</button>
+                <button onclick="numberPadClick(8)">8</button>
+                <button onclick="numberPadClick(9)">9</button>
+                <button id="pencilBtn" onclick="togglePencilMode()">✏</button>
+            </div>
+
             <div class="controls">
                 <button onclick="clearSelection()">CLEAR</button>
-                <button onclick="toggleCandidates()">CANDIDATES</button>
+                <button onclick="undoLastMove()">UNDO</button>
             </div>
 
             <div class="controls-bottom">
@@ -438,7 +474,7 @@
     </div>
 
     <script>
-        // newsudoku.js functions
+        // newsudoku.js core functions
         function convertToMatrix(sudokuString) {
             if (sudokuString.length !== 81) throw new Error("Sudoku string must be exactly 81 characters long.");
             const matrix = [];
@@ -494,10 +530,7 @@
                             if (grid[r].includes(num)) isValid = false;
                             if (isValid) {
                                 for (let i = 0; i < 9; i++) {
-                                    if (grid[i][c] === num) {
-                                        isValid = false;
-                                        break;
-                                    }
+                                    if (grid[i][c] === num) { isValid = false; break; }
                                 }
                             }
                             if (isValid) {
@@ -505,10 +538,7 @@
                                 const startCol = Math.floor(c / 3) * 3;
                                 for (let rowBox = startRow; rowBox < startRow + 3; rowBox++) {
                                     for (let colBox = startCol; colBox < startCol + 3; colBox++) {
-                                        if (grid[rowBox][colBox] === num) {
-                                            isValid = false;
-                                            break;
-                                        }
+                                        if (grid[rowBox][colBox] === num) { isValid = false; break; }
                                     }
                                     if (!isValid) break;
                                 }
@@ -537,15 +567,11 @@
             for (let i = 0; i < 9; i++) {
                 if (possibilities[rPlaced][i].has(valPlaced)) {
                     possibilities[rPlaced][i].delete(valPlaced);
-                    if (possibilities[rPlaced][i].size === 0 && puzzle[rPlaced][i] === 0) {
-                        contradiction = true;
-                    }
+                    if (possibilities[rPlaced][i].size === 0 && puzzle[rPlaced][i] === 0) contradiction = true;
                 }
                 if (possibilities[i][cPlaced].has(valPlaced)) {
                     possibilities[i][cPlaced].delete(valPlaced);
-                    if (possibilities[i][cPlaced].size === 0 && puzzle[i][cPlaced] === 0) {
-                        contradiction = true;
-                    }
+                    if (possibilities[i][cPlaced].size === 0 && puzzle[i][cPlaced] === 0) contradiction = true;
                 }
             }
             const startRow = Math.floor(rPlaced / 3) * 3;
@@ -554,9 +580,7 @@
                 for (let c = startCol; c < startCol + 3; c++) {
                     if (possibilities[r][c].has(valPlaced)) {
                         possibilities[r][c].delete(valPlaced);
-                        if (possibilities[r][c].size === 0 && puzzle[r][c] === 0) {
-                            contradiction = true;
-                        }
+                        if (possibilities[r][c].size === 0 && puzzle[r][c] === 0) contradiction = true;
                     }
                 }
             }
@@ -567,10 +591,7 @@
             const updates = [];
             const allNums = range1To9();
             const unitPoss = {};
-            
-            for (const num of allNums) {
-                unitPoss[num] = [];
-            }
+            for (const num of allNums) unitPoss[num] = [];
             
             let coords = [];
             if (unitType === 'row') {
@@ -596,14 +617,10 @@
             }
             
             for (const [num, locations] of Object.entries(unitPoss)) {
-                if (locations.length === 1) {
-                    const [r, c] = locations[0];
-                    if (puzzle[r][c] === 0) {
-                        updates.push([r, c, parseInt(num)]);
-                    }
+                if (locations.length === 1 && puzzle[locations[0][0]][locations[0][1]] === 0) {
+                    updates.push([locations[0][0], locations[0][1], parseInt(num)]);
                 }
             }
-            
             return updates;
         }
 
@@ -625,22 +642,18 @@
             
             if (techniqueType === 'BoxHS') {
                 for (let boxIdx = 0; boxIdx < 9; boxIdx++) {
-                    const boxUpdates = findHiddenSingles(puzzle, possibilities, 'box', boxIdx);
-                    updates = updates.concat(boxUpdates);
+                    updates = updates.concat(findHiddenSingles(puzzle, possibilities, 'box', boxIdx));
                 }
             } else if (techniqueType === 'LineHS') {
                 for (let idx = 0; idx < 9; idx++) {
-                    const rowUpdates = findHiddenSingles(puzzle, possibilities, 'row', idx);
-                    const colUpdates = findHiddenSingles(puzzle, possibilities, 'col', idx);
-                    updates = updates.concat(rowUpdates, colUpdates);
+                    updates = updates.concat(findHiddenSingles(puzzle, possibilities, 'row', idx));
+                    updates = updates.concat(findHiddenSingles(puzzle, possibilities, 'col', idx));
                 }
             } else if (techniqueType === 'NakedSingle') {
                 updates = findNakedSingles(puzzle, possibilities);
             }
             
-            if (updates.length === 0) {
-                return [emptyCellsCount, false];
-            }
+            if (updates.length === 0) return [emptyCellsCount, false];
             
             const uniqueUpdates = [];
             const seen = new Set();
@@ -657,15 +670,10 @@
                 if (puzzle[r][c] === 0) {
                     puzzle[r][c] = val;
                     emptyCellsCount--;
-                    
-                    if (eliminatePossibilities(possibilities, r, c, val, puzzle)) {
-                        contradiction = true;
-                    }
-                    
+                    if (eliminatePossibilities(possibilities, r, c, val, puzzle)) contradiction = true;
                     possibilities[r][c] = new Set();
                 }
             }
-            
             return [emptyCellsCount, contradiction];
         }
 
@@ -674,22 +682,16 @@
             const initialEmptyCells = puzzle.flat().filter(x => x === 0).length;
             let highestTechnique = 0;
             
-            if (initialEmptyCells === 0) {
-                return returnDifficulty ? 0.0 : puzzle;
-            }
+            if (initialEmptyCells === 0) return returnDifficulty ? 0.0 : puzzle;
             
-            const possibilities = Array(9).fill(null).map(() => 
-                Array(9).fill(null).map(() => new Set())
-            );
+            const possibilities = Array(9).fill(null).map(() => Array(9).fill(null).map(() => new Set()));
             
             let emptyCellsCount = 0;
             for (let r = 0; r < 9; r++) {
                 for (let c = 0; c < 9; c++) {
                     if (puzzle[r][c] === 0) {
                         possibilities[r][c] = new Set(getPossibleValues(puzzle, r, c));
-                        if (possibilities[r][c].size === 0) {
-                            return returnDifficulty ? -0.2 : sudoku;
-                        }
+                        if (possibilities[r][c].size === 0) return returnDifficulty ? -0.2 : sudoku;
                         emptyCellsCount++;
                     } else {
                         possibilities[r][c] = new Set();
@@ -702,44 +704,27 @@
             
             while (emptyCellsCount > 0) {
                 [emptyCellsCount, contradiction] = findAndApplyUpdates('BoxHS', puzzle, possibilities, emptyCellsCount);
-                const boxUpdates = emptyCellsCount < initialEmptyCells - steps;
-                if (boxUpdates) {
-                    steps++;
-                    if (contradiction) break;
-                    continue;
-                }
+                if (emptyCellsCount < initialEmptyCells - steps) { steps++; if (contradiction) break; continue; }
                 
                 highestTechnique = Math.max(1, highestTechnique);
-                
                 const prevCount = emptyCellsCount;
                 [emptyCellsCount, contradiction] = findAndApplyUpdates('LineHS', puzzle, possibilities, emptyCellsCount);
-                if (emptyCellsCount < prevCount) {
-                    steps++;
-                    if (contradiction) break;
-                    continue;
-                }
+                if (emptyCellsCount < prevCount) { steps++; if (contradiction) break; continue; }
                 
                 highestTechnique = 2;
-                
                 const prevCount2 = emptyCellsCount;
                 [emptyCellsCount, contradiction] = findAndApplyUpdates('NakedSingle', puzzle, possibilities, emptyCellsCount);
-                if (emptyCellsCount < prevCount2) {
-                    steps++;
-                    if (contradiction) break;
-                    continue;
-                }
+                if (emptyCellsCount < prevCount2) { steps++; if (contradiction) break; continue; }
                 
                 break;
             }
             
-            if (contradiction) {
-                return returnDifficulty ? -0.2 : sudoku;
-            } else if (emptyCellsCount === 0) {
+            if (contradiction) return returnDifficulty ? -0.2 : sudoku;
+            if (emptyCellsCount === 0) {
                 const difficulty = initialEmptyCells > 0 ? steps / initialEmptyCells : 0.0;
                 return returnDifficulty ? (difficulty + highestTechnique) / 3 : puzzle;
-            } else {
-                return returnDifficulty ? -0.1 : sudoku;
             }
+            return returnDifficulty ? -0.1 : sudoku;
         }
 
         function generateSudoku(minDifficulty, maxDifficulty, targetClues = 25, maxAttempts = 100) {
@@ -803,17 +788,18 @@
             return puzzle;
         }
 
-        // Game State
+        // Game logic
         let gameState = {
             puzzle: null,
             current: null,
             initial: null,
             selected: null,
             candidates: null,
-            showCandidates: true,
             mistakes: 0,
             startTime: null,
-            givenCells: new Set()
+            givenCells: new Set(),
+            pencilMode: false,
+            history: []
         };
 
         let currentGeneratedPuzzle = null;
@@ -905,6 +891,7 @@
             gameState.mistakes = 0;
             gameState.selected = null;
             gameState.candidates = Array(9).fill(null).map(() => Array(9).fill(null).map(() => new Set()));
+            gameState.history = [];
 
             for (let r = 0; r < 9; r++) {
                 for (let c = 0; c < 9; c++) {
@@ -912,7 +899,7 @@
                         gameState.givenCells.add(`${r},${c}`);
                         gameState.candidates[r][c] = new Set();
                     } else {
-                        gameState.candidates[r][c] = new Set(getPossibleValues(puzzle, r, c));
+                        gameState.candidates[r][c] = new Set();
                     }
                 }
             }
@@ -994,7 +981,7 @@
 
                     if (gameState.current[r][c] !== 0) {
                         cellContent.textContent = gameState.current[r][c];
-                    } else if (gameState.showCandidates && gameState.candidates[r][c].size > 0) {
+                    } else if (gameState.candidates[r][c].size > 0) {
                         const candidatesDiv = document.createElement('div');
                         candidatesDiv.className = 'candidates';
                         for (let i = 1; i <= 9; i++) {
@@ -1011,30 +998,8 @@
 
                     cell.appendChild(cellContent);
                     cell.onclick = () => selectCell(r, c);
-                    
-                    cell.onkeydown = (e) => {
-                        const num = parseInt(e.key);
-                        if (num >= 1 && num <= 9 && gameState.selected) {
-                            placeNumber(gameState.selected[0], gameState.selected[1], num);
-                            e.preventDefault();
-                        } else if (e.key === '0' || e.key === 'Backspace' || e.key === 'Delete') {
-                            if (gameState.selected) {
-                                clearCell(gameState.selected[0], gameState.selected[1]);
-                            }
-                            e.preventDefault();
-                        }
-                    };
-                    cell.tabIndex = 0;
-
                     board.appendChild(cell);
                 }
-            }
-
-            if (gameState.selected) {
-                const index = gameState.selected[0] * 9 + gameState.selected[1];
-                setTimeout(() => {
-                    document.querySelectorAll('.sudoku-cell')[index]?.focus();
-                }, 0);
             }
         }
 
@@ -1045,56 +1010,77 @@
             }
         }
 
-        function placeNumber(r, c, num) {
+        function numberPadClick(num) {
+            if (!gameState.selected) return;
+            const [r, c] = gameState.selected;
             if (gameState.initial[r][c] !== 0) return;
 
-            gameState.current[r][c] = num;
-            gameState.candidates[r][c].clear();
+            gameState.history.push({
+                r, c,
+                current: gameState.current[r][c],
+                candidates: new Set(gameState.candidates[r][c])
+            });
 
-            updateCandidatesAfterPlacement(r, c, num);
+            if (gameState.pencilMode) {
+                if (gameState.candidates[r][c].has(num)) {
+                    gameState.candidates[r][c].delete(num);
+                } else {
+                    gameState.candidates[r][c].add(num);
+                }
+            } else {
+                if (gameState.current[r][c] === num) {
+                    gameState.current[r][c] = 0;
+                    gameState.candidates[r][c] = new Set();
+                } else {
+                    gameState.current[r][c] = num;
+                    gameState.candidates[r][c].clear();
+                    updateCandidatesAfterPlacement(r, c, num);
 
-            if (!isValidPlacement(r, c, num)) {
-                gameState.mistakes++;
+                    if (!isValidPlacement(r, c, num)) {
+                        gameState.mistakes++;
+                    }
+
+                    if (isPuzzleSolved()) {
+                        setTimeout(() => alert('PUZZLE SOLVED'), 100);
+                    }
+                }
             }
 
             updateStats();
             renderBoard();
+        }
 
-            if (isPuzzleSolved()) {
-                setTimeout(() => alert('PUZZLE SOLVED'), 100);
+        function togglePencilMode() {
+            gameState.pencilMode = !gameState.pencilMode;
+            const pencilBtn = document.getElementById('pencilBtn');
+            if (gameState.pencilMode) {
+                pencilBtn.style.color = '#ffff00';
+                pencilBtn.style.borderColor = '#ffff00';
+            } else {
+                pencilBtn.style.color = '#0f0';
+                pencilBtn.style.borderColor = '#0f0';
             }
         }
 
-        function clearCell(r, c) {
-            if (gameState.initial[r][c] !== 0) return;
-
-            const val = gameState.current[r][c];
-            gameState.current[r][c] = 0;
-
-            gameState.candidates[r][c] = new Set(getPossibleValues(gameState.current, r, c));
-
-            if (val !== 0) {
-                for (let i = 0; i < 9; i++) {
-                    if (gameState.current[r][i] === 0 && canPlace(r, i, val)) {
-                        gameState.candidates[r][i].add(val);
-                    }
-                    if (gameState.current[i][c] === 0 && canPlace(i, c, val)) {
-                        gameState.candidates[i][c].add(val);
-                    }
-                }
-                const startRow = Math.floor(r / 3) * 3;
-                const startCol = Math.floor(c / 3) * 3;
-                for (let br = startRow; br < startRow + 3; br++) {
-                    for (let bc = startCol; bc < startCol + 3; bc++) {
-                        if (gameState.current[br][bc] === 0 && canPlace(br, bc, val)) {
-                            gameState.candidates[br][bc].add(val);
-                        }
-                    }
-                }
-            }
-
+        function undoLastMove() {
+            if (gameState.history.length === 0) return;
+            
+            const move = gameState.history.pop();
+            gameState.current[move.r][move.c] = move.current;
+            gameState.candidates[move.r][move.c] = new Set(move.candidates);
+            
             updateStats();
             renderBoard();
+        }
+
+        function clearSelection() {
+            if (gameState.selected) {
+                const [r, c] = gameState.selected;
+                gameState.current[r][c] = 0;
+                gameState.candidates[r][c] = new Set();
+                updateStats();
+                renderBoard();
+            }
         }
 
         function updateCandidatesAfterPlacement(r, c, num) {
@@ -1128,11 +1114,6 @@
             return true;
         }
 
-        function canPlace(r, c, num) {
-            if (gameState.current[r][c] !== 0) return false;
-            return isValidPlacement(r, c, num);
-        }
-
         function isPuzzleSolved() {
             for (let r = 0; r < 9; r++) {
                 for (let c = 0; c < 9; c++) {
@@ -1164,29 +1145,12 @@
             setTimeout(updateTimer, 1000);
         }
 
-        function clearSelection() {
-            if (gameState.selected) {
-                clearCell(gameState.selected[0], gameState.selected[1]);
-            }
-        }
-
-        function toggleCandidates() {
-            gameState.showCandidates = !gameState.showCandidates;
-            renderBoard();
-        }
-
         function resetGame() {
             gameState.current = deepCopyBoard(gameState.initial);
             gameState.mistakes = 0;
             gameState.selected = null;
             gameState.candidates = Array(9).fill(null).map(() => Array(9).fill(null).map(() => new Set()));
-            for (let r = 0; r < 9; r++) {
-                for (let c = 0; c < 9; c++) {
-                    if (gameState.initial[r][c] === 0) {
-                        gameState.candidates[r][c] = new Set(getPossibleValues(gameState.initial, r, c));
-                    }
-                }
-            }
+            gameState.history = [];
             updateStats();
             renderBoard();
         }
@@ -1201,35 +1165,17 @@
                 initial: null,
                 selected: null,
                 candidates: null,
-                showCandidates: true,
                 mistakes: 0,
                 startTime: null,
-                givenCells: new Set()
+                givenCells: new Set(),
+                pencilMode: false,
+                history: []
             };
         }
 
         if (puzzleParam && timeParam) {
             loadFromUrl();
         }
-
-        document.addEventListener('keydown', (e) => {
-            if (!gameState.selected || !document.getElementById('gameContainer').classList.contains('active')) return;
-            const [r, c] = gameState.selected;
-            const num = parseInt(e.key);
-            if (num >= 1 && num <= 9) {
-                placeNumber(r, c, num);
-            } else if (e.key === '0' || e.key === 'Backspace' || e.key === 'Delete') {
-                clearCell(r, c);
-            } else if (e.key === 'ArrowUp' && r > 0) {
-                selectCell(r - 1, c);
-            } else if (e.key === 'ArrowDown' && r < 8) {
-                selectCell(r + 1, c);
-            } else if (e.key === 'ArrowLeft' && c > 0) {
-                selectCell(r, c - 1);
-            } else if (e.key === 'ArrowRight' && c < 8) {
-                selectCell(r, c + 1);
-            }
-        });
     </script>
 </body>
 </html>
