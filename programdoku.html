@@ -57,10 +57,12 @@
             color: #0f0;
             padding: 12px;
             font-family: 'Courier New', monospace;
-            font-size: 12px;
+            font-size: 11px;
             word-break: break-all;
             margin-bottom: 10px;
             border-radius: 4px;
+            max-height: 80px;
+            overflow-y: auto;
         }
 
         .share-container button {
@@ -298,11 +300,24 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
+            margin-bottom: 10px;
         }
 
         .controls button {
             margin-top: 0;
-            padding: 10px;
+            padding: 12px;
+            font-size: 12px;
+        }
+
+        .controls-bottom {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .controls-bottom button {
+            margin-top: 0;
+            padding: 12px;
             font-size: 12px;
         }
 
@@ -330,6 +345,11 @@
             }
 
             .sudoku-cell {
+                font-size: 14px;
+            }
+
+            button {
+                padding: 14px;
                 font-size: 14px;
             }
         }
@@ -408,6 +428,9 @@
             <div class="controls">
                 <button onclick="clearSelection()">CLEAR</button>
                 <button onclick="toggleCandidates()">CANDIDATES</button>
+            </div>
+
+            <div class="controls-bottom">
                 <button onclick="resetGame()">RESET</button>
                 <button onclick="resetToSetup()">SETUP</button>
             </div>
@@ -415,12 +438,7 @@
     </div>
 
     <script>
-        // Check if loaded from URL params
-        const urlParams = new URLSearchParams(window.location.search);
-        const puzzleParam = urlParams.get('p');
-        const timeParam = urlParams.get('t');
-
-        // Inline newsudoku.js functions
+        // newsudoku.js functions
         function convertToMatrix(sudokuString) {
             if (sudokuString.length !== 81) throw new Error("Sudoku string must be exactly 81 characters long.");
             const matrix = [];
@@ -545,31 +563,190 @@
             return contradiction;
         }
 
+        function findHiddenSingles(puzzle, possibilities, unitType, unitIndex) {
+            const updates = [];
+            const allNums = range1To9();
+            const unitPoss = {};
+            
+            for (const num of allNums) {
+                unitPoss[num] = [];
+            }
+            
+            let coords = [];
+            if (unitType === 'row') {
+                coords = Array(9).fill(null).map((_, c) => [unitIndex, c]);
+            } else if (unitType === 'col') {
+                coords = Array(9).fill(null).map((_, r) => [r, unitIndex]);
+            } else if (unitType === 'box') {
+                const startRow = Math.floor(unitIndex / 3) * 3;
+                const startCol = (unitIndex % 3) * 3;
+                for (let r = startRow; r < startRow + 3; r++) {
+                    for (let c = startCol; c < startCol + 3; c++) {
+                        coords.push([r, c]);
+                    }
+                }
+            }
+            
+            for (const [r, c] of coords) {
+                if (puzzle[r][c] === 0) {
+                    for (const num of possibilities[r][c]) {
+                        unitPoss[num].push([r, c]);
+                    }
+                }
+            }
+            
+            for (const [num, locations] of Object.entries(unitPoss)) {
+                if (locations.length === 1) {
+                    const [r, c] = locations[0];
+                    if (puzzle[r][c] === 0) {
+                        updates.push([r, c, parseInt(num)]);
+                    }
+                }
+            }
+            
+            return updates;
+        }
+
+        function findNakedSingles(puzzle, possibilities) {
+            const updates = [];
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (puzzle[r][c] === 0 && possibilities[r][c].size === 1) {
+                        const val = [...possibilities[r][c]][0];
+                        updates.push([r, c, val]);
+                    }
+                }
+            }
+            return updates;
+        }
+
+        function findAndApplyUpdates(techniqueType, puzzle, possibilities, emptyCellsCount) {
+            let updates = [];
+            
+            if (techniqueType === 'BoxHS') {
+                for (let boxIdx = 0; boxIdx < 9; boxIdx++) {
+                    const boxUpdates = findHiddenSingles(puzzle, possibilities, 'box', boxIdx);
+                    updates = updates.concat(boxUpdates);
+                }
+            } else if (techniqueType === 'LineHS') {
+                for (let idx = 0; idx < 9; idx++) {
+                    const rowUpdates = findHiddenSingles(puzzle, possibilities, 'row', idx);
+                    const colUpdates = findHiddenSingles(puzzle, possibilities, 'col', idx);
+                    updates = updates.concat(rowUpdates, colUpdates);
+                }
+            } else if (techniqueType === 'NakedSingle') {
+                updates = findNakedSingles(puzzle, possibilities);
+            }
+            
+            if (updates.length === 0) {
+                return [emptyCellsCount, false];
+            }
+            
+            const uniqueUpdates = [];
+            const seen = new Set();
+            for (const [r, c, val] of updates) {
+                const key = `${r},${c},${val}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    uniqueUpdates.push([r, c, val]);
+                }
+            }
+            
+            let contradiction = false;
+            for (const [r, c, val] of uniqueUpdates) {
+                if (puzzle[r][c] === 0) {
+                    puzzle[r][c] = val;
+                    emptyCellsCount--;
+                    
+                    if (eliminatePossibilities(possibilities, r, c, val, puzzle)) {
+                        contradiction = true;
+                    }
+                    
+                    possibilities[r][c] = new Set();
+                }
+            }
+            
+            return [emptyCellsCount, contradiction];
+        }
+
         function solveWithSingles(sudoku, returnDifficulty = false) {
             const puzzle = deepCopyBoard(sudoku);
             const initialEmptyCells = puzzle.flat().filter(x => x === 0).length;
-            if (initialEmptyCells === 0) return returnDifficulty ? 0.0 : puzzle;
+            let highestTechnique = 0;
             
-            const possibilities = Array(9).fill(null).map(() => Array(9).fill(null).map(() => new Set()));
+            if (initialEmptyCells === 0) {
+                return returnDifficulty ? 0.0 : puzzle;
+            }
+            
+            const possibilities = Array(9).fill(null).map(() => 
+                Array(9).fill(null).map(() => new Set())
+            );
+            
             let emptyCellsCount = 0;
             for (let r = 0; r < 9; r++) {
                 for (let c = 0; c < 9; c++) {
                     if (puzzle[r][c] === 0) {
                         possibilities[r][c] = new Set(getPossibleValues(puzzle, r, c));
-                        if (possibilities[r][c].size === 0) return returnDifficulty ? -0.2 : sudoku;
+                        if (possibilities[r][c].size === 0) {
+                            return returnDifficulty ? -0.2 : sudoku;
+                        }
                         emptyCellsCount++;
                     } else {
                         possibilities[r][c] = new Set();
                     }
                 }
             }
-            return returnDifficulty ? -0.1 : puzzle;
+            
+            let steps = 0;
+            let contradiction = false;
+            
+            while (emptyCellsCount > 0) {
+                [emptyCellsCount, contradiction] = findAndApplyUpdates('BoxHS', puzzle, possibilities, emptyCellsCount);
+                const boxUpdates = emptyCellsCount < initialEmptyCells - steps;
+                if (boxUpdates) {
+                    steps++;
+                    if (contradiction) break;
+                    continue;
+                }
+                
+                highestTechnique = Math.max(1, highestTechnique);
+                
+                const prevCount = emptyCellsCount;
+                [emptyCellsCount, contradiction] = findAndApplyUpdates('LineHS', puzzle, possibilities, emptyCellsCount);
+                if (emptyCellsCount < prevCount) {
+                    steps++;
+                    if (contradiction) break;
+                    continue;
+                }
+                
+                highestTechnique = 2;
+                
+                const prevCount2 = emptyCellsCount;
+                [emptyCellsCount, contradiction] = findAndApplyUpdates('NakedSingle', puzzle, possibilities, emptyCellsCount);
+                if (emptyCellsCount < prevCount2) {
+                    steps++;
+                    if (contradiction) break;
+                    continue;
+                }
+                
+                break;
+            }
+            
+            if (contradiction) {
+                return returnDifficulty ? -0.2 : sudoku;
+            } else if (emptyCellsCount === 0) {
+                const difficulty = initialEmptyCells > 0 ? steps / initialEmptyCells : 0.0;
+                return returnDifficulty ? (difficulty + highestTechnique) / 3 : puzzle;
+            } else {
+                return returnDifficulty ? -0.1 : sudoku;
+            }
         }
 
         function generateSudoku(minDifficulty, maxDifficulty, targetClues = 25, maxAttempts = 100) {
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 const solution = generateSolutionRandom();
                 const puzzle = deepCopyBoard(solution);
+                
                 const positions = [];
                 for (let r = 0; r < 9; r++) {
                     for (let c = 0; c < 9; c++) {
@@ -600,7 +777,6 @@
                 }
             }
             
-            // Fallback: just create a valid puzzle with target clues
             const solution = generateSolutionRandom();
             const puzzle = deepCopyBoard(solution);
             const positions = [];
@@ -630,7 +806,6 @@
         // Game State
         let gameState = {
             puzzle: null,
-            solution: null,
             current: null,
             initial: null,
             selected: null,
@@ -644,12 +819,14 @@
         let currentGeneratedPuzzle = null;
         let currentGeneratedTime = null;
 
-        // Initialize start time input
+        const urlParams = new URLSearchParams(window.location.search);
+        const puzzleParam = urlParams.get('p');
+        const timeParam = urlParams.get('t');
+
         const now = new Date();
         now.setMinutes(now.getMinutes() + 1);
         document.getElementById('startTime').value = now.toISOString().slice(0, 16);
 
-        // Event listeners
         document.getElementById('minDiff').addEventListener('input', (e) => {
             document.getElementById('minDiffValue').textContent = (e.target.value / 100).toFixed(2);
         });
@@ -667,7 +844,6 @@
             const startDate = new Date(startTimeInput);
             const unixTimestamp = Math.floor(startDate.getTime() / 1000);
             
-            // Generate puzzle (with empty cells)
             const puzzleBoard = generateSudoku(minDiff, maxDiff, targetClues, maxAttempts);
             const puzzleString = convertToString(puzzleBoard);
             
@@ -697,6 +873,9 @@
 
             if (startTime > now) {
                 waitForStartTime(startTime);
+                gameState.puzzle = puzzle;
+                gameState.initial = deepCopyBoard(puzzle);
+                gameState.current = deepCopyBoard(puzzle);
             } else {
                 initializeGame(puzzle);
                 startGameNow();
@@ -751,7 +930,10 @@
                 const diff = startTime - now;
 
                 if (diff <= 0) {
-                    startGameNow();
+                    document.getElementById('waitingContainer').classList.remove('active');
+                    document.getElementById('gameContainer').classList.add('active');
+                    gameState.startTime = Date.now();
+                    updateTimer();
                 } else {
                     const hours = Math.floor(diff / 3600000);
                     const minutes = Math.floor((diff % 3600000) / 60000);
@@ -1012,9 +1194,9 @@
         function resetToSetup() {
             document.getElementById('setupForm').style.display = 'block';
             document.getElementById('gameContainer').classList.remove('active');
+            document.getElementById('shareContainer').classList.remove('active');
             gameState = {
                 puzzle: null,
-                solution: null,
                 current: null,
                 initial: null,
                 selected: null,
@@ -1026,7 +1208,6 @@
             };
         }
 
-        // Check for URL params on load
         if (puzzleParam && timeParam) {
             loadFromUrl();
         }
