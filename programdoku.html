@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sudoku Game</title>
+    <title>PROGRAMDOKU</title>
     <style>
         * {
             margin: 0;
@@ -36,6 +36,43 @@
             color: #e0e0e0;
             font-size: 24px;
             letter-spacing: 2px;
+        }
+
+        .share-container {
+            background: #252525;
+            border: 1px solid #444;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .share-container.active {
+            display: block;
+        }
+
+        .share-url {
+            background: #1a1a1a;
+            border: 1px solid #0f0;
+            color: #0f0;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            word-break: break-all;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+
+        .share-container button {
+            margin-top: 0;
+            padding: 8px;
+            font-size: 12px;
+        }
+
+        .share-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
         }
 
         .form-group {
@@ -301,7 +338,7 @@
 <body>
     <div class="container">
         <div id="setupForm">
-            <h1>SUDOKU</h1>
+            <h1>PROGRAMDOKU</h1>
             
             <div class="form-group">
                 <label for="minDiff">MIN DIFFICULTY</label>
@@ -331,7 +368,16 @@
                 <input type="datetime-local" id="startTime">
             </div>
 
-            <button onclick="startGame()">GENERATE</button>
+            <button onclick="generatePuzzle()">GENERATE</button>
+
+            <div id="shareContainer" class="share-container">
+                <label>SHARE LINK</label>
+                <div class="share-url" id="shareUrl"></div>
+                <div class="share-buttons">
+                    <button onclick="copyShareLink()">COPY</button>
+                    <button onclick="startFromLink()">START</button>
+                </div>
+            </div>
         </div>
 
         <div id="waitingContainer" class="waiting-container">
@@ -369,6 +415,11 @@
     </div>
 
     <script>
+        // Check if loaded from URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const puzzleParam = urlParams.get('p');
+        const timeParam = urlParams.get('t');
+
         // Inline newsudoku.js functions
         function convertToMatrix(sudokuString) {
             if (sudokuString.length !== 81) throw new Error("Sudoku string must be exactly 81 characters long.");
@@ -584,10 +635,15 @@
             givenCells: new Set()
         };
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const puzzleParam = urlParams.get('p');
-        const timeParam = urlParams.get('t');
+        let currentGeneratedPuzzle = null;
+        let currentGeneratedTime = null;
 
+        // Initialize start time input
+        const now = new Date();
+        now.setMinutes(now.getMinutes() + 1);
+        document.getElementById('startTime').value = now.toISOString().slice(0, 16);
+
+        // Event listeners
         document.getElementById('minDiff').addEventListener('input', (e) => {
             document.getElementById('minDiffValue').textContent = (e.target.value / 100).toFixed(2);
         });
@@ -595,32 +651,46 @@
             document.getElementById('maxDiffValue').textContent = (e.target.value / 100).toFixed(2);
         });
 
-        const now = new Date();
-        now.setMinutes(now.getMinutes() + 1);
-        document.getElementById('startTime').value = now.toISOString().slice(0, 16);
-
-        function startGame() {
-            if (puzzleParam && timeParam) {
-                loadFromUrl();
-            } else {
-                generateAndStartGame();
-            }
-        }
-
-        function generateAndStartGame() {
+        function generatePuzzle() {
             const minDiff = parseInt(document.getElementById('minDiff').value) / 100;
             const maxDiff = parseInt(document.getElementById('maxDiff').value) / 100;
             const targetClues = parseInt(document.getElementById('targetClues').value);
             const maxAttempts = parseInt(document.getElementById('maxAttempts').value);
 
             const startTimeInput = document.getElementById('startTime').value;
-            const startTime = new Date(startTimeInput).getTime();
+            const startDate = new Date(startTimeInput);
+            const unixTimestamp = Math.floor(startDate.getTime() / 1000);
+            
+            const puzzle = generateSudoku(minDiff, maxDiff, targetClues, maxAttempts);
+            const puzzleString = convertToString(puzzle);
+            
+            currentGeneratedPuzzle = puzzleString;
+            currentGeneratedTime = unixTimestamp;
+
+            const baseUrl = window.location.origin + window.location.pathname;
+            const shareUrl = `${baseUrl}?p=${puzzleString}&t=${unixTimestamp}`;
+            
+            document.getElementById('shareUrl').textContent = shareUrl;
+            document.getElementById('shareContainer').classList.add('active');
+        }
+
+        function copyShareLink() {
+            const shareUrl = document.getElementById('shareUrl').textContent;
+            navigator.clipboard.writeText(shareUrl).then(() => {
+                alert('Link copied to clipboard!');
+            });
+        }
+
+        function startFromLink() {
+            if (!currentGeneratedPuzzle || !currentGeneratedTime) return;
+            
+            const puzzle = convertToMatrix(currentGeneratedPuzzle);
+            const startTime = currentGeneratedTime * 1000;
             const now = Date.now();
 
             if (startTime > now) {
                 waitForStartTime(startTime);
             } else {
-                const puzzle = generateSudoku(minDiff, maxDiff, targetClues, maxAttempts);
                 initializeGame(puzzle);
                 startGameNow();
             }
@@ -947,6 +1017,11 @@
                 startTime: null,
                 givenCells: new Set()
             };
+        }
+
+        // Check for URL params on load
+        if (puzzleParam && timeParam) {
+            loadFromUrl();
         }
 
         document.addEventListener('keydown', (e) => {
