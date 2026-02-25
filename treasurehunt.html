@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Treasure Hunt</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #111; font-family: Georgia, serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  #topbar {
+    background: #1a1a1a; border-bottom: 1px solid #2e2e2e;
+    padding: 10px 20px; display: flex; align-items: center; gap: 10px; z-index: 1000; flex-wrap: wrap;
+  }
+  #topbar h1 { font-size: 1.1rem; color: #e6b84a; letter-spacing: 0.08em; text-transform: uppercase; }
+  .badge {
+    background: #2a2a2a; border: 1px solid #3a3a3a; color: #aaa;
+    font-size: 0.72rem; padding: 3px 9px; border-radius: 20px; font-family: monospace;
+  }
+  #coords { margin-left: auto; }
+
+  #map { flex: 1; width: 100%; }
+  .leaflet-tile { filter: brightness(0.85) saturate(0.65); }
+
+  .chest-dot {
+    border-radius: 50%; border: 2px solid rgba(255,255,255,0.25);
+    box-shadow: 0 0 6px 2px var(--glow); transition: transform .15s; cursor: pointer;
+  }
+  .chest-dot:hover { transform: scale(1.4); }
+
+  .leaflet-popup-content-wrapper {
+    background: #1e1e1e; border: 1px solid #333; border-radius: 10px;
+    color: #f0ead6; box-shadow: 0 4px 20px #000a;
+  }
+  .leaflet-popup-tip { background: #1e1e1e; }
+  .popup-tier { font-size: 0.7rem; text-transform: uppercase; letter-spacing: .1em; font-weight: bold; }
+  .popup-id { font-size: 0.75rem; color: #777; margin-top: 2px; }
+
+  #gpsOverlay {
+    display: none; position: fixed; inset: 0; background: #111e; z-index: 3000;
+    align-items: center; justify-content: center; flex-direction: column; gap: 12px;
+    font-family: Georgia, serif; color: #e6b84a;
+  }
+  #gpsOverlay .icon { font-size: 2.4rem; animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  #gpsOverlay .sub { font-size: 0.75rem; color: #555; }
+
+  #urlBox {
+    display: none; position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 10px;
+    padding: 12px 16px; z-index: 2000; gap: 8px; align-items: center;
+    box-shadow: 0 4px 24px #000c; max-width: 90vw;
+  }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>🗺 Treasure Hunt</h1>
+  <span class="badge" id="visibleCount">—</span>
+  <span class="badge" id="coords">—</span>
+</div>
+
+<div id="map"></div>
+
+<div id="gpsOverlay">
+  <div class="icon">📡</div>
+  <div>Detecting your location…</div>
+  <div class="sub">Please allow location access when prompted</div>
+</div>
+
+<div id="urlBox">
+  <span style="color:#e6b84a;font-size:0.75rem;white-space:nowrap">🔗 Your hunt URL</span>
+  <input id="urlOut" readonly style="background:#111;border:1px solid #333;color:#ccc;border-radius:6px;padding:4px 8px;font-size:0.72rem;font-family:monospace;width:300px;max-width:50vw"/>
+  <button id="copyBtn" style="background:#e6b84a;color:#111;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.75rem;font-weight:bold">Copy</button>
+  <button id="closeUrl" style="background:none;border:none;color:#555;cursor:pointer;font-size:1rem;line-height:1">✕</button>
+</div>
+
+<script>
+  // ── Tiers ────────────────────────────────────────────────
+  const TIERS = [
+    { name: 'Mythic',    from:    0, to:   49, color: '#ff4444', glow: '#ff000088', size: 14 },
+    { name: 'Legendary', from:   50, to:  299, color: '#ff9500', glow: '#ff950066', size: 12 },
+    { name: 'Epic',      from:  300, to:  799, color: '#bf5fff', glow: '#bf5fff55', size: 10 },
+    { name: 'Rare',      from:  800, to: 1799, color: '#4d9fff', glow: '#4d9fff44', size: 9  },
+    { name: 'Uncommon',  from: 1800, to: 3799, color: '#4caf50', glow: '#4caf5033', size: 8  },
+    { name: 'Common',    from: 3800, to: 9999, color: '#888888', glow: '#88888822', size: 7  },
+  ];
+  function getTier(i) {
+    for (const t of TIERS) if (i >= t.from && i <= t.to) return t;
+    return TIERS[TIERS.length - 1];
+  }
+
+  // ── Encoding ─────────────────────────────────────────────
+  const XOR_KEY = 0x5F3A;
+  function encodeLocation(lat, lng) {
+    const str = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+    let x = '';
+    for (let i = 0; i < str.length; i++)
+      x += String.fromCharCode(str.charCodeAt(i) ^ (XOR_KEY >> (i % 2 === 0 ? 8 : 0) & 0xFF));
+    return btoa(x).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+  }
+  function decodeLocation(enc) {
+    try {
+      const x = atob(enc.replace(/-/g,'+').replace(/_/g,'/'));
+      let s = '';
+      for (let i = 0; i < x.length; i++)
+        s += String.fromCharCode(x.charCodeAt(i) ^ (XOR_KEY >> (i % 2 === 0 ? 8 : 0) & 0xFF));
+      const [lat, lng] = s.split(',').map(Number);
+      if (isNaN(lat) || isNaN(lng)) return null;
+      return { lat, lng };
+    } catch { return null; }
+  }
+
+  // ── PRNG ─────────────────────────────────────────────────
+  function seededRNG(seed) {
+    let s = seed;
+    return () => {
+      s |= 0; s = s + 0x6D2B79F5 | 0;
+      let t = Math.imul(s ^ s >>> 15, 1 | s);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  // ── Boot ─────────────────────────────────────────────────
+  const params = new URLSearchParams(window.location.search);
+  const locParam = params.get('home');
+
+  function setHomeParam(lat, lng) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('home', encodeLocation(lat, lng));
+    window.history.replaceState({}, '', url);
+    return { lat, lng };
+  }
+
+  function boot(home) {
+    document.getElementById('gpsOverlay').style.display = 'none';
+    initMap(home);
+  }
+
+  if (locParam) {
+    const decoded = decodeLocation(locParam);
+    boot(decoded || setHomeParam(41.9028, 12.4964));
+  } else {
+    document.getElementById('gpsOverlay').style.display = 'flex';
+    navigator.geolocation.getCurrentPosition(
+      p => boot(setHomeParam(p.coords.latitude, p.coords.longitude)),
+      ()  => boot(setHomeParam(41.9028, 12.4964)),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }
+
+  // ── Map init ─────────────────────────────────────────────
+  function initMap(HOME) {
+    const SEED = 42;
+    const CHEST_COUNT = 10000;
+    const RADIUS = 0.1;
+    const RENDER_LIMIT = 400;
+
+    // Generate chests
+    const rng = seededRNG(SEED);
+    const chests = [];
+    const tierCounts = {};
+    TIERS.forEach(t => tierCounts[t.name] = 0);
+
+    for (let i = 0; i < CHEST_COUNT; i++) {
+      let dlat, dlng;
+      do {
+        dlat = (rng() * 2 - 1) * RADIUS;
+        dlng = (rng() * 2 - 1) * RADIUS;
+      } while (dlat * dlat + dlng * dlng > RADIUS * RADIUS);
+      const tier = getTier(i);
+      tierCounts[tier.name]++;
+      chests.push({ lat: HOME.lat + dlat, lng: HOME.lng + dlng, id: i, tier });
+    }
+
+    const map = L.map('map', { center: [HOME.lat, HOME.lng], zoom: 15 });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors', maxZoom: 19
+    }).addTo(map);
+
+    map.on('mousemove', e => {
+      document.getElementById('coords').textContent =
+        `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+    });
+
+    // Legend
+    const legend = L.control({ position: 'bottomright' });
+    legend.onAdd = () => {
+      const d = L.DomUtil.create('div');
+      d.style.cssText = 'background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:10px 14px;font-family:Georgia,serif;font-size:0.75rem;color:#ccc;line-height:1.8;min-width:140px';
+      d.innerHTML = '<div style="color:#e6b84a;font-size:0.7rem;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Chest Tiers</div>' +
+        TIERS.map(t =>
+          `<div><span style="background:${t.color};display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;box-shadow:0 0 5px ${t.color};vertical-align:middle"></span>${t.name}<span style="color:#555;float:right;margin-left:16px">${tierCounts[t.name]}</span></div>`
+        ).join('');
+      return d;
+    };
+    legend.addTo(map);
+
+    // Chest rendering
+    const chestLayer = L.layerGroup().addTo(map);
+
+    function renderChests() {
+      chestLayer.clearLayers();
+      const b = map.getBounds().pad(0.1);
+      const visible = chests.filter(c => b.contains([c.lat, c.lng]));
+      const toRender = visible.slice(0, RENDER_LIMIT);
+      toRender.forEach(c => {
+        const t = c.tier;
+        const icon = L.divIcon({
+          html: `<div class="chest-dot" style="width:${t.size}px;height:${t.size}px;background:${t.color};--glow:${t.glow}"></div>`,
+          className: '', iconSize: [t.size, t.size], iconAnchor: [t.size/2, t.size/2]
+        });
+        L.marker([c.lat, c.lng], { icon })
+          .bindPopup(`<div class="popup-tier" style="color:${t.color}">${t.tier}</div><div class="popup-id">Chest #${c.id + 1}</div>`)
+          .addTo(chestLayer);
+      });
+      document.getElementById('visibleCount').textContent =
+        visible.length > RENDER_LIMIT
+          ? `Showing ${toRender.length} of ${visible.length} chests`
+          : `${visible.length} chests in view`;
+    }
+
+    map.on('moveend', renderChests);
+    map.on('zoomend', renderChests);
+    renderChests();
+
+    // Right-click to generate URL
+    const urlBox = document.getElementById('urlBox');
+    const urlOut = document.getElementById('urlOut');
+    map.on('contextmenu', e => {
+      const url = `${location.origin}${location.pathname}?home=${encodeLocation(e.latlng.lat, e.latlng.lng)}`;
+      urlOut.value = url;
+      urlBox.style.display = 'flex';
+    });
+    document.getElementById('copyBtn').onclick = () => {
+      navigator.clipboard.writeText(urlOut.value);
+      document.getElementById('copyBtn').textContent = 'Copied!';
+      setTimeout(() => document.getElementById('copyBtn').textContent = 'Copy', 1500);
+    };
+    document.getElementById('closeUrl').onclick = () => urlBox.style.display = 'none';
+  }
+</script>
+</body>
+</html>
