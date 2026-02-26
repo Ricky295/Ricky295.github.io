@@ -1,364 +1,1181 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Treasure Hunt</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #111; font-family: Georgia, serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PROGRAMDOKU</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-  #topbar {
-    background: #1a1a1a; border-bottom: 1px solid #2e2e2e;
-    padding: 10px 20px; display: flex; align-items: center; gap: 10px; z-index: 1000;
-  }
-  #topbar h1 { font-size: 1.1rem; color: #e6b84a; letter-spacing: 0.08em; text-transform: uppercase; }
-  .badge {
-    background: #2a2a2a; border: 1px solid #3a3a3a; color: #aaa;
-    font-size: 0.72rem; padding: 3px 9px; border-radius: 20px; font-family: monospace;
-  }
-  #coords { margin-left: auto; }
-  #map { flex: 1; width: 100%; }
-  .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(0.85) saturate(0.6); }
-  .chest-dot {
-    border-radius: 50%; border: 2px solid rgba(255,255,255,0.25);
-    box-shadow: 0 0 6px 2px var(--glow); transition: transform .15s; cursor: pointer;
-  }
-  .chest-dot:hover { transform: scale(1.4); }
-  .leaflet-popup-content-wrapper {
-    background: #1e1e1e; border: 1px solid #333; border-radius: 10px;
-    color: #f0ead6; box-shadow: 0 4px 20px #000a;
-  }
-  .leaflet-popup-tip { background: #1e1e1e; }
-  .popup-tier { font-size: 0.7rem; text-transform: uppercase; letter-spacing: .1em; font-weight: bold; }
-  .popup-id { font-size: 0.75rem; color: #777; margin-top: 2px; }
-  #gpsOverlay {
-    display: none; position: fixed; inset: 0; background: #111e; z-index: 3000;
-    align-items: center; justify-content: center; flex-direction: column; gap: 12px;
-    font-family: Georgia, serif; color: #e6b84a;
-  }
-  #gpsOverlay .icon { font-size: 2.4rem; animation: pulse 1.2s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-  #gpsOverlay .sub { font-size: 0.75rem; color: #555; }
-  #urlBox {
-    display: none; position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    background: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 10px;
-    padding: 12px 16px; z-index: 2000; gap: 8px; align-items: center;
-    box-shadow: 0 4px 24px #000c; max-width: 90vw;
-  }
-  #toast {
-    display: none; position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
-    padding: 8px 18px; border-radius: 20px; font-size: 0.85rem;
-    z-index: 2000; white-space: nowrap; pointer-events: none;
-    box-shadow: 0 4px 16px #000a; animation: fadeUp .3s ease;
-  }
-  @keyframes fadeUp { from { opacity:0; transform: translateX(-50%) translateY(8px); } }
-</style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: #2d2d2d;
+            border: 2px solid #555;
+            padding: 30px;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #e0e0e0;
+            font-size: 24px;
+            letter-spacing: 2px;
+        }
+
+        .share-container {
+            background: #252525;
+            border: 1px solid #444;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .share-container.active {
+            display: block;
+        }
+
+        .share-url {
+            background: #1a1a1a;
+            border: 1px solid #0f0;
+            color: #0f0;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            word-break: break-all;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            max-height: 80px;
+            overflow-y: auto;
+        }
+
+        .share-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .share-buttons button {
+            margin-top: 0;
+            padding: 8px;
+            font-size: 12px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #b0b0b0;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        input[type="number"],
+        input[type="datetime-local"],
+        input[type="range"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #444;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            font-family: inherit;
+            font-size: 14px;
+        }
+
+        input[type="number"]:focus,
+        input[type="datetime-local"]:focus {
+            outline: none;
+            border-color: #0f0;
+            box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+        }
+
+        input[type="range"] {
+            padding: 0;
+            height: 6px;
+        }
+
+        .range-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .value-display {
+            display: inline-block;
+            margin-left: 10px;
+            color: #0f0;
+            font-weight: bold;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #333;
+            color: #0f0;
+            border: 1px solid #0f0;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            letter-spacing: 1px;
+            margin-top: 20px;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #0f0;
+            color: #1a1a1a;
+        }
+
+        button:active {
+            opacity: 0.8;
+        }
+
+        .game-container {
+            display: none;
+        }
+
+        .game-container.active {
+            display: block;
+        }
+
+        .timer {
+            text-align: center;
+            font-size: 28px;
+            font-weight: bold;
+            color: #0f0;
+            margin-bottom: 20px;
+            letter-spacing: 2px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .sudoku-board {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 0;
+            background: #111;
+            padding: 8px;
+            margin-bottom: 20px;
+            width: 100%;
+            aspect-ratio: 1;
+            max-width: 100%;
+            border: 3px solid #444;
+        }
+
+        .sudoku-cell {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            padding: 0;
+            aspect-ratio: 1;
+            font-size: clamp(14px, 4vw, 24px);
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .sudoku-cell:nth-child(3n)::after {
+            content: '';
+            position: absolute;
+            right: -1px;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background: #444;
+        }
+
+        .sudoku-cell:nth-child(n+19):nth-child(-n+27)::before,
+        .sudoku-cell:nth-child(n+55):nth-child(-n+63)::before {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: #444;
+        }
+
+        .sudoku-cell.given {
+            background: #252525;
+            cursor: not-allowed;
+            color: #e0e0e0;
+        }
+
+        .sudoku-cell.selected {
+            background: #333;
+            border-color: #0f0;
+            box-shadow: inset 0 0 10px rgba(0, 255, 0, 0.2);
+        }
+
+        .sudoku-cell.highlighted {
+            background: #2a2a2a;
+        }
+
+        .sudoku-cell.error {
+            color: #ff4444;
+        }
+
+        .sudoku-cell.selected.error {
+            border-color: #ff4444;
+            box-shadow: inset 0 0 10px rgba(255, 68, 68, 0.2);
+        }
+
+        .candidates {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0;
+            font-size: 50%;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .candidate {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #555;
+            font-weight: normal;
+        }
+
+        .candidate.hidden {
+            display: none;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-box {
+            background: #252525;
+            padding: 12px;
+            border: 1px solid #444;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 22px;
+            font-weight: bold;
+            color: #0f0;
+        }
+
+        .number-pad {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .number-pad button {
+            margin-top: 0;
+            padding: 12px;
+            font-size: 12px;
+        }
+
+        .pencil-btn {
+            grid-column: 5;
+            grid-row: 2;
+        }
+
+        .pencil-mode {
+            color: #ffff00;
+            border-color: #ffff00;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .controls button {
+            margin-top: 0;
+            padding: 12px;
+            font-size: 12px;
+        }
+
+        .controls-bottom {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .controls-bottom button {
+            margin-top: 0;
+            padding: 12px;
+            font-size: 12px;
+        }
+
+        .waiting-container {
+            text-align: center;
+            display: none;
+        }
+
+        .waiting-container.active {
+            display: block;
+        }
+
+        .countdown {
+            font-size: 48px;
+            font-weight: bold;
+            color: #0f0;
+            margin: 30px 0;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 2px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+
+            .sudoku-cell {
+                font-size: 14px;
+            }
+
+            button {
+                padding: 14px;
+                font-size: 14px;
+            }
+        }
+    </style>
 </head>
 <body>
+    <div class="container">
+        <div id="setupForm">
+            <h1>PROGRAMDOKU</h1>
+            
+            <div class="form-group">
+                <label for="minDiff">MIN DIFFICULTY</label>
+                <input type="range" id="minDiff" min="0" max="100" value="30" step="5">
+                <span class="value-display" id="minDiffValue">0.30</span>
+            </div>
 
-<div id="topbar">
-  <h1>🗺 Treasure Hunt</h1>
-  <span class="badge" id="levelBadge" style="position:relative;overflow:hidden">
-    <span id="levelBar" style="position:absolute;left:0;top:0;height:100%;background:#e6b84a22;width:0%;transition:width .4s;border-radius:20px;"></span>
-    <span id="levelText" style="position:relative">Lv. 0  0/30 XP</span>
-  </span>
-  <span class="badge" id="collectedCount">—</span>
-  <span class="badge" id="coords">—</span>
-</div>
+            <div class="form-group">
+                <label for="maxDiff">MAX DIFFICULTY</label>
+                <input type="range" id="maxDiff" min="0" max="100" value="70" step="5">
+                <span class="value-display" id="maxDiffValue">0.70</span>
+            </div>
 
-<div id="map"></div>
-<div id="toast"></div>
+            <div class="range-container">
+                <div class="form-group">
+                    <label for="targetClues">TARGET CLUES</label>
+                    <input type="number" id="targetClues" min="17" max="81" value="25">
+                </div>
+                <div class="form-group">
+                    <label for="maxAttempts">MAX ATTEMPTS</label>
+                    <input type="number" id="maxAttempts" min="1" max="1000" value="100">
+                </div>
+            </div>
 
-<div id="gpsOverlay">
-  <div class="icon">📡</div>
-  <div>Detecting your location…</div>
-  <div class="sub">Please allow location access when prompted</div>
-</div>
+            <div class="form-group">
+                <label for="startTime">START TIME</label>
+                <input type="datetime-local" id="startTime">
+            </div>
 
-<div id="urlBox">
-  <span style="color:#e6b84a;font-size:0.75rem;white-space:nowrap">🔗 Your hunt URL</span>
-  <input id="urlOut" readonly style="background:#111;border:1px solid #333;color:#ccc;border-radius:6px;padding:4px 8px;font-size:0.72rem;font-family:monospace;width:300px;max-width:50vw"/>
-  <button id="copyBtn" style="background:#e6b84a;color:#111;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.75rem;font-weight:bold">Copy</button>
-  <button id="closeUrl" style="background:none;border:none;color:#555;cursor:pointer;font-size:1rem;line-height:1">✕</button>
-</div>
+            <button onclick="generatePuzzle()">GENERATE</button>
 
-<script>
-  // ── Tiers ────────────────────────────────────────────────
-  const TIERS = [
-    { name: 'Mythic',    from:    0, to:   49, minR: 0.01802, minXP:  750, maxXP: 2500, color: '#ff4444', glow: '#ff000088', size: 14 },
-    { name: 'Legendary', from:   50, to:  299, minR: 0.00901, minXP:  400, maxXP: 1000, color: '#ff9500', glow: '#ff950066', size: 12 },
-    { name: 'Epic',      from:  300, to:  799, minR: 0.00450, minXP:  200, maxXP:  500, color: '#bf5fff', glow: '#bf5fff55', size: 10 },
-    { name: 'Rare',      from:  800, to: 1799, minR: 0.00225, minXP:  100, maxXP:  250, color: '#4d9fff', glow: '#4d9fff44', size: 9  },
-    { name: 'Uncommon',  from: 1800, to: 3799, minR: 0.00090, minXP:   50, maxXP:  120, color: '#4caf50', glow: '#4caf5033', size: 8  },
-    { name: 'Common',    from: 3800, to: 9999, minR: 0.00000, minXP:   20, maxXP:   60, color: '#888888', glow: '#88888822', size: 7  },
-  ];
-  function getTier(i) {
-    for (const t of TIERS) if (i >= t.from && i <= t.to) return t;
-    return TIERS[TIERS.length - 1];
-  }
+            <div id="shareContainer" class="share-container">
+                <label>SHARE LINK</label>
+                <div class="share-url" id="shareUrl"></div>
+                <div class="share-buttons">
+                    <button onclick="copyShareLink()">COPY</button>
+                    <button onclick="startFromLink()">START</button>
+                </div>
+            </div>
+        </div>
 
-  // ── Encoding ─────────────────────────────────────────────
-  const XOR_KEY = 0x5F3A;
-  function encodeLocation(lat, lng) {
-    const str = `${lat.toFixed(6)},${lng.toFixed(6)}`;
-    let x = '';
-    for (let i = 0; i < str.length; i++)
-      x += String.fromCharCode(str.charCodeAt(i) ^ (XOR_KEY >> (i % 2 === 0 ? 8 : 0) & 0xFF));
-    return btoa(x).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
-  }
-  function decodeLocation(enc) {
-    try {
-      const x = atob(enc.replace(/-/g,'+').replace(/_/g,'/'));
-      let s = '';
-      for (let i = 0; i < x.length; i++)
-        s += String.fromCharCode(x.charCodeAt(i) ^ (XOR_KEY >> (i % 2 === 0 ? 8 : 0) & 0xFF));
-      const [lat, lng] = s.split(',').map(Number);
-      if (isNaN(lat) || isNaN(lng)) return null;
-      return { lat, lng };
-    } catch { return null; }
-  }
+        <div id="waitingContainer" class="waiting-container">
+            <h1>WAITING</h1>
+            <div class="countdown" id="countdown">00:00:00</div>
+        </div>
 
-  // ── PRNG ─────────────────────────────────────────────────
-  function seededRNG(seed) {
-    let s = seed;
-    return () => {
-      s |= 0; s = s + 0x6D2B79F5 | 0;
-      let t = Math.imul(s ^ s >>> 15, 1 | s);
-      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-      return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    };
-  }
+        <div id="gameContainer" class="game-container">
+            <div class="timer" id="timer">00:00:00</div>
+            
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="stat-label">MISTAKES</div>
+                    <div class="stat-value" id="mistakes">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">LEFT</div>
+                    <div class="stat-value" id="remaining">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">DONE</div>
+                    <div class="stat-value" id="completed">0%</div>
+                </div>
+            </div>
 
-  // ── Haversine ────────────────────────────────────────────
-  function haversine(lat1, lng1, lat2, lng2) {
-    const R = 6371000, rad = Math.PI / 180;
-    const dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
-    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*rad) * Math.cos(lat2*rad) * Math.sin(dLng/2)**2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  }
+            <div class="sudoku-board" id="sudokuBoard"></div>
 
-  // ── Spawn schedule ────────────────────────────────────────
-  function lastSpawnTime(tierName) {
-    const now = new Date(), h = now.getHours();
-    const d = new Date(now); d.setMinutes(0, 0, 0);
-    switch (tierName) {
-      case 'Common':    return d.getTime();
-      case 'Uncommon':  { const u = new Date(d); u.setHours(h - h % 3); return u.getTime(); }
-      case 'Rare':      { const r = new Date(d); r.setHours(h - h % 6); return r.getTime(); }
-      case 'Epic':      { const e = new Date(d); e.setHours(h < 8 ? 0 : h < 16 ? 8 : 16); return e.getTime(); }
-      case 'Legendary': { const l = new Date(d); l.setHours(h < 12 ? 0 : 12); return l.getTime(); }
-      case 'Mythic':    { const m = new Date(d); m.setHours(0); return m.getTime(); }
-    }
-  }
-  function isCollectedStillValid(tierName, collectedAt) {
-    return collectedAt >= lastSpawnTime(tierName);
-  }
+            <div class="number-pad" id="numberPad">
+                <button onclick="numberPadClick(1)">1</button>
+                <button onclick="numberPadClick(2)">2</button>
+                <button onclick="numberPadClick(3)">3</button>
+                <button onclick="numberPadClick(4)">4</button>
+                <button onclick="numberPadClick(5)">5</button>
+                <button onclick="numberPadClick(6)">6</button>
+                <button onclick="numberPadClick(7)">7</button>
+                <button onclick="numberPadClick(8)">8</button>
+                <button onclick="numberPadClick(9)">9</button>
+                <button id="pencilBtn" onclick="togglePencilMode()">✏</button>
+            </div>
 
-  // ── Levelling ─────────────────────────────────────────────
-  function xpForLevel(n) { return n === 0 ? 30 : 50 * n; }
+            <div class="controls">
+                <button onclick="clearSelection()">CLEAR</button>
+                <button onclick="undoLastMove()">UNDO</button>
+            </div>
 
-  function totalXPForLevel(n) {
-    let total = 0;
-    for (let i = 0; i < n; i++) total += xpForLevel(i);
-    return total;
-  }
+            <div class="controls-bottom">
+                <button onclick="resetGame()">RESET</button>
+                <button onclick="resetToSetup()">SETUP</button>
+            </div>
+        </div>
+    </div>
 
-  function getLevelFromXP(xp) {
-    let lvl = 0, rem = xp;
-    while (true) {
-      const needed = xpForLevel(lvl);
-      if (rem < needed) break;
-      rem -= needed; lvl++;
-    }
-    return { level: lvl, rem, needed: xpForLevel(lvl) };
-  }
-
-  function updateLevelUI(totalXP, prevLevel) {
-    const { level, rem, needed } = getLevelFromXP(totalXP);
-    const base = totalXPForLevel(level);
-    document.getElementById('levelText').textContent =
-      `Lv. ${level}  ${base + rem}/${base + needed} XP`;
-    document.getElementById('levelBar').style.width = Math.round(rem / needed * 100) + '%';
-    if (prevLevel !== undefined && level > prevLevel) showLevelUpToast(level);
-    return level;
-  }
-
-  // ── Toast ─────────────────────────────────────────────────
-  let toastTimer;
-  function showToast(text, bg, fg = '#111') {
-    const el = document.getElementById('toast');
-    el.textContent = text;
-    el.style.display = 'block';
-    el.style.background = bg;
-    el.style.color = fg;
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.style.display = 'none', 2500);
-  }
-  function showLevelUpToast(level) { showToast(`🎉 Level up! You are now Lv. ${level}`, '#e6b84a'); }
-  function showChestToast(tier, xp) { showToast(`✨ ${tier.name} chest — +${xp} XP`, tier.color, tier.name === 'Common' ? '#eee' : '#111'); }
-
-  // ── Boot ─────────────────────────────────────────────────
-  const params = new URLSearchParams(window.location.search);
-  const locParam = params.get('home');
-
-  function setHomeParam(lat, lng) {
-    const url = new URL(window.location.href);
-    url.searchParams.set('home', encodeLocation(lat, lng));
-    window.history.replaceState({}, '', url);
-    return { lat, lng };
-  }
-
-  function boot(home) {
-    document.getElementById('gpsOverlay').style.display = 'none';
-    initMap(home);
-  }
-
-  if (locParam) {
-    boot(decodeLocation(locParam) || setHomeParam(41.9028, 12.4964));
-  } else {
-    document.getElementById('gpsOverlay').style.display = 'flex';
-    navigator.geolocation.getCurrentPosition(
-      p => boot(setHomeParam(p.coords.latitude, p.coords.longitude)),
-      ()  => boot(setHomeParam(41.9028, 12.4964)),
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
-  }
-
-  // ── Map ──────────────────────────────────────────────────
-  function initMap(HOME) {
-    const SEED = 42, CHEST_COUNT = 10000, RADIUS = 0.035, RENDER_LIMIT = 400, PICKUP_RADIUS = 30;
-
-    const rng = seededRNG(SEED);
-    const chests = [], tierCounts = {};
-    TIERS.forEach(t => tierCounts[t.name] = 0);
-
-    for (let i = 0; i < CHEST_COUNT; i++) {
-      const tier = getTier(i);
-      let dlat, dlng, r2;
-      const min2 = tier.minR * tier.minR;
-      do {
-        dlat = (rng() * 2 - 1) * RADIUS;
-        dlng = (rng() * 2 - 1) * RADIUS;
-        r2 = dlat * dlat + dlng * dlng;
-      } while (r2 > RADIUS * RADIUS || r2 < min2);
-      tierCounts[tier.name]++;
-      const xp = Math.round(tier.minXP + rng() * (tier.maxXP - tier.minXP));
-      chests.push({ lat: HOME.lat + dlat, lng: HOME.lng + dlng, id: i, tier, xp, collected: false });
-    }
-
-    // Load save
-    const savedData = JSON.parse(localStorage.getItem('treasurehunt') || '{}');
-    const collectedMap = savedData.collected || {};
-    let collected = 0, totalXP = savedData.totalXP || 0;
-
-    function saveProgress() {
-      localStorage.setItem('treasurehunt', JSON.stringify({ collected: collectedMap, totalXP }));
-    }
-
-    for (const c of chests) {
-      const ts = collectedMap[c.id];
-      if (ts && isCollectedStillValid(c.tier.name, ts)) { c.collected = true; collected++; }
-    }
-
-    document.getElementById('collectedCount').textContent = `${collected} collected`;
-    let currentLevel = updateLevelUI(totalXP);
-
-    // Map
-    const map = L.map('map', { center: [HOME.lat, HOME.lng], zoom: 15 });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors', maxZoom: 19
-    }).addTo(map);
-
-    map.on('mousemove', e => {
-      document.getElementById('coords').textContent =
-        `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
-    });
-
-    // Legend
-    const legend = L.control({ position: 'bottomright' });
-    legend.onAdd = () => {
-      const d = L.DomUtil.create('div');
-      d.style.cssText = 'background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:10px 14px;font-family:Georgia,serif;font-size:0.75rem;color:#ccc;line-height:1.8;min-width:140px';
-      d.innerHTML = '<div style="color:#e6b84a;font-size:0.7rem;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Chest Tiers</div>' +
-        TIERS.map(t =>
-          `<div><span style="background:${t.color};display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;box-shadow:0 0 5px ${t.color};vertical-align:middle"></span>${t.name}<span style="color:#555;float:right;margin-left:16px">${tierCounts[t.name]}</span></div>`
-        ).join('');
-      return d;
-    };
-    legend.addTo(map);
-
-    // Player
-    let playerMarker = null;
-
-    function checkPickups(lat, lng) {
-      let changed = false;
-      for (const c of chests) {
-        if (c.collected) continue;
-        if (haversine(lat, lng, c.lat, c.lng) <= PICKUP_RADIUS) {
-          c.collected = true;
-          collectedMap[c.id] = Date.now();
-          collected++;
-          totalXP += c.xp;
-          changed = true;
-          saveProgress();
-          showChestToast(c.tier, c.xp);
-          currentLevel = updateLevelUI(totalXP, currentLevel);
-          document.getElementById('collectedCount').textContent = `${collected} collected`;
+    <script>
+        // newsudoku.js core functions
+        function convertToMatrix(sudokuString) {
+            if (sudokuString.length !== 81) throw new Error("Sudoku string must be exactly 81 characters long.");
+            const matrix = [];
+            for (let i = 0; i < 9; i++) {
+                const rowStart = i * 9;
+                const rowEnd = (i + 1) * 9;
+                const rowString = sudokuString.substring(rowStart, rowEnd);
+                const row = Array.from(rowString, char => parseInt(char));
+                matrix.push(row);
+            }
+            return matrix;
         }
-      }
-      if (changed) renderChests();
-    }
 
-    navigator.geolocation.watchPosition(pos => {
-      const { latitude: lat, longitude: lng } = pos.coords;
-      if (!playerMarker) playerMarker = L.marker([lat, lng]).addTo(map).bindPopup('<b>You are here</b>');
-      else playerMarker.setLatLng([lat, lng]);
-      checkPickups(lat, lng);
-    }, null, { enableHighAccuracy: true, maximumAge: 5000 });
+        function range1To9() { return [1, 2, 3, 4, 5, 6, 7, 8, 9]; }
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
 
-    // Chests
-    const chestLayer = L.layerGroup().addTo(map);
+        function deepCopyBoard(board) { return board.map(row => [...row]); }
+        function convertToString(array) { return array.flat().join(''); }
 
-    function renderChests() {
-      chestLayer.clearLayers();
-      const b = map.getBounds().pad(0.1);
-      const visible = chests.filter(c => !c.collected && b.contains([c.lat, c.lng]));
-      const toRender = visible.slice(0, RENDER_LIMIT);
-      toRender.forEach(c => {
-        const t = c.tier;
-        const icon = L.divIcon({
-          html: `<div class="chest-dot" style="width:${t.size}px;height:${t.size}px;background:${t.color};--glow:${t.glow}"></div>`,
-          className: '', iconSize: [t.size, t.size], iconAnchor: [t.size/2, t.size/2]
+        function getPossibleValues(board, row, col) {
+            if (board[row][col] !== 0) return [];
+            const used = new Set();
+            for (let c = 0; c < 9; c++) used.add(board[row][c]);
+            for (let r = 0; r < 9; r++) used.add(board[r][col]);
+            const startRow = Math.floor(row / 3) * 3;
+            const startCol = Math.floor(col / 3) * 3;
+            for (let r = startRow; r < startRow + 3; r++) {
+                for (let c = startCol; c < startCol + 3; c++) {
+                    used.add(board[r][c]);
+                }
+            }
+            const possible = [];
+            for (let num = 1; num <= 9; num++) {
+                if (!used.has(num)) possible.push(num);
+            }
+            return possible;
+        }
+
+        function solveGridRandomBacktracking(grid) {
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (grid[r][c] === 0) {
+                        const possibleNums = range1To9();
+                        shuffle(possibleNums);
+                        for (const num of possibleNums) {
+                            let isValid = true;
+                            if (grid[r].includes(num)) isValid = false;
+                            if (isValid) {
+                                for (let i = 0; i < 9; i++) {
+                                    if (grid[i][c] === num) { isValid = false; break; }
+                                }
+                            }
+                            if (isValid) {
+                                const startRow = Math.floor(r / 3) * 3;
+                                const startCol = Math.floor(c / 3) * 3;
+                                for (let rowBox = startRow; rowBox < startRow + 3; rowBox++) {
+                                    for (let colBox = startCol; colBox < startCol + 3; colBox++) {
+                                        if (grid[rowBox][colBox] === num) { isValid = false; break; }
+                                    }
+                                    if (!isValid) break;
+                                }
+                            }
+                            if (isValid) {
+                                grid[r][c] = num;
+                                if (solveGridRandomBacktracking(grid)) return true;
+                                grid[r][c] = 0;
+                            }
+                        }
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function generateSolutionRandom() {
+            const solution = Array(9).fill(null).map(() => Array(9).fill(0));
+            solveGridRandomBacktracking(solution);
+            return solution;
+        }
+
+        function eliminatePossibilities(possibilities, rPlaced, cPlaced, valPlaced, puzzle) {
+            let contradiction = false;
+            for (let i = 0; i < 9; i++) {
+                if (possibilities[rPlaced][i].has(valPlaced)) {
+                    possibilities[rPlaced][i].delete(valPlaced);
+                    if (possibilities[rPlaced][i].size === 0 && puzzle[rPlaced][i] === 0) contradiction = true;
+                }
+                if (possibilities[i][cPlaced].has(valPlaced)) {
+                    possibilities[i][cPlaced].delete(valPlaced);
+                    if (possibilities[i][cPlaced].size === 0 && puzzle[i][cPlaced] === 0) contradiction = true;
+                }
+            }
+            const startRow = Math.floor(rPlaced / 3) * 3;
+            const startCol = Math.floor(cPlaced / 3) * 3;
+            for (let r = startRow; r < startRow + 3; r++) {
+                for (let c = startCol; c < startCol + 3; c++) {
+                    if (possibilities[r][c].has(valPlaced)) {
+                        possibilities[r][c].delete(valPlaced);
+                        if (possibilities[r][c].size === 0 && puzzle[r][c] === 0) contradiction = true;
+                    }
+                }
+            }
+            return contradiction;
+        }
+
+        function findHiddenSingles(puzzle, possibilities, unitType, unitIndex) {
+            const updates = [];
+            const allNums = range1To9();
+            const unitPoss = {};
+            for (const num of allNums) unitPoss[num] = [];
+            
+            let coords = [];
+            if (unitType === 'row') {
+                coords = Array(9).fill(null).map((_, c) => [unitIndex, c]);
+            } else if (unitType === 'col') {
+                coords = Array(9).fill(null).map((_, r) => [r, unitIndex]);
+            } else if (unitType === 'box') {
+                const startRow = Math.floor(unitIndex / 3) * 3;
+                const startCol = (unitIndex % 3) * 3;
+                for (let r = startRow; r < startRow + 3; r++) {
+                    for (let c = startCol; c < startCol + 3; c++) {
+                        coords.push([r, c]);
+                    }
+                }
+            }
+            
+            for (const [r, c] of coords) {
+                if (puzzle[r][c] === 0) {
+                    for (const num of possibilities[r][c]) {
+                        unitPoss[num].push([r, c]);
+                    }
+                }
+            }
+            
+            for (const [num, locations] of Object.entries(unitPoss)) {
+                if (locations.length === 1 && puzzle[locations[0][0]][locations[0][1]] === 0) {
+                    updates.push([locations[0][0], locations[0][1], parseInt(num)]);
+                }
+            }
+            return updates;
+        }
+
+        function findNakedSingles(puzzle, possibilities) {
+            const updates = [];
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (puzzle[r][c] === 0 && possibilities[r][c].size === 1) {
+                        const val = [...possibilities[r][c]][0];
+                        updates.push([r, c, val]);
+                    }
+                }
+            }
+            return updates;
+        }
+
+        function findAndApplyUpdates(techniqueType, puzzle, possibilities, emptyCellsCount) {
+            let updates = [];
+            
+            if (techniqueType === 'BoxHS') {
+                for (let boxIdx = 0; boxIdx < 9; boxIdx++) {
+                    updates = updates.concat(findHiddenSingles(puzzle, possibilities, 'box', boxIdx));
+                }
+            } else if (techniqueType === 'LineHS') {
+                for (let idx = 0; idx < 9; idx++) {
+                    updates = updates.concat(findHiddenSingles(puzzle, possibilities, 'row', idx));
+                    updates = updates.concat(findHiddenSingles(puzzle, possibilities, 'col', idx));
+                }
+            } else if (techniqueType === 'NakedSingle') {
+                updates = findNakedSingles(puzzle, possibilities);
+            }
+            
+            if (updates.length === 0) return [emptyCellsCount, false];
+            
+            const uniqueUpdates = [];
+            const seen = new Set();
+            for (const [r, c, val] of updates) {
+                const key = `${r},${c},${val}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    uniqueUpdates.push([r, c, val]);
+                }
+            }
+            
+            let contradiction = false;
+            for (const [r, c, val] of uniqueUpdates) {
+                if (puzzle[r][c] === 0) {
+                    puzzle[r][c] = val;
+                    emptyCellsCount--;
+                    if (eliminatePossibilities(possibilities, r, c, val, puzzle)) contradiction = true;
+                    possibilities[r][c] = new Set();
+                }
+            }
+            return [emptyCellsCount, contradiction];
+        }
+
+        function solveWithSingles(sudoku, returnDifficulty = false) {
+            const puzzle = deepCopyBoard(sudoku);
+            const initialEmptyCells = puzzle.flat().filter(x => x === 0).length;
+            let highestTechnique = 0;
+            
+            if (initialEmptyCells === 0) return returnDifficulty ? 0.0 : puzzle;
+            
+            const possibilities = Array(9).fill(null).map(() => Array(9).fill(null).map(() => new Set()));
+            
+            let emptyCellsCount = 0;
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (puzzle[r][c] === 0) {
+                        possibilities[r][c] = new Set(getPossibleValues(puzzle, r, c));
+                        if (possibilities[r][c].size === 0) return returnDifficulty ? -0.2 : sudoku;
+                        emptyCellsCount++;
+                    } else {
+                        possibilities[r][c] = new Set();
+                    }
+                }
+            }
+            
+            let steps = 0;
+            let contradiction = false;
+            
+            while (emptyCellsCount > 0) {
+                [emptyCellsCount, contradiction] = findAndApplyUpdates('BoxHS', puzzle, possibilities, emptyCellsCount);
+                if (emptyCellsCount < initialEmptyCells - steps) { steps++; if (contradiction) break; continue; }
+                
+                highestTechnique = Math.max(1, highestTechnique);
+                const prevCount = emptyCellsCount;
+                [emptyCellsCount, contradiction] = findAndApplyUpdates('LineHS', puzzle, possibilities, emptyCellsCount);
+                if (emptyCellsCount < prevCount) { steps++; if (contradiction) break; continue; }
+                
+                highestTechnique = 2;
+                const prevCount2 = emptyCellsCount;
+                [emptyCellsCount, contradiction] = findAndApplyUpdates('NakedSingle', puzzle, possibilities, emptyCellsCount);
+                if (emptyCellsCount < prevCount2) { steps++; if (contradiction) break; continue; }
+                
+                break;
+            }
+            
+            if (contradiction) return returnDifficulty ? -0.2 : sudoku;
+            if (emptyCellsCount === 0) {
+                const difficulty = initialEmptyCells > 0 ? steps / initialEmptyCells : 0.0;
+                return returnDifficulty ? (difficulty + highestTechnique) / 3 : puzzle;
+            }
+            return returnDifficulty ? -0.1 : sudoku;
+        }
+
+        function generateSudoku(minDifficulty, maxDifficulty, targetClues = 25, maxAttempts = 100) {
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                const solution = generateSolutionRandom();
+                const puzzle = deepCopyBoard(solution);
+                
+                const positions = [];
+                for (let r = 0; r < 9; r++) {
+                    for (let c = 0; c < 9; c++) {
+                        positions.push([r, c]);
+                    }
+                }
+                shuffle(positions);
+                
+                for (const [r, c] of positions) {
+                    const cluesLeft = puzzle.flat().filter(x => x !== 0).length;
+                    if (cluesLeft <= targetClues) break;
+                    
+                    const originalValue = puzzle[r][c];
+                    puzzle[r][c] = 0;
+                    
+                    const difficulty = solveWithSingles(deepCopyBoard(puzzle), true);
+                    
+                    if (difficulty < 0) {
+                        puzzle[r][c] = originalValue;
+                    }
+                }
+                
+                const cluesCount = puzzle.flat().filter(x => x !== 0).length;
+                const finalDifficulty = solveWithSingles(deepCopyBoard(puzzle), true);
+                
+                if (finalDifficulty >= minDifficulty && finalDifficulty <= maxDifficulty && cluesCount >= targetClues && cluesCount <= targetClues + 8) {
+                    return puzzle;
+                }
+            }
+            
+            const solution = generateSolutionRandom();
+            const puzzle = deepCopyBoard(solution);
+            const positions = [];
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    positions.push([r, c]);
+                }
+            }
+            shuffle(positions);
+            
+            for (const [r, c] of positions) {
+                const cluesLeft = puzzle.flat().filter(x => x !== 0).length;
+                if (cluesLeft <= targetClues) break;
+                
+                const originalValue = puzzle[r][c];
+                puzzle[r][c] = 0;
+                
+                const difficulty = solveWithSingles(deepCopyBoard(puzzle), true);
+                if (difficulty < 0) {
+                    puzzle[r][c] = originalValue;
+                }
+            }
+            
+            return puzzle;
+        }
+
+        // Game logic
+        let gameState = {
+            puzzle: null,
+            current: null,
+            initial: null,
+            selected: null,
+            candidates: null,
+            mistakes: 0,
+            startTime: null,
+            givenCells: new Set(),
+            pencilMode: false,
+            history: []
+        };
+
+        let currentGeneratedPuzzle = null;
+        let currentGeneratedTime = null;
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const puzzleParam = urlParams.get('p');
+        const timeParam = urlParams.get('t');
+
+        const now = new Date();
+        now.setMinutes(now.getMinutes() + 1);
+        document.getElementById('startTime').value = now.toISOString().slice(0, 16);
+
+        document.getElementById('minDiff').addEventListener('input', (e) => {
+            document.getElementById('minDiffValue').textContent = (e.target.value / 100).toFixed(2);
         });
-        L.marker([c.lat, c.lng], { icon })
-          .bindPopup(`<div class="popup-tier" style="color:${t.color}">${t.name}</div><div class="popup-id">Chest #${c.id + 1} · ${c.xp} XP</div>`)
-          .addTo(chestLayer);
-      });
-      document.getElementById('visibleCount') &&
-        (document.getElementById('visibleCount').textContent =
-          visible.length > RENDER_LIMIT ? `${toRender.length}/${visible.length} shown` : `${visible.length} in view`);
-    }
+        document.getElementById('maxDiff').addEventListener('input', (e) => {
+            document.getElementById('maxDiffValue').textContent = (e.target.value / 100).toFixed(2);
+        });
 
-    map.on('moveend', renderChests);
-    map.on('zoomend', renderChests);
-    renderChests();
+        function generatePuzzle() {
+            const minDiff = parseInt(document.getElementById('minDiff').value) / 100;
+            const maxDiff = parseInt(document.getElementById('maxDiff').value) / 100;
+            const targetClues = parseInt(document.getElementById('targetClues').value);
+            const maxAttempts = parseInt(document.getElementById('maxAttempts').value);
 
-    // URL generator
-    const urlBox = document.getElementById('urlBox'), urlOut = document.getElementById('urlOut');
-    map.on('contextmenu', e => {
-      urlOut.value = `${location.origin}${location.pathname}?home=${encodeLocation(e.latlng.lat, e.latlng.lng)}`;
-      urlBox.style.display = 'flex';
-    });
-    document.getElementById('copyBtn').onclick = () => {
-      navigator.clipboard.writeText(urlOut.value);
-      document.getElementById('copyBtn').textContent = 'Copied!';
-      setTimeout(() => document.getElementById('copyBtn').textContent = 'Copy', 1500);
-    };
-    document.getElementById('closeUrl').onclick = () => urlBox.style.display = 'none';
-  }
-</script>
+            const startTimeInput = document.getElementById('startTime').value;
+            const startDate = new Date(startTimeInput);
+            const unixTimestamp = Math.floor(startDate.getTime() / 1000);
+            
+            const puzzleBoard = generateSudoku(minDiff, maxDiff, targetClues, maxAttempts);
+            const puzzleString = convertToString(puzzleBoard);
+            
+            currentGeneratedPuzzle = puzzleString;
+            currentGeneratedTime = unixTimestamp;
+
+            const baseUrl = window.location.origin + window.location.pathname;
+            const shareUrl = `${baseUrl}?p=${puzzleString}&t=${unixTimestamp}`;
+            
+            document.getElementById('shareUrl').textContent = shareUrl;
+            document.getElementById('shareContainer').classList.add('active');
+        }
+
+        function copyShareLink() {
+            const shareUrl = document.getElementById('shareUrl').textContent;
+            navigator.clipboard.writeText(shareUrl).then(() => {
+                alert('Link copied to clipboard!');
+            });
+        }
+
+        function startFromLink() {
+            if (!currentGeneratedPuzzle || !currentGeneratedTime) return;
+            
+            const puzzle = convertToMatrix(currentGeneratedPuzzle);
+            const startTime = currentGeneratedTime * 1000;
+            const now = Date.now();
+
+            if (startTime > now) {
+                waitForStartTime(startTime);
+                gameState.puzzle = puzzle;
+                gameState.initial = deepCopyBoard(puzzle);
+                gameState.current = deepCopyBoard(puzzle);
+            } else {
+                initializeGame(puzzle);
+                startGameNow();
+            }
+        }
+
+        function loadFromUrl() {
+            const puzzle = convertToMatrix(puzzleParam);
+            const startTime = parseInt(timeParam) * 1000;
+            const now = Date.now();
+
+            if (startTime > now) {
+                waitForStartTime(startTime);
+                gameState.puzzle = puzzle;
+                gameState.initial = deepCopyBoard(puzzle);
+                gameState.current = deepCopyBoard(puzzle);
+            } else {
+                initializeGame(puzzle);
+                startGameNow();
+            }
+        }
+
+        function initializeGame(puzzle) {
+            gameState.puzzle = puzzle;
+            gameState.initial = deepCopyBoard(puzzle);
+            gameState.current = deepCopyBoard(puzzle);
+            gameState.mistakes = 0;
+            gameState.selected = null;
+            gameState.candidates = Array(9).fill(null).map(() => Array(9).fill(null).map(() => new Set()));
+            gameState.history = [];
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (puzzle[r][c] !== 0) {
+                        gameState.givenCells.add(`${r},${c}`);
+                        gameState.candidates[r][c] = new Set();
+                    } else {
+                        gameState.candidates[r][c] = new Set();
+                    }
+                }
+            }
+
+            renderBoard();
+            updateStats();
+        }
+
+        function waitForStartTime(startTime) {
+            document.getElementById('setupForm').style.display = 'none';
+            document.getElementById('waitingContainer').classList.add('active');
+
+            const countdown = () => {
+                const now = Date.now();
+                const diff = startTime - now;
+
+                if (diff <= 0) {
+                    document.getElementById('waitingContainer').classList.remove('active');
+                    document.getElementById('gameContainer').classList.add('active');
+                    gameState.startTime = Date.now();
+                    updateTimer();
+                } else {
+                    const hours = Math.floor(diff / 3600000);
+                    const minutes = Math.floor((diff % 3600000) / 60000);
+                    const seconds = Math.floor((diff % 60000) / 1000);
+                    document.getElementById('countdown').textContent = 
+                        `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                    setTimeout(countdown, 100);
+                }
+            };
+            countdown();
+        }
+
+        function startGameNow() {
+            document.getElementById('waitingContainer').classList.remove('active');
+            document.getElementById('setupForm').style.display = 'none';
+            document.getElementById('gameContainer').classList.add('active');
+            gameState.startTime = Date.now();
+            updateTimer();
+        }
+
+        function renderBoard() {
+            const board = document.getElementById('sudokuBoard');
+            board.innerHTML = '';
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'sudoku-cell';
+                    
+                    if (gameState.initial[r][c] !== 0) {
+                        cell.classList.add('given');
+                    }
+
+                    if (gameState.selected && gameState.selected[0] === r && gameState.selected[1] === c) {
+                        cell.classList.add('selected');
+                    }
+
+                    if (gameState.selected && gameState.current[gameState.selected[0]][gameState.selected[1]] !== 0) {
+                        const selectedVal = gameState.current[gameState.selected[0]][gameState.selected[1]];
+                        if (gameState.current[r][c] === selectedVal && (r !== gameState.selected[0] || c !== gameState.selected[1])) {
+                            cell.classList.add('highlighted');
+                        }
+                    }
+
+                    if (gameState.current[r][c] !== 0) {
+                        const isValid = isValidPlacement(r, c, gameState.current[r][c]);
+                        if (!isValid) {
+                            cell.classList.add('error');
+                        }
+                    }
+
+                    const cellContent = document.createElement('div');
+                    cellContent.style.width = '100%';
+                    cellContent.style.height = '100%';
+                    cellContent.style.display = 'flex';
+                    cellContent.style.alignItems = 'center';
+                    cellContent.style.justifyContent = 'center';
+
+                    if (gameState.current[r][c] !== 0) {
+                        cellContent.textContent = gameState.current[r][c];
+                    } else if (gameState.candidates[r][c].size > 0) {
+                        const candidatesDiv = document.createElement('div');
+                        candidatesDiv.className = 'candidates';
+                        for (let i = 1; i <= 9; i++) {
+                            const candidate = document.createElement('div');
+                            candidate.className = 'candidate';
+                            if (!gameState.candidates[r][c].has(i)) {
+                                candidate.classList.add('hidden');
+                            }
+                            candidate.textContent = i;
+                            candidatesDiv.appendChild(candidate);
+                        }
+                        cellContent.appendChild(candidatesDiv);
+                    }
+
+                    cell.appendChild(cellContent);
+                    cell.onclick = () => selectCell(r, c);
+                    board.appendChild(cell);
+                }
+            }
+        }
+
+        function selectCell(r, c) {
+            if (gameState.initial[r][c] === 0) {
+                gameState.selected = [r, c];
+                renderBoard();
+            }
+        }
+
+        function numberPadClick(num) {
+            if (!gameState.selected) return;
+            const [r, c] = gameState.selected;
+            if (gameState.initial[r][c] !== 0) return;
+
+            gameState.history.push({
+                r, c,
+                current: gameState.current[r][c],
+                candidates: new Set(gameState.candidates[r][c])
+            });
+
+            if (gameState.pencilMode) {
+                if (gameState.candidates[r][c].has(num)) {
+                    gameState.candidates[r][c].delete(num);
+                } else {
+                    gameState.candidates[r][c].add(num);
+                }
+            } else {
+                if (gameState.current[r][c] === num) {
+                    gameState.current[r][c] = 0;
+                    gameState.candidates[r][c] = new Set();
+                } else {
+                    gameState.current[r][c] = num;
+                    gameState.candidates[r][c].clear();
+                    updateCandidatesAfterPlacement(r, c, num);
+
+                    if (!isValidPlacement(r, c, num)) {
+                        gameState.mistakes++;
+                    }
+
+                    if (isPuzzleSolved()) {
+                        setTimeout(() => alert('PUZZLE SOLVED'), 100);
+                    }
+                }
+            }
+
+            updateStats();
+            renderBoard();
+        }
+
+        function togglePencilMode() {
+            gameState.pencilMode = !gameState.pencilMode;
+            const pencilBtn = document.getElementById('pencilBtn');
+            if (gameState.pencilMode) {
+                pencilBtn.style.color = '#ffff00';
+                pencilBtn.style.borderColor = '#ffff00';
+            } else {
+                pencilBtn.style.color = '#0f0';
+                pencilBtn.style.borderColor = '#0f0';
+            }
+        }
+
+        function undoLastMove() {
+            if (gameState.history.length === 0) return;
+            
+            const move = gameState.history.pop();
+            gameState.current[move.r][move.c] = move.current;
+            gameState.candidates[move.r][move.c] = new Set(move.candidates);
+            
+            updateStats();
+            renderBoard();
+        }
+
+        function clearSelection() {
+            if (gameState.selected) {
+                const [r, c] = gameState.selected;
+                gameState.current[r][c] = 0;
+                gameState.candidates[r][c] = new Set();
+                updateStats();
+                renderBoard();
+            }
+        }
+
+        function updateCandidatesAfterPlacement(r, c, num) {
+            for (let i = 0; i < 9; i++) {
+                gameState.candidates[r][i].delete(num);
+                gameState.candidates[i][c].delete(num);
+            }
+            const startRow = Math.floor(r / 3) * 3;
+            const startCol = Math.floor(c / 3) * 3;
+            for (let br = startRow; br < startRow + 3; br++) {
+                for (let bc = startCol; bc < startCol + 3; bc++) {
+                    gameState.candidates[br][bc].delete(num);
+                }
+            }
+        }
+
+        function isValidPlacement(r, c, num) {
+            for (let i = 0; i < 9; i++) {
+                if (i !== c && gameState.current[r][i] === num) return false;
+            }
+            for (let i = 0; i < 9; i++) {
+                if (i !== r && gameState.current[i][c] === num) return false;
+            }
+            const startRow = Math.floor(r / 3) * 3;
+            const startCol = Math.floor(c / 3) * 3;
+            for (let br = startRow; br < startRow + 3; br++) {
+                for (let bc = startCol; bc < startCol + 3; bc++) {
+                    if ((br !== r || bc !== c) && gameState.current[br][bc] === num) return false;
+                }
+            }
+            return true;
+        }
+
+        function isPuzzleSolved() {
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (gameState.current[r][c] === 0) return false;
+                    if (!isValidPlacement(r, c, gameState.current[r][c])) return false;
+                }
+            }
+            return true;
+        }
+
+        function updateStats() {
+            const filled = gameState.current.flat().filter(x => x !== 0).length;
+            const remaining = 81 - gameState.initial.flat().filter(x => x !== 0).length;
+            const completed = Math.round((filled - gameState.initial.flat().filter(x => x !== 0).length) / remaining * 100);
+
+            document.getElementById('mistakes').textContent = gameState.mistakes;
+            document.getElementById('remaining').textContent = remaining - (filled - gameState.initial.flat().filter(x => x !== 0).length);
+            document.getElementById('completed').textContent = Math.max(0, completed) + '%';
+        }
+
+        function updateTimer() {
+            if (!gameState.startTime) return;
+            const elapsed = Math.floor((Date.now() - gameState.startTime) / 1000);
+            const hours = Math.floor(elapsed / 3600);
+            const minutes = Math.floor((elapsed % 3600) / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('timer').textContent = 
+                `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            setTimeout(updateTimer, 1000);
+        }
+
+        function resetGame() {
+            gameState.current = deepCopyBoard(gameState.initial);
+            gameState.mistakes = 0;
+            gameState.selected = null;
+            gameState.candidates = Array(9).fill(null).map(() => Array(9).fill(null).map(() => new Set()));
+            gameState.history = [];
+            updateStats();
+            renderBoard();
+        }
+
+        function resetToSetup() {
+            document.getElementById('setupForm').style.display = 'block';
+            document.getElementById('gameContainer').classList.remove('active');
+            document.getElementById('shareContainer').classList.remove('active');
+            gameState = {
+                puzzle: null,
+                current: null,
+                initial: null,
+                selected: null,
+                candidates: null,
+                mistakes: 0,
+                startTime: null,
+                givenCells: new Set(),
+                pencilMode: false,
+                history: []
+            };
+        }
+
+        if (puzzleParam && timeParam) {
+            loadFromUrl();
+        }
+    </script>
 </body>
 </html>
