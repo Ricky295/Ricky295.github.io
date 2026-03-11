@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniCal Pro - The Most Customizable Calendar</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
+        .canvas-container {
+            background: white;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+            margin: auto;
+            transition: width 0.3s ease, height 0.3s ease;
+        }
+        .element { position: absolute; transform: translate(-50%, -50%); pointer-events: none; }
+        .hidden-mode { display: none !important; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        #editor-panel {
+            transition: transform 0.3s ease-in-out;
+            transform: translateX(0);
+        }
+        #editor-panel.collapsed {
+            transform: translateX(-100%);
+        }
+
+        #docs-popup {
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Landing View -->
+    <div id="landing-view" class="flex-1 flex flex-col items-center justify-center p-6">
+        <div class="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 border border-gray-100">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-black tracking-tighter mb-2 italic bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">OmniCal Pro</h1>
+                <p class="text-gray-500 text-sm">The world's most customizable calendar engine.</p>
+            </div>
+
+            <div class="space-y-6">
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Starting Date (Base)</label>
+                    <input type="month" id="start-date" value="2026-03" class="w-full border-2 border-gray-100 rounded-xl px-4 py-3 focus:border-purple-500 outline-none transition">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-2">JSON Configuration</label>
+                    <div class="relative group">
+                        <input type="file" id="json-upload" accept=".json" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                        <div class="border-2 border-dashed border-gray-200 rounded-xl px-4 py-4 text-center group-hover:border-purple-400 transition bg-gray-50">
+                            <span id="upload-label" class="text-sm text-gray-600 font-medium">Drop your .json here</span>
+                        </div>
+                    </div>
+                    <p class="mt-4 text-[11px] text-gray-400 text-center uppercase tracking-widest">
+                        New here? <button onclick="toggleMode(true)" class="text-purple-600 font-black hover:underline cursor-pointer">Launch Builder</button>
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 pt-2 border-t border-gray-50">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Format</label>
+                        <select id="export-format" class="w-full border-2 border-gray-100 rounded-xl px-4 py-3 text-sm focus:border-purple-500 outline-none">
+                            <option>PDF</option><option>JPG</option><option>PNG</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Unit</label>
+                        <select id="size-unit" class="w-full border-2 border-gray-100 rounded-xl px-4 py-3 text-sm focus:border-purple-500 outline-none">
+                            <option>cm</option><option selected>px</option><option>in</option><option>mm</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Width</label>
+                        <input type="number" id="size-width" value="297" min="100" class="w-full border-2 border-gray-100 rounded-xl px-4 py-3 text-sm focus:border-purple-500 outline-none transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Height</label>
+                        <input type="number" id="size-height" value="210" min="100" class="w-full border-2 border-gray-100 rounded-xl px-4 py-3 text-sm focus:border-purple-500 outline-none transition">
+                    </div>
+                </div>
+
+                <button onclick="simulateDownload()" class="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-2xl font-bold text-lg hover:shadow-xl active:scale-[0.98] transition-all shadow-lg">
+                    Export Calendar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Builder View -->
+    <div id="builder-view" class="hidden-mode h-screen flex flex-col bg-gradient-to-br from-slate-100 to-slate-200 relative">
+        <!-- Docs Popup Overlay -->
+        <div id="docs-popup" class="hidden-mode fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm">
+            <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[80vh] overflow-hidden">
+                <div class="p-6 border-b flex items-center justify-between">
+                    <h3 class="font-black text-xl tracking-tight uppercase">Reference Documentation</h3>
+                    <button onclick="toggleDocs(false)" class="p-2 hover:bg-slate-100 rounded-full transition">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                <div class="p-8 overflow-y-auto space-y-8">
+                    <section class="space-y-4">
+                        <h4 class="font-black text-purple-600 uppercase text-sm">Linear Components</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                                <span class="font-bold text-slate-900">row_calendar</span>
+                                <p class="text-[11px] text-slate-500 mb-2">Linear horizontal month view.</p>
+                                <ul class="text-[10px] font-mono space-y-1">
+                                    <li>month_offset: number</li>
+                                    <li>spacing: px</li>
+                                    <li>show_weekdays: boolean</li>
+                                    <li>weekday_pos: "top"|"bottom"</li>
+                                </ul>
+                            </div>
+                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                                <span class="font-bold text-slate-900">col_calendar</span>
+                                <p class="text-[11px] text-slate-500 mb-2">Linear vertical month view.</p>
+                                <ul class="text-[10px] font-mono space-y-1">
+                                    <li>month_offset: number</li>
+                                    <li>spacing: px</li>
+                                    <li>weekday_pos: "left"|"right"</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="space-y-4 border-t pt-8">
+                        <h4 class="font-black text-purple-600 uppercase text-sm">Media & Decoration</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                                <span class="font-bold text-slate-900">image</span>
+                                <p class="text-[11px] text-slate-500 mb-2">Live image from URL.</p>
+                                <ul class="text-[10px] font-mono space-y-1">
+                                    <li>url: string</li>
+                                    <li>fit: "cover"|"contain"</li>
+                                    <li>borderRadius: string</li>
+                                </ul>
+                            </div>
+                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                                <span class="font-bold text-slate-900">shape</span>
+                                <p class="text-[11px] text-slate-500 mb-2">Background blocks.</p>
+                                <ul class="text-[10px] font-mono space-y-1">
+                                    <li>backgroundColor: string</li>
+                                    <li>opacity: 0-1</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+
+        <header class="px-6 py-3 border-b flex items-center justify-between bg-white z-20 shadow-sm">
+            <div class="flex items-center space-x-4">
+                <button onclick="toggleMode(false)" class="p-2 hover:bg-gray-100 rounded-full transition">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                </button>
+                <h2 class="font-black text-xl tracking-tighter">OmniCal Builder</h2>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button onclick="toggleDocs(true)" class="p-2 hover:bg-purple-50 text-purple-600 rounded-full transition" title="Documentation">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                </button>
+                <button onclick="downloadJson()" class="p-2 hover:bg-slate-100 text-slate-600 rounded-full transition" title="Download JSON Config">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                </button>
+                <button onclick="applyJson()" class="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-2 rounded-full text-sm font-bold hover:shadow-lg shadow-purple-200 transition active:scale-95">
+                    Sync Changes
+                </button>
+            </div>
+        </header>
+
+        <div class="flex-1 flex overflow-hidden relative">
+            <!-- Sidebar: Focused JSON Editor -->
+            <aside id="editor-panel" class="absolute left-0 top-0 bottom-0 w-[80%] md:w-[450px] lg:w-[550px] z-10 bg-white border-r shadow-2xl flex flex-col">
+                <div class="p-2 bg-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-700">
+                    Editor
+                </div>
+                <div class="flex-1 flex flex-col bg-slate-900">
+                    <textarea id="json-editor" spellcheck="false" class="flex-1 p-6 font-mono text-sm outline-none resize-none bg-transparent text-emerald-400 leading-relaxed"></textarea>
+                </div>
+                
+                <!-- Toggle Button -->
+                <button onclick="toggleSidebar()" class="absolute -right-10 top-1/2 -translate-y-1/2 bg-white border border-l-0 p-2 rounded-r-xl shadow-md hover:bg-gray-50 transition-colors">
+                    <svg id="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+            </aside>
+
+            <!-- Preview Area -->
+            <section class="flex-1 p-4 md:p-8 flex items-center justify-center overflow-auto">
+                <div id="calendar-canvas" class="canvas-container shadow-2xl border border-white/50"></div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        const landingView = document.getElementById('landing-view');
+        const builderView = document.getElementById('builder-view');
+        const docsPopup = document.getElementById('docs-popup');
+        const canvas = document.getElementById('calendar-canvas');
+        const jsonEditor = document.getElementById('json-editor');
+        const dateInput = document.getElementById('start-date');
+        const editorPanel = document.getElementById('editor-panel');
+        const sidebarIcon = document.getElementById('sidebar-icon');
+        const widthInput = document.getElementById('size-width');
+        const heightInput = document.getElementById('size-height');
+
+        let currentConfig = {
+            "version": "1.4",
+            "elements": [
+                {
+                    "type": "image",
+                    "pos": { "x": 0, "y": -20 },
+                    "size": { "w": 200, "h": 160 },
+                    "config": { 
+                        "url": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&q=80&w=1000",
+                        "fit": "cover"
+                    }
+                },
+                {
+                    "type": "shape",
+                    "pos": { "x": 0, "y": 70 },
+                    "size": { "w": 200, "h": 60 },
+                    "config": { "backgroundColor": "#ffffff", "opacity": 0.95 }
+                },
+                {
+                    "type": "text",
+                    "pos": { "x": -70, "y": 62 },
+                    "size": { "w": 50, "h": 10 },
+                    "config": { 
+                        "content": "{MONTH}", 
+                        "fontSize": "24px", 
+                        "weight": "900", 
+                        "color": "#0f172a"
+                    }
+                },
+                {
+                    "type": "text",
+                    "pos": { "x": -70, "y": 70 },
+                    "size": { "w": 50, "h": 5 },
+                    "config": { 
+                        "content": "{YEAR} SEASONAL", 
+                        "fontSize": "10px", 
+                        "weight": "700", 
+                        "color": "#64748b"
+                    }
+                },
+                {
+                    "type": "row_calendar",
+                    "pos": { "x": 10, "y": 72 },
+                    "size": { "w": 160, "h": 25 },
+                    "config": { 
+                        "month_offset": 0,
+                        "spacing": 2,
+                        "show_weekdays": true,
+                        "weekday_pos": "top",
+                        "fontSize": "11px",
+                        "color": "#1e293b"
+                    }
+                }
+            ]
+        };
+
+        jsonEditor.value = JSON.stringify(currentConfig, null, 2);
+
+        function toggleMode(isBuilder) {
+            landingView.classList.toggle('hidden-mode', isBuilder);
+            builderView.classList.toggle('hidden-mode', !isBuilder);
+            if (isBuilder) setTimeout(updateCanvasSize, 50);
+        }
+
+        function toggleSidebar() {
+            editorPanel.classList.toggle('collapsed');
+            const isCollapsed = editorPanel.classList.contains('collapsed');
+            sidebarIcon.style.transform = isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)';
+            setTimeout(updateCanvasSize, 100); 
+            setTimeout(updateCanvasSize, 300);
+        }
+
+        function toggleDocs(show) { docsPopup.classList.toggle('hidden-mode', !show); }
+
+        function updateCanvasSize() {
+            const container = canvas.parentElement;
+            const sidebar = document.getElementById('editor-panel');
+            const isCollapsed = sidebar.classList.contains('collapsed');
+            const sidebarWidth = isCollapsed ? 0 : sidebar.offsetWidth;
+            const totalWidth = window.innerWidth;
+            const availableWidth = totalWidth - sidebarWidth - 80;
+            const availableHeight = container.clientHeight - 80;
+            
+            const w = parseFloat(widthInput.value);
+            const h = parseFloat(heightInput.value);
+            const ratio = w / h;
+            
+            let finalW, finalH;
+            if (availableWidth / availableHeight > ratio) {
+                finalH = availableHeight;
+                finalW = availableHeight * ratio;
+            } else {
+                finalW = availableWidth;
+                finalH = availableWidth / ratio;
+            }
+            
+            canvas.style.width = finalW + 'px';
+            canvas.style.height = finalH + 'px';
+            canvas.style.marginLeft = !isCollapsed ? (sidebarWidth) + 'px' : 'auto';
+            canvas.dataset.originalWidth = w;
+            canvas.dataset.originalHeight = h;
+            render();
+        }
+
+        function getActualCoords(nx, ny, originalW) {
+            const cw = canvas.clientWidth, ch = canvas.clientHeight;
+            return { x: ((nx + 100) / 200) * cw, y: ((ny + 100) / 200) * ch };
+        }
+
+        function getActualSize(nw, nh, originalW) {
+            const cw = canvas.clientWidth, ch = canvas.clientHeight;
+            return { w: (nw / 200) * cw, h: (nh / 200) * ch };
+        }
+
+        function getOffsetDate(baseStr, offset) {
+            const date = new Date(baseStr + "-01T12:00:00");
+            date.setMonth(date.getMonth() + (offset || 0));
+            return date;
+        }
+
+        function scaleFontSize(baseFontSize, scale) {
+            const num = parseFloat(baseFontSize);
+            const unit = baseFontSize.replace(/[0-9.]/g, '') || 'px';
+            const scaled = Math.max(num * scale, 6);
+            return scaled + unit;
+        }
+
+        function render() {
+            canvas.innerHTML = '';
+            let config;
+            try { config = JSON.parse(jsonEditor.value); } catch (e) { return; }
+            const baseDateStr = dateInput.value;
+            const originalW = parseFloat(widthInput.value);
+            const originalH = parseFloat(heightInput.value);
+            const scale = Math.min(canvas.clientWidth / originalW, canvas.clientHeight / originalH);
+            
+            config.elements.forEach(el => {
+                const div = document.createElement('div');
+                div.className = 'element';
+                const coords = getActualCoords(el.pos.x, el.pos.y, originalW);
+                const dims = getActualSize(el.size.w, el.size.h, originalW);
+                const elDate = getOffsetDate(baseDateStr, el.config.month_offset);
+
+                div.style.left = coords.x + 'px';
+                div.style.top = coords.y + 'px';
+                div.style.width = dims.w + 'px';
+                div.style.height = dims.h + 'px';
+
+                if (el.type === 'text') {
+                    div.style.display = 'flex';
+                    div.style.alignItems = 'center';
+                    div.style.justifyContent = el.config.align === 'center' ? 'center' : (el.config.align === 'right' ? 'flex-end' : 'flex-start');
+                    div.style.fontSize = scaleFontSize(el.config.fontSize, scale);
+                    div.style.fontWeight = el.config.weight;
+                    div.style.color = el.config.color || 'black';
+                    div.style.whiteSpace = 'nowrap';
+                    let txt = el.config.content || "";
+                    txt = txt.replace('{MONTH}', elDate.toLocaleString('default', { month: 'long' }).toUpperCase());
+                    txt = txt.replace('{YEAR}', elDate.getFullYear());
+                    div.innerText = txt;
+                }
+
+                if (el.type === 'grid_calendar') renderGrid(div, el.config, elDate, scale);
+                if (el.type === 'row_calendar') renderLinear(div, el.config, elDate, 'row', scale);
+                if (el.type === 'col_calendar') renderLinear(div, el.config, elDate, 'col', scale);
+
+                if (el.type === 'shape') {
+                    div.style.backgroundColor = el.config.backgroundColor || '#eee';
+                    div.style.borderRadius = el.config.borderRadius || '0';
+                    div.style.opacity = el.config.opacity !== undefined ? el.config.opacity : 1;
+                }
+
+                if (el.type === 'line') {
+                    div.style.backgroundColor = el.config.color || '#000';
+                    if (el.config.vertical) {
+                        div.style.width = el.config.thickness || '1px';
+                        div.style.height = '100%';
+                    } else {
+                        div.style.height = el.config.thickness || '1px';
+                        div.style.width = '100%';
+                    }
+                }
+
+                if (el.type === 'image') {
+                    div.style.overflow = 'hidden';
+                    div.style.borderRadius = el.config.borderRadius || '0';
+                    const img = document.createElement('img');
+                    img.src = el.config.url;
+                    img.style.width = '100%';
+                    img.style.height = '100%';
+                    img.style.objectFit = el.config.fit || 'cover';
+                    div.appendChild(img);
+                }
+
+                canvas.appendChild(div);
+            });
+        }
+
+        function renderLinear(container, config, date, mode, scale) {
+            const year = date.getFullYear(), month = date.getMonth();
+            const totalDays = new Date(year, month + 1, 0).getDate();
+            const daysShort = ['S','M','T','W','T','F','S'];
+            
+            container.style.display = 'flex';
+            container.style.flexDirection = mode === 'row' ? 'row' : 'column';
+            container.style.gap = (config.spacing || 2) + 'px';
+
+            for (let d = 1; d <= totalDays; d++) {
+                const cell = document.createElement('div');
+                cell.style.flex = '1';
+                cell.style.display = 'flex';
+                cell.style.flexDirection = mode === 'row' 
+                    ? (config.weekday_pos === 'bottom' ? 'column' : 'column-reverse')
+                    : (config.weekday_pos === 'right' ? 'row' : 'row-reverse');
+                cell.style.alignItems = 'center';
+                cell.style.justifyContent = 'center';
+                
+                const dayLabel = document.createElement('div');
+                dayLabel.innerText = d;
+                dayLabel.style.fontWeight = 'bold';
+                dayLabel.style.fontSize = scaleFontSize(config.fontSize || '10px', scale);
+                dayLabel.style.color = config.color || '#000';
+
+                cell.appendChild(dayLabel);
+
+                if (config.show_weekdays !== false) {
+                    const wd = document.createElement('div');
+                    const dayIdx = new Date(year, month, d).getDay();
+                    wd.innerText = daysShort[dayIdx];
+                    wd.style.fontSize = scaleFontSize('8px', scale);
+                    wd.style.opacity = '0.5';
+                    wd.style.marginBottom = mode === 'row' && config.weekday_pos !== 'bottom' ? '2px' : '0';
+                    wd.style.marginTop = mode === 'row' && config.weekday_pos === 'bottom' ? '2px' : '0';
+                    cell.appendChild(wd);
+                }
+
+                container.appendChild(cell);
+            }
+        }
+
+        function renderGrid(container, config, date, scale) {
+            container.style.display = 'grid';
+            container.style.gridTemplateColumns = 'repeat(7, 1fr)';
+            container.style.gap = config.spacing + 'px';
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const startDay = config.day_start || 0;
+            if (config.show_header) {
+                for (let i = 0; i < 7; i++) {
+                    const h = document.createElement('div');
+                    h.className = 'text-center font-black text-[10px] uppercase tracking-tighter mb-1';
+                    h.style.color = config.color || '#94a3b8';
+                    h.style.fontSize = scaleFontSize('10px', scale);
+                    h.innerText = days[(i + startDay) % 7];
+                    container.appendChild(h);
+                }
+            }
+            const year = date.getFullYear(), month = date.getMonth();
+            const firstDay = new Date(year, month, 1).getDay();
+            const totalDays = new Date(year, month + 1, 0).getDate();
+            let offset = (firstDay - startDay + 7) % 7;
+            for (let i = 0; i < offset; i++) container.appendChild(document.createElement('div'));
+            for (let d = 1; d <= totalDays; d++) {
+                const dayEl = document.createElement('div');
+                dayEl.className = 'border flex items-center justify-center rounded shadow-sm font-medium';
+                dayEl.style.fontSize = scaleFontSize(config.fontSize || '12px', scale);
+                dayEl.style.color = config.color || 'black';
+                dayEl.style.backgroundColor = config.backgroundColor || 'white';
+                dayEl.style.borderColor = config.borderColor || '#f1f5f9';
+                dayEl.innerText = d;
+                container.appendChild(dayEl);
+            }
+        }
+
+        function applyJson() { render(); }
+        
+        function downloadJson() {
+            const data = jsonEditor.value;
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `omnical-config-${new Date().getTime()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function simulateDownload() { 
+            const msg = document.createElement('div');
+            msg.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-2xl shadow-2xl z-[100] font-bold text-sm animate-bounce';
+            msg.innerText = "Building high-res printable vector...";
+            document.body.appendChild(msg);
+            setTimeout(() => msg.remove(), 3000);
+        }
+        
+        document.getElementById('json-upload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            document.getElementById('upload-label').innerText = file.name;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const uploaded = JSON.parse(event.target.result);
+                    currentConfig = uploaded;
+                    jsonEditor.value = JSON.stringify(currentConfig, null, 2);
+                    applyJson();
+                } catch (err) { alert("JSON error."); }
+            };
+            reader.readAsText(file);
+        });
+
+        widthInput.addEventListener('change', updateCanvasSize);
+        heightInput.addEventListener('change', updateCanvasSize);
+        window.addEventListener('resize', () => { if(!builderView.classList.contains('hidden-mode')) updateCanvasSize(); });
+    </script>
+</body>
+</html>
