@@ -633,25 +633,96 @@ function openSettings() {
     m.innerHTML=`
         <div class="modal-content">
             <h2>Settings</h2>
-            <div style="margin:20px 0; text-align:left;">
-                <label style="display:block;margin-bottom:8px;font-weight:bold;">Unlock Code</label>
-                <input id="unlockInput" type="password" placeholder="Enter unlock code" value="${localStorage.getItem('sudokuUnlock')||''}"
-                    style="width:100%;padding:10px;border-radius:8px;border:1px solid #ccc;background:var(--card-bg);color:var(--text);font-size:1rem;" />
-                <button onclick="saveUnlock()" class="btn-util" style="width:100%;margin-top:10px;justify-content:center;">Save Unlock Code</button>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px;">
+                <button onclick="settingsExport()" class="btn-util" style="width:100%;justify-content:center;">📤 Export Progress</button>
+                <button onclick="settingsImportView()" class="btn-util" style="width:100%;justify-content:center;">📥 Import Progress</button>
+                <button onclick="settingsResetConfirm1()" class="btn-util" style="width:100%;background:var(--danger);color:white;border-color:var(--danger);justify-content:center;">🗑️ Reset All Data</button>
+                <button onclick="closeModals()" class="btn-util" style="width:100%;justify-content:center;">Close</button>
             </div>
-            <button onclick="localStorage.removeItem('sudokuProgress');location.reload();" class="btn-util" style="width:100%;margin-top:10px;background:var(--danger);color:white;border-color:var(--danger);justify-content:center;">Reset All Data</button>
-            <button onclick="closeModals()" class="btn-util" style="width:100%;margin-top:10px;justify-content:center;">Close</button>
+            <div id="settingsPanel" style="margin-top:20px;"></div>
         </div>`;
     m.classList.add('show');
 }
 
-function saveUnlock() {
-    const v=document.getElementById('unlockInput').value.trim();
-    if(v) localStorage.setItem('sudokuUnlock',v);
-    else localStorage.removeItem('sudokuUnlock');
-    closeModals();
-    updateDashboard();
-    showToast(v===UNLOCK_KEY?"🔓 All puzzles unlocked!":"Code saved.");
+function settingsExport() {
+    const raw = localStorage.getItem('sudokuProgress') || '{}';
+    const b64 = btoa(raw);
+    document.getElementById('settingsPanel').innerHTML=`
+        <div style="text-align:left;">
+            <p style="font-weight:bold;margin-bottom:8px;">Your export string:</p>
+            <textarea readonly rows="5"
+                style="width:100%;padding:10px;border-radius:8px;border:1px solid #ccc;background:var(--card-bg);color:var(--text);font-size:0.8rem;resize:vertical;word-break:break-all;"
+            >${b64}</textarea>
+            <p style="font-size:0.75rem;opacity:0.6;margin-top:6px;">Copy this string and keep it safe. Use Import to restore it later.</p>
+        </div>`;
+}
+
+function settingsImportView() {
+    document.getElementById('settingsPanel').innerHTML=`
+        <div style="text-align:left;">
+            <p style="font-weight:bold;margin-bottom:8px;">Paste your export string:</p>
+            <textarea id="importInput" rows="5" placeholder="Paste base64 string here..."
+                style="width:100%;padding:10px;border-radius:8px;border:1px solid #ccc;background:var(--card-bg);color:var(--text);font-size:0.8rem;resize:vertical;word-break:break-all;"></textarea>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+                <button onclick="settingsImportDo('merge')" class="btn-util" style="flex:1;justify-content:center;">➕ Add to existing</button>
+                <button onclick="settingsImportDo('replace')" class="btn-util" style="flex:1;justify-content:center;">🔄 Replace all</button>
+            </div>
+        </div>`;
+}
+
+function settingsImportDo(mode) {
+    const raw = document.getElementById('importInput').value.trim();
+    if(!raw) { showToast("No data entered."); return; }
+    let imported;
+    try {
+        imported = JSON.parse(atob(raw));
+    } catch(e) {
+        showToast("Invalid export string!"); return;
+    }
+
+    if(mode === 'replace') {
+        localStorage.setItem('sudokuProgress', JSON.stringify(imported));
+        closeModals(); updateDashboard();
+        showToast("✅ Progress replaced!");
+        return;
+    }
+
+    // merge: keep higher score per day
+    const existing = JSON.parse(localStorage.getItem('sudokuProgress') || '{}');
+    for(const yr of Object.keys(imported)) {
+        if(!existing[yr]) existing[yr] = {};
+        for(const d of Object.keys(imported[yr])) {
+            const imp = imported[yr][d], cur = existing[yr][d];
+            if(!cur || imp.points > cur.points) existing[yr][d] = imp;
+        }
+    }
+    localStorage.setItem('sudokuProgress', JSON.stringify(existing));
+    closeModals(); updateDashboard();
+    showToast("✅ Progress merged!");
+}
+
+function settingsResetConfirm1() {
+    document.getElementById('settingsPanel').innerHTML=`
+        <div style="text-align:center;padding:10px;border:2px solid var(--danger);border-radius:12px;">
+            <p style="font-weight:bold;color:var(--danger);">⚠️ This will permanently delete all your scores and progress.</p>
+            <p style="margin:10px 0;font-size:0.9rem;">Are you sure?</p>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+                <button onclick="settingsResetConfirm2()" class="btn-util" style="flex:1;background:var(--danger);color:white;border-color:var(--danger);justify-content:center;">Yes, continue</button>
+                <button onclick="document.getElementById('settingsPanel').innerHTML=''" class="btn-util" style="flex:1;justify-content:center;">Cancel</button>
+            </div>
+        </div>`;
+}
+
+function settingsResetConfirm2() {
+    document.getElementById('settingsPanel').innerHTML=`
+        <div style="text-align:center;padding:10px;border:2px solid var(--danger);border-radius:12px;">
+            <p style="font-weight:bold;color:var(--danger);">🚨 Last chance. This cannot be undone.</p>
+            <p style="margin:10px 0;font-size:0.9rem;">All data will be gone forever.</p>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+                <button onclick="localStorage.removeItem('sudokuProgress');closeModals();updateDashboard();showToast('Data reset.');" class="btn-util" style="flex:1;background:var(--danger);color:white;border-color:var(--danger);justify-content:center;">🗑️ Delete everything</button>
+                <button onclick="document.getElementById('settingsPanel').innerHTML=''" class="btn-util" style="flex:1;justify-content:center;">Cancel</button>
+            </div>
+        </div>`;
 }
 
 function sharePuzzle() {
