@@ -237,6 +237,33 @@ body.dark .candidate-num { color: #aaa; }
 const UNLOCK_KEY = "do7'eggs";
 const NAMES = ["Hidden Single (Box) - Easy","Hidden Single (Box) - Hard","Hidden Single (Line) - Easy","Hidden Single (Line) - Hard","Locked Candidate - Easy","Locked Candidate - Hard","Naked Single - Easy","Naked Single - Hard","Naked Pair - Easy","Naked Pair - Hard","Hidden Pair - Easy","Hidden Pair - Hard","X-Wing - Easy","X-Wing - Hard","Skyscraper - Easy","Skyscraper - Hard","2-String Kite - Easy","2-String Kite - Hard","Y-Wing","XYZ-Wing","W-Wing","BUG+1","X-Chains","The Grand Finale"];
 
+const HELP_URLS = [
+    "https://sudoku.coach/en/learn/hidden-single",       // 1  Hidden Single (Box) - Easy
+    "https://sudoku.coach/en/learn/hidden-single",       // 2  Hidden Single (Box) - Hard
+    "https://sudoku.coach/en/learn/hidden-single-line",  // 3  Hidden Single (Line) - Easy
+    "https://sudoku.coach/en/learn/hidden-single-line",  // 4  Hidden Single (Line) - Hard
+    "https://sudoku.coach/en/learn/locked-candidates",   // 5  Locked Candidate - Easy
+    "https://sudoku.coach/en/learn/locked-candidates",   // 6  Locked Candidate - Hard
+    "https://sudoku.coach/en/learn/naked-single",        // 7  Naked Single - Easy
+    "https://sudoku.coach/en/learn/naked-single",        // 8  Naked Single - Hard
+    "https://sudoku.coach/en/learn/naked-pair",          // 9  Naked Pair - Easy
+    "https://sudoku.coach/en/learn/naked-pair",          // 10 Naked Pair - Hard
+    "https://sudoku.coach/en/learn/hidden-pair",         // 11 Hidden Pair - Easy
+    "https://sudoku.coach/en/learn/hidden-pair",         // 12 Hidden Pair - Hard
+    "https://sudoku.coach/en/learn/x-wing",              // 13 X-Wing - Easy
+    "https://sudoku.coach/en/learn/x-wing",              // 14 X-Wing - Hard
+    "https://sudoku.coach/en/learn/skyscraper",          // 15 Skyscraper - Easy
+    "https://sudoku.coach/en/learn/skyscraper",          // 16 Skyscraper - Hard
+    "https://sudoku.coach/en/learn/2-string-kite",       // 17 2-String Kite - Easy
+    "https://sudoku.coach/en/learn/2-string-kite",       // 18 2-String Kite - Hard
+    "https://sudoku.coach/en/learn/y-wing",              // 19 Y-Wing
+    "https://sudoku.coach/en/learn/xyz-wing",            // 20 XYZ-Wing
+    "https://sudoku.coach/en/learn/w-wing",              // 21 W-Wing
+    "https://sudoku.coach/en/learn/bug-plus-one",        // 22 BUG+1
+    "https://sudoku.coach/en/learn/x-chain",             // 23 X-Chains
+    "https://sudoku.coach/en/learn/technique-overview",  // 24 The Grand Finale
+];
+
 let DATA = {
     "2026": Array(24).fill(null).map(()=>["530070000600195000098000060800060003400803001700020006060000280000419005000080079","534678912672195348198342567859761423426853791713924856961537284287419635345286179","100"]),
     "2025": Array(24).fill(null).map(()=>["530070000600195000098000060800060003400803001700020006060000280000419005000080079","534678912672195348198342567859761423426853791713924856961537284287419635345286179","120"])
@@ -254,7 +281,6 @@ function isYearLocked(yr) {
     const now = new Date();
     const unlocked = localStorage.getItem('sudokuUnlock') === UNLOCK_KEY;
     if (unlocked) return false;
-    // Year is locked until Dec 1 of that year
     const unlock = new Date(parseInt(yr), 11, 1); // Dec 1, yr
     return now < unlock;
 }
@@ -286,7 +312,6 @@ function peers(idx) {
 }
 
 function removeCandidate(idx, val) {
-    // Remove val from candidates of all peers of idx
     for(const p of peers(idx)) {
         const ci = cand[p].indexOf(val);
         if(ci > -1) cand[p].splice(ci,1);
@@ -305,7 +330,6 @@ async function initApp() {
     setupKeyListeners();
     setInterval(updateCountdown, 1000);
 
-    // URL-based puzzle loading
     const { y, d } = getURLParams();
     if(y && d) {
         const yr = y, day = parseInt(d);
@@ -324,7 +348,6 @@ function setupKeyListeners() {
         const overlay = document.getElementById('puzzleOverlay');
         if(!overlay.classList.contains('show') || isPaused) return;
 
-        // Arrow key navigation
         if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
             e.preventDefault();
             if(sel === null) { sel = 0; drawGame(); return; }
@@ -367,7 +390,6 @@ function updateDashboard() {
     let grandTotal = 0;
 
     years.forEach(yr => {
-        // Hide future years entirely (until Dec 1 of that year)
         if(isYearLocked(yr)) return;
 
         let yrPts = 0, completedCount = 0;
@@ -521,22 +543,6 @@ function input(n) {
     if(!grid.includes(0)) autoCheck();
 }
 
-function rebuildCandidates() {
-    // Full candidate rebuild (only for empty cells)
-    for(let i=0;i<81;i++) {
-        if(!grid[i]) {
-            cand[i]=[];
-            for(let n=1;n<=9;n++) {
-                let ok=true;
-                for(const p of peers(i)) {
-                    if(grid[p]===n) { ok=false; break; }
-                }
-                if(ok) cand[i].push(n);
-            }
-        }
-    }
-}
-
 function autoCheck() {
     let wrong=0;
     for(let i=0;i<81;i++) if(grid[i]!==0&&grid[i]!==activePuzzle.sol[i]){errs.add(i);wrong++;}
@@ -558,8 +564,6 @@ function win() {
     else if(ratio<=2.0){medal='🥉';medalBonus=100;}
     const totalPts=base+timeBonus+medalBonus;
 
-    const mistakePenalty = mistakeCount * 10 * activePuzzle.d; // in seconds, reflected in timeBonus loss
-    // Calculate what timeBonus would have been with no mistakes
     const cleanTimeBonus = Math.max(0, Math.floor((activePuzzle.staff / rawTime) * 1000));
     const mistakePointLoss = -(cleanTimeBonus - timeBonus);
 
@@ -606,6 +610,13 @@ function setMode(m) {
     document.getElementById('mode0').style.color=m?'var(--primary)':'white';
     document.getElementById('mode1').style.background=m?'var(--primary)':'transparent';
     document.getElementById('mode1').style.color=m?'white':'var(--primary)';
+}
+
+// ─── Help ─────────────────────────────────────────────────────────────────────
+function openHelp() {
+    if(!activePuzzle) return;
+    const url = HELP_URLS[activePuzzle.d - 1];
+    window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -655,7 +666,6 @@ function closePuzzle() {
     clearInterval(timerInterval);
     document.getElementById('puzzleOverlay').classList.remove('show');
     updateDashboard();
-    // Clear URL params without reload
     const url = new URL(window.location);
     url.searchParams.delete('y'); url.searchParams.delete('d');
     history.replaceState({},'',url);
@@ -682,7 +692,6 @@ function updateCountdown() {
     }
     document.getElementById('countdown').textContent = str;
 }
-
 
 function verdureSandwich() { if(!activePuzzle) return; activePuzzle.sol.forEach((v,i)=>{ if(!init[i]){ grid[i]=v; cand[i]=[]; errs.delete(i); } }); drawGame(); if(!grid.includes(0)) autoCheck(); }
 
