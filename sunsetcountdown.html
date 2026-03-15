@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sunset Countdown</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            transition: background 2s ease-in-out;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 2rem;
+            padding: 3rem;
+            text-align: center;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            max-width: 90%;
+            width: 400px;
+        }
+
+        .day-bg { background: linear-gradient(to bottom, #4facfe 0%, #00f2fe 100%); }
+        .sunset-bg { background: linear-gradient(to bottom, #f83600 0%, #fe8c00 100%); }
+        .night-bg { background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364); }
+
+        .time-unit {
+            display: inline-block;
+            margin: 0 0.5rem;
+        }
+
+        .time-value {
+            font-size: 3.5rem;
+            font-weight: 800;
+            display: block;
+            line-height: 1;
+        }
+
+        .time-label {
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            opacity: 0.8;
+        }
+
+        .sun-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+    </style>
+</head>
+<body class="day-bg">
+
+    <div id="app" class="glass">
+        <div id="icon" class="sun-icon">☀️</div>
+        <h2 id="status-text" class="text-xl font-medium mb-2">Finding your location...</h2>
+        
+        <div id="countdown-container" class="hidden my-6">
+            <div class="flex justify-center items-center">
+                <div class="time-unit">
+                    <span id="hours" class="time-value">00</span>
+                    <span class="time-label">Hrs</span>
+                </div>
+                <div class="time-unit">
+                    <span id="minutes" class="time-value">00</span>
+                    <span class="time-label">Min</span>
+                </div>
+                <div class="time-unit">
+                    <span id="seconds" class="time-value">00</span>
+                    <span class="time-label">Sec</span>
+                </div>
+            </div>
+        </div>
+
+        <p id="location-name" class="text-sm opacity-60 mt-4 italic"></p>
+        
+        <button id="retry-btn" onclick="init()" class="hidden mt-6 px-6 py-2 bg-white text-black rounded-full font-bold hover:bg-opacity-90 transition-all">
+            Try Again
+        </button>
+    </div>
+
+    <script>
+        // Solar Calculation constants
+        const PI = Math.PI;
+        const RAD = PI / 180;
+
+        let sunsetTime = null;
+        let timerId = null;
+
+        function init() {
+            const status = document.getElementById('status-text');
+            const retryBtn = document.getElementById('retry-btn');
+            
+            status.innerText = "Requesting location...";
+            retryBtn.classList.add('hidden');
+
+            if (!navigator.geolocation) {
+                status.innerText = "Geolocation is not supported by your browser.";
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    calculateTimes(lat, lon);
+                    startCountdown();
+                    document.getElementById('location-name').innerText = `Lat: ${lat.toFixed(2)}, Lon: ${lon.toFixed(2)}`;
+                },
+                (error) => {
+                    status.innerText = "Location access denied. Please enable location services.";
+                    retryBtn.classList.remove('hidden');
+                }
+            );
+        }
+
+        // Astronomical formula for sunset
+        function calculateTimes(lat, lon) {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+            const day = now.getDate();
+
+            // Simplified version of the NOAA Solar Calculator algorithm
+            const zenith = 90.833; // Official sunset
+            const D2R = RAD;
+            const R2D = 180 / PI;
+
+            // 1. first calculate the day of the year
+            const N1 = Math.floor(275 * month / 9);
+            const N2 = Math.floor((month + 9) / 12);
+            const N3 = (1 + Math.floor((year - 4 * Math.floor(year / 4) + 2) / 3));
+            const N = N1 - (N2 * N3) + day - 30;
+
+            // 2. convert the longitude to hour value and calculate an approximate time
+            const lngHour = lon / 15;
+            const t = N + ((18 - lngHour) / 24); // sunset
+
+            // 3. calculate the Sun's mean anomaly
+            const M = (0.9856 * t) - 3.289;
+
+            // 4. calculate the Sun's true longitude
+            let L = M + (1.916 * Math.sin(M * D2R)) + (0.020 * Math.sin(2 * M * D2R)) + 282.634;
+            L = L % 360;
+            if (L < 0) L += 360;
+
+            // 5. calculate the Sun's right ascension
+            let RA = R2D * Math.atan(0.91764 * Math.tan(L * D2R));
+            RA = RA % 360;
+            if (RA < 0) RA += 360;
+
+            // 5b. right ascension value needs to be in the same quadrant as L
+            const Lquadrant = (Math.floor(L / 90)) * 90;
+            const RAquadrant = (Math.floor(RA / 90)) * 90;
+            RA = RA + (Lquadrant - RAquadrant);
+
+            // 5c. right ascension value needs to be converted into hours
+            RA = RA / 15;
+
+            // 6. calculate the Sun's declination
+            const sinDec = 0.39782 * Math.sin(L * D2R);
+            const cosDec = Math.cos(Math.asin(sinDec));
+
+            // 7. calculate the Sun's local hour angle
+            const cosH = (Math.cos(zenith * D2R) - (sinDec * Math.sin(lat * D2R))) / (cosDec * Math.cos(lat * D2R));
+
+            // 7b. finish calculating H and convert into hours
+            const H = R2D * Math.acos(cosH) / 15;
+
+            // 8. calculate local mean time of sunset
+            const T = H + RA - (0.06571 * t) - 6.622;
+
+            // 9. adjust back to UTC
+            let UT = T - lngHour;
+            UT = UT % 24;
+            if (UT < 0) UT += 24;
+
+            // 10. Convert UT to local time
+            const sunset = new Date(now);
+            sunset.setUTCHours(Math.floor(UT));
+            sunset.setUTCMinutes(Math.floor((UT - Math.floor(UT)) * 60));
+            sunset.setUTCSeconds(Math.floor(((UT - Math.floor(UT)) * 60 - Math.floor((UT - Math.floor(UT)) * 60)) * 60));
+            
+            // If sunset already happened today, calculate for tomorrow
+            if (sunset < now) {
+                sunset.setDate(sunset.getDate() + 1);
+            }
+
+            sunsetTime = sunset;
+        }
+
+        function startCountdown() {
+            const container = document.getElementById('countdown-container');
+            const status = document.getElementById('status-text');
+            const icon = document.getElementById('icon');
+            
+            container.classList.remove('hidden');
+            
+            function update() {
+                const now = new Date();
+                const diff = sunsetTime - now;
+
+                if (diff <= 0) {
+                    // Sunset achieved! Recalculate for next day or update UI
+                    status.innerText = "The sun has set.";
+                    icon.innerText = "🌙";
+                    document.body.className = "night-bg";
+                    document.getElementById('hours').innerText = "00";
+                    document.getElementById('minutes').innerText = "00";
+                    document.getElementById('seconds').innerText = "00";
+                    
+                    // Briefly wait then recalculate for tomorrow
+                    setTimeout(() => init(), 10000);
+                    return;
+                }
+
+                const h = Math.floor(diff / 3600000);
+                const m = Math.floor((diff % 3600000) / 60000);
+                const s = Math.floor((diff % 60000) / 1000);
+
+                document.getElementById('hours').innerText = h.toString().padStart(2, '0');
+                document.getElementById('minutes').innerText = m.toString().padStart(2, '0');
+                document.getElementById('seconds').innerText = s.toString().padStart(2, '0');
+
+                // Dynamic UI updates
+                if (h < 1) {
+                    status.innerText = "Golden hour is near!";
+                    icon.innerText = "🌇";
+                    document.body.className = "sunset-bg";
+                } else {
+                    status.innerText = "Time until sunset:";
+                    icon.innerText = "☀️";
+                    document.body.className = "day-bg";
+                }
+            }
+
+            if (timerId) clearInterval(timerId);
+            update();
+            timerId = setInterval(update, 1000);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
