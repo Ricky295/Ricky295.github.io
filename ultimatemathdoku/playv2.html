@@ -55,10 +55,21 @@
 
   #game { display: none; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 540px; }
 
-  .game-topbar { width: 100%; display: flex; justify-content: space-between; align-items: center; }
+  .game-topbar { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .back-btn { background: none; border: none; color: var(--muted); font-size: .8rem; font-weight: 700; cursor: pointer; padding: 4px 0; }
   .back-btn:hover { color: var(--text); }
-  #timerDisplay { font-size: 1.1rem; font-weight: 900; letter-spacing: .05em; color: var(--text); font-variant-numeric: tabular-nums; }
+  #timerDisplay { font-size: 1.1rem; font-weight: 900; letter-spacing: .05em; color: var(--text); font-variant-numeric: tabular-nums; flex: 1; text-align: center; }
+
+  .topbar-btns { display: flex; gap: 6px; }
+  .icon-btn {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    width: 32px; height: 32px; border-radius: 8px; font-size: .85rem;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background .15s, opacity .15s; user-select: none;
+  }
+  .icon-btn:hover { background: #2e2e36; }
+  .icon-btn:disabled { opacity: .25; cursor: not-allowed; }
+  .icon-btn.active { background: #1c2a3a; border-color: var(--blue); color: var(--blue); }
 
   .puzzle-wrap { position: relative; width: 100%; }
   #gridEl { display: grid; border: 3px solid var(--text); background: var(--border); gap: 1px; touch-action: none; user-select: none; margin: 0 auto; }
@@ -74,14 +85,13 @@
   .cell.selected { background: #1c2a3a; border-color: var(--blue); z-index: 2; }
   .cell.given { color: var(--accent); cursor: default; }
   .cell.given:hover { background: var(--surface); }
-  .cell.filled { color: var(--blue); }
   .cell.error { color: var(--danger) !important; background: #1f1010 !important; }
   .cell.correct { color: var(--success) !important; }
   .cell.highlight { background: #1a2030; }
 
   .cage-label {
     position: absolute; top: 2px; left: 3px;
-    font-size: clamp(.4rem, 1.1vw, .6rem); font-weight: 900;
+    font-size: clamp(.6rem, 1.8vw, .95rem); font-weight: 900;
     color: var(--text); pointer-events: none; line-height: 1;
   }
   .bt { border-top: 3px solid var(--text) !important; }
@@ -90,7 +100,7 @@
   .br { border-right: 3px solid var(--text) !important; }
 
   .pencil-grid { display: grid; width: 90%; height: 90%; position: absolute; inset: 5%; }
-  .pencil-digit { display: flex; align-items: center; justify-content: center; font-size: clamp(.3rem, .9vw, .5rem); font-weight: 700; color: var(--muted); line-height: 1; }
+  .pencil-digit { display: flex; align-items: center; justify-content: center; font-size: clamp(.5rem, 1.4vw, .75rem); font-weight: 700; color: var(--muted); line-height: 1; }
 
   #difficultyLabel { text-align: center; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin-top: 6px; }
 
@@ -164,6 +174,14 @@
       </div>
     </div>
 
+    <div class="option-row">
+      <label>Error Checking</label>
+      <div class="seg" id="errorSegs">
+        <div class="seg-btn active" data-val="on">On</div>
+        <div class="seg-btn" data-val="off">Off</div>
+      </div>
+    </div>
+
     <button class="btn btn-accent" id="genBtn" onclick="generatePuzzle()">▶ Generate Puzzle</button>
 
     <div id="genInline" style="display:none; flex-direction:column; gap:10px;">
@@ -196,6 +214,11 @@
   <div class="game-topbar">
     <button class="back-btn" onclick="goLobby()">← Back</button>
     <div id="timerDisplay">0:00</div>
+    <div class="topbar-btns">
+      <button class="icon-btn" id="undoBtn" title="Undo (Ctrl+Z)" onclick="undo()" disabled>↩</button>
+      <button class="icon-btn" id="redoBtn" title="Redo (Ctrl+Y)" onclick="redo()" disabled>↪</button>
+      <button class="icon-btn" id="errorToggleBtn" title="Toggle error checking" onclick="toggleErrorChecking()">👁</button>
+    </div>
   </div>
   <div class="puzzle-wrap">
     <div id="gridEl"></div>
@@ -232,25 +255,19 @@ document.querySelectorAll('.seg').forEach(seg => {
   });
 });
 
-// ── Size-based difficulty restrictions ───────────────────────────────────────
-// 8×8: BD disabled. 9×9: everything except "Any" disabled.
+// ── Size-based difficulty restrictions ────────────────────────────────────────
 const DIFF_BTNS = () => [...$('diffSegs').querySelectorAll('.seg-btn')];
 
 function applyDiffRestrictions(size) {
   const btns = DIFF_BTNS();
-  // Reset all first
   btns.forEach(b => b.classList.remove('disabled'));
-
   if (size === 9) {
-    // Only "Any" allowed — disable everything else
     btns.forEach(b => { if (b.dataset.val !== 'any') b.classList.add('disabled'); });
-    // Force active to "Any" if current selection is now disabled
     if (segVal('diffSegs') !== 'any') {
       btns.forEach(b => b.classList.remove('active'));
       $('diffSegs').querySelector('[data-val="any"]').classList.add('active');
     }
   } else if (size === 8) {
-    // Disable BD only
     btns.forEach(b => { if (b.dataset.val === 'Beyond Diabolical') b.classList.add('disabled'); });
     if (segVal('diffSegs') === 'Beyond Diabolical') {
       btns.forEach(b => b.classList.remove('active'));
@@ -259,7 +276,6 @@ function applyDiffRestrictions(size) {
   }
 }
 
-// Hook size seg clicks to trigger restriction updates
 $('sizeSegs').addEventListener('click', e => {
   const btn = e.target.closest('.seg-btn');
   if (!btn) return;
@@ -328,22 +344,17 @@ async function generatePuzzle() {
   let attempt = 0;
   while (genRunning) {
     attempt++;
-
     const puz = randomPuzzle(size);
-
     const solveResult = MathdokuSolver.solve(puz, { maxSolutions: 2 });
     if (!solveResult) { await maybeYield(attempt); continue; }
     const isUniq = solveResult.solutions.length === 1;
-
     if (uniq === 'guaranteed' && !isUniq) { await maybeYield(attempt); continue; }
     if (uniq === 'only'       &&  isUniq) { await maybeYield(attempt); continue; }
-
     const rating   = MathdokuSolver.rate(puz);
     const rawDiff  = isUniq
       ? rating.difficulty
       : rating.difficulty.replace(/^Non-unique \(/, '').replace(/\)$/, '');
     const proximity = diffProximity(rating.score, diff);
-
     if (proximity < genBestProximity) {
       genBestProximity = proximity;
       genBestPuzzle    = puz;
@@ -351,10 +362,8 @@ async function generatePuzzle() {
       $('genBestLabel').textContent   = genBestLabel;
       $('genAcceptBtn').style.display = '';
     }
-
     await maybeYield(attempt);
     if (!genRunning) return;
-
     if (proximity === 0) {
       genRunning = false;
       $('genInline').style.display = 'none';
@@ -382,31 +391,22 @@ function acceptBest() {
 
 // ── Puzzle generation helpers ─────────────────────────────────────────────────
 function randomPuzzle(size) {
-  const grid  = randomLatinSquare(size);
-  const cages = carveCages(grid, size);
-  return { size, cages, givens: [] };
+  return { size, cages: carveCages(randomLatinSquare(size), size), givens: [] };
 }
 
 function randomLatinSquare(size) {
-  const grid    = Array.from({length: size}, () => new Array(size).fill(0));
-  const rowUsed = new Array(size).fill(0);
-  const colUsed = new Array(size).fill(0);
-
+  const grid = Array.from({length: size}, () => new Array(size).fill(0));
+  const rowUsed = new Array(size).fill(0), colUsed = new Array(size).fill(0);
   function bt(pos) {
     if (pos === size * size) return true;
     const r = Math.floor(pos / size), c = pos % size;
     const used = rowUsed[r] | colUsed[c];
-    const vals = shuffle(Array.from({length: size}, (_,i) => i+1));
-    for (const v of vals) {
+    for (const v of shuffle(Array.from({length: size}, (_,i) => i+1))) {
       const bit = 1 << v;
       if (used & bit) continue;
-      grid[r][c]  = v;
-      rowUsed[r] |= bit;
-      colUsed[c] |= bit;
+      grid[r][c] = v; rowUsed[r] |= bit; colUsed[c] |= bit;
       if (bt(pos+1)) return true;
-      grid[r][c]  = 0;
-      rowUsed[r] &= ~bit;
-      colUsed[c] &= ~bit;
+      grid[r][c] = 0; rowUsed[r] &= ~bit; colUsed[c] &= ~bit;
     }
     return false;
   }
@@ -417,8 +417,7 @@ function randomLatinSquare(size) {
 function carveCages(grid, size) {
   const assigned = Array.from({length: size}, () => new Array(size).fill(false));
   const cages = [];
-  const order = shuffle(Array.from({length: size*size}, (_,i) => i));
-  for (const flat of order) {
+  for (const flat of shuffle(Array.from({length: size*size}, (_,i) => i))) {
     const r = Math.floor(flat / size), c = flat % size;
     if (assigned[r][c]) continue;
     const cells = [[r, c]];
@@ -429,17 +428,14 @@ function carveCages(grid, size) {
       for (const [cr, cc] of cells)
         for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
           const nr = cr+dr, nc = cc+dc;
-          if (nr>=0 && nr<size && nc>=0 && nc<size && !assigned[nr][nc])
-            cands.push([nr, nc]);
+          if (nr>=0 && nr<size && nc>=0 && nc<size && !assigned[nr][nc]) cands.push([nr, nc]);
         }
       if (!cands.length) break;
       const [nr, nc] = cands[Math.floor(Math.random() * cands.length)];
-      cells.push([nr, nc]);
-      assigned[nr][nc] = true;
+      cells.push([nr, nc]); assigned[nr][nc] = true;
     }
     const vals = cells.map(([cr,cc]) => grid[cr][cc]);
-    const { op, target } = chooseOp(vals);
-    cages.push({ id: Date.now() + cages.length, cells, op, target });
+    cages.push({ id: Date.now() + cages.length, cells, ...chooseOp(vals) });
   }
   return cages;
 }
@@ -469,6 +465,58 @@ function shuffle(arr) {
 
 // ── Game state ────────────────────────────────────────────────────────────────
 let puzzle, solution, userGrid, pencilGrid, selected, pencilMode, timerSec, timerInt, solved, difficulty;
+let errorCheckingEnabled = true;
+
+// ── Undo/redo history ─────────────────────────────────────────────────────────
+let undoStack = [], redoStack = [];
+
+function snapshotState() {
+  return {
+    userGrid:   userGrid.map(r => r.slice()),
+    pencilGrid: pencilGrid.map(r => r.map(s => new Set(s))),
+  };
+}
+
+function restoreState(snap) {
+  userGrid   = snap.userGrid.map(r => r.slice());
+  pencilGrid = snap.pencilGrid.map(r => r.map(s => new Set(s)));
+}
+
+function pushUndo() {
+  undoStack.push(snapshotState());
+  redoStack = [];
+  updateUndoRedoBtns();
+}
+
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(snapshotState());
+  restoreState(undoStack.pop());
+  updateUndoRedoBtns();
+  renderGrid();
+}
+
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(snapshotState());
+  restoreState(redoStack.pop());
+  updateUndoRedoBtns();
+  renderGrid();
+}
+
+function updateUndoRedoBtns() {
+  $('undoBtn').disabled = undoStack.length === 0;
+  $('redoBtn').disabled = redoStack.length === 0;
+}
+
+// ── Error checking toggle ─────────────────────────────────────────────────────
+function toggleErrorChecking() {
+  errorCheckingEnabled = !errorCheckingEnabled;
+  const btn = $('errorToggleBtn');
+  btn.title = errorCheckingEnabled ? 'Error checking on' : 'Error checking off';
+  btn.classList.toggle('active', !errorCheckingEnabled);
+  renderGrid();
+}
 
 function startGame(puz) {
   puzzle = puz;
@@ -482,6 +530,15 @@ function startGame(puz) {
   selected   = null;
   pencilMode = false;
   solved     = false;
+  undoStack  = [];
+  redoStack  = [];
+
+  // Inherit error checking setting from lobby selector
+  errorCheckingEnabled = segVal('errorSegs') !== 'off';
+  const btn = $('errorToggleBtn');
+  btn.classList.toggle('active', !errorCheckingEnabled);
+  btn.title = errorCheckingEnabled ? 'Error checking on' : 'Error checking off';
+
   (puz.givens||[]).forEach(g => { userGrid[g.row][g.col] = g.value; });
   clearInterval(timerInt);
   timerSec = 0;
@@ -494,6 +551,7 @@ function startGame(puz) {
   $('lobby').style.display = 'none';
   $('game').style.display  = 'flex';
   $('difficultyLabel').textContent = difficulty;
+  updateUndoRedoBtns();
   const encoded = btoa(JSON.stringify({ size: puz.size, cages: puz.cages, givens: puz.givens || [] }));
   history.replaceState(null, '', '?p=' + encoded);
   renderGrid();
@@ -530,9 +588,14 @@ function renderGrid() {
 
       const div = document.createElement('div');
       let cls = 'cell';
-      if (isGiven)                          cls += ' given';
-      else if (val && val===solution[r][c]) cls += ' correct';
-      else if (val)                         cls += ' error';
+      if (isGiven) {
+        cls += ' given';
+      } else if (val) {
+        if (errorCheckingEnabled) {
+          cls += val === solution[r][c] ? ' correct' : ' error';
+        }
+        // with error checking off: no extra class — neutral white text
+      }
       if (isSel) cls += ' selected';
       else if (isHl) cls += ' highlight';
       div.className = cls;
@@ -548,7 +611,7 @@ function renderGrid() {
         if (sorted[0][0]===r && sorted[0][1]===c) {
           const lbl = document.createElement('span');
           lbl.className = 'cage-label';
-          lbl.textContent = cage.target + (cage.op==='=' ? '' : cage.op);
+          lbl.textContent = cage.target + (cage.op==='=' ? '' : cage.op==='*' ? '×' : cage.op);
           div.appendChild(lbl);
         }
       }
@@ -583,8 +646,9 @@ function inputValue(v) {
   if (!selected || solved) return;
   const [r, c] = selected;
   if ((puzzle.givens||[]).some(g => g.row===r && g.col===c)) return;
+  pushUndo();
   if (pencilMode) {
-    if (userGrid[r][c]) return;
+    if (userGrid[r][c]) { redoStack = []; undoStack.pop(); return; }
     if (pencilGrid[r][c].has(v)) pencilGrid[r][c].delete(v);
     else pencilGrid[r][c].add(v);
   } else {
@@ -593,6 +657,7 @@ function inputValue(v) {
     for (let i = 0; i < puzzle.size; i++) { pencilGrid[r][i].delete(v); pencilGrid[i][c].delete(v); }
     checkWin();
   }
+  updateUndoRedoBtns();
   renderGrid();
 }
 
@@ -600,8 +665,11 @@ function eraseCell() {
   if (!selected || solved) return;
   const [r, c] = selected;
   if ((puzzle.givens||[]).some(g => g.row===r && g.col===c)) return;
+  if (!userGrid[r][c] && pencilGrid[r][c].size === 0) return;
+  pushUndo();
   userGrid[r][c] = 0;
   pencilGrid[r][c].clear();
+  updateUndoRedoBtns();
   renderGrid();
 }
 
@@ -647,6 +715,11 @@ function renderNumpad() {
 document.addEventListener('keydown', e => {
   if ($('game').style.display === 'none') return;
   if (['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+  if (e.key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) { e.preventDefault(); undo(); return; }
+  if ((e.key === 'y' && (e.ctrlKey || e.metaKey)) ||
+      (e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey)) { e.preventDefault(); redo(); return; }
+
   const N = puzzle?.size || 4;
   const digit = parseInt(e.key);
   if (!isNaN(digit) && digit >= 1 && digit <= N) { inputValue(digit); return; }
