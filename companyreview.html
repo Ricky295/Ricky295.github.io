@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Company Insight AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen pb-12 text-slate-900">
+    <div class="max-w-4xl mx-auto px-4 pt-12">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold mb-3 tracking-tight">Workplace Intelligence AI</h1>
+            <p class="text-slate-600 max-w-xl mx-auto italic">"Because some 'Great Places to Work' are actually nightmares."</p>
+        </header>
+
+        <!-- Configuration Section -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 mb-6 shadow-sm">
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Gemini API Key</label>
+            <input type="password" id="apiKeyInput" placeholder="Enter your Gemini API Key here..." 
+                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+            <p class="text-[10px] text-slate-400 mt-2">Get a free key at aistudio.google.com. Your key is only used in your browser.</p>
+        </div>
+
+        <!-- Search Section -->
+        <div class="glass p-6 rounded-2xl shadow-xl border border-slate-200 mb-8">
+            <div class="flex flex-col md:flex-row gap-4">
+                <input type="text" id="companyInput" placeholder="Enter company name (e.g. Amazon, Tesla, Netflix)" 
+                    class="flex-1 px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-lg">
+                <button id="analyzeBtn" class="bg-slate-900 hover:bg-black text-white font-semibold px-8 py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2">
+                    <span id="btnText">Analyze Deeply</span>
+                    <div id="btnLoader" class="loader hidden"></div>
+                </button>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorBox" class="hidden mb-8 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl"></div>
+
+        <!-- Results Section -->
+        <div id="results" class="hidden space-y-6">
+            <!-- Search Context -->
+            <div id="searchContext" class="bg-blue-50 p-4 rounded-xl border border-blue-100 hidden">
+                <h3 class="text-xs font-bold text-blue-600 uppercase mb-2">AI Search Path</h3>
+                <div id="queriesUsed" class="flex flex-wrap gap-2 text-sm text-blue-800"></div>
+            </div>
+
+            <!-- Summary Card -->
+            <div class="bg-white p-8 rounded-2xl shadow-md border border-slate-100">
+                <h2 class="text-2xl font-bold text-slate-800 mb-6">
+                    Report: <span id="displayCompanyName" class="text-blue-600 underline decoration-blue-200"></span>
+                </h2>
+                
+                <div id="aiResponse" class="prose prose-slate max-w-none text-slate-700 leading-relaxed"></div>
+            </div>
+
+            <!-- Sources Section -->
+            <div id="sourcesContainer" class="hidden">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Verified Evidence Sources</h3>
+                <div id="sourcesList" class="flex flex-wrap gap-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const companyInput = document.getElementById('companyInput');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const results = document.getElementById('results');
+        const aiResponse = document.getElementById('aiResponse');
+        const displayCompanyName = document.getElementById('displayCompanyName');
+        const btnText = document.getElementById('btnText');
+        const btnLoader = document.getElementById('btnLoader');
+        const errorBox = document.getElementById('errorBox');
+        const sourcesContainer = document.getElementById('sourcesContainer');
+        const sourcesList = document.getElementById('sourcesList');
+        const searchContext = document.getElementById('searchContext');
+        const queriesUsed = document.getElementById('queriesUsed');
+
+        async function fetchGeminiData(company, key, retryCount = 0) {
+            const systemPrompt = `You are an elite investigative corporate journalist. 
+            Analyze working at the requested company by cross-referencing recent news, employee reviews (Glassdoor, Reddit, Indeed), and financial reports. 
+            Be brutal and honest. Use Markdown formatting.
+            Structure:
+            1. # The Verdict (1 sentence)
+            2. ## The Good (List)
+            3. ## The Bad (List)
+            4. ## The Reality (3-4 sentences on internal culture and recent sentiment)`;
+
+            const userQuery = `What is the unfiltered truth about working at ${company} right now? Research employee satisfaction, WLB, and any recent management scandals.`;
+
+            // Updated model name to stable version and fixed tool syntax
+            const modelName = "gemini-2.5-flash"; 
+            const payload = {
+                contents: [{ 
+                    role: "user",
+                    parts: [{ text: userQuery }] 
+                }],
+                systemInstruction: { 
+                    parts: [{ text: systemPrompt }] 
+                },
+                tools: [{ googleSearch: {} }]
+            };
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${key}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    if (response.status === 404 && retryCount === 0) {
+                        // If 2.5-flash is somehow not found, fallback to 2.0-flash
+                        return fetchGeminiDataFallback(company, key);
+                    }
+                    throw new Error(result.error?.message || 'Failed to connect to Gemini.');
+                }
+
+                return result;
+            } catch (err) {
+                throw err;
+            }
+        }
+
+        // Fallback function for broader compatibility
+        async function fetchGeminiDataFallback(company, key) {
+            const modelName = "gemini-2.0-flash";
+            const payload = {
+                contents: [{ parts: [{ text: `Provide a detailed workplace report for ${company}.` }] }],
+                tools: [{ google_search: {} }]
+            };
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${key}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            return await response.json();
+        }
+
+        function formatMarkdown(text) {
+            return text
+                .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-black mb-4 border-b pb-2">$1</h1>')
+                .replace(/^## (.*$)/gim, '<h2 class="text-lg font-bold mt-6 mb-2 text-slate-800">$1</h2>')
+                .replace(/^\* (.*$)/gim, '<li class="ml-5 list-disc mb-1 text-slate-700">$1</li>')
+                .replace(/^- (.*$)/gim, '<li class="ml-5 list-disc mb-1 text-slate-700">$1</li>')
+                .replace(/\*\*(.*?)\*\*/gim, '<span class="font-bold text-slate-900">$1</span>')
+                .replace(/\n/gim, '<br>');
+        }
+
+        analyzeBtn.addEventListener('click', async () => {
+            const company = companyInput.value.trim();
+            const key = apiKeyInput.value.trim();
+            
+            if (!key) {
+                errorBox.textContent = "Please enter your Gemini API Key.";
+                errorBox.classList.remove('hidden');
+                return;
+            }
+            if (!company) return;
+
+            errorBox.classList.add('hidden');
+            results.classList.add('hidden');
+            searchContext.classList.add('hidden');
+            btnText.textContent = "Researching...";
+            btnLoader.classList.remove('hidden');
+            analyzeBtn.disabled = true;
+
+            try {
+                const data = await fetchGeminiData(company, key);
+                const candidate = data.candidates?.[0];
+                const text = candidate?.content?.parts?.[0]?.text;
+                const metadata = candidate?.groundingMetadata;
+
+                if (text) {
+                    displayCompanyName.textContent = company;
+                    aiResponse.innerHTML = formatMarkdown(text);
+                    results.classList.remove('hidden');
+
+                    if (metadata?.webSearchQueries) {
+                        searchContext.classList.remove('hidden');
+                        queriesUsed.innerHTML = metadata.webSearchQueries.map(q => 
+                            `<span class="bg-blue-100 px-2 py-1 rounded border border-blue-200">🔍 ${q}</span>`
+                        ).join('');
+                    }
+
+                    if (metadata?.groundingChunks) {
+                        sourcesList.innerHTML = '';
+                        metadata.groundingChunks.forEach(chunk => {
+                            if (chunk.web?.uri) {
+                                const a = document.createElement('a');
+                                a.href = chunk.web.uri;
+                                a.target = "_blank";
+                                a.className = "text-[11px] bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-3 py-1.5 rounded-lg border border-slate-300 transition-all";
+                                a.textContent = chunk.web.title || "Source";
+                                sourcesList.appendChild(a);
+                            }
+                        });
+                        sourcesContainer.classList.remove('hidden');
+                    }
+                } else {
+                    throw new Error("No response generated. Please check your API key and try again.");
+                }
+
+            } catch (err) {
+                errorBox.textContent = err.message;
+                errorBox.classList.remove('hidden');
+            } finally {
+                btnText.textContent = "Analyze Deeply";
+                btnLoader.classList.add('hidden');
+                analyzeBtn.disabled = false;
+            }
+        });
+
+        companyInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') analyzeBtn.click(); });
+    </script>
+</body>
+</html>
