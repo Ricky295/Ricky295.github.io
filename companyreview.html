@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Company Insight AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
@@ -39,10 +40,17 @@
             transition: left 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
             filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
         }
+        .star-icon {
+            transition: all 0.2s ease;
+        }
+        .star-icon.filled {
+            color: #fbbf24;
+            filter: drop-shadow(0 0 3px rgba(251, 191, 36, 0.5));
+        }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen pb-12 text-slate-900">
-    <div class="max-w-4xl mx-auto px-4 pt-12">
+<body class="bg-gradient-to-br from-orange-50 via-white to-amber-50 min-h-screen pb-12 text-slate-900">
+    <div class="max-w-7xl mx-auto px-4 pt-12">
         <!-- Header -->
         <header class="text-center mb-8">
             <h1 class="text-4xl font-bold mb-3 tracking-tight">Workplace Intelligence AI</h1>
@@ -57,65 +65,164 @@
             <p class="text-[10px] text-slate-400 mt-2">Get a free key at aistudio.google.com. Your key is only used in your browser.</p>
         </div>
 
-        <!-- Search Section -->
-        <div class="glass p-6 rounded-2xl shadow-xl border border-slate-200 mb-8">
-            <div class="flex flex-col md:flex-row gap-4">
-                <input type="text" id="companyInput" placeholder="Enter company name (e.g. Amazon, Tesla, Netflix)" 
-                    class="flex-1 px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-lg">
-                <button id="analyzeBtn" class="bg-slate-900 hover:bg-black text-white font-semibold px-8 py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2">
-                    <span id="btnText">Analyze Deeply</span>
-                    <div id="btnLoader" class="loader hidden"></div>
-                </button>
+        <!-- Favorites Bar -->
+        <div id="favoritesBar" class="hidden mb-6 bg-white p-4 rounded-xl border border-amber-200 shadow-sm">
+            <p class="text-xs font-bold text-amber-700 uppercase mb-3 flex items-center gap-2">
+                <span>⭐ Saved Companies</span>
+                <button id="clearFavs" class="ml-auto text-xs px-2 py-1 hover:bg-amber-100 rounded text-amber-600">Clear</button>
+            </p>
+            <div id="favoritesList" class="flex flex-wrap gap-2"></div>
+        </div>
+
+        <!-- Comparison Mode Toggle -->
+        <div class="flex justify-center mb-8">
+            <button id="comparisonToggle" class="px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 transition">
+                📊 Compare Mode
+            </button>
+        </div>
+
+        <!-- Single Company Mode -->
+        <div id="singleMode">
+            <!-- Search Section -->
+            <div class="glass p-6 rounded-2xl shadow-xl border border-slate-200 mb-8">
+                <div class="flex flex-col md:flex-row gap-4">
+                    <input type="text" id="companyInput" placeholder="Enter company name (e.g. Amazon, Tesla, Netflix)" 
+                        class="flex-1 px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-lg">
+                    <button id="analyzeBtn" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-8 py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2">
+                        <span id="btnText">Analyze Deeply</span>
+                        <div id="btnLoader" class="loader hidden"></div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Error Message -->
+            <div id="errorBox" class="hidden mb-8 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl"></div>
+
+            <!-- Results Section -->
+            <div id="results" class="hidden space-y-6">
+                <!-- Score Meter Card -->
+                <div class="bg-white p-8 rounded-2xl shadow-md border border-slate-100 text-center">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Workplace Quality Score</h3>
+                        <button id="favBtn" class="star-icon text-2xl cursor-pointer hover:scale-125 transition">☆</button>
+                    </div>
+                    <div class="relative max-w-md mx-auto mb-4">
+                        <div class="score-bar"></div>
+                        <div id="scoreArrow" class="score-arrow" style="left: 0%;"></div>
+                    </div>
+                    <div class="flex justify-between max-w-md mx-auto text-[10px] font-bold text-slate-400 uppercase px-1">
+                        <span class="text-red-500">Toxic / Avoid</span>
+                        <span class="text-yellow-600">Average</span>
+                        <span class="text-green-600">Elite / Dream</span>
+                    </div>
+                    <div class="flex items-baseline justify-center gap-3 mt-4">
+                        <div id="scoreText" class="text-6xl font-black text-slate-900">0</div>
+                        <span class="text-slate-400 font-bold">/100</span>
+                        <div id="confidenceScore" class="ml-4 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p class="text-[10px] text-blue-600 font-bold">Confidence</p>
+                            <p class="text-lg font-bold text-blue-700" id="confidenceText">0%</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Card -->
+                <div class="bg-white p-8 rounded-2xl shadow-md border border-slate-100">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-2xl font-bold text-slate-800">
+                            Analysis for <span id="displayCompanyName" class="text-orange-600 underline decoration-orange-200"></span>
+                        </h2>
+                        <div class="flex gap-2">
+                            <button id="exportPdfBtn" class="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium rounded-lg transition border border-red-200">📄 PDF (Broken)</button>
+                            <button id="exportMdBtn" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg transition border border-slate-300">📝 Markdown</button>
+                        </div>
+                    </div>
+                    
+                    <div id="aiResponse" class="prose prose-slate max-w-none text-slate-700 leading-relaxed"></div>
+                </div>
+
+                <!-- Sources Section -->
+                <div id="sourcesContainer" class="hidden">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Verified Evidence Sources</h3>
+                    <div id="sourcesList" class="flex flex-wrap gap-2"></div>
+                </div>
             </div>
         </div>
 
-        <!-- Error Message -->
-        <div id="errorBox" class="hidden mb-8 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl"></div>
-
-        <!-- Results Section -->
-        <div id="results" class="hidden space-y-6">
-            <!-- Score Meter Card -->
-            <div class="bg-white p-8 rounded-2xl shadow-md border border-slate-100 text-center">
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Workplace Quality Score</h3>
-                <div class="relative max-w-md mx-auto mb-4">
-                    <div class="score-bar"></div>
-                    <div id="scoreArrow" class="score-arrow" style="left: 0%;"></div>
+        <!-- Comparison Mode -->
+        <div id="comparisonMode" class="hidden">
+            <div class="grid md:grid-cols-2 gap-6 mb-8">
+                <!-- Company 1 -->
+                <div class="glass p-6 rounded-2xl shadow-xl border border-slate-200">
+                    <h3 class="text-sm font-bold text-slate-600 uppercase mb-4">Company 1</h3>
+                    <div class="flex gap-3 mb-4">
+                        <input type="text" id="company1Input" placeholder="Enter company name..." 
+                            class="flex-1 px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
+                        <button id="analyze1Btn" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-6 py-2 rounded-lg transition flex items-center gap-2">
+                            <span>Analyze</span>
+                            <div class="analyze1Loader loader hidden"></div>
+                        </button>
+                    </div>
+                    <div id="company1Result" class="min-h-96 p-4 bg-white rounded-lg border border-slate-200 hidden">
+                        <div class="flex items-baseline gap-2 mb-3">
+                            <div class="text-4xl font-black text-slate-900" id="score1">0</div>
+                            <span class="text-slate-500">/100</span>
+                            <span class="text-xs bg-blue-50 px-2 py-1 rounded text-blue-600 font-bold ml-2" id="conf1">0%</span>
+                        </div>
+                        <h4 class="font-bold text-orange-600 mb-2" id="company1Name"></h4>
+                        <p class="text-sm text-slate-600 line-clamp-3" id="summary1"></p>
+                    </div>
+                    <div id="company1Empty" class="min-h-96 flex items-center justify-center text-slate-400">
+                        <p class="text-center text-sm">Analyze a company to compare</p>
+                    </div>
                 </div>
-                <div class="flex justify-between max-w-md mx-auto text-[10px] font-bold text-slate-400 uppercase px-1">
-                    <span class="text-red-500">Toxic / Avoid</span>
-                    <span class="text-yellow-600">Average</span>
-                    <span class="text-green-600">Elite / Dream</span>
+
+                <!-- Company 2 -->
+                <div class="glass p-6 rounded-2xl shadow-xl border border-slate-200">
+                    <h3 class="text-sm font-bold text-slate-600 uppercase mb-4">Company 2</h3>
+                    <div class="flex gap-3 mb-4">
+                        <input type="text" id="company2Input" placeholder="Enter company name..." 
+                            class="flex-1 px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
+                        <button id="analyze2Btn" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-6 py-2 rounded-lg transition flex items-center gap-2">
+                            <span>Analyze</span>
+                            <div class="analyze2Loader loader hidden"></div>
+                        </button>
+                    </div>
+                    <div id="company2Result" class="min-h-96 p-4 bg-white rounded-lg border border-slate-200 hidden">
+                        <div class="flex items-baseline gap-2 mb-3">
+                            <div class="text-4xl font-black text-slate-900" id="score2">0</div>
+                            <span class="text-slate-500">/100</span>
+                            <span class="text-xs bg-blue-50 px-2 py-1 rounded text-blue-600 font-bold ml-2" id="conf2">0%</span>
+                        </div>
+                        <h4 class="font-bold text-orange-600 mb-2" id="company2Name"></h4>
+                        <p class="text-sm text-slate-600 line-clamp-3" id="summary2"></p>
+                    </div>
+                    <div id="company2Empty" class="min-h-96 flex items-center justify-center text-slate-400">
+                        <p class="text-center text-sm">Analyze a company to compare</p>
+                    </div>
                 </div>
-                <div class="flex items-baseline justify-center gap-1 mt-4">
-                    <div id="scoreText" class="text-6xl font-black text-slate-900">0</div>
-                    <span class="text-slate-400 font-bold">/100</span>
+            </div>
+
+            <div id="comparisonError" class="hidden mb-8 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl"></div>
+
+            <!-- Detailed Comparison View -->
+            <div id="comparisonDetails" class="hidden space-y-6">
+                <div class="bg-white p-8 rounded-2xl shadow-md border border-slate-100">
+                    <h3 class="text-xl font-bold mb-6 text-slate-800">Head-to-Head Analysis</h3>
+                    <div id="comparisonContent" class="space-y-4"></div>
                 </div>
             </div>
 
-            <!-- Summary Card -->
-            <div class="bg-white p-8 rounded-2xl shadow-md border border-slate-100">
-                <h2 class="text-2xl font-bold text-slate-800 mb-6">
-                    Analysis for <span id="displayCompanyName" class="text-blue-600 underline decoration-blue-200"></span>
-                </h2>
-                
-                <div id="aiResponse" class="prose prose-slate max-w-none text-slate-700 leading-relaxed"></div>
-            </div>
-
-            <!-- Search Context -->
-            <div id="searchContext" class="bg-blue-50 p-4 rounded-xl border border-blue-100 hidden">
-                <h3 class="text-xs font-bold text-blue-600 uppercase mb-2">AI Search Path</h3>
-                <div id="queriesUsed" class="flex flex-wrap gap-2 text-sm text-blue-800"></div>
-            </div>
-
-            <!-- Sources Section -->
-            <div id="sourcesContainer" class="hidden">
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Verified Evidence Sources</h3>
-                <div id="sourcesList" class="flex flex-wrap gap-2"></div>
-            </div>
+            <button id="backToSingle" class="mt-8 px-6 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg transition">← Back to Single Analysis</button>
         </div>
     </div>
 
     <script>
+        // ============ STATE MANAGEMENT ============
+        let currentAnalysis = null;
+        let comparisons = { company1: null, company2: null };
+        let favorites = JSON.parse(localStorage.getItem('companyFavorites')) || [];
+
+        // ============ DOM ELEMENTS ============
         const analyzeBtn = document.getElementById('analyzeBtn');
         const companyInput = document.getElementById('companyInput');
         const apiKeyInput = document.getElementById('apiKeyInput');
@@ -125,13 +232,216 @@
         const btnText = document.getElementById('btnText');
         const btnLoader = document.getElementById('btnLoader');
         const errorBox = document.getElementById('errorBox');
-        const sourcesContainer = document.getElementById('sourcesContainer');
         const sourcesList = document.getElementById('sourcesList');
-        const searchContext = document.getElementById('searchContext');
-        const queriesUsed = document.getElementById('queriesUsed');
+        const sourcesContainer = document.getElementById('sourcesContainer');
         const scoreArrow = document.getElementById('scoreArrow');
         const scoreText = document.getElementById('scoreText');
+        const confidenceText = document.getElementById('confidenceText');
+        const favBtn = document.getElementById('favBtn');
+        const favoritesBar = document.getElementById('favoritesBar');
+        const favoritesList = document.getElementById('favoritesList');
+        const clearFavs = document.getElementById('clearFavs');
+        const exportPdfBtn = document.getElementById('exportPdfBtn');
+        const exportMdBtn = document.getElementById('exportMdBtn');
+        const comparisonToggle = document.getElementById('comparisonToggle');
+        const singleMode = document.getElementById('singleMode');
+        const comparisonMode = document.getElementById('comparisonMode');
+        const backToSingle = document.getElementById('backToSingle');
 
+        // ============ FAVORITES MANAGEMENT ============
+        function saveFavorites() {
+            localStorage.setItem('companyFavorites', JSON.stringify(favorites));
+            renderFavorites();
+        }
+
+        function toggleFavorite(company, score) {
+            const idx = favorites.findIndex(f => f.company.toLowerCase() === company.toLowerCase());
+            if (idx === -1) {
+                favorites.push({ 
+                    company, 
+                    score, 
+                    confidence: currentAnalysis?.data?.confidence || 0,
+                    data: currentAnalysis?.data,
+                    date: new Date().toISOString() 
+                });
+                favBtn.textContent = '★';
+                favBtn.classList.add('filled');
+            } else {
+                favorites.splice(idx, 1);
+                favBtn.textContent = '☆';
+                favBtn.classList.remove('filled');
+            }
+            saveFavorites();
+        }
+
+        function renderFavorites() {
+            if (favorites.length === 0) {
+                favoritesBar.classList.add('hidden');
+                return;
+            }
+            favoritesBar.classList.remove('hidden');
+            favoritesList.innerHTML = favorites.map(fav => `
+                <button onclick="window.jumpToFavorite('${fav.company}')" class="px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 text-sm font-medium rounded-lg border border-amber-300 transition">
+                    ⭐ ${fav.company} (${fav.score})
+                </button>
+            `).join('');
+        }
+
+        window.jumpToFavorite = async (company) => {
+            // Find the favorite with full data
+            const favorite = favorites.find(f => f.company.toLowerCase() === company.toLowerCase());
+            if (favorite && favorite.data) {
+                // Restore the full analysis without making a new API call
+                currentAnalysis = { data: favorite.data, company: favorite.company };
+                displayCompanyName.textContent = favorite.company;
+                
+                const score = Math.min(Math.max(favorite.data.score || 0, 0), 100);
+                scoreText.textContent = score;
+                confidenceText.textContent = `${Math.min(Math.max(favorite.data.confidence || 0, 0), 100)}%`;
+                
+                scoreArrow.style.left = '0%';
+                setTimeout(() => {
+                    scoreArrow.style.left = `${score}%`;
+                }, 50);
+
+                const isFav = true;
+                favBtn.textContent = '★';
+                favBtn.classList.add('filled');
+                favBtn.onclick = () => toggleFavorite(favorite.company, score);
+
+                renderReport(favorite.data, favorite.company);
+                results.classList.remove('hidden');
+                singleMode.classList.remove('hidden');
+                comparisonMode.classList.add('hidden');
+                comparisonToggle.textContent = '📊 Compare Mode';
+                results.scrollIntoView({ behavior: 'smooth' });
+            }
+        };
+
+        clearFavs.addEventListener('click', () => {
+            if (confirm('Clear all saved companies?')) {
+                favorites = [];
+                saveFavorites();
+            }
+        });
+
+        // ============ EXPORT FUNCTIONS ============
+        function generateMarkdown(data, company) {
+            return `# Workplace Analysis: ${company}
+
+## Score: ${data.score}/100
+
+${data.shortDescription}
+
+${data.longDescription}
+
+### Green Flags ✅
+${data.greenFlags.map(f => `- ${f}`).join('\n')}
+
+### Yellow Flags ⚠️
+${data.yellowFlags.map(f => `- ${f}`).join('\n')}
+
+### Red Flags 🚩
+${data.redFlags.map(f => `- ${f}`).join('\n')}
+
+### Better Alternatives 💼
+${data.alternatives.map(a => `- **${a.name}**: ${a.reason}`).join('\n')}
+
+---
+Generated by Workplace Intelligence AI
+`;
+        }
+
+        exportMdBtn.addEventListener('click', () => {
+            if (!currentAnalysis) return;
+            const markdown = generateMarkdown(currentAnalysis.data, currentAnalysis.company);
+            const blob = new Blob([markdown], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentAnalysis.company}-analysis.md`;
+            a.click();
+        });
+
+        exportPdfBtn.addEventListener('click', () => {
+            if (!currentAnalysis) return;
+            const data = currentAnalysis.data;
+            const company = currentAnalysis.company;
+            const score = data.score || 0;
+            const confidence = data.confidence || 0;
+
+            const pdfContent = document.createElement('div');
+            pdfContent.style.padding = '15px';
+            pdfContent.style.fontFamily = 'Arial, sans-serif';
+            pdfContent.innerHTML = `
+                <h1 style="text-align: center; margin: 0 0 15px 0; font-size: 22px; color: #0f172a;">${company} - Workplace Analysis</h1>
+                
+                <div style="display: flex; gap: 15px; margin-bottom: 15px; text-align: center;">
+                    <div style="flex: 1; padding: 12px; background: #f8fafc; border-radius: 8px; border: 2px solid #3b82f6;">
+                        <p style="margin: 0; color: #64748b; font-size: 11px; font-weight: bold;">WORKPLACE QUALITY SCORE</p>
+                        <p style="margin: 6px 0 0 0; font-size: 36px; font-weight: bold; color: #1e293b;">${score}</p>
+                        <p style="margin: 2px 0 0 0; color: #64748b; font-size: 12px;">/100</p>
+                    </div>
+                    <div style="flex: 1; padding: 12px; background: #eff6ff; border-radius: 8px; border: 2px solid #0ea5e9;">
+                        <p style="margin: 0; color: #0369a1; font-size: 11px; font-weight: bold;">ANALYSIS CONFIDENCE</p>
+                        <p style="margin: 6px 0 0 0; font-size: 36px; font-weight: bold; color: #0c4a6e;">${confidence}%</p>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <p style="margin: 0 0 8px 0; color: #475569; line-height: 1.4; font-size: 13px; border-left: 4px solid #ea580c; padding-left: 10px; font-weight: 600;">${data.shortDescription}</p>
+                    <p style="color: #475569; line-height: 1.3; margin: 0; font-size: 12px;">${data.longDescription.split('\n').slice(0, 2).join(' ')}</p>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                    <div style="padding: 10px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px;">
+                        <p style="margin: 0 0 8px 0; font-weight: bold; color: #15803d; font-size: 10px; text-transform: uppercase;">✓ Green Flags</p>
+                        <ul style="margin: 0; padding-left: 16px; color: #166534; font-size: 11px;">
+                            ${data.greenFlags.map(f => `<li style="margin-bottom: 4px;">${f}</li>`).join('')}
+                        </ul>
+                    </div>
+                    <div style="padding: 10px; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px;">
+                        <p style="margin: 0 0 8px 0; font-weight: bold; color: #b45309; font-size: 10px; text-transform: uppercase;">⚠ Yellow Flags</p>
+                        <ul style="margin: 0; padding-left: 16px; color: #92400e; font-size: 11px;">
+                            ${data.yellowFlags.map(f => `<li style="margin-bottom: 4px;">${f}</li>`).join('')}
+                        </ul>
+                    </div>
+                    <div style="padding: 10px; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 6px;">
+                        <p style="margin: 0 0 8px 0; font-weight: bold; color: #991b1b; font-size: 10px; text-transform: uppercase;">✗ Red Flags</p>
+                        <ul style="margin: 0; padding-left: 16px; color: #7f1d1d; font-size: 11px;">
+                            ${data.redFlags.map(f => `<li style="margin-bottom: 4px;">${f}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+
+                <div style="padding: 12px; background: #1e293b; color: white; border-radius: 6px; border-left: 4px solid #ea580c;">
+                    <p style="margin: 0 0 8px 0; font-weight: bold; font-size: 10px; text-transform: uppercase;">💼 Better Alternatives</p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px;">
+                        ${data.alternatives.map(a => `
+                            <div>
+                                <p style="margin: 0 0 3px 0; font-weight: bold; color: #ea580c;">${a.name}</p>
+                                <p style="margin: 0; color: #cbd5e1; line-height: 1.2;">${a.reason}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <p style="text-align: center; color: #94a3b8; font-size: 9px; margin-top: 10px; border-top: 1px solid #e2e8f0; padding-top: 8px;">
+                    Generated by Workplace Intelligence AI | ${new Date().toLocaleDateString()}
+                </p>
+            `;
+
+            const opt = {
+                margin: 10,
+                filename: `${company}-workplace-analysis.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
+            };
+            html2pdf().set(opt).from(pdfContent).save();
+        });
+
+        // ============ API FUNCTIONS ============
         async function fetchGeminiData(company, key) {
             const systemPrompt = `You are an elite corporate culture analyst. 
             Research the requested company using search data. 
@@ -141,6 +451,7 @@
             Structure:
             {
                 "score": 0-100,
+                "confidence": 0-100,
                 "shortDescription": "One powerful sentence summary",
                 "longDescription": "A detailed 2-3 paragraph deep dive into the culture and sentiment",
                 "greenFlags": ["Positive items"],
@@ -151,9 +462,9 @@
                 ]
             }`;
 
-            const userQuery = `Examine working at ${company}. How is the work-life balance, management, and compensation? Provide a numeric score 0-100 and suggest 2 better alternatives.`;
+            const userQuery = `Examine working at ${company}. How is the work-life balance, management, and compensation? Provide a numeric score 0-100, a confidence score 0-100, and suggest 2 better alternatives.`;
 
-            const modelName = "gemini-2.5-flash"; 
+            const modelName = "gemini-2.5-flash";
             const payload = {
                 contents: [{ 
                     role: "user",
@@ -163,7 +474,6 @@
                     parts: [{ text: systemPrompt }] 
                 },
                 tools: [{ googleSearch: {} }]
-                // Note: removed responseMimeType to avoid the specific error while keeping JSON request
             };
 
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${key}`, {
@@ -177,22 +487,29 @@
             return result;
         }
 
+        // ============ RENDERING ============
         function renderReport(data, company) {
             displayCompanyName.textContent = company;
+            currentAnalysis = { data, company };
             
-            // Set Score and Animate Arrow
             const score = Math.min(Math.max(data.score || 0, 0), 100);
             scoreText.textContent = score;
-            // Immediate reset to allow transition to be seen
+            confidenceText.textContent = `${Math.min(Math.max(data.confidence || 0, 0), 100)}%`;
+            
             scoreArrow.style.left = '0%';
             setTimeout(() => {
                 scoreArrow.style.left = `${score}%`;
             }, 50);
 
-            // Build UI Sections
+            // Check if favorite
+            const isFav = favorites.some(f => f.company.toLowerCase() === company.toLowerCase());
+            favBtn.textContent = isFav ? '★' : '☆';
+            favBtn.classList.toggle('filled', isFav);
+            favBtn.addEventListener('click', () => toggleFavorite(company, score));
+
             let html = `
                 <div class="mb-10">
-                    <p class="text-xl font-bold text-slate-900 mb-3 border-l-4 border-blue-500 pl-4">${data.shortDescription}</p>
+                    <p class="text-xl font-bold text-slate-900 mb-3 border-l-4 border-orange-500 pl-4">${data.shortDescription}</p>
                     <div class="space-y-4 text-slate-600 leading-relaxed">
                         ${data.longDescription.split('\n').map(p => `<p>${p}</p>`).join('')}
                     </div>
@@ -230,15 +547,15 @@
                     </div>
                 </div>
 
-                <div class="bg-slate-900 text-white p-8 rounded-3xl shadow-xl border-t-4 border-blue-500">
+                <div class="bg-slate-900 text-white p-8 rounded-3xl shadow-xl border-t-4 border-orange-500">
                     <div class="flex items-center gap-3 mb-6">
-                        <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1a1 1 0 112 0v1a1 1 0 11-2 0zM13.536 14.95a1 1 0 011.414-1.414l.707.707a1 1 0 01-1.414 1.414l-.707-.707zM16.243 16.243a1 1 0 01-1.414 0l-.707-.707a1 1 0 011.414-1.414l.707.707a1 1 0 010 1.414z"></path></svg>
-                        <h3 class="text-blue-400 font-bold text-sm uppercase tracking-widest">Smarter Career Alternatives</h3>
+                        <svg class="w-5 h-5 text-orange-400" fill="currentColor" viewBox="0 0 20 20"><path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1a1 1 0 112 0v1a1 1 0 11-2 0zM13.536 14.95a1 1 0 011.414-1.414l.707.707a1 1 0 01-1.414 1.414l-.707-.707zM16.243 16.243a1 1 0 01-1.414 0l-.707-.707a1 1 0 011.414-1.414l.707.707a1 1 0 010 1.414z"></path></svg>
+                        <h3 class="text-orange-400 font-bold text-sm uppercase tracking-widest">Smarter Career Alternatives</h3>
                     </div>
                     <div class="grid sm:grid-cols-2 gap-6">
                         ${data.alternatives.map(alt => `
                             <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                                <p class="text-blue-300 font-bold text-lg mb-1">${alt.name}</p>
+                                <p class="text-orange-300 font-bold text-lg mb-1">${alt.name}</p>
                                 <p class="text-slate-400 text-sm leading-snug">${alt.reason}</p>
                             </div>
                         `).join('')}
@@ -249,6 +566,7 @@
             aiResponse.innerHTML = html;
         }
 
+        // ============ EVENT LISTENERS - SINGLE MODE ============
         analyzeBtn.addEventListener('click', async () => {
             const company = companyInput.value.trim();
             const key = apiKeyInput.value.trim();
@@ -262,7 +580,7 @@
 
             errorBox.classList.add('hidden');
             results.classList.add('hidden');
-            searchContext.classList.add('hidden');
+            sourcesContainer.classList.add('hidden');
             btnText.textContent = "Investigating Data...";
             btnLoader.classList.remove('hidden');
             analyzeBtn.disabled = true;
@@ -271,37 +589,12 @@
                 const response = await fetchGeminiData(company, key);
                 const candidate = response.candidates?.[0];
                 let text = candidate?.content?.parts?.[0]?.text;
-                const metadata = candidate?.groundingMetadata;
 
                 if (text) {
-                    // Clean text in case AI added markdown blocks around the JSON
                     text = text.replace(/```json/g, '').replace(/```/g, '').trim();
                     const parsedData = JSON.parse(text);
                     renderReport(parsedData, company);
                     results.classList.remove('hidden');
-
-                    if (metadata?.webSearchQueries) {
-                        searchContext.classList.remove('hidden');
-                        queriesUsed.innerHTML = metadata.webSearchQueries.map(q => 
-                            `<span class="bg-blue-100 px-2 py-1 rounded border border-blue-200">🔍 ${q}</span>`
-                        ).join('');
-                    }
-
-                    if (metadata?.groundingChunks) {
-                        sourcesList.innerHTML = '';
-                        metadata.groundingChunks.forEach(chunk => {
-                            if (chunk.web?.uri) {
-                                const a = document.createElement('a');
-                                a.href = chunk.web.uri;
-                                a.target = "_blank";
-                                a.className = "text-[11px] bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-3 py-1.5 rounded-lg border border-slate-300 transition-all";
-                                a.textContent = chunk.web.title || "Source";
-                                sourcesList.appendChild(a);
-                            }
-                        });
-                        sourcesContainer.classList.remove('hidden');
-                    }
-                    
                     results.scrollIntoView({ behavior: 'smooth' });
                 }
 
@@ -317,6 +610,126 @@
         });
 
         companyInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') analyzeBtn.click(); });
+
+        // ============ EVENT LISTENERS - COMPARISON MODE ============
+        comparisonToggle.addEventListener('click', () => {
+            singleMode.classList.add('hidden');
+            comparisonMode.classList.remove('hidden');
+            comparisonToggle.textContent = '← Back to Single';
+        });
+
+        backToSingle.addEventListener('click', () => {
+            singleMode.classList.remove('hidden');
+            comparisonMode.classList.add('hidden');
+            comparisonToggle.textContent = '📊 Compare Mode';
+        });
+
+        async function analyzeForComparison(companyNum) {
+            const inputId = `company${companyNum}Input`;
+            const company = document.getElementById(inputId).value.trim();
+            const key = apiKeyInput.value.trim();
+            const loaderClass = `analyze${companyNum}Loader`;
+            const loaders = document.querySelectorAll(`.${loaderClass}`);
+
+            if (!key || !company) return;
+
+            loaders.forEach(l => l.classList.remove('hidden'));
+            document.getElementById(`analyze${companyNum}Btn`).disabled = true;
+
+            try {
+                const response = await fetchGeminiData(company, key);
+                const candidate = response.candidates?.[0];
+                let text = candidate?.content?.parts?.[0]?.text;
+
+                if (text) {
+                    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const data = JSON.parse(text);
+                    comparisons[`company${companyNum}`] = { data, company };
+
+                    document.getElementById(`score${companyNum}`).textContent = data.score;
+                    document.getElementById(`conf${companyNum}`).textContent = `${data.confidence || 0}%`;
+                    document.getElementById(`company${companyNum}Name`).textContent = company;
+                    document.getElementById(`summary${companyNum}`).textContent = data.shortDescription;
+                    document.getElementById(`company${companyNum}Result`).classList.remove('hidden');
+                    document.getElementById(`company${companyNum}Empty`).classList.add('hidden');
+
+                    if (comparisons.company1 && comparisons.company2) {
+                        renderComparison();
+                    }
+                }
+            } catch (err) {
+                document.getElementById('comparisonError').textContent = `Error analyzing: ${err.message}`;
+                document.getElementById('comparisonError').classList.remove('hidden');
+            } finally {
+                loaders.forEach(l => l.classList.add('hidden'));
+                document.getElementById(`analyze${companyNum}Btn`).disabled = false;
+            }
+        }
+
+        document.getElementById('analyze1Btn').addEventListener('click', () => analyzeForComparison(1));
+        document.getElementById('analyze2Btn').addEventListener('click', () => analyzeForComparison(2));
+        document.getElementById('company1Input').addEventListener('keypress', (e) => { if (e.key === 'Enter') analyzeForComparison(1); });
+        document.getElementById('company2Input').addEventListener('keypress', (e) => { if (e.key === 'Enter') analyzeForComparison(2); });
+
+        function renderComparison() {
+            const c1 = comparisons.company1.data;
+            const c2 = comparisons.company2.data;
+            const name1 = comparisons.company1.company;
+            const name2 = comparisons.company2.company;
+
+            const html = `
+                <div class="grid md:grid-cols-2 gap-6 mb-6">
+                    <div class="p-6 bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl border border-orange-200">
+                        <h3 class="text-lg font-bold text-orange-900 mb-4">${name1}</h3>
+                        <div class="text-4xl font-black text-orange-600 mb-4">${c1.score}</div>
+                        <p class="text-sm text-orange-800 mb-4">${c1.shortDescription}</p>
+                        <div class="text-xs text-orange-700 font-bold">Confidence: ${c1.confidence || 0}%</div>
+                    </div>
+                    <div class="p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border border-blue-200">
+                        <h3 class="text-lg font-bold text-blue-900 mb-4">${name2}</h3>
+                        <div class="text-4xl font-black text-blue-600 mb-4">${c2.score}</div>
+                        <p class="text-sm text-blue-800 mb-4">${c2.shortDescription}</p>
+                        <div class="text-xs text-blue-700 font-bold">Confidence: ${c2.confidence || 0}%</div>
+                    </div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <h4 class="font-bold text-orange-700 mb-3 flex items-center gap-2"><span class="text-xl">✅</span> Strengths of ${name1}</h4>
+                        <ul class="space-y-2 text-sm text-slate-700">
+                            ${c1.greenFlags.map(f => `<li class="flex gap-2"><span>•</span><span>${f}</span></li>`).join('')}
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-blue-700 mb-3 flex items-center gap-2"><span class="text-xl">✅</span> Strengths of ${name2}</h4>
+                        <ul class="space-y-2 text-sm text-slate-700">
+                            ${c2.greenFlags.map(f => `<li class="flex gap-2"><span>•</span><span>${f}</span></li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 class="font-bold text-rose-700 mb-3 flex items-center gap-2"><span class="text-xl">🚩</span> Concerns with ${name1}</h4>
+                        <ul class="space-y-2 text-sm text-slate-700">
+                            ${c1.redFlags.map(f => `<li class="flex gap-2"><span>•</span><span>${f}</span></li>`).join('')}
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-rose-700 mb-3 flex items-center gap-2"><span class="text-xl">🚩</span> Concerns with ${name2}</h4>
+                        <ul class="space-y-2 text-sm text-slate-700">
+                            ${c2.redFlags.map(f => `<li class="flex gap-2"><span>•</span><span>${f}</span></li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('comparisonContent').innerHTML = html;
+            document.getElementById('comparisonDetails').classList.remove('hidden');
+        }
+
+        // ============ INITIALIZATION ============
+        renderFavorites();
     </script>
 </body>
 </html>
