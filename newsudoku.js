@@ -454,9 +454,15 @@ function solveWithSingles(sudoku, returnDifficulty = false) {
 function generateSudoku(minDifficulty, maxDifficulty, targetClues = 25, maxAttempts = 100) {
     /**
      * Generates a Sudoku puzzle with difficulty in [minDifficulty, maxDifficulty].
-     * Uses truly random solution generation.
+     * Uses truly random solution generation and attempts indefinitely until
+     * a puzzle matching the difficulty criteria is found.
+     * maxAttempts is useless, keeping the argument for legacy support.
      */
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    let attempt = 0;
+    
+    while (true) {
+        attempt++;
+        
         // Generate a random complete solution
         const solution = generateSolutionRandom();
         const puzzle = deepCopyBoard(solution);
@@ -505,34 +511,6 @@ function generateSudoku(minDifficulty, maxDifficulty, targetClues = 25, maxAttem
             return puzzle;
         }
     }
-    
-    // Fallback: return a solvable puzzle even if not in exact difficulty range
-    const solution = generateSolutionRandom();
-    const puzzle = deepCopyBoard(solution);
-    const positions = [];
-    for (let r = 0; r < 9; r++) {
-        for (let c = 0; c < 9; c++) {
-            positions.push([r, c]);
-        }
-    }
-    shuffle(positions);
-    
-    let cluesRemaining = 81;
-    for (const [r, c] of positions) {
-        if (cluesRemaining <= targetClues) break;
-        
-        const originalValue = puzzle[r][c];
-        puzzle[r][c] = 0;
-        
-        const difficulty = solveWithSingles(puzzle, true);
-        if (difficulty < 0) {
-            puzzle[r][c] = originalValue;
-        } else {
-            cluesRemaining--;
-        }
-    }
-    
-    return puzzle;
 }
 
 function generateDailySudoku(date) {
