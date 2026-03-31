@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guessdoku</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Space Mono', monospace;
+            background: #0f0f1e;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            color: #fff;
+        }
+
+        .container {
+            background: #1a1a2e;
+            border: 2px solid #00ff88;
+            border-radius: 0;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.2);
+        }
+
+        h1 {
+            text-align: center;
+            color: #00ff88;
+            margin-bottom: 5px;
+            font-size: 2.2em;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+            letter-spacing: 3px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+            letter-spacing: 1px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #0f0f1e;
+            border: 1px solid #333;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.75em;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: 700;
+            color: #00ff88;
+            text-shadow: 0 0 8px rgba(0, 255, 136, 0.4);
+        }
+
+        table {
+            border-collapse: collapse;
+            margin: 0 auto 30px;
+            background: #0f0f1e;
+        }
+
+        td {
+            width: 55px;
+            height: 55px;
+            border: 1px solid #333;
+            text-align: center;
+            font-size: 1.4em;
+            font-weight: 700;
+            color: #00ff88;
+            cursor: pointer;
+            background: #16213e;
+            transition: all 0.1s ease;
+            font-family: 'Space Mono', monospace;
+            padding: 0;
+        }
+
+        td:hover {
+            background: #0e3a2a;
+            border-color: #00ff88;
+        }
+
+        td.selected {
+            background: #00ff88;
+            color: #0f0f1e;
+            border-color: #00ff88;
+        }
+
+        td.error {
+            background: #3a0f0f;
+            color: #ff0055;
+            border-color: #ff0055;
+        }
+
+        /* 3x3 box borders */
+        td:nth-child(3n) {
+            border-right: 2px solid #00ff88;
+        }
+
+        tr:nth-child(3n) td {
+            border-bottom: 2px solid #00ff88;
+        }
+
+        /* Remove border on rightmost column */
+        td:nth-child(9n) {
+            border-right: 1px solid #333;
+        }
+
+        /* Remove border on bottom row */
+        tr:last-child td {
+            border-bottom: 1px solid #333;
+        }
+
+        .message {
+            text-align: center;
+            padding: 15px;
+            margin-top: 20px;
+            font-weight: 700;
+            display: none;
+            letter-spacing: 1px;
+            border: 2px solid;
+            text-transform: uppercase;
+        }
+
+        .message.success {
+            background: #0f3a2a;
+            color: #00ff88;
+            border-color: #00ff88;
+            text-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>GUESSDOKU</h1>
+        <p class="subtitle">// NO HINTS. PURE LOGIC.</p>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-label">Filled</div>
+                <div class="stat-value"><span id="filled">0</span>/81</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Time</div>
+                <div class="stat-value"><span id="time">0:00</span></div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Mistakes</div>
+                <div class="stat-value"><span id="mistakes">0</span></div>
+            </div>
+        </div>
+
+        <table id="grid"></table>
+
+        <div class="message" id="message"></div>
+    </div>
+
+    <script>
+        let grid = Array(9).fill(null).map(() => Array(9).fill(0));
+        let solution = Array(9).fill(null).map(() => Array(9).fill(0));
+        let selectedCell = null;
+        let mistakes = 0;
+        let startTime = Date.now();
+        let timerInterval = null;
+
+        function generateSudoku() {
+            solution = Array(9).fill(null).map(() => Array(9).fill(0));
+            fillDiagonal();
+            solveSudoku(solution);
+        }
+
+        function fillDiagonal() {
+            for (let i = 0; i < 9; i += 3) {
+                let nums = shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+                for (let j = 0; j < 3; j++) {
+                    for (let k = 0; k < 3; k++) {
+                        solution[i + j][i + k] = nums[j * 3 + k];
+                    }
+                }
+            }
+        }
+
+        function solveSudoku(board) {
+            for (let row = 0; row < 9; row++) {
+                for (let col = 0; col < 9; col++) {
+                    if (board[row][col] === 0) {
+                        let nums = shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+                        for (let num of nums) {
+                            if (isValid(board, row, col, num)) {
+                                board[row][col] = num;
+                                if (solveSudoku(board)) return true;
+                                board[row][col] = 0;
+                            }
+                        }
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function isValid(board, row, col, num) {
+            for (let i = 0; i < 9; i++) {
+                if (board[row][i] === num || board[i][col] === num) return false;
+            }
+            let boxRow = Math.floor(row / 3) * 3;
+            let boxCol = Math.floor(col / 3) * 3;
+            for (let i = boxRow; i < boxRow + 3; i++) {
+                for (let j = boxCol; j < boxCol + 3; j++) {
+                    if (board[i][j] === num) return false;
+                }
+            }
+            return true;
+        }
+
+        function shuffle(arr) {
+            return arr.sort(() => Math.random() - 0.5);
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                document.getElementById('time').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }, 100);
+        }
+
+        function renderGrid() {
+            const table = document.getElementById('grid');
+            table.innerHTML = '';
+            let filled = 0;
+
+            for (let i = 0; i < 9; i++) {
+                const row = document.createElement('tr');
+                for (let j = 0; j < 9; j++) {
+                    const cell = document.createElement('td');
+                    cell.textContent = grid[i][j] || '';
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+
+                    if (grid[i][j] !== 0) filled++;
+
+                    // Check if this cell has an error
+                    if (grid[i][j] !== 0 && grid[i][j] !== solution[i][j]) {
+                        cell.classList.add('error');
+                    }
+
+                    cell.addEventListener('click', () => selectCell(i, j, cell));
+                    row.appendChild(cell);
+                }
+                table.appendChild(row);
+            }
+            document.getElementById('filled').textContent = filled;
+        }
+
+        function selectCell(row, col, cellEl) {
+            if (selectedCell) {
+                selectedCell.classList.remove('selected');
+            }
+            selectedCell = cellEl;
+            cellEl.classList.add('selected');
+            cellEl.focus();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (!selectedCell) return;
+            
+            const row = parseInt(selectedCell.dataset.row);
+            const col = parseInt(selectedCell.dataset.col);
+
+            if (e.key >= '1' && e.key <= '9') {
+                const num = parseInt(e.key);
+                grid[row][col] = num;
+                
+                // Check if it's wrong
+                if (num !== solution[row][col]) {
+                    mistakes++;
+                    document.getElementById('mistakes').textContent = mistakes;
+                }
+                
+                renderGrid();
+                selectCell(row, col, document.querySelector(`[data-row="${row}"][data-col="${col}"]`));
+                checkWin();
+            } else if (e.key === '0' || e.key === 'Backspace' || e.key === 'Delete') {
+                grid[row][col] = 0;
+                renderGrid();
+                selectCell(row, col, document.querySelector(`[data-row="${row}"][data-col="${col}"]`));
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                if (col < 8) selectCell(row, col + 1, document.querySelector(`[data-row="${row}"][data-col="${col + 1}"]`));
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                if (col > 0) selectCell(row, col - 1, document.querySelector(`[data-row="${row}"][data-col="${col - 1}"]`));
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (row < 8) selectCell(row + 1, col, document.querySelector(`[data-row="${row + 1}"][data-col="${col}"]`));
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (row > 0) selectCell(row - 1, col, document.querySelector(`[data-row="${row - 1}"][data-col="${col}"]`));
+            }
+        });
+
+        function checkWin() {
+            // Check if grid is complete
+            for (let i = 0; i < 9; i++) {
+                for (let j = 0; j < 9; j++) {
+                    if (grid[i][j] === 0) return;
+                }
+            }
+
+            // Check if all correct
+            if (JSON.stringify(grid) === JSON.stringify(solution)) {
+                clearInterval(timerInterval);
+                const msg = document.getElementById('message');
+                msg.textContent = '> SUCCESS: PUZZLE SOLVED!';
+                msg.className = 'message success';
+                msg.style.display = 'block';
+            }
+        }
+
+        generateSudoku();
+        renderGrid();
+        startTimer();
+    </script>
+</body>
+</html>
