@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentic Pixel Timer</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+        }
+
+        .ui-overlay {
+            position: absolute;
+            bottom: 30px;
+            display: flex;
+            gap: 12px;
+            background: rgba(10, 10, 10, 0.85);
+            padding: 15px;
+            border: 2px solid #222;
+            font-family: 'Courier New', Courier, monospace;
+            opacity: 0.1;
+            transition: opacity 0.3s;
+            z-index: 10;
+        }
+        
+        .ui-overlay:hover {
+            opacity: 1;
+        }
+
+        input {
+            background: #000;
+            color: #39FF14;
+            border: 1px solid #333;
+            padding: 8px;
+            width: 100px;
+            font-size: 16px;
+            outline: none;
+        }
+
+        button {
+            background: #111;
+            color: #39FF14;
+            border: 1px solid #39FF14;
+            padding: 8px 15px;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #39FF14;
+            color: #000;
+        }
+
+        #notifyBtn.active {
+            background: #39FF14;
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="timerCanvas"></canvas>
+
+    <div class="ui-overlay">
+        <input type="number" id="minutesInput" value="5" min="1" step="1" placeholder="Minutes">
+        <button id="notifyBtn">🔔</button>
+        <button id="startBtn">Set & Start</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('timerCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const minutesInput = document.getElementById('minutesInput');
+        const startBtn = document.getElementById('startBtn');
+        const notifyBtn = document.getElementById('notifyBtn');
+
+        const gridH = 12;
+        const gridW = 23; 
+        
+        let timeLeftMs = 300000;
+        let totalTimeMs = 300000;
+        let isRunning = false;
+        let lastTimestamp = 0;
+        let notificationsEnabled = false;
+
+        const contrast = 0.6; 
+
+        const font = {
+            '0': [6, 9, 9, 9, 9, 9, 9, 6],
+            '1': [4, 12, 4, 4, 4, 4, 4, 14],
+            '2': [14, 1, 1, 1, 6, 8, 8, 15],
+            '3': [15, 1, 1, 6, 1, 1, 1, 15],
+            '4': [9, 9, 9, 15, 1, 1, 1, 1],
+            '5': [15, 8, 8, 14, 1, 1, 1, 14],
+            '6': [6, 8, 8, 14, 9, 9, 9, 6],
+            '7': [15, 1, 1, 2, 4, 4, 4, 4],
+            '8': [6, 9, 9, 6, 9, 9, 9, 6],
+            '9': [6, 9, 9, 7, 1, 1, 1, 6],
+            ':': [0, 0, 2, 0, 0, 2, 0, 0],
+            '.': [0, 0, 0, 0, 0, 0, 2, 0]
+        };
+
+        function resize() {
+            const aspect = gridW / gridH;
+            if (window.innerWidth / window.innerHeight > aspect) {
+                canvas.height = window.innerHeight;
+                canvas.width = canvas.height * aspect;
+            } else {
+                canvas.width = window.innerWidth;
+                canvas.height = canvas.width / aspect;
+            }
+            bpSize = canvas.height / gridH;
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+
+        function getBaseColor(ratio) {
+            if (ratio > 0.5) {
+                const subRatio = (ratio - 0.5) * 2;
+                return { r: Math.floor(255 * (1 - subRatio)), g: 255, b: 0 };
+            } else {
+                const subRatio = ratio * 2;
+                return { r: 255, g: Math.floor(255 * subRatio), b: 0 };
+            }
+        }
+
+        function getFlickerColor(baseColor, brightnessTier) {
+            let min, max;
+            const slice = contrast / 3;
+            if (brightnessTier === 0) {
+                min = 0; max = slice;
+            } else if (brightnessTier === 1) {
+                min = 0.5 - (slice / 2); max = 0.5 + (slice / 2);
+            } else {
+                min = 1.0 - slice; max = 1.0;
+            }
+            const finalBrightness = min + Math.random() * (max - min);
+            return `rgb(${baseColor.r * finalBrightness}, ${baseColor.g * finalBrightness}, ${baseColor.b * finalBrightness})`;
+        }
+
+        function sendNotification() {
+            if (notificationsEnabled && Notification.permission === "granted") {
+                new Notification("Timer Finished!", {
+                    body: "Your pixel countdown has completed.",
+                    icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='black'/%3E%3Crect x='20' y='20' width='60' height='60' fill='%2339FF14'/%3E%3C/svg%3E"
+                });
+            }
+        }
+
+        function render(timestamp) {
+            if (isRunning) {
+                const delta = timestamp - lastTimestamp;
+                const nextTime = timeLeftMs - delta;
+                
+                if (nextTime <= 0 && timeLeftMs > 0) {
+                    timeLeftMs = 0;
+                    isRunning = false;
+                    sendNotification();
+                } else {
+                    timeLeftMs = nextTime;
+                }
+                lastTimestamp = timestamp;
+            } else {
+                lastTimestamp = timestamp;
+            }
+
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const ratio = totalTimeMs > 0 ? timeLeftMs / totalTimeMs : 0;
+            const baseColor = getBaseColor(ratio);
+            const grid = Array.from({ length: gridH }, () => Array(gridW).fill(0));
+
+            const drawChar = (char, startX, startY, tier) => {
+                const rows = font[char] || [];
+                const width = (char === ':' || char === '.') ? 3 : 4;
+                for (let y = 0; y < rows.length; y++) {
+                    for (let x = 0; x < width; x++) {
+                        if ((rows[y] >> (width - 1 - x)) & 1) {
+                            grid[startY + y][startX + x] = tier;
+                        }
+                    }
+                }
+            };
+
+            const totalSecs = Math.floor(timeLeftMs / 1000);
+            const totalMins = Math.floor(totalSecs / 60);
+            const totalHrs = Math.floor(totalMins / 60);
+            const textY = 1;
+
+            if (totalHrs > 0 || totalMins >= 100) {
+                const hh = Math.min(99, totalHrs).toString().padStart(2, '0');
+                const mm = (totalMins % 60).toString().padStart(2, '0');
+                drawChar(hh[0], 1, textY, 2);
+                drawChar(hh[1], 6, textY, 2);
+                drawChar(':', 10, textY, 2);
+                drawChar(mm[0], 13, textY, 2);
+                drawChar(mm[1], 18, textY, 2);
+            } else if (totalMins >= 10) {
+                const mm = totalMins.toString().padStart(2, '0');
+                const ss = (totalSecs % 60).toString().padStart(2, '0');
+                drawChar(mm[0], 1, textY, 2);
+                drawChar(mm[1], 6, textY, 2);
+                drawChar(':', 10, textY, 2);
+                drawChar(ss[0], 13, textY, 2);
+                drawChar(ss[1], 18, textY, 2);
+            } else if (timeLeftMs >= 100000) {
+                const m = totalMins.toString();
+                const ss = (totalSecs % 60).toString().padStart(2, '0');
+                const t = Math.floor((timeLeftMs % 1000) / 100).toString();
+                drawChar(m, 1, textY, 2);
+                drawChar(':', 5, textY, 2);
+                drawChar(ss[0], 8, textY, 2);
+                drawChar(ss[1], 13, textY, 2);
+                drawChar(t, 18, textY, 1);
+            } else {
+                const ss = totalSecs.toString().padStart(2, '0');
+                const ms = Math.floor((timeLeftMs % 1000) / 10).toString().padStart(2, '0');
+                drawChar(ss[0], 1, textY, 2);
+                drawChar(ss[1], 6, textY, 2);
+                drawChar('.', 10, textY, 2);
+                drawChar(ms[0], 13, textY, 2);
+                drawChar(ms[1], 18, textY, 2);
+            }
+
+            const barY = 10;
+            const barWidth = gridW - 2;
+            const currentProgress = Math.ceil(barWidth * ratio);
+            for (let x = 0; x < barWidth; x++) {
+                if (x < currentProgress) grid[barY][x + 1] = 2;
+            }
+
+            for (let y = 0; y < gridH; y++) {
+                for (let x = 0; x < gridW; x++) {
+                    ctx.fillStyle = getFlickerColor(baseColor, grid[y][x]);
+                    ctx.fillRect(x * bpSize, y * bpSize, bpSize, bpSize);
+                    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+                    ctx.strokeRect(x * bpSize, y * bpSize, bpSize, bpSize);
+                }
+            }
+            requestAnimationFrame(render);
+        }
+
+        notifyBtn.addEventListener('click', () => {
+            Notification.requestPermission().then(permission => {
+                if (permission === "granted") {
+                    notificationsEnabled = !notificationsEnabled;
+                    notifyBtn.classList.toggle('active', notificationsEnabled);
+                }
+            });
+        });
+
+        startBtn.addEventListener('click', () => {
+            const val = parseFloat(minutesInput.value);
+            if (val > 0) {
+                totalTimeMs = Math.floor(val * 60 * 1000);
+                timeLeftMs = totalTimeMs;
+                isRunning = true;
+                lastTimestamp = performance.now();
+            }
+        });
+
+        requestAnimationFrame(render);
+    </script>
+</body>
+</html>
