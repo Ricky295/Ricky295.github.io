@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Learning Box HS - Sudoku Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0f172a',
+                        darkCard: '#1e293b',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .sudoku-grid {
+            display: grid;
+            border: 3px solid #1e293b;
+            background-color: #1e293b;
+            width: 100%;
+            max-width: 500px;
+            aspect-ratio: 1 / 1;
+            gap: 0;
+        }
+
+        .dark .sudoku-grid {
+            border-color: #334155;
+            background-color: #334155;
+        }
+
+        .sudoku-cell {
+            background-color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            user-select: none;
+            position: relative;
+            overflow: hidden;
+            font-size: 1.5rem;
+            width: 100%;
+            height: 100%;
+            border: 1px solid #cbd5e1;
+        }
+
+        .dark .sudoku-cell {
+            background-color: #1e293b;
+            color: #f1f5f9;
+            border-color: #334155;
+        }
+
+        .sudoku-cell.box-right {
+            border-right-width: 3px;
+            border-right-color: #1e293b;
+        }
+
+        .dark .sudoku-cell.box-right {
+            border-right-color: #475569;
+        }
+
+        .sudoku-cell.box-bottom {
+            border-bottom-width: 3px;
+            border-bottom-color: #1e293b;
+        }
+
+        .dark .sudoku-cell.box-bottom {
+            border-bottom-color: #475569;
+        }
+
+        .sudoku-cell.selected {
+            background-color: #dbeafe !important;
+            box-shadow: inset 0 0 0 3px #3b82f6;
+            z-index: 10;
+        }
+        .dark .sudoku-cell.selected {
+            background-color: #1e3a8a !important;
+        }
+
+        .sudoku-cell.highlighted {
+            background-color: #f1f5f9;
+        }
+        .dark .sudoku-cell.highlighted {
+            background-color: #334155;
+        }
+
+        .sudoku-cell.hint-target {
+            box-shadow: inset 0 0 15px #f59e0b;
+            animation: pulse-hint 1s infinite alternate;
+            z-index: 20;
+        }
+
+        @keyframes pulse-hint {
+            0% { background-color: #fef3c7; transform: scale(1); }
+            100% { background-color: #fbbf24; transform: scale(0.92); }
+        }
+
+        .sudoku-cell.initial { font-weight: 800; color: #0f172a; }
+        .dark .sudoku-cell.initial { color: #f8fafc; }
+
+        .sudoku-cell.user-input { color: #2563eb; }
+        .dark .sudoku-cell.user-input { color: #60a5fa; }
+
+        .sudoku-cell.error { color: #ef4444 !important; }
+
+        .note-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            width: 100%;
+            height: 100%;
+            font-size: 0.65rem;
+            line-height: 1;
+            padding: 2px;
+            color: #94a3b8;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-darkBg text-slate-900 dark:text-slate-100 min-h-screen">
+
+    <div class="max-w-5xl mx-auto p-4 md:p-8">
+        <header class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold tracking-tight">
+                    Learning Box <span class="text-blue-600">HS</span> Sudoku
+                </h1>
+                <p class="text-slate-500 dark:text-slate-400">Box Hidden Single Training Mode</p>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div class="lg:col-span-4 space-y-6 order-2 lg:order-1">
+                <div class="bg-white dark:bg-darkCard p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
+                    <h2 class="text-lg font-bold mb-4">Practice Settings</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-sm font-medium text-slate-500 mb-2 block">Board Format</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="setGameSize(6)" id="btn-6x6" class="py-2 rounded-lg border-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 font-bold transition-all">6 x 6</button>
+                                <button onclick="setGameSize(9)" id="btn-9x9" class="py-2 rounded-lg border-2 border-transparent bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all">9 x 9</button>
+                            </div>
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
+                            <label class="text-sm font-medium text-slate-500 mb-2 block">Difficulty</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <button onclick="setDifficulty('easy')" id="btn-easy" class="py-2 rounded-lg border-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 font-bold transition-all text-sm">Easy</button>
+                                <button onclick="setDifficulty('medium')" id="btn-medium" class="py-2 rounded-lg border-2 border-transparent bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all text-sm">Medium</button>
+                                <button onclick="setDifficulty('hard')" id="btn-hard" class="py-2 rounded-lg border-2 border-transparent bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all text-sm">Hard</button>
+                            </div>
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-medium text-slate-600 dark:text-slate-400">Enable Notes</span>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="notes-enabled" checked class="sr-only peer" onchange="toggleNotesAccess()">
+                                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <button onclick="newGame()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95">
+                            Generate Training Board
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-indigo-600 p-6 rounded-2xl shadow-lg text-white">
+                    <h3 class="font-bold text-lg mb-4">How it works</h3>
+                    <p class="text-sm leading-relaxed">
+                        This board is guaranteed 100% solvable using only the Box Hidden Single technique. Each logical step applies all Box HS moves at once.
+                    </p>
+                </div>
+            </div>
+
+            <div class="lg:col-span-8 flex flex-col items-center order-1 lg:order-2">
+                <div id="sudoku-container" class="w-full max-w-[500px] bg-white dark:bg-darkCard p-2 rounded-2xl shadow-xl overflow-hidden">
+                    <div class="space-y-3 mb-4 px-2">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex items-center gap-3">
+                                <div class="flex items-center gap-1.5">
+                                    <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    <span id="mistake-count" class="font-bold text-slate-900 dark:text-slate-100">0</span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <svg class="w-5 h-5 text-amber-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"></path></svg>
+                                    <span id="hints-used" class="font-bold text-slate-900 dark:text-slate-100">0</span>
+                                </div>
+                            </div>
+                            
+                            <div class="flex-1 mx-3">
+                                <div class="text-right text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                                    <span id="timer" class="font-mono">00:00</span>
+                                </div>
+                                <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5">
+                                    <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center gap-2">
+                                <span id="progress-display" class="font-bold text-slate-900 dark:text-slate-100 text-sm whitespace-nowrap">0/0</span>
+                                <button onclick="toggleDarkMode()" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 transition-all hover:scale-110 flex-shrink-0">
+                                    <svg id="moon-icon" class="w-5 h-5 hidden dark:block text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"></path></svg>
+                                    <svg id="sun-icon" class="w-5 h-5 block dark:hidden text-slate-700" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="grid-container" class="sudoku-grid"></div>
+                </div>
+
+                <div class="mt-8 w-full max-w-[500px] space-y-4">
+                    <div class="flex gap-2 items-center justify-between">
+                        <button id="notes-toggle-btn" onclick="toggleNotesMode()" class="flex-1 py-4 px-2 rounded-xl font-bold flex items-center justify-center gap-2 border-2 border-slate-200 dark:border-slate-700 transition-all bg-white dark:bg-darkCard">
+                            <span id="notes-indicator" class="w-3 h-3 rounded-full bg-slate-300"></span>
+                            Notes (N)
+                        </button>
+                        <button onclick="eraseCell()" class="flex-1 py-4 px-2 rounded-xl font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition-all">
+                            Erase
+                        </button>
+                        <button onclick="showBoxHSHint()" class="flex-1 py-4 px-2 rounded-xl font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-lg transition-all">
+                            Hint (Box HS)
+                        </button>
+                    </div>
+
+                    <div id="numpad" class="grid grid-cols-5 md:grid-cols-9 gap-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="win-overlay" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center z-50 hidden opacity-0 transition-opacity">
+        <div class="bg-white dark:bg-darkCard p-10 rounded-3xl shadow-2xl max-w-md w-full mx-4 text-center">
+            <div class="w-20 h-20 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+            </div>
+            <h2 class="text-3xl font-bold mb-2">Mastered!</h2>
+            <p class="text-slate-500 mb-8">You solved it with Box HS logic.</p>
+            <div class="grid grid-cols-3 gap-4 mb-8">
+                <div class="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
+                    <span class="block text-xs uppercase font-bold text-slate-400">Time</span>
+                    <span id="final-time" class="text-xl font-bold"></span>
+                </div>
+                <div class="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
+                    <span class="block text-xs uppercase font-bold text-slate-400">Steps</span>
+                    <span id="final-steps" class="text-xl font-bold"></span>
+                </div>
+                <div class="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
+                    <span class="block text-xs uppercase font-bold text-slate-400">Mistakes</span>
+                    <span id="final-mistakes" class="text-xl font-bold"></span>
+                </div>
+            </div>
+            <button onclick="closeWinOverlay()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl shadow-lg transition-all">
+                New Challenge
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let boardSize = 6;
+        let difficulty = 'easy';
+        let solution = [];
+        let displayBoard = [];
+        let originalBoard = [];
+        let notes = [];
+        let selectedCell = null;
+        let mistakes = 0;
+        let timerSeconds = 0;
+        let timerInterval = null;
+        let notesMode = false;
+        let totalSteps = 0;
+        let currentStep = 0;
+        let isInitialRender = true;
+        let hintsUsed = 0;
+
+        const gridContainer = document.getElementById('grid-container');
+        const numpad = document.getElementById('numpad');
+        const timerDisplay = document.getElementById('timer');
+        const mistakeDisplay = document.getElementById('mistake-count');
+
+        const difficultyConfig = {
+            easy: { minSteps: 5, maxSteps: 8 },
+            medium: { minSteps: 12, maxSteps: 18 },
+            hard: { minSteps: 25, maxSteps: 35 }
+        };
+
+        function getBoxInfo(r, c, size) {
+            const rowsPerBlock = size === 6 ? 2 : 3;
+            const colsPerBlock = size === 6 ? 3 : 3;
+            const startR = Math.floor(r / rowsPerBlock) * rowsPerBlock;
+            const startC = Math.floor(c / colsPerBlock) * colsPerBlock;
+            return { startR, startC, rows: rowsPerBlock, cols: colsPerBlock };
+        }
+
+        class SudokuManager {
+            constructor(size) {
+                this.size = size;
+                this.rowsPerBlock = size === 6 ? 2 : 3;
+                this.colsPerBlock = size === 6 ? 3 : 3;
+            }
+
+            isValid(grid, r, c, num) {
+                for (let i = 0; i < this.size; i++) {
+                    if (grid[r][i] === num || grid[i][c] === num) return false;
+                }
+                const info = getBoxInfo(r, c, this.size);
+                for (let i = 0; i < info.rows; i++) {
+                    for (let j = 0; j < info.cols; j++) {
+                        if (grid[info.startR + i][info.startC + j] === num) return false;
+                    }
+                }
+                return true;
+            }
+
+            solveRandomly(grid) {
+                for (let r = 0; r < this.size; r++) {
+                    for (let c = 0; c < this.size; c++) {
+                        if (grid[r][c] === 0) {
+                            let nums = Array.from({ length: this.size }, (_, i) => i + 1).sort(() => Math.random() - 0.5);
+                            for (let num of nums) {
+                                if (this.isValid(grid, r, c, num)) {
+                                    grid[r][c] = num;
+                                    if (this.solveRandomly(grid)) return true;
+                                    grid[r][c] = 0;
+                                }
+                            }
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+
+            countSteps(puzzle) {
+                let grid = JSON.parse(JSON.stringify(puzzle));
+                let steps = 0;
+
+                while (!this.isSolved(grid)) {
+                    let found = [];
+
+                    for (let boxIdx = 0; boxIdx < this.size; boxIdx++) {
+                        let br = Math.floor(boxIdx / (this.size / this.colsPerBlock)) * this.rowsPerBlock;
+                        let bc = (boxIdx % (this.size / this.colsPerBlock)) * this.colsPerBlock;
+
+                        for (let num = 1; num <= this.size; num++) {
+                            let inBox = false;
+                            for (let i = 0; i < this.rowsPerBlock; i++) {
+                                for (let j = 0; j < this.colsPerBlock; j++) {
+                                    if (grid[br + i][bc + j] === num) inBox = true;
+                                }
+                            }
+                            if (inBox) continue;
+
+                            let candidates = [];
+                            for (let i = 0; i < this.rowsPerBlock; i++) {
+                                for (let j = 0; j < this.colsPerBlock; j++) {
+                                    let r = br + i, c = bc + j;
+                                    if (grid[r][c] === 0 && this.isValid(grid, r, c, num)) {
+                                        candidates.push({ r, c });
+                                    }
+                                }
+                            }
+                            if (candidates.length === 1) {
+                                found.push({ r: candidates[0].r, c: candidates[0].c, val: num });
+                            }
+                        }
+                    }
+
+                    if (found.length === 0) return -1;
+                    found.forEach(cell => grid[cell.r][cell.c] = cell.val);
+                    steps++;
+                }
+                return steps;
+            }
+
+            isSolved(grid) {
+                return grid.every(row => row.every(cell => cell !== 0));
+            }
+
+            generateBoxHSOnlyPuzzle(targetSteps) {
+                let full = Array.from({ length: this.size }, () => Array(this.size).fill(0));
+                this.solveRandomly(full);
+                let puzzle = JSON.parse(JSON.stringify(full));
+                let cells = [];
+                for (let r = 0; r < this.size; r++) {
+                    for (let c = 0; c < this.size; c++) cells.push({ r, c });
+                }
+                cells.sort(() => Math.random() - 0.5);
+
+                for (let cell of cells) {
+                    let prevVal = puzzle[cell.r][cell.c];
+                    puzzle[cell.r][cell.c] = 0;
+                    let steps = this.countSteps(puzzle);
+
+                    // If returns -1, not solvable by Box HS, put it back
+                    if (steps === -1) {
+                        puzzle[cell.r][cell.c] = prevVal;
+                        continue;
+                    }
+
+                    // Below target: keep removing
+                    if (steps < targetSteps.minSteps) {
+                        continue;
+                    }
+
+                    // Within target range: 50/50 chance to continue or stop
+                    if (steps >= targetSteps.minSteps && steps <= targetSteps.maxSteps) {
+                        if (Math.random() > 0.5) {
+                            continue;
+                        } else {
+                            puzzle[cell.r][cell.c] = prevVal;
+                            break;
+                        }
+                    }
+
+                    // Above target: backtrack and stop
+                    if (steps > targetSteps.maxSteps) {
+                        puzzle[cell.r][cell.c] = prevVal;
+                        break;
+                    }
+                }
+
+                let finalSteps = this.countSteps(puzzle);
+                return { full, puzzle, steps: finalSteps };
+            }
+        }
+
+        function initGame() {
+            const manager = new SudokuManager(boardSize);
+            const config = difficultyConfig[difficulty];
+            const { full, puzzle, steps } = manager.generateBoxHSOnlyPuzzle(config);
+            
+            solution = full;
+            displayBoard = JSON.parse(JSON.stringify(puzzle));
+            originalBoard = JSON.parse(JSON.stringify(puzzle));
+            notes = Array.from({ length: boardSize }, () => Array.from({ length: boardSize }, () => []));
+            mistakes = 0;
+            totalSteps = steps || 0;
+            currentStep = 0;
+            hintsUsed = 0;
+            
+            console.log('Total Steps:', totalSteps, 'Steps returned:', steps);
+            
+            updateMistakeDisplay();
+            updateProgressDisplay();
+            resetTimer();
+            renderBoard();
+            renderNumpad();
+        }
+
+        function renderBoard() {
+            gridContainer.innerHTML = '';
+            gridContainer.style.gridTemplateColumns = `repeat(${boardSize}, 1fr)`;
+            gridContainer.style.gridTemplateRows = `repeat(${boardSize}, 1fr)`;
+            
+            const rowsPB = boardSize === 6 ? 2 : 3;
+            const colsPB = boardSize === 6 ? 3 : 3;
+
+            for (let r = 0; r < boardSize; r++) {
+                for (let c = 0; c < boardSize; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'sudoku-cell';
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    
+                    if ((c + 1) % colsPB === 0 && c !== boardSize - 1) cell.classList.add('box-right');
+                    if ((r + 1) % rowsPB === 0 && r !== boardSize - 1) cell.classList.add('box-bottom');
+
+                    const val = displayBoard[r][c];
+                    if (val !== 0) {
+                        cell.textContent = val;
+                        if (originalBoard[r][c] !== 0) cell.classList.add('initial');
+                        else {
+                            cell.classList.add('user-input');
+                            if (val !== solution[r][c]) cell.classList.add('error');
+                        }
+                    } else if (notes[r][c].length > 0) {
+                        const nGrid = document.createElement('div');
+                        nGrid.className = 'note-grid';
+                        for(let i=1; i<=boardSize; i++) {
+                            const nItem = document.createElement('div');
+                            nItem.textContent = notes[r][c].includes(i) ? i : '';
+                            nGrid.appendChild(nItem);
+                        }
+                        cell.appendChild(nGrid);
+                    }
+
+                    cell.onclick = () => selectCell(r, c);
+                    gridContainer.appendChild(cell);
+                }
+            }
+            if(selectedCell) updateHighlights();
+            
+            // Skip progress calc on initial render
+            if (isInitialRender) {
+                isInitialRender = false;
+                return;
+            }
+            
+            // Update progress after rendering
+            let puzzleWithCorrectOnly = JSON.parse(JSON.stringify(originalBoard));
+            for (let r = 0; r < boardSize; r++) {
+                for (let c = 0; c < boardSize; c++) {
+                    if (displayBoard[r][c] === solution[r][c] && originalBoard[r][c] === 0) {
+                        puzzleWithCorrectOnly[r][c] = displayBoard[r][c];
+                    }
+                }
+            }
+            
+            const manager = new SudokuManager(boardSize);
+            const remainingSteps = manager.countSteps(puzzleWithCorrectOnly);
+            currentStep = remainingSteps === -1 ? totalSteps : Math.max(0, totalSteps - remainingSteps);
+            
+            // Use setTimeout to ensure DOM is ready
+            setTimeout(() => updateProgressDisplay(), 0);
+        }
+
+        function showBoxHSHint() {
+            const manager = new SudokuManager(boardSize);
+            for (let boxIdx = 0; boxIdx < boardSize; boxIdx++) {
+                let br = Math.floor(boxIdx / (boardSize / manager.colsPerBlock)) * manager.rowsPerBlock;
+                let bc = (boxIdx % (boardSize / manager.colsPerBlock)) * manager.colsPerBlock;
+                for (let num = 1; num <= boardSize; num++) {
+                    let inBox = false;
+                    for (let i = 0; i < manager.rowsPerBlock; i++) {
+                        for (let j = 0; j < manager.colsPerBlock; j++) if (displayBoard[br + i][bc + j] === num) inBox = true;
+                    }
+                    if (inBox) continue;
+                    let candidates = [];
+                    for (let i = 0; i < manager.rowsPerBlock; i++) {
+                        for (let j = 0; j < manager.colsPerBlock; j++) {
+                            let r = br + i, c = bc + j;
+                            if (displayBoard[r][c] === 0 && manager.isValid(displayBoard, r, c, num)) candidates.push({ r, c });
+                        }
+                    }
+                    if (candidates.length === 1) {
+                        const target = candidates[0];
+                        const cellEl = document.querySelector(`[data-row="${target.r}"][data-col="${target.c}"]`);
+                        cellEl.classList.add('hint-target');
+                        setTimeout(() => cellEl.classList.remove('hint-target'), 2000);
+                        hintsUsed++;
+                        document.getElementById('hints-used').textContent = hintsUsed;
+                        return;
+                    }
+                }
+            }
+        }
+
+        function enterNumber(num) {
+            if (!selectedCell) return;
+            const { r, c } = selectedCell;
+            if (originalBoard[r][c] !== 0) return;
+
+            if (notesMode && document.getElementById('notes-enabled').checked) {
+                if (displayBoard[r][c] !== 0) return;
+                const idx = notes[r][c].indexOf(num);
+                if (idx > -1) notes[r][c].splice(idx, 1);
+                else notes[r][c].push(num);
+            } else {
+                if (displayBoard[r][c] === num) displayBoard[r][c] = 0;
+                else {
+                    displayBoard[r][c] = num;
+                    if (num !== solution[r][c]) {
+                        mistakes++;
+                        updateMistakeDisplay();
+                    }
+                }
+            }
+            renderBoard();
+            checkWin();
+        }
+
+        function setGameSize(size) {
+            boardSize = size;
+            document.getElementById('btn-6x6').className = size === 6 ? 'py-2 rounded-lg border-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 font-bold transition-all' : 'py-2 rounded-lg border-2 border-transparent bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all';
+            document.getElementById('btn-9x9').className = size === 9 ? 'py-2 rounded-lg border-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 font-bold transition-all' : 'py-2 rounded-lg border-2 border-transparent bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all';
+            newGame();
+        }
+
+        function setDifficulty(diff) {
+            difficulty = diff;
+            document.getElementById('btn-easy').className = diff === 'easy' ? 'py-2 rounded-lg border-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 font-bold transition-all text-sm' : 'py-2 rounded-lg border-2 border-transparent bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all text-sm';
+            document.getElementById('btn-medium').className = diff === 'medium' ? 'py-2 rounded-lg border-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 font-bold transition-all text-sm' : 'py-2 rounded-lg border-2 border-transparent bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all text-sm';
+            document.getElementById('btn-hard').className = diff === 'hard' ? 'py-2 rounded-lg border-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 font-bold transition-all text-sm' : 'py-2 rounded-lg border-2 border-transparent bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all text-sm';
+            newGame();
+        }
+
+        function selectCell(r, c) {
+            selectedCell = { r, c };
+            updateHighlights();
+        }
+
+        function updateHighlights() {
+            const cells = document.querySelectorAll('.sudoku-cell');
+            const info = getBoxInfo(selectedCell.r, selectedCell.c, boardSize);
+
+            cells.forEach(cell => {
+                const r = parseInt(cell.dataset.row);
+                const c = parseInt(cell.dataset.col);
+                cell.classList.remove('selected', 'highlighted');
+                
+                if (r === selectedCell.r && c === selectedCell.c) cell.classList.add('selected');
+                else if (r === selectedCell.r || c === selectedCell.c || (r >= info.startR && r < info.startR + info.rows && c >= info.startC && c < info.startC + info.cols)) {
+                    cell.classList.add('highlighted');
+                }
+            });
+        }
+
+        function eraseCell() {
+            if (!selectedCell || originalBoard[selectedCell.r][selectedCell.c] !== 0) return;
+            displayBoard[selectedCell.r][selectedCell.c] = 0;
+            notes[selectedCell.r][selectedCell.c] = [];
+            renderBoard();
+        }
+
+        function toggleNotesMode() {
+            if (!document.getElementById('notes-enabled').checked) return;
+            notesMode = !notesMode;
+            const btn = document.getElementById('notes-toggle-btn');
+            const indicator = document.getElementById('notes-indicator');
+            btn.classList.toggle('border-blue-500', notesMode);
+            btn.classList.toggle('bg-blue-50', notesMode);
+            btn.classList.toggle('dark:bg-blue-900/20', notesMode);
+            indicator.classList.toggle('bg-blue-500', notesMode);
+            indicator.classList.toggle('bg-slate-300', !notesMode);
+        }
+
+        function toggleNotesAccess() {
+            const enabled = document.getElementById('notes-enabled').checked;
+            if (!enabled && notesMode) toggleNotesMode();
+            document.getElementById('notes-toggle-btn').style.opacity = enabled ? '1' : '0.5';
+            document.getElementById('notes-toggle-btn').style.cursor = enabled ? 'pointer' : 'not-allowed';
+        }
+
+        function toggleDarkMode() { document.documentElement.classList.toggle('dark'); }
+
+        function resetTimer() {
+            clearInterval(timerInterval);
+            timerSeconds = 0;
+            timerInterval = setInterval(() => {
+                timerSeconds++;
+                const mins = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
+                const secs = (timerSeconds % 60).toString().padStart(2, '0');
+                timerDisplay.textContent = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function updateProgressDisplay() {
+            const progressDisplay = document.getElementById('progress-display');
+            console.log('Updating progress:', currentStep, '/', totalSteps);
+            if (progressDisplay) {
+                progressDisplay.textContent = `${currentStep} / ${totalSteps}`;
+                console.log('Text updated to:', progressDisplay.textContent);
+            }
+            const percent = totalSteps > 0 ? (currentStep / totalSteps) * 100 : 0;
+            const progressBar = document.getElementById('progress-bar');
+            if (progressBar) {
+                progressBar.style.width = percent + '%';
+            }
+        }
+
+        function checkWin() {
+            if (displayBoard.every((row, r) => row.every((val, c) => val === solution[r][c]))) {
+                clearInterval(timerInterval);
+                document.getElementById('final-time').textContent = timerDisplay.textContent;
+                document.getElementById('final-steps').textContent = totalSteps;
+                document.getElementById('final-mistakes').textContent = mistakes;
+                const overlay = document.getElementById('win-overlay');
+                overlay.classList.remove('hidden');
+                setTimeout(() => overlay.classList.add('opacity-100'), 50);
+            }
+        }
+
+        function closeWinOverlay() {
+            document.getElementById('win-overlay').classList.remove('opacity-100');
+            setTimeout(() => {
+                document.getElementById('win-overlay').classList.add('hidden');
+                newGame();
+            }, 300);
+        }
+
+        function renderNumpad() {
+            numpad.innerHTML = '';
+            for (let i = 1; i <= boardSize; i++) {
+                const btn = document.createElement('button');
+                btn.className = 'flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg h-14 text-xl font-bold shadow-sm hover:bg-blue-50 dark:hover:bg-blue-900/30 active:scale-90 transition-all';
+                btn.textContent = i;
+                btn.onclick = () => enterNumber(i);
+                numpad.appendChild(btn);
+            }
+        }
+
+        function updateMistakeDisplay() { mistakeDisplay.textContent = mistakes; }
+
+        function newGame() {
+            selectedCell = null;
+            isInitialRender = true;
+            initGame();
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key >= '1' && e.key <= boardSize.toString()) enterNumber(parseInt(e.key));
+            if (e.key === 'Backspace' || e.key === 'Delete') eraseCell();
+            if (e.key.toLowerCase() === 'n') toggleNotesMode();
+        });
+
+        window.onload = initGame;
+    </script>
+</body>
+</html>
