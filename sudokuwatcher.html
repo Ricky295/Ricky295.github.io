@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku Watcher</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #cbd5e1;
+            --grid-border: #1e293b;
+        }
+
+        .dark {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --grid-border: #f1f5f9;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            transition: background-color 0.3s ease;
+        }
+
+        .sudoku-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            border: 3px solid var(--grid-border);
+            width: 100%;
+            max-width: 500px;
+            aspect-ratio: 1 / 1;
+            background: var(--card-bg);
+        }
+
+        .cell {
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 600;
+            background: var(--card-bg);
+            position: relative;
+            width: 55px;
+            height: 55px;
+        }
+
+        .cell:nth-child(3n) { border-right: 3px solid var(--grid-border); }
+        .cell:nth-child(9n) { border-right: 1px solid var(--border-color); }
+        .cell:nth-child(n+19):nth-child(-n+27),
+        .cell:nth-child(n+46):nth-child(-n+54) { border-bottom: 3px solid var(--grid-border); }
+        
+        .cell.initial { color: var(--text-main); font-weight: 800; background: rgba(0,0,0,0.05); }
+        .cell.solved { color: #3b82f6; animation: pop 0.4s ease-out; }
+        .cell.focus { background: #fef08a; border: 2px solid #eab308; z-index: 10; color: #1e293b; }
+
+        @keyframes pop {
+            0% { transform: scale(0.8); opacity: 0; }
+            70% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        #pip-canvas { display: none; }
+        #pip-video { display: none; }
+
+        .claude-quote {
+            border-left: 4px solid #f97316;
+            background: rgba(249, 115, 22, 0.05);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="max-w-xl w-full text-center space-y-6 my-8">
+        <header class="flex justify-between items-end">
+            <div class="text-left">
+                <h1 class="text-3xl font-extrabold tracking-tight text-slate-800 dark:text-white">Sudoku Watcher</h1>
+                <p class="text-slate-500 italic dark:text-slate-400">Human-like solver logic</p>
+            </div>
+            <div class="flex gap-2">
+                <button id="dark-toggle" class="p-2 bg-slate-200 dark:bg-slate-700 rounded-lg hover:opacity-80 transition-all">
+                    <svg id="sun-icon" class="hidden dark:block" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                    <svg id="moon-icon" class="block dark:hidden" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                </button>
+                <button id="pip-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><rect width="7" height="5" x="14" y="10" rx="1"/></svg>
+                    PiP Mode
+                </button>
+            </div>
+        </header>
+
+        <div id="capture-area" class="relative flex justify-center bg-white dark:bg-slate-800 p-4 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700">
+            <div id="grid" class="sudoku-grid overflow-hidden"></div>
+            <div id="overlay" class="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center opacity-0 pointer-events-none transition-opacity duration-500">
+                <div class="text-xl font-bold">New Puzzle Incoming...</div>
+            </div>
+        </div>
+
+        <canvas id="pip-canvas" width="600" height="600"></canvas>
+        <video id="pip-video" autoplay muted></video>
+
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 w-full space-y-4">
+            <div class="flex justify-between items-center">
+                <div class="flex flex-col items-start text-left">
+                    <span id="status-badge" class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold uppercase tracking-wider mb-1">Solving</span>
+                    <span id="method-text" class="text-sm font-medium italic opacity-80">Analyzing board...</span>
+                </div>
+                <div class="text-right">
+                    <div class="text-xs font-bold uppercase text-slate-400">Total Solved</div>
+                    <div id="stats-count" class="text-2xl font-black text-blue-500">0</div>
+                </div>
+            </div>
+            
+            <div class="space-y-2">
+                <div class="flex justify-between text-xs font-bold uppercase text-slate-400">
+                    <span>Solving Speed</span>
+                    <span id="speed-val">1x</span>
+                </div>
+                <input type="range" id="speed-slider" min="0.2" max="5" step="0.1" value="1" class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+            </div>
+
+            <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2">
+                <div id="progress-bar" class="bg-blue-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div class="claude-quote p-4 rounded-r-lg text-left shadow-sm">
+            <div class="flex items-center gap-2 mb-2">
+                <div class="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
+                <span class="text-[10px] font-bold uppercase tracking-widest text-orange-600">AI Hall of Fame</span>
+            </div>
+            <p class="text-sm text-slate-600 dark:text-slate-300 italic leading-relaxed">
+                "My dignity didn't just leave, it SPRINTED out the door... I got so cooked that my dignity filed a restraining order against me."
+            </p>
+            <div class="mt-2 text-xs font-bold text-slate-400">
+                — Claude-4.5-Haiku, 2026
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const gridElement = document.getElementById('grid');
+        const statusBadge = document.getElementById('status-badge');
+        const methodText = document.getElementById('method-text');
+        const progressBar = document.getElementById('progress-bar');
+        const overlay = document.getElementById('overlay');
+        const pipBtn = document.getElementById('pip-btn');
+        const pipCanvas = document.getElementById('pip-canvas');
+        const pipVideo = document.getElementById('pip-video');
+        const speedSlider = document.getElementById('speed-slider');
+        const speedVal = document.getElementById('speed-val');
+        const statsCount = document.getElementById('stats-count');
+        const darkToggle = document.getElementById('dark-toggle');
+
+        let board = [];
+        let initialBoard = [];
+        let solving = false;
+        let solvedCount = 0;
+        let baseDelay = 1000;
+
+        darkToggle.addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+            updateCanvas();
+        });
+
+        speedSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            speedVal.textContent = val + 'x';
+            baseDelay = 1000 / val;
+        });
+
+        const ctx = pipCanvas.getContext('2d');
+        async function startPiP() {
+            try {
+                const stream = pipCanvas.captureStream(30);
+                pipVideo.srcObject = stream;
+                await pipVideo.play();
+                await pipVideo.requestPictureInPicture();
+            } catch (err) { console.error(err); }
+        }
+
+        function updateCanvas() {
+            const isDark = document.documentElement.classList.contains('dark');
+            ctx.fillStyle = isDark ? "#1e293b" : "#ffffff";
+            ctx.fillRect(0, 0, 600, 600);
+            
+            ctx.strokeStyle = isDark ? "#334155" : "#cbd5e1";
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 9; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * 66.6, 0); ctx.lineTo(i * 66.6, 600);
+                ctx.moveTo(0, i * 66.6); ctx.lineTo(600, i * 66.6);
+                ctx.stroke();
+            }
+
+            ctx.strokeStyle = isDark ? "#f1f5f9" : "#1e293b";
+            ctx.lineWidth = 4;
+            for (let i = 0; i <= 9; i += 3) {
+                ctx.beginPath();
+                ctx.moveTo(i * 66.6, 0); ctx.lineTo(i * 66.6, 600);
+                ctx.moveTo(0, i * 66.6); ctx.lineTo(600, i * 66.6);
+                ctx.stroke();
+            }
+
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            for (let i = 0; i < 81; i++) {
+                if (board[i] !== 0) {
+                    let r = Math.floor(i / 9);
+                    let c = i % 9;
+                    let isInitial = initialBoard[i] !== 0;
+                    
+                    const cell = document.getElementById(`cell-${i}`);
+                    if (cell && cell.classList.contains('focus')) {
+                        ctx.fillStyle = "#fef08a";
+                        ctx.fillRect(c * 66.6 + 2, r * 66.6 + 2, 62.6, 62.6);
+                    }
+
+                    ctx.fillStyle = isInitial ? (isDark ? "#f1f5f9" : "#1e293b") : "#3b82f6";
+                    ctx.font = isInitial ? "bold 32px Inter" : "600 32px Inter";
+                    ctx.fillText(board[i], c * 66.6 + 33.3, r * 66.6 + 33.3);
+                }
+            }
+        }
+
+        function generateSudoku() {
+            let tempGrid = Array(81).fill(0);
+            fillGrid(tempGrid);
+            let cluesCount = 26 + Math.floor(Math.random() * 8);
+            let attempts = 81 - cluesCount;
+            while (attempts > 0) {
+                let idx = Math.floor(Math.random() * 81);
+                if (tempGrid[idx] !== 0) {
+                    tempGrid[idx] = 0;
+                    attempts--;
+                }
+            }
+            return tempGrid;
+        }
+
+        function fillGrid(grid) {
+            let emptyCell = grid.indexOf(0);
+            if (emptyCell === -1) return true;
+            let nums = [1, 2, 3, 4, 5, 6, 7, 8, 9].sort(() => Math.random() - 0.5);
+            for (let num of nums) {
+                if (isValid(grid, emptyCell, num)) {
+                    grid[emptyCell] = num;
+                    if (fillGrid(grid)) return true;
+                    grid[emptyCell] = 0;
+                }
+            }
+            return false;
+        }
+
+        function isValid(grid, idx, num) {
+            let row = Math.floor(idx / 9);
+            let col = idx % 9;
+            let boxRow = Math.floor(row / 3) * 3;
+            let boxCol = Math.floor(col / 3) * 3;
+            for (let i = 0; i < 9; i++) {
+                if (grid[row * 9 + i] === num) return false;
+                if (grid[i * 9 + col] === num) return false;
+                let bIdx = (boxRow + Math.floor(i / 3)) * 9 + (boxCol + i % 3);
+                if (grid[bIdx] === num) return false;
+            }
+            return true;
+        }
+
+        async function stepSolve() {
+            if (!solving) return;
+
+            let possibilities = Array(81).fill(null).map((_, i) => {
+                if (board[i] !== 0) return [];
+                let res = [];
+                for (let n = 1; n <= 9; n++) { if (isValid(board, i, n)) res.push(n); }
+                return res;
+            });
+
+            let move = null;
+            for (let i = 0; i < 81; i++) {
+                if (board[i] === 0 && possibilities[i].length === 1) {
+                    move = { idx: i, val: possibilities[i][0], method: "Naked Single" };
+                    break;
+                }
+            }
+            if (!move) move = findHiddenSingle(possibilities);
+            if (!move) {
+                let solverGrid = [...board];
+                if (fillGrid(solverGrid)) {
+                    let emptyIndices = board.map((v, i) => v === 0 ? i : -1).filter(v => v !== -1);
+                    if (emptyIndices.length > 0) {
+                        let target = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+                        move = { idx: target, val: solverGrid[target], method: "Logical Deduction" };
+                    }
+                }
+            }
+
+            if (move) {
+                highlightCell(move.idx, move.method);
+                board[move.idx] = move.val;
+                updateGridUI();
+                updateCanvas();
+                setTimeout(stepSolve, baseDelay * (0.8 + Math.random() * 0.4));
+            } else {
+                finishGame();
+            }
+        }
+
+        function findHiddenSingle(possibilities) {
+            for (let n = 1; n <= 9; n++) {
+                for (let r = 0; r < 9; r++) {
+                    let potentialIndices = [];
+                    for (let c = 0; c < 9; c++) {
+                        let idx = r * 9 + c;
+                        if (board[idx] === 0 && possibilities[idx].includes(n)) potentialIndices.push(idx);
+                    }
+                    if (potentialIndices.length === 1) return { idx: potentialIndices[0], val: n, method: "Hidden Single (Row)" };
+                }
+            }
+            return null;
+        }
+
+        function initUI() {
+            gridElement.innerHTML = '';
+            for (let i = 0; i < 81; i++) {
+                let cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.id = `cell-${i}`;
+                gridElement.appendChild(cell);
+            }
+        }
+
+        function updateGridUI() {
+            let filled = 0;
+            for (let i = 0; i < 81; i++) {
+                let cell = document.getElementById(`cell-${i}`);
+                if (board[i] !== 0) {
+                    cell.textContent = board[i];
+                    filled++;
+                    if (initialBoard[i] !== 0) cell.classList.add('initial');
+                    else cell.classList.add('solved');
+                } else {
+                    cell.textContent = '';
+                }
+            }
+            let progress = ((filled - initialBoard.filter(x => x !== 0).length) / (81 - initialBoard.filter(x => x !== 0).length)) * 100;
+            progressBar.style.width = `${progress || 0}%`;
+        }
+
+        function highlightCell(idx, method) {
+            document.querySelectorAll('.cell.focus').forEach(c => c.classList.remove('focus'));
+            const cell = document.getElementById(`cell-${idx}`);
+            if (cell) cell.classList.add('focus');
+            methodText.textContent = method;
+        }
+
+        async function startNewGame() {
+            overlay.classList.add('opacity-100');
+            statusBadge.textContent = "Generating";
+            statusBadge.className = "px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-xs font-bold uppercase tracking-wider mb-1";
+            
+            await new Promise(r => setTimeout(r, 1000));
+            
+            board = generateSudoku();
+            initialBoard = [...board];
+            solving = true;
+            
+            initUI();
+            updateGridUI();
+            updateCanvas();
+            
+            overlay.classList.remove('opacity-100');
+            statusBadge.textContent = "Solving";
+            statusBadge.className = "px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold uppercase tracking-wider mb-1";
+            
+            stepSolve();
+        }
+
+        function finishGame() {
+            solving = false;
+            solvedCount++;
+            statsCount.textContent = solvedCount;
+            statusBadge.textContent = "Completed";
+            statusBadge.className = "px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold uppercase tracking-wider mb-1";
+            methodText.textContent = "Puzzle Solved!";
+            updateCanvas();
+            setTimeout(startNewGame, 3000);
+        }
+
+        pipBtn.addEventListener('click', startPiP);
+        window.onload = startNewGame;
+    </script>
+</body>
+</html>
