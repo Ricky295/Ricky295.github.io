@@ -138,6 +138,84 @@
             color: #94a3b8;
             pointer-events: none;
         }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(4px);
+            z-index: 40;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.hidden {
+            display: none;
+        }
+
+        .modal-content {
+            background: white;
+            position: relative;
+            z-index: 50;
+            border-radius: 1.5rem;
+            padding: 2rem;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .dark .modal-content {
+            background: #1e293b;
+        }
+
+        .hs-indicator {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            vertical-align: middle;
+        }
+
+        .hs-indicator.high {
+            background-color: #10b981;
+        }
+
+        .hs-indicator.medium {
+            background-color: #f59e0b;
+        }
+
+        .hs-indicator.low {
+            background-color: #ef4444;
+        }
+
+        .hs-tooltip {
+            position: relative;
+            cursor: help;
+        }
+
+        .hs-tooltip::before {
+            content: attr(data-hs-count);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            z-index: 100;
+        }
+
+        .hs-tooltip:hover::before {
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-darkBg text-slate-900 dark:text-slate-100 min-h-screen">
@@ -167,11 +245,14 @@
 
                         <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
                             <label class="text-sm font-medium text-slate-500 mb-2 block">Difficulty</label>
-                            <div class="grid grid-cols-3 gap-2">
+                            <div class="grid grid-cols-3 gap-2 mb-3">
                                 <button onclick="setDifficulty('easy')" id="btn-easy" class="py-2 rounded-lg border-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 font-bold transition-all text-sm">Easy</button>
                                 <button onclick="setDifficulty('medium')" id="btn-medium" class="py-2 rounded-lg border-2 border-transparent bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all text-sm">Medium</button>
                                 <button onclick="setDifficulty('hard')" id="btn-hard" class="py-2 rounded-lg border-2 border-transparent bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all text-sm">Hard</button>
                             </div>
+                            <button onclick="openCustomDifficultyModal()" class="w-full py-2 px-3 rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 font-semibold text-sm transition-all hover:border-slate-400 dark:hover:border-slate-500">
+                                Custom
+                            </button>
                         </div>
 
                         <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -191,7 +272,12 @@
                 </div>
 
                 <div class="bg-indigo-600 p-6 rounded-2xl shadow-lg text-white">
-                    <h3 class="font-bold text-lg mb-4">How it works</h3>
+                    <div class="flex items-start justify-between mb-3">
+                        <h3 class="font-bold text-lg">How it works</h3>
+                        <div class="hs-tooltip" id="hs-count-badge" data-hs-count="">
+                            <span class="hs-indicator"></span>
+                        </div>
+                    </div>
                     <p class="text-sm leading-relaxed">
                         This board is guaranteed 100% solvable using only the Box Hidden Single technique. Each logical step applies all Box HS moves at once.
                     </p>
@@ -254,6 +340,41 @@
         </div>
     </div>
 
+    <div id="custom-difficulty-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-4">Custom Difficulty</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        Min Steps: <span id="min-steps-display" class="text-blue-600 font-bold">5</span>
+                    </label>
+                    <input type="range" id="min-steps-slider" min="1" max="40" value="5" 
+                        oninput="updateMinStepsDisplay()" 
+                        class="w-full">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        Max Steps: <span id="max-steps-display" class="text-blue-600 font-bold">8</span>
+                    </label>
+                    <input type="range" id="max-steps-slider" min="1" max="40" value="8" 
+                        oninput="updateMaxStepsDisplay()" 
+                        class="w-full">
+                </div>
+                <div class="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-lg text-sm text-blue-900 dark:text-blue-200">
+                    Target range: <span id="range-display">5 - 8</span> steps
+                </div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="closeCustomDifficultyModal()" class="flex-1 py-2 px-4 rounded-lg border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-bold transition-all hover:bg-slate-100 dark:hover:bg-slate-800">
+                    Cancel
+                </button>
+                <button onclick="applyCustomDifficulty()" class="flex-1 py-2 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all">
+                    Apply
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="win-overlay" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center z-50 hidden opacity-0 transition-opacity">
         <div class="bg-white dark:bg-darkCard p-10 rounded-3xl shadow-2xl max-w-md w-full mx-4 text-center">
             <div class="w-20 h-20 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -284,6 +405,7 @@
     <script>
         let boardSize = 6;
         let difficulty = 'easy';
+        let customDifficulty = null;
         let solution = [];
         let displayBoard = [];
         let originalBoard = [];
@@ -298,6 +420,7 @@
         let currentStep = 0;
         let isInitialRender = true;
         let hintsUsed = 0;
+        let boxHSCount = 0;
 
         const gridContainer = document.getElementById('grid-container');
         const numpad = document.getElementById('numpad');
@@ -316,6 +439,33 @@
             const startR = Math.floor(r / rowsPerBlock) * rowsPerBlock;
             const startC = Math.floor(c / colsPerBlock) * colsPerBlock;
             return { startR, startC, rows: rowsPerBlock, cols: colsPerBlock };
+        }
+
+        function countBoxHSMoves(grid, size) {
+            const manager = new SudokuManager(size);
+            let count = 0;
+            for (let boxIdx = 0; boxIdx < size; boxIdx++) {
+                let br = Math.floor(boxIdx / (size / manager.colsPerBlock)) * manager.rowsPerBlock;
+                let bc = (boxIdx % (size / manager.colsPerBlock)) * manager.colsPerBlock;
+                for (let num = 1; num <= size; num++) {
+                    let inBox = false;
+                    for (let i = 0; i < manager.rowsPerBlock; i++) {
+                        for (let j = 0; j < manager.colsPerBlock; j++) {
+                            if (grid[br + i][bc + j] === num) inBox = true;
+                        }
+                    }
+                    if (inBox) continue;
+                    let candidates = [];
+                    for (let i = 0; i < manager.rowsPerBlock; i++) {
+                        for (let j = 0; j < manager.colsPerBlock; j++) {
+                            let r = br + i, c = bc + j;
+                            if (grid[r][c] === 0 && manager.isValid(grid, r, c, num)) candidates.push({ r, c });
+                        }
+                    }
+                    if (candidates.length === 1) count++;
+                }
+            }
+            return count;
         }
 
         class SudokuManager {
@@ -403,57 +553,84 @@
                 return grid.every(row => row.every(cell => cell !== 0));
             }
 
-            generateBoxHSOnlyPuzzle(targetSteps) {
+            generateBoxHSOnlyPuzzle(targetSteps, timeoutMs = 3000) {
+                const startTime = Date.now();
+                let bestPuzzle = null;
+                let bestDiff = Infinity;
+
+                while (Date.now() - startTime < timeoutMs) {
+                    // Step 1: Generate a complete solution
+                    let full = Array.from({ length: this.size }, () => Array(this.size).fill(0));
+                    this.solveRandomly(full);
+
+                    // Step 2: Randomize all coordinates
+                    let cells = [];
+                    for (let r = 0; r < this.size; r++) {
+                        for (let c = 0; c < this.size; c++) {
+                            cells.push({ r, c });
+                        }
+                    }
+                    cells.sort(() => Math.random() - 0.5);
+
+                    // Step 3: Pick target step count
+                    const targetStepCount = targetSteps.minSteps + Math.floor(Math.random() * (targetSteps.maxSteps - targetSteps.minSteps + 1));
+
+                    // Step 4: Remove cells until we exhaust removable cells
+                    let puzzle = JSON.parse(JSON.stringify(full));
+
+                    for (let cell of cells) {
+                        let prevVal = puzzle[cell.r][cell.c];
+                        puzzle[cell.r][cell.c] = 0;
+                        let steps = this.countSteps(puzzle);
+
+                        // Not Box HS solvable, put it back
+                        if (steps === -1) {
+                            puzzle[cell.r][cell.c] = prevVal;
+                            continue;
+                        }
+
+                        // Track closest match to target
+                        const diff = Math.abs(steps - targetStepCount);
+                        if (diff < bestDiff) {
+                            bestDiff = diff;
+                            bestPuzzle = { full, puzzle: JSON.parse(JSON.stringify(puzzle)), steps };
+                        }
+                    }
+                }
+
+                // Return best match found, even if not in range
+                if (bestPuzzle) {
+                    return bestPuzzle;
+                }
+
+                // Last resort: generate anything solvable
                 let full = Array.from({ length: this.size }, () => Array(this.size).fill(0));
                 this.solveRandomly(full);
                 let puzzle = JSON.parse(JSON.stringify(full));
                 let cells = [];
                 for (let r = 0; r < this.size; r++) {
-                    for (let c = 0; c < this.size; c++) cells.push({ r, c });
+                    for (let c = 0; c < this.size; c++) {
+                        cells.push({ r, c });
+                    }
                 }
                 cells.sort(() => Math.random() - 0.5);
 
                 for (let cell of cells) {
-                    let prevVal = puzzle[cell.r][cell.c];
                     puzzle[cell.r][cell.c] = 0;
                     let steps = this.countSteps(puzzle);
-
-                    // If returns -1, not solvable by Box HS, put it back
-                    if (steps === -1) {
-                        puzzle[cell.r][cell.c] = prevVal;
-                        continue;
+                    if (steps >= 0) {
+                        return { full, puzzle: JSON.parse(JSON.stringify(puzzle)), steps };
                     }
-
-                    // Below target: keep removing
-                    if (steps < targetSteps.minSteps) {
-                        continue;
-                    }
-
-                    // Within target range: 50/50 chance to continue or stop
-                    if (steps >= targetSteps.minSteps && steps <= targetSteps.maxSteps) {
-                        if (Math.random() > 0.5) {
-                            continue;
-                        } else {
-                            puzzle[cell.r][cell.c] = prevVal;
-                            break;
-                        }
-                    }
-
-                    // Above target: backtrack and stop
-                    if (steps > targetSteps.maxSteps) {
-                        puzzle[cell.r][cell.c] = prevVal;
-                        break;
-                    }
+                    puzzle[cell.r][cell.c] = full[cell.r][cell.c];
                 }
 
-                let finalSteps = this.countSteps(puzzle);
-                return { full, puzzle, steps: finalSteps };
+                return { full, puzzle, steps: 0 };
             }
         }
 
         function initGame() {
             const manager = new SudokuManager(boardSize);
-            const config = difficultyConfig[difficulty];
+            const config = customDifficulty || difficultyConfig[difficulty];
             const { full, puzzle, steps } = manager.generateBoxHSOnlyPuzzle(config);
             
             solution = full;
@@ -466,13 +643,38 @@
             hintsUsed = 0;
             highlightedNumber = null;
             
-            console.log('Total Steps:', totalSteps, 'Steps returned:', steps);
+            boxHSCount = countBoxHSMoves(puzzle, boardSize);
+            updateBoxHSBadge();
             
             updateMistakeDisplay();
             updateProgressDisplay();
             resetTimer();
             renderBoard();
             renderNumpad();
+        }
+
+        function updateBoxHSBadge() {
+            const badge = document.getElementById('hs-count-badge');
+            let indicator = badge.querySelector('.hs-indicator');
+            
+            // Count empty cells
+            let emptyCells = 0;
+            for (let r = 0; r < boardSize; r++) {
+                for (let c = 0; c < boardSize; c++) {
+                    if (displayBoard[r][c] === 0) emptyCells++;
+                }
+            }
+            
+            // Calculate percentage of empty cells that are Box HS
+            const percentage = emptyCells > 0 ? (boxHSCount / emptyCells) * 100 : 0;
+            
+            let level = 'low';
+            if (percentage > 10) level = 'high';
+            else if (percentage >= 5) level = 'medium';
+            else if (percentage >= 2) level = 'medium';
+            
+            indicator.className = `hs-indicator ${level}`;
+            badge.setAttribute('data-hs-count', `${boxHSCount} Box HS (${percentage.toFixed(1)}%)`);
         }
 
         function renderBoard() {
@@ -525,13 +727,11 @@
                 updateHighlights();
             }
             
-            // Skip progress calc on initial render
             if (isInitialRender) {
                 isInitialRender = false;
                 return;
             }
             
-            // Update progress after rendering
             let puzzleWithCorrectOnly = JSON.parse(JSON.stringify(originalBoard));
             for (let r = 0; r < boardSize; r++) {
                 for (let c = 0; c < boardSize; c++) {
@@ -545,7 +745,6 @@
             const remainingSteps = manager.countSteps(puzzleWithCorrectOnly);
             currentStep = remainingSteps === -1 ? totalSteps : Math.max(0, totalSteps - remainingSteps);
             
-            // Use setTimeout to ensure DOM is ready
             setTimeout(() => updateProgressDisplay(), 0);
         }
 
@@ -581,7 +780,6 @@
         }
 
         function highlightNumber(num) {
-            // Toggle: if clicking same number, clear highlight
             if (highlightedNumber === num) {
                 highlightedNumber = null;
             } else {
@@ -623,10 +821,48 @@
 
         function setDifficulty(diff) {
             difficulty = diff;
+            customDifficulty = null;
             document.getElementById('btn-easy').className = diff === 'easy' ? 'py-2 rounded-lg border-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 font-bold transition-all text-sm' : 'py-2 rounded-lg border-2 border-transparent bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all text-sm';
             document.getElementById('btn-medium').className = diff === 'medium' ? 'py-2 rounded-lg border-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 font-bold transition-all text-sm' : 'py-2 rounded-lg border-2 border-transparent bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all text-sm';
             document.getElementById('btn-hard').className = diff === 'hard' ? 'py-2 rounded-lg border-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 font-bold transition-all text-sm' : 'py-2 rounded-lg border-2 border-transparent bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all text-sm';
             newGame();
+        }
+
+        function openCustomDifficultyModal() {
+            document.getElementById('custom-difficulty-modal').classList.remove('hidden');
+        }
+
+        function closeCustomDifficultyModal() {
+            document.getElementById('custom-difficulty-modal').classList.add('hidden');
+        }
+
+        function updateMinStepsDisplay() {
+            const val = document.getElementById('min-steps-slider').value;
+            document.getElementById('min-steps-display').textContent = val;
+            updateRangeDisplay();
+        }
+
+        function updateMaxStepsDisplay() {
+            const val = document.getElementById('max-steps-slider').value;
+            document.getElementById('max-steps-display').textContent = val;
+            updateRangeDisplay();
+        }
+
+        function updateRangeDisplay() {
+            const min = document.getElementById('min-steps-slider').value;
+            const max = document.getElementById('max-steps-slider').value;
+            document.getElementById('range-display').textContent = `${min} - ${max}`;
+        }
+
+        function applyCustomDifficulty() {
+            const min = parseInt(document.getElementById('min-steps-slider').value);
+            const max = parseInt(document.getElementById('max-steps-slider').value);
+            if (min <= max) {
+                customDifficulty = { minSteps: min, maxSteps: max };
+                difficulty = null;
+                closeCustomDifficultyModal();
+                newGame();
+            }
         }
 
         function selectCell(r, c) {
@@ -649,7 +885,6 @@
                     cell.classList.add('highlighted');
                 }
 
-                // Add number highlighting
                 if (highlightedNumber && displayBoard[r][c] === highlightedNumber) {
                     cell.classList.add('number-highlighted');
                 }
@@ -697,10 +932,8 @@
 
         function updateProgressDisplay() {
             const progressDisplay = document.getElementById('progress-display');
-            console.log('Updating progress:', currentStep, '/', totalSteps);
             if (progressDisplay) {
                 progressDisplay.textContent = `${currentStep} / ${totalSteps}`;
-                console.log('Text updated to:', progressDisplay.textContent);
             }
             const percent = totalSteps > 0 ? (currentStep / totalSteps) * 100 : 0;
             const progressBar = document.getElementById('progress-bar');
@@ -736,12 +969,10 @@
                 btn.className = 'flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg h-14 text-xl font-bold shadow-sm hover:bg-blue-50 dark:hover:bg-blue-900/30 active:scale-90 transition-all';
                 btn.textContent = i;
                 btn.onclick = (e) => {
-                    // Right click to highlight number
                     if (e.button === 2) {
                         e.preventDefault();
                         highlightNumber(i);
                     } else {
-                        // Left click to enter number
                         enterNumber(i);
                     }
                 };
