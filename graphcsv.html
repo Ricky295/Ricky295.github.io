@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GraphCSV - Interactive Data Visualization Dashboard</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- PapaParse for robust CSV Parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <!-- Chart.js for beautiful plotting -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              950: '#090d16',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans overflow-hidden">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md px-6 py-4 flex items-center justify-between shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="p-2.5 bg-gradient-to-tr from-brand-600 to-indigo-500 rounded-xl shadow-lg shadow-indigo-500/20">
+        <i data-lucide="bar-chart-3" class="w-6 h-6 text-white"></i>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">GraphCSV</h1>
+        <p class="text-xs text-slate-400">Instantly parse, analyze, and visualize tabular data with AI insights</p>
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-3">
+      <button onclick="loadSampleData('sales')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-3.5 py-2 rounded-lg transition border border-slate-700/50 flex items-center gap-1.5">
+        <i data-lucide="database" class="w-3.5 h-3.5"></i> Load Sales Sample
+      </button>
+      <button onclick="loadSampleData('stocks')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-3.5 py-2 rounded-lg transition border border-slate-700/50 flex items-center gap-1.5">
+        <i data-lucide="line-chart" class="w-3.5 h-3.5"></i> Load Stock Sample
+      </button>
+      <span class="h-5 w-px bg-slate-800"></span>
+      <a href="https://github.com" target="_blank" class="text-slate-400 hover:text-white transition">
+        <i data-lucide="github" class="w-5 h-5"></i>
+      </a>
+    </div>
+  </header>
+
+  <!-- Notification Toast Area -->
+  <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Main Content Layout -->
+  <main class="flex-1 flex flex-col lg:flex-row overflow-hidden">
+    
+    <!-- Left Sidebar: Controls & File Upload -->
+    <section class="w-full lg:w-[380px] border-r border-slate-800 bg-slate-900/30 flex flex-col shrink-0 overflow-y-auto">
+      
+      <!-- Upload Box -->
+      <div class="p-5 border-b border-slate-800/60">
+        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Upload CSV File</label>
+        <div id="dropzone" class="border-2 border-dashed border-slate-700 hover:border-brand-500 bg-slate-900/50 hover:bg-slate-900/80 rounded-xl p-6 text-center cursor-pointer transition-all group">
+          <input type="file" id="csv-file-input" accept=".csv" class="hidden" onchange="handleFileSelect(event)">
+          <div class="flex flex-col items-center">
+            <div class="p-3 bg-slate-800 rounded-lg mb-3 group-hover:scale-110 group-hover:bg-brand-500/10 group-hover:text-brand-400 transition-all text-slate-400">
+              <i data-lucide="upload-cloud" class="w-6 h-6"></i>
+            </div>
+            <p class="text-sm font-medium text-slate-200">Drag & drop your CSV here</p>
+            <p class="text-xs text-slate-500 mt-1">or click to browse from device</p>
+          </div>
+        </div>
+        <div id="file-info" class="hidden mt-3 p-2.5 bg-slate-800/50 border border-slate-700/50 rounded-lg flex items-center justify-between text-xs">
+          <span class="truncate max-w-[200px] text-slate-300 font-medium" id="filename-label">No file selected</span>
+          <button onclick="clearCurrentFile()" class="text-red-400 hover:text-red-300 transition p-1">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mapping & Plotting Settings (Only unlocked when CSV parsed) -->
+      <div id="mapping-controls" class="p-5 flex-1 flex flex-col gap-5 opacity-50 pointer-events-none transition-opacity duration-300">
+        <div>
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Graph Configuration</h3>
+          
+          <!-- X-Axis Field -->
+          <div class="mb-4">
+            <label class="block text-xs font-medium text-slate-400 mb-1.5 flex items-center justify-between">
+              <span>X-Axis (Labels)</span>
+              <span class="text-[10px] text-slate-500 italic" id="x-type-hint">Select a column</span>
+            </label>
+            <select id="select-x-axis" onchange="updateXTypeHint(); updateChart();" class="w-full bg-slate-800 border border-slate-700 rounded-lg py-2 px-3 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition">
+              <option value="">-- Choose Column --</option>
+            </select>
+          </div>
+
+          <!-- Y-Axis Field(s) (Allows Multi-Select) -->
+          <div class="mb-4">
+            <label class="block text-xs font-medium text-slate-400 mb-1.5 flex items-center justify-between">
+              <span>Y-Axis Value(s)</span>
+              <span class="text-[10px] text-brand-400 font-semibold">Multiple allowed</span>
+            </label>
+            <div id="y-axis-container" class="max-h-40 overflow-y-auto border border-slate-700 rounded-lg p-2 bg-slate-800/40 space-y-1">
+              <!-- Dynamically populated checkboxes -->
+              <p class="text-xs text-slate-500 p-1 italic text-center">Select X-Axis first</p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Visualization Style</h3>
+          
+          <!-- Chart Type Grid -->
+          <div class="grid grid-cols-3 gap-2 mb-4">
+            <button onclick="setChartType('line')" id="btn-chart-line" class="chart-type-btn p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700/60 flex flex-col items-center gap-1 text-slate-300 transition">
+              <i data-lucide="line-chart" class="w-4 h-4 text-indigo-400"></i>
+              <span class="text-[10px] font-medium">Line</span>
+            </button>
+            <button onclick="setChartType('bar')" id="btn-chart-bar" class="chart-type-btn p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700/60 flex flex-col items-center gap-1 text-slate-300 transition">
+              <i data-lucide="bar-chart-big" class="w-4 h-4 text-indigo-400"></i>
+              <span class="text-[10px] font-medium">Bar</span>
+            </button>
+            <button onclick="setChartType('scatter')" id="btn-chart-scatter" class="chart-type-btn p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700/60 flex flex-col items-center gap-1 text-slate-300 transition">
+              <i data-lucide="scatter-chart" class="w-4 h-4 text-indigo-400"></i>
+              <span class="text-[10px] font-medium">Scatter</span>
+            </button>
+            <button onclick="setChartType('radar')" id="btn-chart-radar" class="chart-type-btn p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700/60 flex flex-col items-center gap-1 text-slate-300 transition">
+              <i data-lucide="radical" class="w-4 h-4 text-indigo-400"></i>
+              <span class="text-[10px] font-medium">Radar</span>
+            </button>
+            <button onclick="setChartType('pie')" id="btn-chart-pie" class="chart-type-btn p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700/60 flex flex-col items-center gap-1 text-slate-300 transition">
+              <i data-lucide="pie-chart" class="w-4 h-4 text-indigo-400"></i>
+              <span class="text-[10px] font-medium">Pie</span>
+            </button>
+            <button onclick="setChartType('polarArea')" id="btn-chart-polarArea" class="chart-type-btn p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700/60 flex flex-col items-center gap-1 text-slate-300 transition">
+              <i data-lucide="orbit" class="w-4 h-4 text-indigo-400"></i>
+              <span class="text-[10px] font-medium">Polar</span>
+            </button>
+          </div>
+
+          <!-- Advanced Controls Toggle -->
+          <div class="border-t border-slate-800/60 pt-4 space-y-3">
+            <!-- Aggregation Method -->
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1 flex items-center gap-1">
+                <i data-lucide="combine" class="w-3.5 h-3.5 text-slate-500"></i> Aggregate Duplicate X-Values
+              </label>
+              <select id="aggregation-method" onchange="updateChart()" class="w-full bg-slate-800 border border-slate-700 rounded-lg py-1.5 px-2.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                <option value="none">None (Plot raw entries)</option>
+                <option value="sum" selected>Sum (Group & Add)</option>
+                <option value="avg">Average (Mean)</option>
+                <option value="min">Minimum Value</option>
+                <option value="max">Maximum Value</option>
+                <option value="count">Count (Occurrence count)</option>
+              </select>
+            </div>
+
+            <!-- Sorting Option -->
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1 flex items-center gap-1">
+                <i data-lucide="arrow-up-down" class="w-3.5 h-3.5 text-slate-500"></i> Sorting
+              </label>
+              <select id="sort-order" onchange="updateChart()" class="w-full bg-slate-800 border border-slate-700 rounded-lg py-1.5 px-2.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                <option value="original">Original File Order</option>
+                <option value="x-asc">X-Axis (A to Z / Low to High)</option>
+                <option value="x-desc">X-Axis (Z to A / High to Low)</option>
+                <option value="y-asc">Y-Axis Values (Low to High)</option>
+                <option value="y-desc">Y-Axis Values (High to Low)</option>
+              </select>
+            </div>
+
+            <!-- Theme Color Selection -->
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1 flex items-center gap-1">
+                <i data-lucide="palette" class="w-3.5 h-3.5 text-slate-500"></i> Color Theme
+              </label>
+              <select id="chart-theme" onchange="updateChart()" class="w-full bg-slate-800 border border-slate-700 rounded-lg py-1.5 px-2.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                <option value="neon">Cyberpunk Neon</option>
+                <option value="classic">Cool Tech Indigo</option>
+                <option value="emerald">Emerald Forest</option>
+                <option value="warm">Warm Sunset</option>
+                <option value="mono">Sleek Monochrome</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Workspace Panel (Visualizer + Analytics) -->
+    <section class="flex-1 flex flex-col min-w-0 bg-slate-950 overflow-hidden">
+      
+      <!-- Top Workspace Tabs -->
+      <div class="border-b border-slate-800 bg-slate-900/10 px-6 py-2 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-1">
+          <button onclick="switchTab('chart')" id="tab-btn-chart" class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-brand-500 text-brand-400 flex items-center gap-2">
+            <i data-lucide="line-chart" class="w-4 h-4"></i> Interactive Graph
+          </button>
+          <button onclick="switchTab('data')" id="tab-btn-data" class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-800 flex items-center gap-2">
+            <i data-lucide="table" class="w-4 h-4"></i> Parsed Data Table
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="exportChartAsImage()" id="btn-export-png" class="hidden text-xs bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-medium px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5 transition">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> Export PNG
+          </button>
+          <button onclick="exportProcessedCSV()" id="btn-export-csv" class="hidden text-xs bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-medium px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5 transition">
+            <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> Export Cleaned CSV
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab Content Area -->
+      <div class="flex-1 p-6 overflow-hidden flex flex-col">
+        
+        <!-- Tab 1: Interactive Graph View -->
+        <div id="tab-content-chart" class="tab-content flex-1 flex flex-col min-h-0">
+          <div id="graph-placeholder" class="flex-1 flex flex-col items-center justify-center text-center p-8 bg-slate-900/20 border border-slate-800/60 rounded-2xl">
+            <div class="w-16 h-16 bg-slate-900 border border-slate-800 text-slate-500 rounded-2xl flex items-center justify-center mb-4">
+              <i data-lucide="pie-chart" class="w-8 h-8"></i>
+            </div>
+            <h2 class="text-lg font-semibold text-slate-300">No Graph Generated Yet</h2>
+            <p class="text-sm text-slate-500 mt-1 max-w-sm">Please upload a valid CSV file or load a sample dataset from the top header to begin configuring your graph.</p>
+          </div>
+          
+          <div id="chart-container" class="hidden flex-1 relative bg-slate-900/10 border border-slate-800/60 rounded-2xl p-6 flex flex-col min-h-0">
+            <!-- Mini Statistics Strip -->
+            <div id="stats-ribbon" class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 shrink-0">
+              <!-- Dynamically populated stats -->
+            </div>
+            <!-- Dynamic Canvas with Container constraints -->
+            <div class="flex-1 relative min-h-0">
+              <canvas id="mainChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Parsed Data Table -->
+        <div id="tab-content-data" class="tab-content hidden flex-1 flex flex-col min-h-0">
+          <div id="table-placeholder" class="flex-1 flex flex-col items-center justify-center text-center p-8 bg-slate-900/20 border border-slate-800/60 rounded-2xl">
+            <div class="w-16 h-16 bg-slate-900 border border-slate-800 text-slate-500 rounded-2xl flex items-center justify-center mb-4">
+              <i data-lucide="table-2" class="w-8 h-8"></i>
+            </div>
+            <h2 class="text-lg font-semibold text-slate-300">No Parsed Data to Show</h2>
+            <p class="text-sm text-slate-500 mt-1">Upload a CSV or load a sample dataset to explore the structured database view.</p>
+          </div>
+
+          <div id="table-container" class="hidden flex-1 flex flex-col overflow-hidden bg-slate-900/20 border border-slate-800/60 rounded-2xl">
+            <!-- Search & Filter Controls -->
+            <div class="p-4 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-900/40">
+              <div class="relative w-64">
+                <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-500"></i>
+                <input type="text" id="table-search" placeholder="Search entries..." oninput="handleTableSearch()" class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs text-slate-300 placeholder-slate-500 focus:outline-none focus:border-brand-500">
+              </div>
+              <div class="text-xs text-slate-400">
+                Showing <span id="table-showing-count" class="font-semibold text-brand-400">0</span> of <span id="table-total-count">0</span> records
+              </div>
+            </div>
+            
+            <!-- Core Table Component -->
+            <div class="flex-1 overflow-auto">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead class="sticky top-0 bg-slate-900 font-semibold text-slate-400 border-b border-slate-800 z-10" id="table-headers">
+                  <!-- Generated dynamically -->
+                </thead>
+                <tbody class="divide-y divide-slate-800/50" id="table-body">
+                  <!-- Generated dynamically -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Table Pagination Controls -->
+            <div class="p-4 border-t border-slate-800 flex items-center justify-between shrink-0 bg-slate-900/40">
+              <button onclick="changePage(-1)" id="btn-prev-page" class="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 font-medium px-3 py-1.5 rounded text-xs transition">
+                Previous
+              </button>
+              <span class="text-xs text-slate-400" id="table-page-info">
+                Page 1 of 1
+              </span>
+              <button onclick="changePage(1)" id="btn-next-page" class="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 font-medium px-3 py-1.5 rounded text-xs transition">
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- Interactive JS Core Application -->
+    <script>
+      // State Management
+      let rawData = [];
+      let headers = [];
+      let chartInstance = null;
+      let currentChartType = 'line';
+      let tablePage = 1;
+      const tableLimit = 15;
+      let filteredDataForTable = [];
+      
+      // Theme Color Maps
+      const THEMES = {
+        neon: {
+          border: ['#818cf8', '#34d399', '#f43f5e', '#fbbf24', '#a78bfa', '#22d3ee'],
+          bg: ['rgba(129, 140, 248, 0.2)', 'rgba(52, 211, 153, 0.2)', 'rgba(244, 63, 94, 0.2)', 'rgba(251, 191, 36, 0.2)', 'rgba(167, 139, 250, 0.2)', 'rgba(34, 211, 238, 0.2)']
+        },
+        classic: {
+          border: ['#6366f1', '#4f46e5', '#3b82f6', '#1d4ed8', '#0284c7', '#0369a1'],
+          bg: ['rgba(99, 102, 241, 0.2)', 'rgba(79, 70, 229, 0.2)', 'rgba(59, 130, 246, 0.2)', 'rgba(29, 78, 216, 0.2)', 'rgba(2, 132, 199, 0.2)', 'rgba(3, 105, 161, 0.2)']
+        },
+        emerald: {
+          border: ['#10b981', '#059669', '#047857', '#065f46', '#064e3b', '#34d399'],
+          bg: ['rgba(16, 185, 129, 0.2)', 'rgba(5, 150, 105, 0.2)', 'rgba(4, 120, 87, 0.2)', 'rgba(6, 95, 70, 0.2)', 'rgba(6, 78, 59, 0.2)', 'rgba(52, 211, 153, 0.2)']
+        },
+        warm: {
+          border: ['#f97316', '#ef4444', '#ec4899', '#f43f5e', '#f59e0b', '#d97706'],
+          bg: ['rgba(249, 115, 22, 0.2)', 'rgba(239, 68, 68, 0.2)', 'rgba(236, 72, 153, 0.2)', 'rgba(244, 63, 94, 0.2)', 'rgba(245, 158, 11, 0.2)', 'rgba(217, 119, 6, 0.2)']
+        },
+        mono: {
+          border: ['#e2e8f0', '#94a3b8', '#64748b', '#475569', '#cbd5e1', '#475569'],
+          bg: ['rgba(226, 232, 240, 0.1)', 'rgba(148, 163, 184, 0.1)', 'rgba(100, 116, 139, 0.1)', 'rgba(71, 85, 105, 0.1)', 'rgba(203, 213, 225, 0.1)', 'rgba(71, 85, 105, 0.1)']
+        }
+      };
+
+      // Built-in Samples (Clean and standard formatting)
+      const SAMPLES = {
+        sales: `Month,Sales,Target,MarketingSpend,Profit
+January,12000,10000,2000,3200
+February,15000,11000,2500,4100
+March,18000,12000,3000,4800
+April,14000,13000,2200,3500
+May,22000,15000,4500,6100
+June,26000,17000,5000,7500
+July,29000,18000,6000,8800
+August,25000,18000,4000,7200
+September,21000,19000,3200,5900
+October,24000,20000,3800,6400
+November,31000,22000,5500,9200
+December,42000,25000,8000,13500`,
+        stocks: `Date,AAPL_Price,MSFT_Price,GOOG_Price,Volume
+2026-05-01,175.50,420.10,168.30,12000
+2026-05-02,176.20,418.90,169.10,9500
+2026-05-03,174.80,422.30,167.80,11000
+2026-05-04,178.10,425.00,171.40,15000
+2026-05-05,179.90,428.60,172.90,18500
+2026-05-06,177.30,423.40,170.20,13200
+2026-05-07,175.00,421.00,169.50,10500
+2026-05-08,181.20,430.50,174.10,21000
+2026-05-09,183.50,435.00,176.50,23000
+2026-05-10,182.10,432.80,175.20,17400`
+      };
+
+      // App Initialization
+      window.onload = function() {
+        lucide.createIcons();
+        initDragAndDrop();
+        // Load default Sales sample so users have context right away
+        loadSampleData('sales');
+      };
+
+      // Custom Simple Toast Notification
+      function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-xl text-xs font-semibold select-none transform translate-y-2 opacity-0 transition-all duration-300 pointer-events-auto ${
+          type === 'success' 
+            ? 'bg-slate-900 border-emerald-500/30 text-emerald-400' 
+            : 'bg-slate-900 border-rose-500/30 text-rose-400'
+        }`;
+        
+        const icon = type === 'success' ? 'check-circle' : 'alert-circle';
+        toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i><span>${message}</span>`;
+        container.appendChild(toast);
+        lucide.createIcons();
+        
+        // Trigger entrance animation
+        setTimeout(() => {
+          toast.classList.remove('translate-y-2', 'opacity-0');
+        }, 10);
+
+        // Auto remove
+        setTimeout(() => {
+          toast.classList.add('translate-y-2', 'opacity-0');
+          setTimeout(() => toast.remove(), 300);
+        }, 4000);
+      }
+
+      // Drag and Drop implementation
+      function initDragAndDrop() {
+        const dropzone = document.getElementById('dropzone');
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+          dropzone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            dropzone.classList.add('border-brand-500', 'bg-slate-900/80');
+          }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+          dropzone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('border-brand-500', 'bg-slate-900/80');
+          }, false);
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+          const dt = e.dataTransfer;
+          const files = dt.files;
+          if (files.length) {
+            document.getElementById('csv-file-input').files = files;
+            parseAndLoadCSV(files[0]);
+          }
+        });
+
+        dropzone.addEventListener('click', () => {
+          document.getElementById('csv-file-input').click();
+        });
+      }
+
+      function handleFileSelect(event) {
+        const files = event.target.files;
+        if (files.length) {
+          parseAndLoadCSV(files[0]);
+        }
+      }
+
+      function loadSampleData(sampleKey) {
+        const csvContent = SAMPLES[sampleKey];
+        if (csvContent) {
+          processCSVString(csvContent, `${sampleKey}_sample.csv`);
+        }
+      }
+
+      function clearCurrentFile() {
+        rawData = [];
+        headers = [];
+        document.getElementById('csv-file-input').value = '';
+        document.getElementById('file-info').classList.add('hidden');
+        document.getElementById('mapping-controls').classList.add('opacity-50', 'pointer-events-none');
+        document.getElementById('graph-placeholder').classList.remove('hidden');
+        document.getElementById('chart-container').classList.add('hidden');
+        document.getElementById('table-placeholder').classList.remove('hidden');
+        document.getElementById('table-container').classList.add('hidden');
+        document.getElementById('btn-export-png').classList.add('hidden');
+        document.getElementById('btn-export-csv').classList.add('hidden');
+
+        if (chartInstance) {
+          chartInstance.destroy();
+          chartInstance = null;
+        }
+        showToast("Session cleared successfully.", "success");
+      }
+
+      // Parser Core
+      function parseAndLoadCSV(file) {
+        if (!file.name.endsWith('.csv')) {
+          showToast("Unsupported file type. Please upload a .csv file.", "error");
+          return;
+        }
+
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          dynamicTyping: true,
+          complete: function(results) {
+            if (results.data && results.data.length > 0) {
+              rawData = results.data;
+              headers = Object.keys(results.data[0]);
+              setupAppUI(file.name);
+              showToast(`Successfully parsed ${rawData.length} rows!`, "success");
+            } else {
+              showToast("The CSV seems empty or corrupt.", "error");
+            }
+          },
+          error: function(err) {
+            showToast("Failed to parse CSV: " + err.message, "error");
+          }
+        });
+      }
+
+      function processCSVString(csvContent, filename) {
+        Papa.parse(csvContent, {
+          header: true,
+          skipEmptyLines: true,
+          dynamicTyping: true,
+          complete: function(results) {
+            if (results.data && results.data.length > 0) {
+              rawData = results.data;
+              headers = Object.keys(results.data[0]);
+              setupAppUI(filename);
+              showToast(`Loaded ${filename} with ${rawData.length} rows`, "success");
+            }
+          }
+        });
+      }
+
+      function setupAppUI(filename) {
+        // Update file indicators
+        document.getElementById('filename-label').innerText = filename;
+        document.getElementById('file-info').classList.remove('hidden');
+        document.getElementById('mapping-controls').classList.remove('opacity-50', 'pointer-events-none');
+        
+        // Enable visualization controls
+        populateSelectorOptions();
+        
+        // Auto select first field for X, and second for Y
+        if (headers.length >= 2) {
+          document.getElementById('select-x-axis').value = headers[0];
+          updateXTypeHint();
+          buildYAxisCheckboxes(headers[0]);
+          
+          // Preselect second field as initial Y series
+          const yCheckbox = document.getElementById(`chk-y-${headers[1]}`);
+          if (yCheckbox) yCheckbox.checked = true;
+        }
+        
+        // Setup initial table view
+        filteredDataForTable = [...rawData];
+        renderDataTable();
+
+        // Setup default style state
+        setChartType('line');
+
+        // Render Graph
+        updateChart();
+      }
+
+      function populateSelectorOptions() {
+        const xSelect = document.getElementById('select-x-axis');
+        xSelect.innerHTML = '';
+        
+        headers.forEach(h => {
+          const opt = document.createElement('option');
+          opt.value = h;
+          opt.innerText = h;
+          xSelect.appendChild(opt);
+        });
+      }
+
+      function updateXTypeHint() {
+        const xVal = document.getElementById('select-x-axis').value;
+        if (!xVal) return;
+
+        // Check type of X based on first few elements
+        const sample = rawData[0]?.[xVal];
+        const isNum = typeof sample === 'number';
+        const hint = document.getElementById('x-type-hint');
+        
+        hint.innerText = isNum ? 'Numerical field' : 'Categorical field';
+        
+        // Rebuild Y-Axis checkboxes (to omit current X-Axis column)
+        buildYAxisCheckboxes(xVal);
+      }
+
+      function buildYAxisCheckboxes(currentX) {
+        const container = document.getElementById('y-axis-container');
+        container.innerHTML = '';
+
+        headers.forEach(h => {
+          if (h === currentX) return; // Don't allow plotting the same as Y
+
+          // Determine if numerical
+          const isNum = rawData.some(row => typeof row[h] === 'number');
+          
+          const wrapper = document.createElement('label');
+          wrapper.className = "flex items-center justify-between p-1.5 hover:bg-slate-700/50 rounded cursor-pointer transition select-none text-xs text-slate-300";
+          wrapper.innerHTML = `
+            <div class="flex items-center gap-2">
+              <input type="checkbox" value="${h}" id="chk-y-${h}" onchange="updateChart()" class="rounded bg-slate-900 border-slate-700 text-brand-500 focus:ring-brand-500 h-3.5 w-3.5">
+              <span>${h}</span>
+            </div>
+            ${isNum ? '<span class="text-[9px] text-emerald-400 font-medium px-1 bg-emerald-400/10 rounded">NUM</span>' : '<span class="text-[9px] text-amber-400 font-medium px-1 bg-amber-400/10 rounded">TXT</span>'}
+          `;
+          container.appendChild(wrapper);
+        });
+      }
+
+      // Determine Selected Y Columns
+      function getSelectedYColumns() {
+        const boxes = document.querySelectorAll('#y-axis-container input[type="checkbox"]:checked');
+        return Array.from(boxes).map(b => b.value);
+      }
+
+      // Tab switcher logic
+      function switchTab(tabId) {
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+          btn.classList.remove('border-brand-500', 'text-brand-400');
+          btn.classList.add('border-transparent', 'text-slate-400');
+        });
+        document.querySelectorAll('.tab-content').forEach(content => {
+          content.classList.add('hidden');
+        });
+
+        // Set active style
+        const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+        activeBtn.classList.remove('border-transparent', 'text-slate-400');
+        activeBtn.classList.add('border-brand-500', 'text-brand-400');
+        
+        // Show active content
+        document.getElementById(`tab-content-${tabId}`).classList.remove('hidden');
+      }
+
+      // Chart config styling selection
+      function setChartType(type) {
+        currentChartType = type;
+        
+        document.querySelectorAll('.chart-type-btn').forEach(btn => {
+          btn.classList.remove('border-brand-500', 'bg-slate-800/80', 'ring-2', 'ring-brand-500/20');
+          btn.classList.add('border-slate-700/60', 'bg-slate-800');
+        });
+
+        const activeBtn = document.getElementById(`btn-chart-${type}`);
+        if (activeBtn) {
+          activeBtn.classList.remove('border-slate-700/60', 'bg-slate-800');
+          activeBtn.classList.add('border-brand-500', 'ring-2', 'ring-brand-500/20');
+        }
+
+        updateChart();
+      }
+
+      // Statistics Processing Layer
+      function processStats(yCols, processedData) {
+        const ribbon = document.getElementById('stats-ribbon');
+        ribbon.innerHTML = '';
+
+        if (!yCols.length || !processedData.length) return;
+
+        // Run calculations for the first selected Y series
+        const targetCol = yCols[0];
+        const values = processedData.map(d => d.yValues[targetCol]).filter(v => typeof v === 'number');
+
+        if (values.length === 0) return;
+
+        const sum = values.reduce((a, b) => a + b, 0);
+        const mean = sum / values.length;
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+
+        // Render Ribbon metrics with premium design tokens
+        const metrics = [
+          { label: 'Active Series', val: targetCol, color: 'text-brand-400', icon: 'activity' },
+          { label: 'Total Sum', val: sum.toLocaleString(undefined, { maximumFractionDigits: 1 }), color: 'text-indigo-400', icon: 'sigma' },
+          { label: 'Average (Mean)', val: mean.toLocaleString(undefined, { maximumFractionDigits: 1 }), color: 'text-emerald-400', icon: 'percent' },
+          { label: 'Data Range', val: `${min.toLocaleString()} - ${max.toLocaleString()}`, color: 'text-amber-400', icon: 'arrow-left-right' }
+        ];
+
+        metrics.forEach(m => {
+          const card = document.createElement('div');
+          card.className = "bg-slate-900/50 border border-slate-800 rounded-xl p-3 flex items-center justify-between";
+          card.innerHTML = `
+            <div>
+              <p class="text-[10px] text-slate-500 font-medium uppercase tracking-wider">${m.label}</p>
+              <h4 class="text-sm font-semibold mt-1 truncate max-w-[140px] ${m.color}">${m.val}</h4>
+            </div>
+            <div class="p-1.5 bg-slate-800/40 rounded-lg text-slate-500">
+              <i data-lucide="${m.icon}" class="w-3.5 h-3.5"></i>
+            </div>
+          `;
+          ribbon.appendChild(card);
+        });
+        lucide.createIcons();
+      }
+
+      // Chart Update Orchestrator
+      function updateChart() {
+        const xCol = document.getElementById('select-x-axis').value;
+        const yCols = getSelectedYColumns();
+        const aggMethod = document.getElementById('aggregation-method').value;
+        const sortOrder = document.getElementById('sort-order').value;
+        const themeKey = document.getElementById('chart-theme').value;
+
+        const placeholder = document.getElementById('graph-placeholder');
+        const container = document.getElementById('chart-container');
+        const pngBtn = document.getElementById('btn-export-png');
+        const csvBtn = document.getElementById('btn-export-csv');
+
+        if (!xCol || !yCols.length) {
+          placeholder.classList.remove('hidden');
+          container.classList.add('hidden');
+          pngBtn.classList.add('hidden');
+          csvBtn.classList.add('hidden');
+          return;
+        }
+
+        placeholder.classList.add('hidden');
+        container.classList.remove('hidden');
+        pngBtn.classList.remove('hidden');
+        csvBtn.classList.remove('hidden');
+
+        // Clean & Group Data
+        let aggregated = [];
+        if (aggMethod === 'none') {
+          aggregated = rawData.map(row => {
+            let yVals = {};
+            yCols.forEach(col => {
+              yVals[col] = Number(row[col]) || 0;
+            });
+            return { xVal: String(row[xCol] ?? ''), yValues: yVals };
+          });
+        } else {
+          // Object tracking groupings { xVal: { count, sum: {yCol: val}, min: {yCol: val}, max: {yCol: val} } }
+          const groups = {};
+          rawData.forEach(row => {
+            const xStr = String(row[xCol] ?? 'N/A');
+            if (!groups[xStr]) {
+              groups[xStr] = {
+                count: 0,
+                sums: {},
+                mins: {},
+                maxs: {}
+              };
+              yCols.forEach(col => {
+                groups[xStr].sums[col] = 0;
+                groups[xStr].mins[col] = Infinity;
+                groups[xStr].maxs[col] = -Infinity;
+              });
+            }
+
+            groups[xStr].count += 1;
+            yCols.forEach(col => {
+              const val = Number(row[col]) || 0;
+              groups[xStr].sums[col] += val;
+              if (val < groups[xStr].mins[col]) groups[xStr].mins[col] = val;
+              if (val > groups[xStr].maxs[col]) groups[xStr].maxs[col] = val;
+            });
+          });
+
+          // Convert grouped object to array
+          Object.keys(groups).forEach(xStr => {
+            const grp = groups[xStr];
+            let yVals = {};
+            
+            yCols.forEach(col => {
+              switch (aggMethod) {
+                case 'sum':
+                  yVals[col] = grp.sums[col];
+                  break;
+                case 'avg':
+                  yVals[col] = grp.sums[col] / grp.count;
+                  break;
+                case 'min':
+                  yVals[col] = grp.mins[col] === Infinity ? 0 : grp.mins[col];
+                  break;
+                case 'max':
+                  yVals[col] = grp.maxs[col] === -Infinity ? 0 : grp.maxs[col];
+                  break;
+                case 'count':
+                  yVals[col] = grp.count;
+                  break;
+              }
+            });
+
+            aggregated.push({ xVal: xStr, yValues: yVals });
+          });
+        }
+
+        // Apply Sorting
+        if (sortOrder !== 'original') {
+          aggregated.sort((a, b) => {
+            let compA, compB;
+            if (sortOrder.startsWith('x')) {
+              compA = a.xVal;
+              compB = b.xVal;
+              // Detect numeric sorting for X-Axis
+              const numA = Number(compA);
+              const numB = Number(compB);
+              if (!isNaN(numA) && !isNaN(numB)) {
+                return sortOrder === 'x-asc' ? numA - numB : numB - numA;
+              }
+            } else {
+              // Y-sorting behaves based on the first checked column
+              const target = yCols[0];
+              compA = a.yValues[target] || 0;
+              compB = b.yValues[target] || 0;
+            }
+
+            if (compA < compB) return sortOrder.endsWith('asc') ? -1 : 1;
+            if (compA > compB) return sortOrder.endsWith('asc') ? 1 : -1;
+            return 0;
+          });
+        }
+
+        // Generate statistics preview for first selected Y series
+        processStats(yCols, aggregated);
+
+        // ChartJS Structure Initialization
+        const theme = THEMES[themeKey] || THEMES.classic;
+        const labels = aggregated.map(item => item.xVal);
+        const datasets = yCols.map((col, index) => {
+          const colorBorder = theme.border[index % theme.border.length];
+          const colorBg = theme.bg[index % theme.bg.length];
+
+          const baseSet = {
+            label: col,
+            data: aggregated.map(item => item.yValues[col]),
+            backgroundColor: currentChartType === 'pie' || currentChartType === 'polarArea' ? theme.border : colorBg,
+            borderColor: currentChartType === 'pie' || currentChartType === 'polarArea' ? '#0f172a' : colorBorder,
+            borderWidth: 2,
+            tension: 0.35,
+            pointBackgroundColor: colorBorder,
+            pointBorderColor: '#090d16',
+            pointHoverRadius: 6,
+            pointRadius: 4,
+            fill: currentChartType === 'line' ? false : true,
+          };
+
+          return baseSet;
+        });
+
+        const ctx = document.getElementById('mainChart').getContext('2d');
+        if (chartInstance) {
+          chartInstance.destroy();
+        }
+
+        // Configure Chart options dynamically based on selection
+        chartInstance = new Chart(ctx, {
+          type: currentChartType,
+          data: {
+            labels: labels,
+            datasets: datasets
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'top',
+                labels: {
+                  color: '#94a3b8',
+                  font: { size: 11, weight: '500' },
+                  boxWidth: 12,
+                  boxHeight: 12,
+                  borderRadius: 3,
+                  useBorderRadius: true
+                }
+              },
+              tooltip: {
+                backgroundColor: '#0f172a',
+                titleColor: '#ffffff',
+                bodyColor: '#e2e8f0',
+                borderColor: '#334155',
+                borderWidth: 1,
+                padding: 12,
+                cornerRadius: 8,
+                titleFont: { size: 12, weight: 'bold' },
+                bodyFont: { size: 11 }
+              }
+            },
+            scales: (currentChartType === 'pie' || currentChartType === 'polarArea' || currentChartType === 'radar') ? {} : {
+              x: {
+                grid: { color: '#1e293b', drawBorder: false },
+                ticks: { color: '#64748b', font: { size: 10 } }
+              },
+              y: {
+                grid: { color: '#1e293b', drawBorder: false },
+                ticks: { color: '#64748b', font: { size: 10 } }
+              }
+            }
+          }
+        });
+      }
+
+      // Exports Layer
+      function exportChartAsImage() {
+        if (!chartInstance) return;
+        const link = document.createElement('a');
+        link.download = `graph_export_${Date.now()}.png`;
+        link.href = chartInstance.toBase64Image();
+        link.click();
+        showToast("Chart exported to PNG!", "success");
+      }
+
+      function exportProcessedCSV() {
+        const xCol = document.getElementById('select-x-axis').value;
+        const yCols = getSelectedYColumns();
+        if (!xCol || !yCols.length || !chartInstance) {
+          showToast("No active chart dataset to export.", "error");
+          return;
+        }
+
+        // Construct processed rows using parsed visual labels and dataset values
+        const exportHeaders = [xCol, ...yCols];
+        const rows = [exportHeaders.join(',')];
+        
+        const labels = chartInstance.data.labels;
+        labels.forEach((lbl, rIndex) => {
+          const rowVals = [lbl];
+          yCols.forEach((_, cIndex) => {
+            rowVals.push(chartInstance.data.datasets[cIndex].data[rIndex]);
+          });
+          rows.push(rowVals.join(','));
+        });
+
+        const csvContent = "data:text/csv;charset=utf-8," + rows.join("\n");
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `cleaned_csv_export_${Date.now()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast("Processed database exported to CSV!", "success");
+      }
+
+      // Tab 2 Parsed Data Table implementation
+      function renderDataTable() {
+        const placeholder = document.getElementById('table-placeholder');
+        const container = document.getElementById('table-container');
+
+        if (!rawData.length) {
+          placeholder.classList.remove('hidden');
+          container.classList.add('hidden');
+          return;
+        }
+
+        placeholder.classList.add('hidden');
+        container.classList.remove('hidden');
+
+        // Render Headers
+        const headerEl = document.getElementById('table-headers');
+        headerEl.innerHTML = '';
+        const tr = document.createElement('tr');
+        headers.forEach(h => {
+          const th = document.createElement('th');
+          th.className = "px-6 py-3 font-semibold text-xs tracking-wider uppercase border-b border-slate-800";
+          th.innerText = h;
+          tr.appendChild(th);
+        });
+        headerEl.appendChild(tr);
+
+        // Paginated Render Rows
+        updateTableRows();
+      }
+
+      function updateTableRows() {
+        const bodyEl = document.getElementById('table-body');
+        bodyEl.innerHTML = '';
+
+        const start = (tablePage - 1) * tableLimit;
+        const end = start + tableLimit;
+        const pageData = filteredDataForTable.slice(start, end);
+
+        pageData.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.className = "hover:bg-slate-900/50 transition-colors";
+          headers.forEach(h => {
+            const td = document.createElement('td');
+            td.className = "px-6 py-3 text-slate-300 font-medium truncate max-w-[180px]";
+            td.innerText = row[h] !== undefined ? row[h] : '';
+            tr.appendChild(td);
+          });
+          bodyEl.appendChild(tr);
+        });
+
+        // Update counts and page controls
+        document.getElementById('table-showing-count').innerText = pageData.length;
+        document.getElementById('table-total-count').innerText = filteredDataForTable.length;
+        
+        const totalPages = Math.ceil(filteredDataForTable.length / tableLimit) || 1;
+        document.getElementById('table-page-info').innerText = `Page ${tablePage} of ${totalPages}`;
+        
+        document.getElementById('btn-prev-page').disabled = tablePage === 1;
+        document.getElementById('btn-next-page').disabled = tablePage === totalPages;
+      }
+
+      function changePage(direction) {
+        tablePage += direction;
+        updateTableRows();
+      }
+
+      function handleTableSearch() {
+        const query = document.getElementById('table-search').value.toLowerCase().trim();
+        if (!query) {
+          filteredDataForTable = [...rawData];
+        } else {
+          filteredDataForTable = rawData.filter(row => {
+            return Object.values(row).some(val => String(val).toLowerCase().includes(query));
+          });
+        }
+        tablePage = 1;
+        updateTableRows();
+      }
+    </script>
+</body>
+</html>
