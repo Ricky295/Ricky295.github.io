@@ -450,7 +450,7 @@ function movePiece(dx,dy){
     cx+=dx; cy+=dy;
     if(dx<0){sfxMove();litBtn('left');}
     else if(dx>0){sfxMove();litBtn('right');}
-    else if(dy>0&&!autoplayMode){litBtn('down');}
+
     return true;
   }
   return false;
@@ -494,9 +494,11 @@ function doAI(){
     if(sc>best){best=sc;bRot=r;bX=x;}
   }
   // light up whichever buttons the AI "pressed"
-  if(bX<cx)      litBtn('left');
-  else if(bX>cx) litBtn('right');
-  if(bRot!==curRot) litBtn('rotate');
+  if(autoplayMode){
+    if(bX<cx)      litBtn('left');
+    else if(bX>cx) litBtn('right');
+    if(bRot!==curRot) litBtn('rotate');
+  }
   curRot=bRot; cx=bX;
 }
 
@@ -630,9 +632,11 @@ document.getElementById('val-next-level').textContent='';
 requestAnimationFrame(t=>mainLoop(t));
 
 // ── KEYBOARD ──────────────────────────────────────────────────────────────────
-let dasTimer=null,dasDir=0;
+let dasTimer=null,dasDir=0,dasDownTimer=null;
 function startDAS(dir){stopDAS();dasDir=dir;dasTimer=setTimeout(()=>{dasTimer=setInterval(()=>movePiece(dasDir,0),50);},180);}
 function stopDAS(){clearTimeout(dasTimer);clearInterval(dasTimer);dasTimer=null;}
+function startDAS_down(){stopDAS_down();dasDownTimer=setTimeout(()=>{dasDownTimer=setInterval(()=>movePiece(0,1),50);},180);}
+function stopDAS_down(){clearTimeout(dasDownTimer);clearInterval(dasDownTimer);dasDownTimer=null;}
 
 document.addEventListener('keydown',async e=>{
   resumeAC();
@@ -666,35 +670,38 @@ document.addEventListener('keydown',async e=>{
     if(!autoplayMode){
       if(k==='ArrowLeft'||k==='a'||k==='A'){movePiece(-1,0);startDAS(-1);}
       if(k==='ArrowRight'||k==='d'||k==='D'){movePiece(1,0);startDAS(1);}
-      if(k==='ArrowDown'||k==='s'||k==='S') movePiece(0,1);
+      if(k==='ArrowDown'||k==='s'||k==='S'){ movePiece(0,1); startDAS_down(); }
       if(k==='ArrowUp'||k==='w'||k==='W'||k===' ') rotatePiece();
     }
   }
 });
 document.addEventListener('keyup',e=>{
   if(['ArrowLeft','a','A','ArrowRight','d','D'].includes(e.key)) stopDAS();
+  if(['ArrowDown','s','S'].includes(e.key)) stopDAS_down();
 });
 
 // ── MOBILE BUTTON HANDLERS ────────────────────────────────────────────────────
-function bindBtn(id, action){
+function bindBtn(id, onStart, onEnd){
   const el=document.getElementById('btn-'+id);
-  // touchstart for instant response on mobile
-  el.addEventListener('touchstart', e=>{ e.preventDefault(); resumeAC(); action(); }, {passive:false});
-  el.addEventListener('mousedown',  e=>{ resumeAC(); action(); });
+  el.addEventListener('touchstart', e=>{ e.preventDefault(); resumeAC(); onStart(); }, {passive:false});
+  el.addEventListener('touchend',   e=>{ e.preventDefault(); onEnd&&onEnd(); },        {passive:false});
+  el.addEventListener('touchcancel',e=>{ e.preventDefault(); onEnd&&onEnd(); },        {passive:false});
+  el.addEventListener('mousedown',  e=>{ resumeAC(); onStart(); });
+  el.addEventListener('mouseup',    ()=>onEnd&&onEnd());
+  el.addEventListener('mouseleave', ()=>onEnd&&onEnd());
 }
 
-let downInterval=null;
-bindBtn('rotate', ()=>{ if(state===ST_GAME&&!autoplayMode) rotatePiece(); });
-bindBtn('left',   ()=>{ if(state===ST_GAME&&!autoplayMode){ movePiece(-1,0); startDAS(-1); } });
-bindBtn('right',  ()=>{ if(state===ST_GAME&&!autoplayMode){ movePiece(1,0);  startDAS(1);  } });
-bindBtn('down',   ()=>{ if(state===ST_GAME&&!autoplayMode) movePiece(0,1); });
-
-['btn-left','btn-right'].forEach(id=>{
-  const el=document.getElementById(id);
-  el.addEventListener('touchend',  ()=>stopDAS(), {passive:true});
-  el.addEventListener('mouseup',   ()=>stopDAS());
-  el.addEventListener('mouseleave',()=>stopDAS());
-});
+bindBtn('rotate',
+  ()=>{ if(state===ST_GAME&&!autoplayMode) rotatePiece(); });
+bindBtn('left',
+  ()=>{ if(state===ST_GAME&&!autoplayMode){ movePiece(-1,0); startDAS(-1); } },
+  ()=>stopDAS());
+bindBtn('right',
+  ()=>{ if(state===ST_GAME&&!autoplayMode){ movePiece(1,0); startDAS(1); } },
+  ()=>stopDAS());
+bindBtn('down',
+  ()=>{ if(state===ST_GAME&&!autoplayMode){ litBtn('down'); movePiece(0,1); startDAS_down(); } },
+  ()=>stopDAS_down());
 </script>
 </body>
 </html>
