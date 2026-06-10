@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2-Resistor Charger Calculator</title>
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #222;
+    --border: #2e2e2e;
+    --text: #e8e8e8;
+    --muted: #777;
+    --accent: #c8ff00;
+    --accent-dim: #8aaf00;
+    --mono: 'JetBrains Mono','Fira Mono','Courier New',monospace;
+    --sans: 'Inter',system-ui,sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.6; padding: 2rem 1rem; min-height: 100vh; }
+  .wrap { max-width: 740px; margin: 0 auto; }
+
+  header { margin-bottom: 2rem; border-left: 3px solid var(--accent); padding-left: 1rem; }
+  header h1 { font-size: 21px; font-weight: 600; letter-spacing: -0.3px; }
+  header p { font-size: 13px; color: var(--muted); margin-top: 3px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 1.2rem; }
+  .field label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 5px; font-family: var(--mono); }
+  .field input, .field select {
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 14px;
+    padding: 8px 10px; border-radius: 5px; outline: none; transition: border-color 0.15s;
+    appearance: none; -webkit-appearance: none;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field select { cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23777'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1.2rem; }
+
+  button { width: 100%; padding: 10px; background: var(--accent); color: #0f0f0f; font-family: var(--sans); font-size: 14px; font-weight: 600; border: none; border-radius: 5px; cursor: pointer; transition: background 0.12s, transform 0.08s; }
+  button:hover { background: #d6ff33; }
+  button:active { transform: scale(0.99); }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 1.6rem 0; }
+
+  .sec-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); font-family: var(--mono); margin-bottom: 10px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 1.4rem; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 13px 15px; }
+  .card .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; font-family: var(--mono); margin-bottom: 5px; }
+  .card .val { font-size: 20px; font-weight: 600; font-family: var(--mono); color: var(--accent); line-height: 1.2; }
+  .card .sub { font-size: 11px; color: var(--muted); margin-top: 3px; font-family: var(--mono); }
+  .card.dim .val { color: var(--accent-dim); }
+
+  table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+  thead tr { background: var(--surface2); }
+  th { padding: 8px 12px; text-align: right; font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
+  th:first-child { text-align: left; }
+  td { padding: 7px 12px; text-align: right; color: var(--text); border-top: 1px solid var(--border); }
+  td:first-child { text-align: left; color: var(--muted); }
+  tr.full td { color: var(--accent-dim); }
+
+  #results { display: none; }
+
+  footer { margin-top: 3rem; font-size: 11px; color: #383838; font-family: var(--mono); text-align: center; line-height: 1.8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>2-resistor charger calculator</h1>
+  <p>Thévenin voltage divider. No IC. Works with any CCCV chemistry.</p>
+</header>
+
+<div class="grid">
+  <div class="field">
+    <label>Source voltage (V)</label>
+    <input type="number" id="vIn" value="5.2" step="0.1" min="0.1">
+  </div>
+  <div class="field">
+    <label>Charge voltage (V)</label>
+    <input type="number" id="vCell" value="4.2" step="0.01" min="0.1">
+  </div>
+  <div class="field">
+    <label>Dead voltage (V)</label>
+    <input type="number" id="vDead" value="3.0" step="0.1" min="0.1">
+  </div>
+  <div class="field">
+    <label>Max current (mA)</label>
+    <input type="number" id="iMax" value="14.3" step="1" min="0.1">
+  </div>
+  <div class="field">
+    <label>Cell capacity (mAh)</label>
+    <input type="number" id="cap" value="40" step="1" min="1">
+  </div>
+</div>
+
+<div class="row2">
+  <div class="field">
+    <label>E-series (std resistors)</label>
+    <select id="eseries">
+      <option value="E6">E6</option>
+      <option value="E12">E12</option>
+      <option value="E24" selected>E24</option>
+      <option value="E48">E48</option>
+      <option value="E96">E96</option>
+      <option value="E192">E192</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Chemistry preset</label>
+    <select id="preset" onchange="applyPreset()">
+      <option value="">— custom —</option>
+      <option value="liion">Li-ion (4.2V / 3.0V)</option>
+      <option value="lipo_hv">Li-ion HV (4.35V / 3.0V)</option>
+      <option value="lifepo4">LiFePO4 (3.65V / 2.5V)</option>
+      <option value="lto">LTO (2.85V / 1.5V)</option>
+      <option value="nimh">NiMH (1.45V / 1.0V)</option>
+      <option value="nicd">NiCd (1.45V / 1.0V)</option>
+      <option value="lead">Lead-acid (2.45V / 1.75V)</option>
+    </select>
+  </div>
+</div>
+
+<button onclick="calculate()">Calculate</button>
+
+<div id="results">
+  <hr>
+  <p class="sec-label">Resistor values</p>
+  <div class="cards" id="rCards"></div>
+
+  <hr>
+  <p class="sec-label">Summary</p>
+  <div class="cards" id="sCards"></div>
+
+  <hr>
+  <p class="sec-label">Charging curve</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Pack V</th>
+        <th>Current (mA)</th>
+        <th>To pack (mW)</th>
+        <th>Wasted (mW)</th>
+        <th>η</th>
+      </tr>
+    </thead>
+    <tbody id="tBody"></tbody>
+  </table>
+</div>
+
+<footer>
+  R_th = (V_charge − V_dead) / I_max &nbsp;|&nbsp;
+  R1 = R_th × V_in / V_charge &nbsp;|&nbsp;
+  R2 = R_th × V_in / (V_in − V_charge)
+</footer>
+
+</div>
+<script>
+const SERIES = {
+  E6:  [1.0,1.5,2.2,3.3,4.7,6.8],
+  E12: [1.0,1.2,1.5,1.8,2.2,2.7,3.3,3.9,4.7,5.6,6.8,8.2],
+  E24: [1.0,1.1,1.2,1.3,1.5,1.6,1.8,2.0,2.2,2.4,2.7,3.0,3.3,3.6,3.9,4.3,4.7,5.1,5.6,6.2,6.8,7.5,8.2,9.1],
+  E48: [1.00,1.05,1.10,1.15,1.21,1.27,1.33,1.40,1.47,1.54,1.62,1.69,1.78,1.87,1.96,2.05,2.15,2.26,2.37,2.49,2.61,2.74,2.87,3.01,3.16,3.32,3.48,3.65,3.83,4.02,4.22,4.42,4.64,4.87,5.11,5.36,5.62,5.90,6.19,6.49,6.81,7.15,7.50,7.87,8.25,8.66,9.09,9.53],
+  E96: [1.00,1.02,1.05,1.07,1.10,1.13,1.15,1.18,1.21,1.24,1.27,1.30,1.33,1.37,1.40,1.43,1.47,1.50,1.54,1.58,1.62,1.65,1.69,1.74,1.78,1.82,1.87,1.91,1.96,2.00,2.05,2.10,2.15,2.21,2.26,2.32,2.37,2.43,2.49,2.55,2.61,2.67,2.74,2.80,2.87,2.94,3.01,3.09,3.16,3.24,3.32,3.40,3.48,3.57,3.65,3.74,3.83,3.92,4.02,4.12,4.22,4.32,4.42,4.53,4.64,4.75,4.87,4.99,5.11,5.23,5.36,5.49,5.62,5.76,5.90,6.04,6.19,6.34,6.49,6.65,6.81,6.98,7.15,7.32,7.50,7.68,7.87,8.06,8.25,8.45,8.66,8.87,9.09,9.31,9.53,9.76],
+  E192:[1.00,1.01,1.02,1.04,1.05,1.06,1.07,1.09,1.10,1.11,1.13,1.14,1.15,1.17,1.18,1.20,1.21,1.23,1.24,1.26,1.27,1.29,1.30,1.32,1.33,1.35,1.37,1.38,1.40,1.42,1.43,1.45,1.47,1.49,1.50,1.52,1.54,1.56,1.58,1.60,1.62,1.64,1.65,1.67,1.69,1.72,1.74,1.76,1.78,1.80,1.82,1.84,1.87,1.89,1.91,1.93,1.96,1.98,2.00,2.03,2.05,2.08,2.10,2.13,2.15,2.18,2.21,2.23,2.26,2.29,2.32,2.34,2.37,2.40,2.43,2.46,2.49,2.52,2.55,2.58,2.61,2.64,2.67,2.71,2.74,2.77,2.80,2.84,2.87,2.91,2.94,2.98,3.01,3.05,3.09,3.12,3.16,3.20,3.24,3.28,3.32,3.36,3.40,3.44,3.48,3.52,3.57,3.61,3.65,3.70,3.74,3.79,3.83,3.88,3.92,3.97,4.02,4.07,4.12,4.17,4.22,4.27,4.32,4.37,4.42,4.48,4.53,4.59,4.64,4.70,4.75,4.81,4.87,4.93,4.99,5.05,5.11,5.17,5.23,5.30,5.36,5.42,5.49,5.56,5.62,5.69,5.76,5.83,5.90,5.97,6.04,6.12,6.19,6.26,6.34,6.42,6.49,6.57,6.65,6.73,6.81,6.90,6.98,7.06,7.15,7.23,7.32,7.41,7.50,7.59,7.68,7.77,7.87,7.96,8.06,8.16,8.25,8.35,8.45,8.56,8.66,8.76,8.87,8.98,9.09,9.20,9.31,9.42,9.53,9.65,9.76,9.88]
+};
+
+const PRESETS = {
+  liion:    { vCell: 4.20, vDead: 3.0 },
+  lipo_hv:  { vCell: 4.35, vDead: 3.0 },
+  lifepo4:  { vCell: 3.65, vDead: 2.5 },
+  lto:      { vCell: 2.85, vDead: 1.5 },
+  nimh:     { vCell: 1.45, vDead: 1.0 },
+  nicd:     { vCell: 1.45, vDead: 1.0 },
+  lead:     { vCell: 2.45, vDead: 1.75 },
+};
+
+function applyPreset() {
+  const key = document.getElementById('preset').value;
+  if (!key) return;
+  const p = PRESETS[key];
+  document.getElementById('vCell').value = p.vCell;
+  document.getElementById('vDead').value = p.vDead;
+}
+
+function nearestE(r, seriesName) {
+  const base = SERIES[seriesName];
+  const decades = [0.001,0.01,0.1,1,10,100,1000,10000,100000];
+  let best = null, bestDiff = Infinity;
+  for (const d of decades) {
+    for (const v of base) {
+      const val = v * d;
+      const diff = Math.abs(val - r);
+      if (diff < bestDiff) { bestDiff = diff; best = val; }
+    }
+  }
+  return best;
+}
+
+function fmtW(w) {
+  if (w < 0.001) return (w * 1000000).toFixed(2) + ' µW';
+  if (w < 1) return (w * 1000).toFixed(1) + ' mW';
+  return w.toFixed(3) + ' W';
+}
+
+function fmtR(r) {
+  if (r >= 1e6) return (r/1e6).toPrecision(4) + ' MΩ';
+  if (r >= 1e3) return (r/1e3).toPrecision(4) + ' kΩ';
+  return r.toPrecision(4) + ' Ω';
+}
+
+function calculate() {
+  const V_in    = parseFloat(document.getElementById('vIn').value);
+  const V_charge = parseFloat(document.getElementById('vCell').value);
+  const V_dead   = parseFloat(document.getElementById('vDead').value);
+  const I_mA    = parseFloat(document.getElementById('iMax').value);
+  const cap     = parseFloat(document.getElementById('cap').value);
+  const serName = document.getElementById('eseries').value;
+
+  const I_max    = I_mA / 1000;
+
+  if (V_charge >= V_in) {
+    alert('Source voltage must exceed pack charge voltage (' + V_charge.toFixed(2) + ' V).');
+    return;
+  }
+
+  // Core math
+  const R_th = (V_charge - V_dead) / I_max;
+  const R1_exact = R_th * V_in / V_charge;
+  const R2_exact = R_th * V_in / (V_in - V_charge);
+
+  const R1_std = nearestE(R1_exact, serName);
+  const R2_std = nearestE(R2_exact, serName);
+
+  // Recalculate actual V_th and R_th from std values
+  const V_th_act = V_in * R2_std / (R1_std + R2_std);
+  const R_th_act = (R1_std * R2_std) / (R1_std + R2_std);
+  const I_act_mA = (V_th_act - V_dead) / R_th_act * 1000;
+
+  const P_R1 = Math.pow(V_in - V_th_act, 2) / R1_std;
+  const P_R2 = Math.pow(V_th_act, 2) / R2_std;
+
+  const err1 = (R1_std - R1_exact) / R1_exact * 100;
+  const err2 = (R2_std - R2_exact) / R2_exact * 100;
+  const vErr = (V_th_act - V_charge) / V_charge * 100;
+
+  // Resistor cards
+  const rCards = document.getElementById('rCards');
+  rCards.innerHTML = `
+    <div class="card">
+      <div class="lbl">R1 — top</div>
+      <div class="val">${fmtR(R1_std)}</div>
+      <div class="sub">exact: ${fmtR(R1_exact)}</div>
+      <div class="sub">err: ${err1 >= 0 ? '+' : ''}${err1.toFixed(1)}% &nbsp;|&nbsp; ${fmtW(P_R1)} max</div>
+    </div>
+    <div class="card">
+      <div class="lbl">R2 — bottom</div>
+      <div class="val">${fmtR(R2_std)}</div>
+      <div class="sub">exact: ${fmtR(R2_exact)}</div>
+      <div class="sub">err: ${err2 >= 0 ? '+' : ''}${err2.toFixed(1)}% &nbsp;|&nbsp; ${fmtW(P_R2)} max</div>
+    </div>
+  `;
+
+  // Summary cards
+  const C_rate = I_act_mA / cap;
+  const est_h  = (cap / I_act_mA) * 2.5;
+  document.getElementById('sCards').innerHTML = `
+    <div class="card">
+      <div class="lbl">Open-circuit V</div>
+      <div class="val">${V_th_act.toFixed(3)} V</div>
+      <div class="sub">${vErr >= 0 ? '+' : ''}${vErr.toFixed(2)}% vs target</div>
+    </div>
+    <div class="card">
+      <div class="lbl">Initial current</div>
+      <div class="val">${I_act_mA.toFixed(1)} mA</div>
+      <div class="sub">at ${V_dead.toFixed(2)} V pack</div>
+    </div>
+    <div class="card">
+      <div class="lbl">Initial C-rate</div>
+      <div class="val">C/${(1/C_rate).toFixed(1)}</div>
+      <div class="sub">${cap} mAh</div>
+    </div>
+    <div class="card dim">
+      <div class="lbl">Est. charge time</div>
+      <div class="val">${est_h.toFixed(1)} h</div>
+      <div class="sub">tapered trickle</div>
+    </div>
+  `;
+
+  // Charging curve table
+  const steps = [];
+  for (let v = V_dead; v <= V_th_act + 0.001; v = parseFloat((v + (V_th_act - V_dead)/12).toFixed(4))) {
+    steps.push(Math.min(v, V_th_act));
+  }
+  if (steps[steps.length-1] < V_th_act) steps.push(V_th_act);
+
+  const tbody = document.getElementById('tBody');
+  tbody.innerHTML = '';
+  steps.forEach(V_bat => {
+    const I = Math.max(0, (V_th_act - V_bat) / R_th_act * 1000);
+    const P_cell = V_bat * I;
+    const P_in   = V_in * I;
+    const P_waste = P_in - P_cell;
+    const eff = P_in > 0 ? (P_cell / P_in * 100) : 100;
+    const tr = document.createElement('tr');
+    if (V_bat >= V_th_act - 0.001) tr.className = 'full';
+    tr.innerHTML = `<td>${V_bat.toFixed(3)} V</td><td>${I.toFixed(2)}</td><td>${P_cell.toFixed(1)}</td><td>${Math.max(0,P_waste).toFixed(1)}</td><td>${eff.toFixed(0)}%</td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('results').style.display = 'block';
+}
+
+calculate();
+</script>
+</body>
+</html>
