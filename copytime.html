@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CopyTime — Custom Time Visualizer & Formatter</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0b0f19;
+        }
+        .font-mono-custom {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #111827;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+    </style>
+</head>
+<body class="text-gray-100 min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+
+    <!-- Header -->
+    <header class="border-b border-gray-800 bg-gray-950/50 backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600/20 p-2 rounded-xl border border-indigo-500/30 text-indigo-400">
+                    <i data-lucide="clock" class="w-6 h-6 animate-pulse"></i>
+                </div>
+                <div>
+                    <span class="font-extrabold text-xl bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">CopyTime</span>
+                    <span class="text-xs text-gray-400 ml-2 border border-gray-800 px-1.5 py-0.5 rounded-md font-mono-custom">v1.2.0</span>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <a href="#guide" class="text-sm text-gray-400 hover:text-white transition flex items-center gap-1.5">
+                    <i data-lucide="help-circle" class="w-4 h-4"></i>
+                    Guide
+                </a>
+                <span class="h-4 w-[1px] bg-gray-800"></span>
+                <div class="text-xs text-indigo-400 font-mono-custom bg-indigo-950/30 px-3 py-1.5 rounded-full border border-indigo-900/40 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                    Live Format Sync
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        <!-- Left Column: Display, Input, Actions, Presets (8 Columns) -->
+        <section class="lg:col-span-7 space-y-6 flex flex-col justify-start">
+            
+            <!-- Live Visualization Card -->
+            <div class="bg-gradient-to-br from-gray-900 to-gray-950 border border-gray-800 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden group">
+                <div class="absolute inset-0 bg-gradient-to-tr from-indigo-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+                
+                <div class="relative flex justify-between items-start mb-6">
+                    <span class="text-xs font-semibold tracking-wider text-gray-400 uppercase">Live Output Preview</span>
+                    <span id="formatStatus" class="text-xs text-emerald-400 font-mono-custom flex items-center gap-1">
+                        <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Valid syntax
+                    </span>
+                </div>
+                
+                <!-- Large Display Display -->
+                <div class="relative min-h-[140px] flex items-center justify-center bg-gray-950/80 border border-gray-800/80 rounded-2xl px-4 py-8 overflow-x-auto">
+                    <span id="formattedOutput" class="font-mono-custom text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-center whitespace-nowrap bg-gradient-to-r from-white via-indigo-100 to-gray-300 bg-clip-text text-transparent px-4">
+                        --:----
+                    </span>
+                </div>
+
+                <!-- Custom copy shortcut -->
+                <div class="mt-6 flex flex-col sm:flex-row gap-3">
+                    <button id="btnCopy" class="flex-grow flex items-center justify-center gap-2 px-6 py-4 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-medium rounded-2xl transition duration-200 shadow-lg shadow-indigo-600/20">
+                        <i data-lucide="copy" class="w-5 h-5"></i>
+                        Copy Formatted Time
+                    </button>
+                    <button id="btnCopyFormat" class="flex-none flex items-center justify-center gap-2 px-6 py-4 bg-gray-800 hover:bg-gray-750 active:scale-[0.98] text-gray-200 font-medium rounded-2xl border border-gray-700/60 transition duration-200">
+                        <i data-lucide="code" class="w-5 h-5"></i>
+                        Copy Syntax Format
+                    </button>
+                </div>
+            </div>
+
+            <!-- Input Controls Card -->
+            <div class="bg-gray-900/60 border border-gray-850 rounded-3xl p-6 space-y-6 backdrop-blur-sm">
+                <div>
+                    <label for="formatInput" class="block text-sm font-semibold text-gray-300 mb-2 flex justify-between">
+                        <span>Time Format Template String</span>
+                        <span class="text-xs text-gray-500 normal-case">Type plain text or standard % variables</span>
+                    </label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-indigo-400">
+                            <i data-lucide="hash" class="w-5 h-5"></i>
+                        </div>
+                        <input type="text" id="formatInput" value="%H:%M:%S" 
+                               class="w-full pl-11 pr-12 py-4 bg-gray-950 text-white font-mono-custom rounded-2xl border border-gray-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition text-lg tracking-wide shadow-inner" 
+                               placeholder="e.g. %Y-%m-%d %H:%M:%S" autocomplete="off" spellcheck="false" />
+                        <button id="btnClearInput" class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-300 transition" title="Clear input">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live Feed info & Stats -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-gray-950/40 p-3 rounded-xl border border-gray-850">
+                        <span class="block text-[10px] text-gray-500 uppercase font-semibold">Local Timezone</span>
+                        <span id="timezoneLabel" class="text-sm font-medium text-gray-300 font-mono-custom truncate block">UTC</span>
+                    </div>
+                    <div class="bg-gray-950/40 p-3 rounded-xl border border-gray-850">
+                        <span class="block text-[10px] text-gray-500 uppercase font-semibold">Time Offset</span>
+                        <span id="offsetLabel" class="text-sm font-medium text-gray-300 font-mono-custom truncate block">+00:00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Presets Grid -->
+            <div class="space-y-3">
+                <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Quick Presets</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    
+                    <button class="preset-btn flex items-center justify-between p-3.5 bg-gray-900/40 hover:bg-gray-800/50 border border-gray-800 hover:border-indigo-500/40 rounded-2xl text-left transition duration-150" data-format="%H:%M:%S">
+                        <div>
+                            <span class="block text-xs text-gray-400 font-medium">Standard Time (24h)</span>
+                            <span class="font-mono-custom text-sm text-indigo-300">%H:%M:%S</span>
+                        </div>
+                        <i data-lucide="arrow-right" class="w-4 h-4 text-gray-500"></i>
+                    </button>
+
+                    <button class="preset-btn flex items-center justify-between p-3.5 bg-gray-900/40 hover:bg-gray-800/50 border border-gray-800 hover:border-indigo-500/40 rounded-2xl text-left transition duration-150" data-format="%I:%M:%S %p">
+                        <div>
+                            <span class="block text-xs text-gray-400 font-medium">Casual Time (12h)</span>
+                            <span class="font-mono-custom text-sm text-indigo-300">%I:%M:%S %p</span>
+                        </div>
+                        <i data-lucide="arrow-right" class="w-4 h-4 text-gray-500"></i>
+                    </button>
+
+                    <button class="preset-btn flex items-center justify-between p-3.5 bg-gray-900/40 hover:bg-gray-800/50 border border-gray-800 hover:border-indigo-500/40 rounded-2xl text-left transition duration-150" data-format="%Y-%m-%dT%H:%M:%S%z">
+                        <div>
+                            <span class="block text-xs text-gray-400 font-medium">ISO 8601 Timestamp</span>
+                            <span class="font-mono-custom text-sm text-indigo-300">%Y-%m-%dT%H:%M:%S%z</span>
+                        </div>
+                        <i data-lucide="arrow-right" class="w-4 h-4 text-gray-500"></i>
+                    </button>
+
+                    <button class="preset-btn flex items-center justify-between p-3.5 bg-gray-900/40 hover:bg-gray-800/50 border border-gray-800 hover:border-indigo-500/40 rounded-2xl text-left transition duration-150" data-format="%A, %B %d, %Y (%I:%M %p)">
+                        <div>
+                            <span class="block text-xs text-gray-400 font-medium">Full Calendar Date</span>
+                            <span class="font-mono-custom text-sm text-indigo-300">Detailed Format</span>
+                        </div>
+                        <i data-lucide="arrow-right" class="w-4 h-4 text-gray-500"></i>
+                    </button>
+
+                    <button class="preset-btn flex items-center justify-between p-3.5 bg-gray-900/40 hover:bg-gray-800/50 border border-gray-800 hover:border-indigo-500/40 rounded-2xl text-left transition duration-150" data-format="Today is %A, week %W of %Y">
+                        <div>
+                            <span class="block text-xs text-gray-400 font-medium">Verbose Info</span>
+                            <span class="font-mono-custom text-sm text-indigo-300">Custom Prose Style</span>
+                        </div>
+                        <i data-lucide="arrow-right" class="w-4 h-4 text-gray-500"></i>
+                    </button>
+
+                    <button class="preset-btn flex items-center justify-between p-3.5 bg-gray-900/40 hover:bg-gray-800/50 border border-gray-800 hover:border-indigo-500/40 rounded-2xl text-left transition duration-150" data-format="UNIX: %s (ms: %Q)">
+                        <div>
+                            <span class="block text-xs text-gray-400 font-medium">Epoch / Developers</span>
+                            <span class="font-mono-custom text-sm text-indigo-300">Seconds & Milliseconds</span>
+                        </div>
+                        <i data-lucide="arrow-right" class="w-4 h-4 text-gray-500"></i>
+                    </button>
+
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Right Column: Interactive Variables Cheat Sheet (5 Columns) -->
+        <section id="guide" class="lg:col-span-5 space-y-6">
+            
+            <div class="bg-gray-900/60 border border-gray-850 rounded-3xl p-6 backdrop-blur-sm h-full flex flex-col">
+                <div class="mb-5">
+                    <h2 class="text-lg font-bold text-gray-200 flex items-center gap-2">
+                        <i data-lucide="book-open" class="text-indigo-400 w-5 h-5"></i>
+                        Variables Guide
+                    </h2>
+                    <p class="text-xs text-gray-400 mt-1">
+                        Click on any token code to insert it directly into your active formatting pattern at your cursor position.
+                    </p>
+                </div>
+
+                <!-- Local Search within variables -->
+                <div class="relative mb-4">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-500">
+                        <i data-lucide="search" class="w-4 h-4"></i>
+                    </span>
+                    <input type="text" id="guideSearch" placeholder="Search variables (e.g. Month, hour)..." 
+                           class="w-full bg-gray-950 pl-10 pr-4 py-2.5 rounded-xl border border-gray-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 outline-none text-sm transition text-gray-200" />
+                </div>
+
+                <!-- Tabs/Category Filters -->
+                <div class="flex gap-2 mb-4 overflow-x-auto pb-1 text-xs">
+                    <button class="tab-btn active bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 px-3 py-1.5 rounded-lg whitespace-nowrap font-medium transition" data-category="all">All</button>
+                    <button class="tab-btn bg-gray-950 text-gray-400 hover:text-white border border-gray-800 px-3 py-1.5 rounded-lg whitespace-nowrap font-medium transition" data-category="time">Time</button>
+                    <button class="tab-btn bg-gray-950 text-gray-400 hover:text-white border border-gray-800 px-3 py-1.5 rounded-lg whitespace-nowrap font-medium transition" data-category="date">Date</button>
+                    <button class="tab-btn bg-gray-950 text-gray-400 hover:text-white border border-gray-800 px-3 py-1.5 rounded-lg whitespace-nowrap font-medium transition" data-category="epoch">Epoch/System</button>
+                </div>
+
+                <!-- Guide Token Box -->
+                <div class="flex-grow overflow-y-auto max-h-[480px] lg:max-h-[520px] pr-1 space-y-2.5" id="variablesContainer">
+                    <!-- Javascript dynamically renders this list -->
+                </div>
+                
+                <div class="mt-4 pt-4 border-t border-gray-800/60 text-center text-xs text-gray-500 flex justify-between items-center">
+                    <span>Tip: Standard characters are rendered as-is.</span>
+                    <button id="btnResetGuide" class="text-indigo-400 hover:text-indigo-300 transition flex items-center gap-1">
+                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Clear search
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-gray-900 bg-gray-950/60 py-6 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500 gap-4">
+            <div class="flex items-center gap-2">
+                <i data-lucide="clock" class="w-4 h-4 text-indigo-500"></i>
+                <span>&copy; 2026 CopyTime Utility. Custom Time format visualizer.</span>
+            </div>
+            <div class="flex space-x-6">
+                <span class="hover:text-gray-300 cursor-default">Privacy-first (Zero data leaves your browser)</span>
+                <span>•</span>
+                <span class="hover:text-gray-300 cursor-default">Milliseconds Resolution</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Global Toast notification -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 pointer-events-none transition-all duration-300 flex items-center gap-3 bg-gray-900 border border-indigo-500/40 text-indigo-100 px-5 py-3.5 rounded-2xl shadow-2xl">
+        <div class="bg-indigo-600/20 p-1.5 rounded-lg border border-indigo-500/30 text-indigo-400">
+            <i data-lucide="clipboard-check" class="w-5 h-5"></i>
+        </div>
+        <div>
+            <span class="block text-sm font-semibold text-white" id="toastTitle">Copied!</span>
+            <span class="block text-xs text-gray-400" id="toastMessage">Your time value was added to the clipboard.</span>
+        </div>
+    </div>
+
+    <!-- Script Area containing logical components -->
+    <script>
+        // Database of variables
+        const variablesData = [
+            // Time items
+            { code: '%H', category: 'time', desc: 'Hour in 24-hour format', example: '14', detail: '00 to 23' },
+            { code: '%I', category: 'time', desc: 'Hour in 12-hour format', example: '02', detail: '01 to 12' },
+            { code: '%k', category: 'time', desc: 'Hour in 24-hour space-padded', example: ' 2', detail: ' 0 to 23' },
+            { code: '%l', category: 'time', desc: 'Hour in 12-hour space-padded', example: ' 9', detail: ' 1 to 12' },
+            { code: '%M', category: 'time', desc: 'Minute with leading zero', example: '05', detail: '00 to 59' },
+            { code: '%S', category: 'time', desc: 'Second with leading zero', example: '39', detail: '00 to 59' },
+            { code: '%L', category: 'time', desc: 'Millisecond padding', example: '074', detail: '000 to 999' },
+            { code: '%p', category: 'time', desc: 'AM / PM indicator (Upper)', example: 'PM', detail: 'AM or PM' },
+            { code: '%P', category: 'time', desc: 'am / pm indicator (Lower)', example: 'pm', detail: 'am or pm' },
+            
+            // Date items
+            { code: '%Y', category: 'date', desc: 'Full Year four-digits', example: '2026', detail: 'e.g. 2026' },
+            { code: '%y', category: 'date', desc: 'Short two-digit Year', example: '26', detail: 'e.g. 26' },
+            { code: '%m', category: 'date', desc: 'Month number with leading zero', example: '06', detail: '01 to 12' },
+            { code: '%B', category: 'date', desc: 'Full Month Name string', example: 'June', detail: 'e.g. September' },
+            { code: '%b', category: 'date', desc: 'Short Month Name abbreviation', example: 'Jun', detail: 'e.g. Sep' },
+            { code: '%d', category: 'date', desc: 'Day of the month (leading zero)', example: '22', detail: '01 to 31' },
+            { code: '%e', category: 'date', desc: 'Day of month (space padded)', example: ' 8', detail: ' 1 to 31' },
+            { code: '%A', category: 'date', desc: 'Full Weekday Name string', example: 'Monday', detail: 'e.g. Sunday' },
+            { code: '%a', category: 'date', desc: 'Short Weekday Name abbreviation', example: 'Mon', detail: 'e.g. Sun' },
+            { code: '%W', category: 'date', desc: 'Week number of year', example: '25', detail: '00 to 53 (Starts Mon)' },
+            
+            // System and Offset items
+            { code: '%s', category: 'epoch', desc: 'Unix Epoch Timestamp seconds', example: '1782161499', detail: 'Seconds elapsed since Jan 1 1970' },
+            { code: '%Q', category: 'epoch', desc: 'Unix Epoch Milliseconds', example: '1782161499000', detail: 'Useful for raw Javascript values' },
+            { code: '%z', category: 'epoch', desc: 'Timezone ISO 8601 offset', example: '+0200', detail: 'e.g. +0530, -0800' },
+            { code: '%Z', category: 'epoch', desc: 'Timezone Alphabetical Code', example: 'CEST', detail: 'e.g. EST, UTC, GMT' },
+        ];
+
+        // Core variables
+        let selectedCategory = 'all';
+        let searchQuery = '';
+
+        // DOM elements
+        const formatInput = document.getElementById('formatInput');
+        const formattedOutput = document.getElementById('formattedOutput');
+        const formatStatus = document.getElementById('formatStatus');
+        const variablesContainer = document.getElementById('variablesContainer');
+        const guideSearch = document.getElementById('guideSearch');
+        const toastElement = document.getElementById('toast');
+        const toastTitle = document.getElementById('toastTitle');
+        const toastMessage = document.getElementById('toastMessage');
+        const clearBtn = document.getElementById('btnClearInput');
+        const timezoneLabel = document.getElementById('timezoneLabel');
+        const offsetLabel = document.getElementById('offsetLabel');
+        
+        // Setup initial static indicators
+        try {
+            const tempDate = new Date();
+            const timeZoneString = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            timezoneLabel.textContent = timeZoneString || 'UTC';
+            
+            // Offset logic
+            const offsetMin = -tempDate.getTimezoneOffset();
+            const sign = offsetMin >= 0 ? '+' : '-';
+            const absOffset = Math.abs(offsetMin);
+            const hours = String(Math.floor(absOffset / 60)).padStart(2, '0');
+            const mins = String(absOffset % 60).padStart(2, '0');
+            offsetLabel.textContent = `${sign}${hours}:${mins}`;
+        } catch(e) {
+            console.error("Error setting timezone static data:", e);
+        }
+
+        // Custom Strftime parsing logic
+        function formatTime(date, formatStr) {
+            if (!formatStr) return '';
+            
+            // Build the dynamic variable values map
+            const hours24 = date.getHours();
+            const hours12 = hours24 % 12 || 12;
+            const minutes = date.getMinutes();
+            const seconds = date.getSeconds();
+            const ms = date.getMilliseconds();
+            
+            const monthNamesFull = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const weekdayNamesFull = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            const weekdayNamesShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            
+            // Calculate ISO Week Number
+            const getWeekNumber = (d) => {
+                const target = new Date(d.valueOf());
+                const dayNr = (d.getDay() + 6) % 7;
+                target.setDate(target.getDate() - dayNr + 3);
+                const firstThursday = target.valueOf();
+                target.setMonth(0, 1);
+                if (target.getDay() !== 4) {
+                    target.setMonth(0, 1 + ((4 - target.getDay() + 7) % 7));
+                }
+                return 1 + Math.ceil((firstThursday - target) / 604800000);
+            };
+
+            // Calculate timezone offset
+            const offsetMin = -date.getTimezoneOffset();
+            const offsetSign = offsetMin >= 0 ? '+' : '-';
+            const absOffset = Math.abs(offsetMin);
+            const offsetHours = String(Math.floor(absOffset / 60)).padStart(2, '0');
+            const offsetMins = String(absOffset % 60).padStart(2, '0');
+            const formattedOffset = `${offsetSign}${offsetHours}${offsetMins}`;
+
+            // Parse short Timezone Code
+            let tzCode = 'UTC';
+            try {
+                const match = date.toString().match(/\(([^)]+)\)$/) || date.toTimeString().match(/([A-Z]{3,4})/);
+                if (match) tzCode = match[1];
+            } catch(e) {}
+
+            const tokens = {
+                '%H': String(hours24).padStart(2, '0'),
+                '%I': String(hours12).padStart(2, '0'),
+                '%k': String(hours24).padStart(2, ' '),
+                '%l': String(hours12).padStart(2, ' '),
+                '%M': String(minutes).padStart(2, '0'),
+                '%S': String(seconds).padStart(2, '0'),
+                '%L': String(ms).padStart(3, '0'),
+                '%p': hours24 >= 12 ? 'PM' : 'AM',
+                '%P': hours24 >= 12 ? 'pm' : 'am',
+                '%Y': String(date.getFullYear()),
+                '%y': String(date.getFullYear()).slice(-2),
+                '%m': String(date.getMonth() + 1).padStart(2, '0'),
+                '%B': monthNamesFull[date.getMonth()],
+                '%b': monthNamesShort[date.getMonth()],
+                '%d': String(date.getDate()).padStart(2, '0'),
+                '%e': String(date.getDate()).padStart(2, ' '),
+                '%A': weekdayNamesFull[date.getDay()],
+                '%a': weekdayNamesShort[date.getDay()],
+                '%W': String(getWeekNumber(date)).padStart(2, '0'),
+                '%s': String(Math.floor(date.getTime() / 1000)),
+                '%Q': String(date.getTime()),
+                '%z': formattedOffset,
+                '%Z': tzCode
+            };
+
+            // Safe replacement algorithm preventing collisions
+            let result = formatStr;
+            const sortedTokens = Object.keys(tokens).sort((a, b) => b.length - a.length);
+            
+            // Run replacement on format tokens
+            sortedTokens.forEach(token => {
+                // Use standard global replaces
+                result = result.split(token).join(tokens[token]);
+            });
+
+            return result;
+        }
+
+        // Trigger updates
+        function updateDisplay() {
+            const format = formatInput.value;
+            const now = new Date();
+            
+            // Set dynamic formatted output
+            const output = formatTime(now, format);
+            
+            // Handle edge empty case
+            if (format.trim() === '') {
+                formattedOutput.textContent = '(Empty format text)';
+                formattedOutput.classList.add('text-gray-600');
+                formattedOutput.classList.remove('bg-gradient-to-r');
+                formatStatus.innerHTML = `<span class="text-amber-400 font-mono-custom flex items-center gap-1"><i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> Empty Format</span>`;
+            } else {
+                formattedOutput.textContent = output;
+                formattedOutput.classList.remove('text-gray-600');
+                formattedOutput.classList.add('bg-gradient-to-r');
+                formatStatus.innerHTML = `<span class="text-emerald-400 font-mono-custom flex items-center gap-1"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Live Synced</span>`;
+            }
+            lucide.createIcons();
+        }
+
+        // Render the Interactive Guide Row items
+        function renderGuide() {
+            variablesContainer.innerHTML = '';
+            
+            const filtered = variablesData.filter(item => {
+                // Category validation
+                if (selectedCategory !== 'all' && item.category !== selectedCategory) {
+                    return false;
+                }
+                // Search query validation
+                if (searchQuery) {
+                    const normSearch = searchQuery.toLowerCase();
+                    return item.code.toLowerCase().includes(normSearch) || 
+                           item.desc.toLowerCase().includes(normSearch) || 
+                           item.example.toLowerCase().includes(normSearch);
+                }
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                variablesContainer.innerHTML = `
+                    <div class="p-8 text-center border border-dashed border-gray-800 rounded-2xl">
+                        <i data-lucide="search-code" class="w-8 h-8 mx-auto text-gray-600 mb-2"></i>
+                        <span class="block text-gray-400 text-sm font-semibold">No tokens match criteria</span>
+                        <span class="block text-gray-500 text-xs mt-1">Try resetting filters or clear search</span>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            filtered.forEach(item => {
+                const element = document.createElement('div');
+                element.className = 'group/item flex items-center justify-between p-3 bg-gray-950/70 hover:bg-gray-900 border border-gray-850 hover:border-indigo-500/30 rounded-2xl cursor-pointer transition duration-150';
+                
+                // Add click behavior to append item code to input field
+                element.addEventListener('click', () => {
+                    injectTokenAtCursor(item.code);
+                });
+
+                element.innerHTML = `
+                    <div class="flex items-center space-x-3 min-w-0">
+                        <div class="bg-indigo-950/50 group-hover/item:bg-indigo-600 text-indigo-400 group-hover/item:text-white font-mono-custom font-extrabold text-sm px-3 py-1.5 rounded-xl border border-indigo-900/50 group-hover/item:border-indigo-500 transition duration-150">
+                            ${item.code}
+                        </div>
+                        <div class="min-w-0">
+                            <span class="block text-xs font-semibold text-gray-300 group-hover/item:text-white transition truncate">${item.desc}</span>
+                            <span class="block text-[10px] text-gray-500 font-mono-custom truncate">Range: ${item.detail}</span>
+                        </div>
+                    </div>
+                    <div class="text-right flex items-center gap-2">
+                        <div class="hidden sm:block">
+                            <span class="block text-[10px] text-gray-500 font-semibold uppercase tracking-wider">Preview</span>
+                            <span class="font-mono-custom text-xs text-indigo-300">${item.example}</span>
+                        </div>
+                        <span class="p-1 rounded-lg bg-gray-900 group-hover/item:bg-indigo-600/20 text-gray-600 group-hover/item:text-indigo-400 transition">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                        </span>
+                    </div>
+                `;
+                variablesContainer.appendChild(element);
+            });
+            lucide.createIcons();
+        }
+
+        // Smart Cursor Insertion helper
+        function injectTokenAtCursor(token) {
+            const startPos = formatInput.selectionStart;
+            const endPos = formatInput.selectionEnd;
+            const textValue = formatInput.value;
+            
+            formatInput.value = textValue.substring(0, startPos) + token + textValue.substring(endPos, textValue.length);
+            
+            // Restore and update selection position to end of new token
+            const cursorTarget = startPos + token.length;
+            formatInput.focus();
+            formatInput.setSelectionRange(cursorTarget, cursorTarget);
+            
+            // Trigger dynamic sync updates
+            updateDisplay();
+            showToast("Variable Inserted!", `Successfully added ${token} to layout string.`);
+        }
+
+        // Show standard Toast alerts
+        let toastTimeout;
+        function showToast(title, message) {
+            clearTimeout(toastTimeout);
+            toastTitle.textContent = title;
+            toastMessage.textContent = message;
+            
+            toastElement.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+            toastElement.classList.add('translate-y-0', 'opacity-100');
+            
+            toastTimeout = setTimeout(() => {
+                toastElement.classList.remove('translate-y-0', 'opacity-100');
+                toastElement.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+            }, 3000);
+        }
+
+        // Generic Clip copy function (compatible with nested inside sandboxes)
+        function copyTextToClipboard(text, successTitle = "Copied!", successMsg = "Text added to clip.") {
+            if (!text) return;
+            
+            // Primary standard API
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast(successTitle, successMsg);
+                }).catch(() => {
+                    fallbackCopy(text, successTitle, successMsg);
+                });
+            } else {
+                fallbackCopy(text, successTitle, successMsg);
+            }
+        }
+
+        // Legacy fallback copy mechanism
+        function fallbackCopy(text, successTitle, successMsg) {
+            const tempArea = document.createElement("textarea");
+            tempArea.value = text;
+            tempArea.style.top = "0";
+            tempArea.style.left = "0";
+            tempArea.style.position = "fixed";
+            tempArea.style.opacity = "0";
+            document.body.appendChild(tempArea);
+            tempArea.focus();
+            tempArea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showToast(successTitle, successMsg);
+                } else {
+                    showToast("Copy failed", "Please copy the output text manually.");
+                }
+            } catch (err) {
+                showToast("Copy failed", "Standard copying unsupported in browser config.");
+            }
+            document.body.removeChild(tempArea);
+        }
+
+        // Category Tab switching functionality
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                tabButtons.forEach(b => {
+                    b.classList.remove('active', 'bg-indigo-600/20', 'text-indigo-300', 'border-indigo-500/30');
+                    b.classList.add('bg-gray-950', 'text-gray-400', 'border-gray-800');
+                });
+                
+                btn.classList.add('active', 'bg-indigo-600/20', 'text-indigo-300', 'border-indigo-500/30');
+                btn.classList.remove('bg-gray-950', 'text-gray-400', 'border-gray-800');
+                
+                selectedCategory = btn.getAttribute('data-category');
+                renderGuide();
+            });
+        });
+
+        // Search variables behavior
+        guideSearch.addEventListener('input', (e) => {
+            searchQuery = e.target.value;
+            renderGuide();
+        });
+
+        // Clear search inputs
+        document.getElementById('btnResetGuide').addEventListener('click', () => {
+            guideSearch.value = '';
+            searchQuery = '';
+            renderGuide();
+        });
+
+        // Copy button action
+        document.getElementById('btnCopy').addEventListener('click', () => {
+            const outText = formattedOutput.textContent;
+            copyTextToClipboard(outText, "Copied Formatted Time", `"${outText}" added to your clipboard.`);
+        });
+
+        // Copy Format layout pattern action
+        document.getElementById('btnCopyFormat').addEventListener('click', () => {
+            const formatStr = formatInput.value;
+            copyTextToClipboard(formatStr, "Syntax Copied", `Format pattern layout "${formatStr}" copied.`);
+        });
+
+        // Reset to empty input text button click
+        clearBtn.addEventListener('click', () => {
+            formatInput.value = '';
+            formatInput.focus();
+            updateDisplay();
+        });
+
+        // Preset activation buttons logic
+        const presetButtons = document.querySelectorAll('.preset-btn');
+        presetButtons.forEach(pBtn => {
+            pBtn.addEventListener('click', () => {
+                const newFmt = pBtn.getAttribute('data-format');
+                formatInput.value = newFmt;
+                updateDisplay();
+                showToast("Preset Loaded!", `Format configuration changed to: ${newFmt}`);
+            });
+        });
+
+        // Realtime user input updating loop
+        formatInput.addEventListener('input', updateDisplay);
+
+        // Core animation execution cycle
+        window.onload = function() {
+            lucide.createIcons();
+            
+            // Initial render state
+            updateDisplay();
+            renderGuide();
+            
+            // Ultra responsive state clock ticker (Ticks dynamically for ms-level performance visual)
+            setInterval(() => {
+                updateDisplay();
+            }, 60);
+        };
+    </script>
+</body>
+</html>
