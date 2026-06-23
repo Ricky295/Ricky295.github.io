@@ -1,425 +1,318 @@
-import React, { useState, useEffect, useRef } from 'react';
-
-// --- SOUND ENGINE (Web Audio API Synthesizer) ---
-class SoundEffects {
-  constructor() {
-    this.ctx = null;
-  }
-  init() {
-    if (!this.ctx) {
-      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cross-Weighted Minesweeper</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Custom thin scrollbar for smooth scrollable boards */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
     }
-  }
-  play(type) {
-    this.init();
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-between p-4 font-sans select-none">
+
+  <!-- Header -->
+  <header class="w-full max-w-5xl text-center my-2">
+    <h1 class="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-200">
+      Cross-Weighted Minesweeper
+    </h1>
+    <p class="text-xs text-slate-400 mt-1">
+      The Calculator Variant: Orthogonal mines weight <span class="text-emerald-400 font-bold">+2</span>, Diagonal mines weight <span className="text-emerald-400 font-bold">+1</span>.
+    </p>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="w-full max-w-5xl flex flex-col lg:flex-row gap-6 items-start justify-center flex-grow py-2">
     
-    if (type === 'dig') {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.frequency.setValueAtTime(400, now);
-      osc.frequency.exponentialRampToValueAtTime(150, now + 0.1);
-      gain.gain.setValueAtTime(0.15, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-      osc.start(now);
-      osc.stop(now + 0.1);
-    } else if (type === 'flag') {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.frequency.setValueAtTime(600, now);
-      osc.frequency.setValueAtTime(800, now + 0.05);
-      gain.gain.setValueAtTime(0.1, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-      osc.start(now);
-      osc.stop(now + 0.1);
-    } else if (type === 'explode') {
-      const bufferSize = this.ctx.sampleRate * 0.4;
-      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        data[i] = Math.random() * 2 - 1;
-      }
-      const noise = this.ctx.createBufferSource();
-      noise.buffer = buffer;
+    <!-- Left Panel: Configurations, Controls & Metrics -->
+    <div class="w-full lg:w-80 flex flex-col gap-4 bg-slate-800/60 p-4 rounded-xl border border-slate-700/60 backdrop-blur-sm shadow-xl shrink-0">
       
-      const filter = this.ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(800, now);
-      filter.frequency.exponentialRampToValueAtTime(50, now + 0.3);
+      <!-- Preset Difficulty Selector -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 font-mono">Select Difficulty</label>
+        <div class="flex flex-col gap-1.5" id="preset-container">
+          <button onclick="applyPreset('easy')" id="btn-easy" class="preset-btn text-left text-sm py-2.5 px-3 rounded-lg flex justify-between items-center transition-all bg-slate-800/80 hover:bg-slate-700/80 text-slate-300">
+            <span>Easy (9x9)</span>
+            <span class="text-xs bg-slate-950/50 text-emerald-300 px-2 py-0.5 rounded font-mono">💣 10</span>
+          </button>
+          <button onclick="applyPreset('medium')" id="btn-medium" class="preset-btn text-left text-sm py-2.5 px-3 rounded-lg flex justify-between items-center transition-all bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold shadow-md">
+            <span>Medium (16x16)</span>
+            <span class="text-xs bg-slate-950/50 text-emerald-300 px-2 py-0.5 rounded font-mono">💣 40</span>
+          </button>
+          <button onclick="applyPreset('hard')" id="btn-hard" class="preset-btn text-left text-sm py-2.5 px-3 rounded-lg flex justify-between items-center transition-all bg-slate-800/80 hover:bg-slate-700/80 text-slate-300">
+            <span>Hard (30x16)</span>
+            <span class="text-xs bg-slate-950/50 text-emerald-300 px-2 py-0.5 rounded font-mono">💣 99</span>
+          </button>
+          
+          <button onclick="toggleCustomForm()" id="btn-custom" class="text-left text-sm py-2.5 px-3 rounded-lg flex justify-between items-center transition-all bg-slate-800/80 hover:bg-slate-700/80 text-slate-300">
+            <span>⚙️ Custom Grid Size</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Custom Settings Form -->
+      <form id="custom-form" onsubmit="applyCustomSettings(event)" class="hidden p-3 bg-slate-900/95 rounded-lg border border-slate-700 flex flex-col gap-2">
+        <div class="flex justify-between items-center">
+          <span class="text-xs text-slate-300">Width (4-40):</span>
+          <input type="number" id="custom-width" value="16" min="4" max="40" class="w-16 bg-slate-800 text-white text-xs p-1 rounded text-center border border-slate-700" />
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-xs text-slate-300">Height (4-30):</span>
+          <input type="number" id="custom-height" value="16" min="4" max="30" class="w-16 bg-slate-800 text-white text-xs p-1 rounded text-center border border-slate-700" />
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-xs text-slate-300">Mines count:</span>
+          <input type="number" id="custom-mines" value="40" min="1" class="w-16 bg-slate-800 text-white text-xs p-1 rounded text-center border border-slate-700" />
+        </div>
+        <button type="submit" class="w-full py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded text-xs font-semibold mt-1">
+          Apply Custom Size
+        </button>
+      </form>
+
+      <!-- Keyboard Explainer Legend -->
+      <div class="border-t border-slate-700/60 pt-3">
+        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Keyboard Navigation</h4>
+        <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-700/30 text-xs text-slate-300 space-y-1.5 font-sans">
+          <div class="flex justify-between"><kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-[10px]">W, A, S, D</kbd> <span>Move Cursor</span></div>
+          <div class="flex justify-between"><kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-[10px]">↑ ↓ ← →</kbd> <span>Arrow Keys Move</span></div>
+          <div class="flex justify-between"><kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-[10px]">Space / Enter</kbd> <span>Dig or Chord</span></div>
+          <div class="flex justify-between"><kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-[10px]">F / Shift</kbd> <span>Toggle Flag</span></div>
+          <div class="pt-1 text-[10px] text-slate-500 text-center italic">
+            Press any key to activate keyboard cursor.
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Session Metrics -->
+      <div class="border-t border-slate-700/60 pt-3 flex flex-col gap-2">
+        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Session Metrics</h3>
+        <div class="grid grid-cols-2 gap-2 text-center text-xs">
+          <div class="bg-slate-900 p-2 rounded-lg">
+            <div class="text-slate-400 text-[10px]">Elapsed Time</div>
+            <div id="stat-time" class="text-base font-mono font-bold text-teal-400">0.00s</div>
+          </div>
+          <div class="bg-slate-900 p-2 rounded-lg">
+            <div class="text-slate-400 text-[10px]">Cleared Spaces</div>
+            <div id="stat-cleared" class="text-base font-mono font-bold text-blue-400">0/216</div>
+          </div>
+          <div class="bg-slate-900 p-2 rounded-lg">
+            <div class="text-slate-400 text-[10px]">Sweep Velocity</div>
+            <div id="stat-rate" class="text-xs font-mono font-semibold text-amber-400">0.0/min</div>
+          </div>
+          <div class="bg-slate-900 p-2 rounded-lg">
+            <div class="text-slate-400 text-[10px]">Unflagged Mines</div>
+            <div id="stat-mines" class="text-xs font-mono font-semibold text-rose-400">40</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right Panel: Game Arena Screen -->
+    <div class="flex-grow flex flex-col items-center justify-center gap-4 w-full">
       
-      const gain = this.ctx.createGain();
-      gain.gain.setValueAtTime(0.3, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
-      
-      noise.connect(filter);
-      filter.connect(gain);
-      gain.connect(this.ctx.destination);
-      noise.start(now);
-      noise.stop(now + 0.4);
-    } else if (type === 'win') {
-      const notes = [261.63, 329.63, 392.00, 523.25]; // C, E, G, C
-      notes.forEach((freq, idx) => {
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.frequency.setValueAtTime(freq, now + idx * 0.1);
-        gain.gain.setValueAtTime(0.1, now + idx * 0.1);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.1 + 0.15);
-        osc.start(now + idx * 0.1);
-        osc.stop(now + idx * 0.1 + 0.2);
-      });
-    } else if (type === 'chord') {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.frequency.setValueAtTime(300, now);
-      osc.frequency.exponentialRampToValueAtTime(450, now + 0.08);
-      gain.gain.setValueAtTime(0.15, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-      osc.start(now);
-      osc.stop(now + 0.08);
-    }
-  }
-}
+      <!-- Status Banner & Restart Action -->
+      <div class="w-full flex items-center justify-between bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+        <div class="flex items-center gap-2">
+          <span id="status-icon" class="text-xl">💤</span>
+          <span id="status-text" class="text-sm font-bold">Select a square to begin!</span>
+        </div>
+        <button onclick="resetGame()" class="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-lg font-semibold text-xs transition">
+          🔄 Restart Grid
+        </button>
+      </div>
 
-const sfx = new SoundEffects();
+      <!-- Mobile Action Switcher -->
+      <div class="w-full bg-slate-800/50 p-2 rounded-xl border border-slate-700/80 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="flex flex-col">
+          <span class="text-xs font-semibold text-slate-300">Tap Mode (Mobile / Touchscreens)</span>
+          <span class="text-[10px] text-slate-500">Tap cells to either uncover ground or plant danger signs.</span>
+        </div>
+        
+        <div class="flex rounded-lg bg-slate-950 p-1 w-full sm:w-auto self-stretch sm:self-auto gap-1">
+          <button id="tap-mode-dig" onclick="setMobileAction('dig')" class="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold transition-all bg-emerald-500 text-white shadow-md">
+            ⛏️ Dig Mode
+          </button>
+          <button id="tap-mode-flag" onclick="setMobileAction('flag')" class="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold transition-all text-slate-400 hover:text-slate-200">
+            🚩 Flag Mode
+          </button>
+        </div>
+      </div>
 
-export default function App() {
-  // Standard Presets (9x9 10 mines, 16x16 40 mines, 30x16 99 mines)
-  const PRESETS = {
-    easy: { width: 9, height: 9, mines: 10, label: "Easy (9x9)" },
-    medium: { width: 16, height: 16, mines: 40, label: "Medium (16x16)" },
-    hard: { width: 30, height: 16, mines: 99, label: "Hard (30x16)" },
-  };
+      <!-- Main Interactive Board Grid -->
+      <div class="w-full max-w-full overflow-auto bg-slate-950 p-4 rounded-xl border border-slate-700 shadow-2xl flex justify-center items-center">
+        <div id="grid-element" class="grid gap-1 relative w-full">
+          <!-- Populated programmatically in JS -->
+        </div>
+      </div>
 
-  // State Management
-  const [config, setConfig] = useState({ width: 16, height: 16, mines: 40 });
-  const [board, setBoard] = useState([]);
-  const [hidden, setHidden] = useState([]);
-  const [flagged, setFlagged] = useState([]);
-  const [cursor, setCursor] = useState({ y: 0, x: 0 });
-  const [cleared, setCleared] = useState(0);
-  const [status, setStatus] = useState(0); // 0 = idle, 1 = playing, -1 = lost, 2 = won
-  const [generated, setGenerated] = useState(false);
-  const [startTime, setStartTime] = useState(null);
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [customWidth, setCustomWidth] = useState(16);
-  const [customHeight, setCustomHeight] = useState(16);
-  const [customMines, setCustomMines] = useState(40);
-  const [showConfig, setShowConfig] = useState(false);
-  const [keyboardActive, setKeyboardActive] = useState(false);
-  
-  // Mobile flag toggle switch state ('dig' vs 'flag')
-  const [mobileAction, setMobileAction] = useState('dig');
+      <!-- Explanation Rules Footer -->
+      <div class="w-full bg-slate-800/40 border border-slate-700/60 p-4 rounded-xl text-xs space-y-3">
+        <h4 class="font-bold text-slate-300 flex items-center gap-1.5">
+          <span>📚 Rules of Cross-Weighted Math</span>
+        </h4>
+        
+        <div class="text-slate-400 leading-relaxed space-y-1.5">
+          <p>
+            Unlike standard Minesweeper where all directions weigh equal to <span class="text-slate-200 font-semibold">1</span>, this variant assigns specific weights to adjacency:
+          </p>
+          <ul class="list-disc pl-5 text-slate-300 space-y-1">
+            <li><span class="font-bold text-emerald-400">Orthogonal neighbors</span> (Up, Down, Left, Right) count as <span class="text-emerald-400 font-bold">+2 points</span>.</li>
+            <li><span class="font-bold text-teal-400">Diagonal neighbors</span> count as <span class="text-teal-400 font-bold">+1 point</span>.</li>
+          </ul>
+          <p>
+            An uncovered space displaying <span class="text-slate-200 font-semibold">"4"</span> can indicate exactly 2 orthogonal mines ($2 \times 2$), or 4 diagonal mines ($4 \times 1$), or a combination!
+          </p>
+        </div>
 
-  const timerRef = useRef(null);
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-700 pt-2 text-slate-400">
+          <div>
+            <span class="font-bold text-slate-300">🎮 Double-Click Chording:</span> Double-click any uncovered cell. If the total weight of surrounding flags matches the cell number, all other hidden squares around it will instantly dig open!
+          </div>
+          <div>
+            <span class="font-bold text-slate-300">📱 Mobile Tap Controller:</span> Toggle between the ⛏️ (Dig) and 🚩 (Flag) buttons on the panel to comfortably sweep with single-finger taps on phones!
+          </div>
+        </div>
+      </div>
 
-  // Maximum cells to clear
-  const maxCleared = (config.width * config.height) - config.mines;
+    </div>
+  </main>
 
-  // Initialize board state
-  const resetGame = (newConfig = config) => {
-    const { width, height } = newConfig;
-    setBoard(Array(height).fill(null).map(() => Array(width).fill(0)));
-    setHidden(Array(height).fill(null).map(() => Array(width).fill(true)));
-    setFlagged(Array(height).fill(null).map(() => Array(width).fill(false)));
-    setCursor({ y: 0, x: 0 });
-    setCleared(0);
-    setStatus(0);
-    setGenerated(false);
-    setStartTime(null);
-    setElapsedTime(0);
-    if (timerRef.current) clearInterval(timerRef.current);
-  };
+  <footer class="text-slate-500 text-[10px] py-2 mt-4 text-center">
+    Recreated from the NumWorks calculator Python environment. Live procedural Audio synthesizers active.
+  </footer>
 
-  // Handle Preset Changes
-  const applyPreset = (presetKey) => {
-    const newConfig = PRESETS[presetKey];
-    setConfig(newConfig);
-    resetGame(newConfig);
-  };
-
-  // Handle Custom Settings
-  const applyCustomSettings = (e) => {
-    e.preventDefault();
-    const w = Math.max(4, Math.min(40, Number(customWidth)));
-    const h = Math.max(4, Math.min(30, Number(customHeight)));
-    const m = Math.max(1, Math.min((w * h) - 9, Number(customMines)));
-    const newConfig = { width: w, height: h, mines: m };
-    setConfig(newConfig);
-    resetGame(newConfig);
-    setShowConfig(false);
-  };
-
-  // Timer hook
-  useEffect(() => {
-    if (status === 1 && startTime) {
-      timerRef.current = setInterval(() => {
-        setElapsedTime(((Date.now() - startTime) / 1000).toFixed(2));
-      }, 50);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [status, startTime]);
-
-  // Reset when configuration changes
-  useEffect(() => {
-    resetGame();
-  }, [config]);
-
-  // Generate Mines after first click (Safety mechanism)
-  const generateMines = (clickedY, clickedX) => {
-    const newBoard = Array(config.height).fill(null).map(() => Array(config.width).fill(0));
-    let mCount = 0;
-
-    while (mCount < config.mines) {
-      const ry = Math.floor(Math.random() * config.height);
-      const rx = Math.floor(Math.random() * config.width);
-
-      // Guard clicked tile safety (9-square exclusion zone is standard for comfortable first starts)
-      const isWithinStartingSquare = Math.abs(ry - clickedY) <= 1 && Math.abs(rx - clickedX) <= 1;
-
-      if (!isWithinStartingSquare && newBoard[ry][rx] !== '*') {
-        newBoard[ry][rx] = '*';
-        mCount++;
-
-        // Add adjacency weighting following NumWorks rules
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const ty = ry + dy;
-            const tx = rx + dx;
-            if (ty >= 0 && ty < config.height && tx >= 0 && tx < config.width && newBoard[ty][tx] !== '*') {
-              newBoard[ty][tx]++;
-              // Orthogonals add +1 extra point (making their total contribution +2)
-              if (dx === 0 || dy === 0) {
-                newBoard[ty][tx]++;
-              }
-            }
+  <!-- Core JavaScript Logics -->
+  <script>
+    // --- SYNTHESIZER SOUND ENGINE ---
+    class SoundEffects {
+      constructor() {
+        this.ctx = null;
+      }
+      init() {
+        if (!this.ctx) {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+      }
+      play(type) {
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        
+        if (type === 'dig') {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.frequency.setValueAtTime(400, now);
+          osc.frequency.exponentialRampToValueAtTime(150, now + 0.1);
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+          osc.start(now);
+          osc.stop(now + 0.1);
+        } else if (type === 'flag') {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.frequency.setValueAtTime(600, now);
+          osc.frequency.setValueAtTime(800, now + 0.05);
+          gain.gain.setValueAtTime(0.1, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+          osc.start(now);
+          osc.stop(now + 0.1);
+        } else if (type === 'explode') {
+          const bufferSize = this.ctx.sampleRate * 0.4;
+          const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
           }
-        }
-      }
-    }
-    setBoard(newBoard);
-    setGenerated(true);
-    setStartTime(Date.now());
-    setStatus(1);
-    return newBoard;
-  };
-
-  // Cell exploration flood fill
-  const explore = (y, x, currentBoard, hiddenGrid, flaggedGrid) => {
-    if (y < 0 || y >= config.height || x < 0 || x >= config.width) return 0;
-    if (!hiddenGrid[y][x] || flaggedGrid[y][x]) return 0;
-
-    hiddenGrid[y][x] = false;
-    let localCleared = 1;
-
-    if (currentBoard[y][x] === 0) {
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          localCleared += explore(y + dy, x + dx, currentBoard, hiddenGrid, flaggedGrid);
-        }
-      }
-    }
-    return localCleared;
-  };
-
-  // Perform Digging / Flagging on left click (respects mobile action toggle)
-  const handleCellInteraction = (y, x) => {
-    if (status === -1 || status === 2) return;
-    
-    // Check if we are flagging on mobile/touch mode
-    if (mobileAction === 'flag') {
-      handleFlag(y, x);
-      return;
-    }
-
-    // Otherwise, Dig
-    handleDig(y, x);
-  };
-
-  // Standard Dig action
-  const handleDig = (y, x) => {
-    if (status === -1 || status === 2) return;
-    if (flagged[y][x]) return;
-
-    let activeBoard = board;
-    if (!generated) {
-      activeBoard = generateMines(y, x);
-    }
-
-    // Hit Mine!
-    if (activeBoard[y][x] === '*') {
-      sfx.play('explode');
-      const revealedHidden = hidden.map((row, rIdx) => 
-        row.map((val, cIdx) => activeBoard[rIdx][cIdx] === '*' ? false : val)
-      );
-      setHidden(revealedHidden);
-      setStatus(-1);
-      return;
-    }
-
-    sfx.play('dig');
-    const newHidden = hidden.map(row => [...row]);
-    const newlyCleared = explore(y, x, activeBoard, newHidden, flagged);
-    const updatedClearedCount = cleared + newlyCleared;
-
-    setHidden(newHidden);
-    setCleared(updatedClearedCount);
-
-    if (updatedClearedCount === maxCleared) {
-      sfx.play('win');
-      setStatus(2);
-    }
-  };
-
-  // Toggle Flagging
-  const handleFlag = (y, x) => {
-    if (status === -1 || status === 2) return;
-    if (!hidden[y][x]) return;
-
-    sfx.play('flag');
-    const newFlagged = flagged.map((row, rIdx) => 
-      row.map((val, cIdx) => (rIdx === y && cIdx === x) ? !val : val)
-    );
-    setFlagged(newFlagged);
-  };
-
-  // Cross-Weighted Chord Logic
-  const handleChord = (y, x) => {
-    if (status === -1 || status === 2) return;
-    if (hidden[y][x]) return;
-
-    const cellValue = board[y][x];
-    if (cellValue === 0 || cellValue === '*') return;
-
-    // Weight flags around the current coordinate
-    let flagWeightCount = 0;
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const ty = y + dy;
-        const tx = x + dx;
-        if (ty >= 0 && ty < config.height && tx >= 0 && tx < config.width && flagged[ty][tx]) {
-          flagWeightCount++;
-          // Orthogonal flag adds an extra 1 point to weight
-          if ((dx === 0 || dy === 0) && (dx !== 0 || dy !== 0)) {
-            flagWeightCount++;
-          }
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = buffer;
+          
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = 'lowpass';
+          filter.frequency.setValueAtTime(800, now);
+          filter.frequency.exponentialRampToValueAtTime(50, now + 0.3);
+          
+          const gain = this.ctx.createGain();
+          gain.gain.setValueAtTime(0.3, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+          
+          noise.connect(filter);
+          filter.connect(gain);
+          gain.connect(this.ctx.destination);
+          noise.start(now);
+          noise.stop(now + 0.4);
+        } else if (type === 'win') {
+          const notes = [261.63, 329.63, 392.00, 523.25];
+          notes.forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+            gain.gain.setValueAtTime(0.1, now + idx * 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.1 + 0.15);
+            osc.start(now + idx * 0.1);
+            osc.stop(now + idx * 0.1 + 0.2);
+          });
+        } else if (type === 'chord') {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.frequency.setValueAtTime(300, now);
+          osc.frequency.exponentialRampToValueAtTime(450, now + 0.08);
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+          osc.start(now);
+          osc.stop(now + 0.08);
         }
       }
     }
 
-    // Chord triggers if the surrounding weighted flag count matches cell's indicator
-    if (flagWeightCount === cellValue) {
-      sfx.play('chord');
-      let hitMine = false;
-      const newHidden = hidden.map(row => [...row]);
-      let newlyCleared = 0;
+    const sfx = new SoundEffects();
 
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const ty = y + dy;
-          const tx = x + dx;
-          if (ty >= 0 && ty < config.height && tx >= 0 && tx < config.width) {
-            if (!flagged[ty][tx] && newHidden[ty][tx]) {
-              if (board[ty][tx] === '*') {
-                hitMine = true;
-              } else {
-                newlyCleared += explore(ty, tx, board, newHidden, flagged);
-              }
-            }
-          }
-        }
-      }
-
-      setHidden(newHidden);
-
-      if (hitMine) {
-        sfx.play('explode');
-        const finalHidden = newHidden.map((row, rIdx) => 
-          row.map((val, cIdx) => board[rIdx][cIdx] === '*' ? false : val)
-        );
-        setHidden(finalHidden);
-        setStatus(-1);
-      } else {
-        const updatedClearedCount = cleared + newlyCleared;
-        setCleared(updatedClearedCount);
-        if (updatedClearedCount === maxCleared) {
-          sfx.play('win');
-          setStatus(2);
-        }
-      }
-    }
-  };
-
-  // Keyboard navigation controller
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      setKeyboardActive(true);
-      let { y, x } = cursor;
-      let handled = true;
-
-      switch (e.key) {
-        case 'ArrowUp':
-        case 'w':
-        case 'W':
-          y = (y - 1 + config.height) % config.height;
-          break;
-        case 'ArrowDown':
-        case 's':
-        case 'S':
-          y = (y + 1) % config.height;
-          break;
-        case 'ArrowLeft':
-        case 'a':
-        case 'A':
-          x = (x - 1 + config.width) % config.width;
-          break;
-        case 'ArrowRight':
-        case 'd':
-        case 'D':
-          x = (x + 1) % config.width;
-          break;
-        case 'Enter':
-        case ' ': // Dig / Chord
-          if (hidden[y][x]) {
-            handleDig(y, x);
-          } else {
-            handleChord(y, x);
-          }
-          break;
-        case 'f':
-        case 'F':
-        case 'Shift': // Flag
-          handleFlag(y, x);
-          break;
-        default:
-          handled = false;
-      }
-
-      if (handled) {
-        e.preventDefault();
-        setCursor({ y, x });
-      }
+    // --- GAME PRESETS ---
+    const PRESETS = {
+      easy: { width: 9, height: 9, mines: 10 },
+      medium: { width: 16, height: 16, mines: 40 },
+      hard: { width: 30, height: 16, mines: 99 }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cursor, board, hidden, flagged, status, generated, cleared, config]);
+    // --- STATE ENGINE ---
+    let config = { ...PRESETS.medium };
+    let board = [];
+    let hidden = [];
+    let flagged = [];
+    let cursor = { y: 0, x: 0 };
+    let cleared = 0;
+    let status = 0; // 0 = idle, 1 = playing, -1 = lost, 2 = won
+    let generated = false;
+    let startTime = null;
+    let timerInterval = null;
+    let mobileAction = 'dig';
+    let keyboardActive = false;
 
-  // Color mapping (matching original NumWorks aesthetics)
-  const getNumColor = (val) => {
-    const colors = {
+    // Numerical coloring setup
+    const numColors = {
       1: "text-blue-500",
       2: "text-emerald-500",
       3: "text-rose-500",
@@ -427,297 +320,429 @@ export default function App() {
       5: "text-amber-500",
       6: "text-cyan-500",
       7: "text-stone-400",
-      8: "text-stone-500",
+      8: "text-stone-500"
     };
-    return colors[val] || "text-slate-100";
-  };
 
-  // Compute clear rate
-  const clearSpeed = elapsedTime > 0 ? ((cleared / elapsedTime) * 60).toFixed(1) : "0.0";
+    // --- COMPONENT INITIALIZATION ---
+    function init() {
+      resetGame(config);
+      setupEventListeners();
+    }
 
-  return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-between p-4 font-sans select-none">
+    function resetGame(newConfig = config) {
+      config = { ...newConfig };
+      board = Array(config.height).fill(null).map(() => Array(config.width).fill(0));
+      hidden = Array(config.height).fill(null).map(() => Array(config.width).fill(true));
+      flagged = Array(config.height).fill(null).map(() => Array(config.width).fill(false));
+      cursor = { y: 0, x: 0 };
+      cleared = 0;
+      status = 0;
+      generated = false;
+      startTime = null;
       
-      {/* Header */}
-      <header className="w-full max-w-5xl text-center my-2">
-        <h1 className="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-200">
-          Cross-Weighted Minesweeper
-        </h1>
-        <p className="text-xs text-slate-400 mt-1">
-          The Calculator Variant: Orthogonal mines weight <span className="text-emerald-400 font-bold">+2</span>, Diagonal mines weight <span className="text-emerald-400 font-bold">+1</span>.
-        </p>
-      </header>
+      clearInterval(timerInterval);
+      updateMetrics();
+      renderGrid();
+    }
 
-      {/* Main Interactive Workspace */}
-      <main className="w-full max-w-5xl flex flex-col lg:flex-row gap-6 items-start justify-center flex-grow py-2">
+    function applyPreset(presetKey) {
+      const btns = document.querySelectorAll('.preset-btn');
+      btns.forEach(btn => {
+        btn.className = "preset-btn text-left text-sm py-2.5 px-3 rounded-lg flex justify-between items-center transition-all bg-slate-800/80 hover:bg-slate-700/80 text-slate-300";
+      });
+
+      const selectedBtn = document.getElementById(`btn-${presetKey}`);
+      if (selectedBtn) {
+        selectedBtn.className = "preset-btn text-left text-sm py-2.5 px-3 rounded-lg flex justify-between items-center transition-all bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold shadow-md";
+      }
+
+      resetGame(PRESETS[presetKey]);
+    }
+
+    function toggleCustomForm() {
+      const form = document.getElementById('custom-form');
+      form.classList.toggle('hidden');
+    }
+
+    function applyCustomSettings(e) {
+      e.preventDefault();
+      const customWidth = Math.max(4, Math.min(40, Number(document.getElementById('custom-width').value)));
+      const customHeight = Math.max(4, Math.min(30, Number(document.getElementById('custom-height').value)));
+      const maxPossibleMines = (customWidth * customHeight) - 9;
+      const customMines = Math.max(1, Math.min(maxPossibleMines, Number(document.getElementById('custom-mines').value)));
+
+      const btns = document.querySelectorAll('.preset-btn');
+      btns.forEach(btn => {
+        btn.className = "preset-btn text-left text-sm py-2.5 px-3 rounded-lg flex justify-between items-center transition-all bg-slate-800/80 hover:bg-slate-700/80 text-slate-300";
+      });
+
+      document.getElementById('btn-custom').className = "text-left text-sm py-2.5 px-3 rounded-lg flex justify-between items-center transition-all bg-slate-700 text-emerald-400 font-bold";
+
+      resetGame({ width: customWidth, height: customHeight, mines: customMines });
+      document.getElementById('custom-form').classList.add('hidden');
+    }
+
+    function setMobileAction(action) {
+      mobileAction = action;
+      const digBtn = document.getElementById('tap-mode-dig');
+      const flagBtn = document.getElementById('tap-mode-flag');
+
+      if (action === 'dig') {
+        digBtn.className = "flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold transition-all bg-emerald-500 text-white shadow-md";
+        flagBtn.className = "flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold transition-all text-slate-400 hover:text-slate-200";
+      } else {
+        digBtn.className = "flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold transition-all text-slate-400 hover:text-slate-200";
+        flagBtn.className = "flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold transition-all bg-red-500 text-white shadow-md";
+      }
+    }
+
+    // --- BOARD GENERATION ---
+    function generateMines(clickedY, clickedX) {
+      const newBoard = Array(config.height).fill(null).map(() => Array(config.width).fill(0));
+      let mCount = 0;
+
+      while (mCount < config.mines) {
+        const ry = Math.floor(Math.random() * config.height);
+        const rx = Math.floor(Math.random() * config.width);
+
+        // Guard starting square safety zone (9-square exclusion zone)
+        const isWithinStartingSquare = Math.abs(ry - clickedY) <= 1 && Math.abs(rx - clickedX) <= 1;
+
+        if (!isWithinStartingSquare && newBoard[ry][rx] !== '*') {
+          newBoard[ry][rx] = '*';
+          mCount++;
+
+          // Build neighbor adjacency weight mapping
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const ty = ry + dy;
+              const tx = rx + dx;
+              if (ty >= 0 && ty < config.height && tx >= 0 && tx < config.width && newBoard[ty][tx] !== '*') {
+                newBoard[ty][tx]++;
+                // Orthogonals add +1 extra weight (making their total value +2)
+                if (dx === 0 || dy === 0) {
+                  newBoard[ty][tx]++;
+                }
+              }
+            }
+          }
+        }
+      }
+      board = newBoard;
+      generated = true;
+      startTime = Date.now();
+      status = 1;
+
+      // Start timer polling loop
+      timerInterval = setInterval(updateTimer, 50);
+    }
+
+    function updateTimer() {
+      if (status === 1 && startTime) {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+        document.getElementById('stat-time').innerText = `${elapsed}s`;
         
-        {/* Left Side: Game Configuration & Metrics */}
-        <div className="w-full lg:w-80 flex flex-col gap-4 bg-slate-800/60 p-4 rounded-xl border border-slate-700/60 backdrop-blur-sm shadow-xl shrink-0">
+        // Calculate velocity (sweeps per minute)
+        const velocity = ((cleared / elapsed) * 60).toFixed(1);
+        document.getElementById('stat-rate').innerText = `${velocity}/min`;
+      }
+    }
+
+    // --- GAMEPLAY TRIGGERS ---
+    function handleCellInteraction(y, x) {
+      if (status === -1 || status === 2) return;
+
+      if (mobileAction === 'flag') {
+        handleFlag(y, x);
+      } else {
+        handleDig(y, x);
+      }
+    }
+
+    function handleDig(y, x) {
+      if (status === -1 || status === 2) return;
+      if (flagged[y][x]) return;
+
+      if (!generated) {
+        generateMines(y, x);
+      }
+
+      // Exploded Mine Action
+      if (board[y][x] === '*') {
+        sfx.play('explode');
+        revealAllMines();
+        setStatusLost();
+        return;
+      }
+
+      sfx.play('dig');
+      const newlyCleared = explore(y, x);
+      cleared += newlyCleared;
+
+      updateMetrics();
+      renderGrid();
+
+      // Check Victory Condition
+      const maxCleared = (config.width * config.height) - config.mines;
+      if (cleared === maxCleared) {
+        setStatusWin();
+      }
+    }
+
+    function handleFlag(y, x) {
+      if (status === -1 || status === 2) return;
+      if (!hidden[y][x]) return;
+
+      sfx.play('flag');
+      flagged[y][x] = !flagged[y][x];
+
+      updateMetrics();
+      renderGrid();
+    }
+
+    function handleChord(y, x) {
+      if (status === -1 || status === 2) return;
+      if (hidden[y][x]) return;
+
+      const cellValue = board[y][x];
+      if (cellValue === 0 || cellValue === '*') return;
+
+      // Add flags weight around the coordinate
+      let flagWeightCount = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const ty = y + dy;
+          const tx = x + dx;
+          if (ty >= 0 && ty < config.height && tx >= 0 && tx < config.width && flagged[ty][tx]) {
+            flagWeightCount++;
+            // Orthogonal flags get an extra 1 weight
+            if ((dx === 0 || dy === 0) && (dx !== 0 || dy !== 0)) {
+              flagWeightCount++;
+            }
+          }
+        }
+      }
+
+      // Execute Chord Action if total matches
+      if (flagWeightCount === cellValue) {
+        sfx.play('chord');
+        let hitMine = false;
+        let newlyCleared = 0;
+
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const ty = y + dy;
+            const tx = x + dx;
+            if (ty >= 0 && ty < config.height && tx >= 0 && tx < config.width) {
+              if (!flagged[ty][tx] && hidden[ty][tx]) {
+                if (board[ty][tx] === '*') {
+                  hitMine = true;
+                } else {
+                  newlyCleared += explore(ty, tx);
+                }
+              }
+            }
+          }
+        }
+
+        cleared += newlyCleared;
+        updateMetrics();
+        renderGrid();
+
+        if (hitMine) {
+          sfx.play('explode');
+          revealAllMines();
+          setStatusLost();
+        } else {
+          const maxCleared = (config.width * config.height) - config.mines;
+          if (cleared === maxCleared) {
+            setStatusWin();
+          }
+        }
+      }
+    }
+
+    // Explore Flood Fill Recurse
+    function explore(y, x) {
+      if (y < 0 || y >= config.height || x < 0 || x >= config.width) return 0;
+      if (!hidden[y][x] || flagged[y][x]) return 0;
+
+      hidden[y][x] = false;
+      let localCleared = 1;
+
+      if (board[y][x] === 0) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            localCleared += explore(y + dy, x + dx);
+          }
+        }
+      }
+      return localCleared;
+    }
+
+    // --- GAME CONTROL METRICS REBUILDERS ---
+    function revealAllMines() {
+      for (let y = 0; y < config.height; y++) {
+        for (let x = 0; x < config.width; x++) {
+          if (board[y][x] === '*') {
+            hidden[y][x] = false;
+          }
+        }
+      }
+      renderGrid();
+    }
+
+    function setStatusLost() {
+      status = -1;
+      clearInterval(timerInterval);
+      document.getElementById('status-icon').innerText = "💥";
+      document.getElementById('status-text').innerText = "Boom! Too bad, you failed.";
+    }
+
+    function setStatusWin() {
+      status = 2;
+      sfx.play('win');
+      clearInterval(timerInterval);
+      document.getElementById('status-icon').innerText = "🎉";
+      document.getElementById('status-text').innerText = "Congratulations! You won!";
+    }
+
+    function updateMetrics() {
+      const maxCleared = (config.width * config.height) - config.mines;
+      document.getElementById('stat-cleared').innerText = `${cleared}/${maxCleared}`;
+      
+      const flaggedCount = flagged.flat().filter(Boolean).length;
+      document.getElementById('stat-mines').innerText = Math.max(0, config.mines - flaggedCount);
+
+      if (status === 0) {
+        document.getElementById('status-icon').innerText = "💤";
+        document.getElementById('status-text').innerText = "Select a square to begin!";
+        document.getElementById('stat-time').innerText = "0.00s";
+        document.getElementById('stat-rate').innerText = "0.0/min";
+      } else if (status === 1) {
+        document.getElementById('status-icon').innerText = "🎮";
+        document.getElementById('status-text').innerText = "Keep digging...";
+      }
+    }
+
+    // --- RENDER SCREEN RENDERING ---
+    function renderGrid() {
+      const gridContainer = document.getElementById('grid-element');
+      gridContainer.innerHTML = '';
+      gridContainer.style.gridTemplateColumns = `repeat(${config.width}, minmax(0, 1fr))`;
+      gridContainer.style.maxWidth = `${config.width * 36}px`;
+
+      for (let y = 0; y < config.height; y++) {
+        for (let x = 0; x < config.width; x++) {
+          const isHidden = hidden[y][x];
+          const isFlagged = flagged[y][x];
+          const val = board[y][x];
+          const isCursor = cursor.y === y && cursor.x === x && keyboardActive;
+
+          const isAlt = (y + x) % 2 === 1;
           
-          {/* Preset Buttons */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 font-mono">Select Difficulty</label>
-            <div className="flex flex-col gap-1.5">
-              {Object.keys(PRESETS).map((key) => (
-                <button
-                  key={key}
-                  onClick={() => applyPreset(key)}
-                  className={`text-left text-sm py-2.5 px-3 rounded-lg flex justify-between items-center transition-all ${
-                    config.width === PRESETS[key].width && config.height === PRESETS[key].height && config.mines === PRESETS[key].mines && !showConfig
-                      ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold shadow-md' 
-                      : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300'
-                  }`}
-                >
-                  <span>{PRESETS[key].label}</span>
-                  <span className="text-xs bg-slate-950/50 text-emerald-300 px-2 py-0.5 rounded font-mono">
-                    💣 {PRESETS[key].mines}
-                  </span>
-                </button>
-              ))}
-              
-              <button
-                onClick={() => setShowConfig(!showConfig)}
-                className={`text-left text-sm py-2.5 px-3 rounded-lg flex justify-between items-center transition-all ${
-                  showConfig ? 'bg-slate-700 text-emerald-400 font-bold' : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300'
-                }`}
-              >
-                <span>⚙️ Custom Grid Size</span>
-              </button>
-            </div>
-          </div>
+          const cell = document.createElement('div');
+          cell.className = `aspect-square rounded-sm flex items-center justify-center font-extrabold text-xs md:text-sm shadow-inner cursor-pointer select-none transition-all duration-100`;
+          cell.style.minWidth = '22px';
+          cell.style.minHeight = '22px';
 
-          {/* Custom Settings Form */}
-          {showConfig && (
-            <form onSubmit={applyCustomSettings} className="p-3 bg-slate-900/95 rounded-lg border border-slate-700 flex flex-col gap-2">
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-300">Width (4-40):</span>
-                <input 
-                  type="number" 
-                  value={customWidth} 
-                  onChange={(e) => setCustomWidth(e.target.value)} 
-                  className="w-16 bg-slate-800 text-white text-xs p-1 rounded text-center border border-slate-700" 
-                />
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-300">Height (4-30):</span>
-                <input 
-                  type="number" 
-                  value={customHeight} 
-                  onChange={(e) => setCustomHeight(e.target.value)} 
-                  className="w-16 bg-slate-800 text-white text-xs p-1 rounded text-center border border-slate-700" 
-                />
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-300">Mines count:</span>
-                <input 
-                  type="number" 
-                  value={customMines} 
-                  onChange={(e) => setCustomMines(e.target.value)} 
-                  className="w-16 bg-slate-800 text-white text-xs p-1 rounded text-center border border-slate-700" 
-                />
-              </div>
-              <button type="submit" className="w-full py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded text-xs font-semibold mt-1">
-                Apply Custom Size
-              </button>
-            </form>
-          )}
+          // Visual highlighting of cell state
+          if (isCursor) {
+            cell.classList.add('bg-yellow-400', 'ring-4', 'ring-yellow-300', 'z-10', 'scale-105');
+          } else if (isHidden) {
+            if (isAlt) {
+              cell.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+            } else {
+              cell.classList.add('bg-emerald-500', 'hover:bg-emerald-400');
+            }
+          } else {
+            if (isAlt) {
+              cell.classList.add('bg-stone-300');
+            } else {
+              cell.classList.add('bg-stone-200');
+            }
+          }
 
-          {/* Interactive Keyboard Explainer Card */}
-          <div className="border-t border-slate-700/60 pt-3">
-            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Keyboard Navigation Controls</h4>
-            <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/30 text-xs text-slate-300 space-y-1.5 font-sans">
-              <div className="flex justify-between"><kbd className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-[10px]">W, A, S, D</kbd> <span>Move Cursor</span></div>
-              <div className="flex justify-between"><kbd className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-[10px]">↑ ↓ ← →</kbd> <span>Arrow Keys Move</span></div>
-              <div className="flex justify-between"><kbd className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-[10px]">Space / Enter</kbd> <span>Dig or Chord</span></div>
-              <div className="flex justify-between"><kbd className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-[10px]">F / Shift</kbd> <span>Toggle Flag</span></div>
-              <div className="pt-1 text-[10px] text-slate-500 text-center italic">
-                Press any key to activate the highlight.
-              </div>
-            </div>
-          </div>
+          // Content rendering inside cell
+          if (!isHidden) {
+            if (val === '*') {
+              cell.innerHTML = '<span class="text-stone-900 text-sm select-none">💣</span>';
+            } else if (val > 0) {
+              const colorClass = numColors[val] || "text-slate-100";
+              cell.innerHTML = `<span class="${colorClass} select-none drop-shadow-sm">${val}</span>`;
+            }
+          } else if (isFlagged) {
+            cell.innerHTML = '<span class="text-red-500 animate-bounce text-xs select-none">🚩</span>';
+          }
 
-          {/* Live Metrics */}
-          <div className="border-t border-slate-700/60 pt-3 flex flex-col gap-2">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Session Metrics</h3>
-            <div className="grid grid-cols-2 gap-2 text-center text-xs">
-              <div className="bg-slate-900 p-2 rounded-lg">
-                <div className="text-slate-400 text-[10px]">Elapsed Time</div>
-                <div className="text-base font-mono font-bold text-teal-400">{elapsedTime}s</div>
-              </div>
-              <div className="bg-slate-900 p-2 rounded-lg">
-                <div className="text-slate-400 text-[10px]">Cleared Spaces</div>
-                <div className="text-base font-mono font-bold text-blue-400">{cleared}/{maxCleared}</div>
-              </div>
-              <div className="bg-slate-900 p-2 rounded-lg">
-                <div className="text-slate-400 text-[10px]">Sweep Velocity</div>
-                <div className="text-xs font-mono font-semibold text-amber-400">{clearSpeed}/min</div>
-              </div>
-              <div className="bg-slate-900 p-2 rounded-lg">
-                <div className="text-slate-400 text-[10px]">Unflagged Mines</div>
-                <div className="text-xs font-mono font-semibold text-rose-400">
-                  {Math.max(0, config.mines - flagged.flat().filter(Boolean).length)}
-                </div>
-              </div>
-            </div>
-          </div>
+          // Event bindings
+          cell.addEventListener('click', () => handleCellInteraction(y, x));
+          cell.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            handleFlag(y, x);
+          });
+          cell.addEventListener('dblclick', () => handleChord(y, x));
 
-        </div>
+          gridContainer.appendChild(cell);
+        }
+      }
+    }
 
-        {/* Right Side: Game Arena Screen */}
-        <div className="flex-grow flex flex-col items-center justify-center gap-4 w-full">
-          
-          {/* Status Alert & Quick Actions Bar */}
-          <div className="w-full flex items-center justify-between bg-slate-800/80 p-3 rounded-xl border border-slate-700">
-            <div className="flex items-center gap-2">
-              <span className="text-xl">
-                {status === 0 && '💤'}
-                {status === 1 && '🎮'}
-                {status === -1 && '💥'}
-                {status === 2 && '🎉'}
-              </span>
-              <span className="text-sm font-bold">
-                {status === 0 && 'Select a square to begin!'}
-                {status === 1 && 'Keep digging...'}
-                {status === -1 && 'Boom! Too bad, you failed.'}
-                {status === 2 && 'Congratulations! You won!'}
-              </span>
-            </div>
-            <button 
-              onClick={() => resetGame()} 
-              className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-lg font-semibold text-xs transition"
-            >
-              🔄 Restart Grid
-            </button>
-          </div>
+    // --- KEYBOARD CONTROLLERS ---
+    function setupEventListeners() {
+      window.addEventListener('keydown', (e) => {
+        let { y, x } = cursor;
+        let handled = true;
+        keyboardActive = true;
 
-          {/* MOBILE TACTICAL SWITCHER FOR FLAGGING AND DIGGING */}
-          <div className="w-full bg-slate-800/50 p-2 rounded-xl border border-slate-700/80 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex flex-col">
-              <span className="text-xs font-semibold text-slate-300">Tap Mode (Mobile / Touchscreens)</span>
-              <span className="text-[10px] text-slate-500">Tap cells to either uncover ground or plant danger signs.</span>
-            </div>
-            
-            <div className="flex rounded-lg bg-slate-950 p-1 w-full sm:w-auto self-stretch sm:self-auto gap-1">
-              <button
-                onClick={() => setMobileAction('dig')}
-                className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold transition-all ${
-                  mobileAction === 'dig' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                ⛏️ Dig Mode
-              </button>
-              <button
-                onClick={() => setMobileAction('flag')}
-                className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold transition-all ${
-                  mobileAction === 'flag' ? 'bg-red-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                🚩 Flag Mode
-              </button>
-            </div>
-          </div>
+        switch (e.key) {
+          case 'ArrowUp':
+          case 'w':
+          case 'W':
+            y = (y - 1 + config.height) % config.height;
+            break;
+          case 'ArrowDown':
+          case 's':
+          case 'S':
+            y = (y + 1) % config.height;
+            break;
+          case 'ArrowLeft':
+          case 'a':
+          case 'A':
+            x = (x - 1 + config.width) % config.width;
+            break;
+          case 'ArrowRight':
+          case 'd':
+          case 'D':
+            x = (x + 1) % config.width;
+            break;
+          case 'Enter':
+          case ' ':
+            if (hidden[y][x]) {
+              handleDig(y, x);
+            } else {
+              handleChord(y, x);
+            }
+            break;
+          case 'f':
+          case 'F':
+          case 'Shift':
+            handleFlag(y, x);
+            break;
+          default:
+            handled = false;
+        }
 
-          {/* Main Grid Viewport Canvas */}
-          <div className="w-full max-w-full overflow-auto bg-slate-950 p-4 rounded-xl border border-slate-700 shadow-2xl flex justify-center items-center">
-            <div 
-              className="grid gap-1 relative"
-              style={{
-                gridTemplateColumns: `repeat(${config.width}, minmax(0, 1fr))`,
-                width: '100%',
-                maxWidth: `${config.width * 36}px`
-              }}
-            >
-              {Array(config.height).fill(null).map((_, y) => 
-                Array(config.width).fill(null).map((_, x) => {
-                  const isHidden = hidden[y]?.[x] ?? true;
-                  const isFlagged = flagged[y]?.[x] ?? false;
-                  const value = board[y]?.[x] ?? 0;
-                  const isCursor = cursor.y === y && cursor.x === x && keyboardActive;
-                  
-                  // Double check grid limits
-                  if (y >= config.height || x >= config.width) return null;
+        if (handled) {
+          e.preventDefault();
+          cursor = { y, x };
+          renderGrid();
+        }
+      });
+    }
 
-                  // Alternate green/earth values to give Google grass board aesthetic
-                  const isAlt = (y + x) % 2 === 1;
-                  let bgClass = "";
-                  
-                  if (isCursor) {
-                    bgClass = "bg-yellow-400 ring-4 ring-yellow-300 z-10 scale-105 duration-75";
-                  } else if (isHidden) {
-                    bgClass = isAlt ? "bg-emerald-600 hover:bg-emerald-500" : "bg-emerald-500 hover:bg-emerald-400";
-                  } else {
-                    bgClass = isAlt ? "bg-stone-300" : "bg-stone-200";
-                  }
-
-                  return (
-                    <div
-                      key={`${y}-${x}`}
-                      onClick={() => handleCellInteraction(y, x)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        handleFlag(y, x);
-                      }}
-                      onDoubleClick={() => handleChord(y, x)}
-                      className={`aspect-square rounded-sm flex items-center justify-center font-extrabold text-xs md:text-sm shadow-inner cursor-pointer select-none transition-all duration-100 ${bgClass}`}
-                      style={{ minWidth: '22px', minHeight: '22px' }}
-                    >
-                      {/* Revealed Numeric Indicators */}
-                      {!isHidden && value !== 0 && value !== '*' && (
-                        <span className={`${getNumColor(value)} select-none drop-shadow-sm`}>{value}</span>
-                      )}
-                      
-                      {/* Revealed Mines */}
-                      {!isHidden && value === '*' && (
-                        <span className="text-stone-900 text-sm select-none">💣</span>
-                      )}
-                      
-                      {/* Intact Flags */}
-                      {isHidden && isFlagged && (
-                        <span className="text-red-500 animate-bounce text-xs select-none">🚩</span>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Quick Explainer Tooltips */}
-          <div className="w-full bg-slate-800/40 border border-slate-700/60 p-4 rounded-xl text-xs space-y-3">
-            <h4 className="font-bold text-slate-300 flex items-center gap-1.5">
-              <span>📚 Rules of Cross-Weighted Math</span>
-            </h4>
-            
-            <div className="text-slate-400 leading-relaxed space-y-1.5">
-              <p>
-                Unlike standard Minesweeper where all directions weigh equal to <span className="text-slate-200 font-semibold">1</span>, this variant assigns specific weights to adjacency:
-              </p>
-              <ul className="list-disc pl-5 text-slate-300 space-y-1">
-                <li><span className="font-bold text-emerald-400">Orthogonal neighbors</span> (Up, Down, Left, Right) count as <span className="text-emerald-400 font-bold">+2 points</span>.</li>
-                <li><span className="font-bold text-teal-400">Diagonal neighbors</span> count as <span className="text-teal-400 font-bold">+1 point</span>.</li>
-              </ul>
-              <p>
-                An uncovered space displaying <span className="text-slate-200 font-semibold">"4"</span> can indicate exactly 2 orthogonal mines ($2 \times 2$), or 4 diagonal mines ($4 \times 1$), or a combination!
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-700 pt-2 text-slate-400">
-              <div>
-                <span className="font-bold text-slate-300">🎮 Double-Click Chording:</span> Double-click any uncovered cell. If the total weight of surrounding flags matches the cell number, all other hidden squares around it will instantly dig open!
-              </div>
-              <div>
-                <span className="font-bold text-slate-300">📱 Mobile Tap Controller:</span> Toggle between the ⛏️ (Dig) and 🚩 (Flag) buttons on the panel to comfortably sweep with single-finger taps on phones!
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="text-slate-500 text-[10px] py-2 mt-4 text-center">
-        Recreated from the NumWorks calculator Python environment. Live procedural Audio synthesizers active.
-      </footer>
-    </div>
-  );
-}
+    // Start App Instance on Load
+    window.onload = init;
+  </script>
+</body>
+</html>
