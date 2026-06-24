@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calendar Maker</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #22263a;
+  --border: #2e3350;
+  --accent: #6c8ef5;
+  --accent2: #a78bfa;
+  --text: #e2e8f0;
+  --text2: #94a3b8;
+  --text3: #64748b;
+  --red: #f87171;
+  --green: #4ade80;
+  --amber: #fbbf24;
+  --radius: 8px;
+  --radius-sm: 5px;
+}
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 13px;
+}
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+header h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; color: var(--text); }
+header .pill {
+  font-size: 10px; background: var(--accent); color: #fff;
+  padding: 2px 8px; border-radius: 20px; font-weight: 600; letter-spacing: .5px;
+}
+.main {
+  display: grid;
+  grid-template-columns: 200px 1fr 260px;
+  flex: 1;
+  overflow: hidden;
+}
+.panel {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.panel-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.panel-scroll { overflow-y: auto; flex: 1; }
+.panel-scroll::-webkit-scrollbar { width: 4px; }
+.panel-scroll::-webkit-scrollbar-track { background: transparent; }
+.panel-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* Left panel: component types */
+.comp-btn {
+  width: calc(100% - 16px);
+  margin: 4px 8px 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: border-color .15s, background .15s;
+}
+.comp-btn:hover { border-color: var(--accent); background: #1e2235; }
+.comp-btn .icon {
+  width: 28px; height: 28px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; flex-shrink: 0;
+}
+.comp-btn .label { font-size: 12px; font-weight: 500; }
+.comp-btn .sub { font-size: 10px; color: var(--text3); }
+
+/* Layer list */
+.layer-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background .1s;
+}
+.layer-item:hover { background: var(--surface2); }
+.layer-item.active { background: #1e2a52; border-left: 2px solid var(--accent); }
+.layer-item .layer-icon { font-size: 14px; flex-shrink: 0; }
+.layer-item .layer-name { flex: 1; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.layer-item .del-btn {
+  background: none; border: none; color: var(--text3);
+  cursor: pointer; padding: 2px; border-radius: 3px;
+  font-size: 14px; line-height: 1; display: flex; align-items: center;
+}
+.layer-item .del-btn:hover { color: var(--red); background: rgba(248,113,113,.1); }
+
+/* Canvas area */
+.canvas-area {
+  background: #0a0c14;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  overflow: auto;
+  position: relative;
+}
+.canvas-controls {
+  position: absolute;
+  top: 12px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 8px; align-items: center;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 20px; padding: 5px 12px;
+  z-index: 10;
+}
+.canvas-controls label { font-size: 11px; color: var(--text2); }
+.canvas-controls select, .canvas-controls input[type=number] {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 4px; font-size: 11px; padding: 2px 6px;
+}
+#canvas-wrap {
+  position: relative;
+  background: white;
+  box-shadow: 0 0 0 1px var(--border), 0 8px 40px rgba(0,0,0,.6);
+}
+#preview-canvas { display: block; }
+
+/* Right panel: properties */
+.right-panel {
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.prop-group { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.prop-group-title { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; }
+.prop-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.prop-row:last-child { margin-bottom: 0; }
+.prop-row label { font-size: 11px; color: var(--text2); width: 80px; flex-shrink: 0; }
+.prop-row input[type=text],
+.prop-row input[type=number],
+.prop-row input[type=url],
+.prop-row select {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: var(--radius-sm); font-size: 12px; padding: 5px 8px;
+  min-width: 0;
+}
+.prop-row input:focus, .prop-row select:focus {
+  outline: none; border-color: var(--accent);
+}
+.prop-row input[type=color] {
+  flex: 1; height: 28px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--surface2); cursor: pointer; padding: 2px;
+}
+.prop-row input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--accent); }
+.xy-pair { display: flex; gap: 6px; flex: 1; }
+.xy-pair input { width: 0; flex: 1; }
+.no-sel {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: var(--text3); gap: 6px; font-size: 12px;
+}
+.no-sel .big { font-size: 32px; }
+
+/* Bottom bar */
+.bottom-bar {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 8px 16px;
+  display: flex; gap: 10px; align-items: center;
+  flex-shrink: 0;
+}
+.btn {
+  padding: 6px 14px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text);
+  transition: all .15s; white-space: nowrap;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.primary:hover { background: #5a7cf0; }
+.btn.danger { color: var(--red); border-color: var(--red); background: rgba(248,113,113,.07); }
+
+/* Month picker in canvas controls */
+#base-month { width: 140px; }
+#canvas-scale { width: 60px; }
+
+/* JSON modal */
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.7); z-index: 100;
+  align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); width: 680px; max-height: 80vh;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.modal-head {
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  font-weight: 600; font-size: 14px;
+}
+.modal-body { padding: 14px; overflow: auto; flex: 1; }
+.modal-body pre {
+  background: #0a0c14; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 12px; font-size: 12px;
+  color: #a3e635; font-family: 'Fira Code', monospace; white-space: pre-wrap;
+  word-break: break-all;
+}
+.modal-foot { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+
+/* utility */
+.empty-hint { padding: 12px 14px; color: var(--text3); font-size: 11px; text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📅 Calendar Maker</h1>
+  <span class="pill">BETA</span>
+  <div style="flex:1"></div>
+  <span style="font-size:11px;color:var(--text3)">Components: <span id="comp-count">0</span></span>
+</header>
+
+<div class="main">
+
+  <!-- LEFT: palette + layers -->
+  <div class="panel" style="border-right:1px solid var(--border)">
+    <div class="panel-title">Add Component</div>
+    <div style="padding:6px 0 2px">
+      <button class="comp-btn" onclick="addComponent('calendar-grid')">
+        <div class="icon" style="background:#1e2a52">🗓️</div>
+        <div><div class="label">Calendar Grid</div><div class="sub">Month as grid</div></div>
+      </button>
+      <button class="comp-btn" onclick="addComponent('calendar-row')">
+        <div class="icon" style="background:#1e3328">📆</div>
+        <div><div class="label">Calendar Row</div><div class="sub">Month as row</div></div>
+      </button>
+      <button class="comp-btn" onclick="addComponent('calendar-col')">
+        <div class="icon" style="background:#1e2833">📊</div>
+        <div><div class="label">Calendar Column</div><div class="sub">Month as column</div></div>
+      </button>
+      <button class="comp-btn" onclick="addComponent('image')">
+        <div class="icon" style="background:#2a1e38">🖼️</div>
+        <div><div class="label">Image</div><div class="sub">From URL</div></div>
+      </button>
+      <button class="comp-btn" onclick="addComponent('text')">
+        <div class="icon" style="background:#2a2a1e">✏️</div>
+        <div><div class="label">Text</div><div class="sub">Draw text</div></div>
+      </button>
+    </div>
+
+    <div class="panel-title" style="margin-top:4px">Layers</div>
+    <div class="panel-scroll" id="layer-list">
+      <div class="empty-hint" id="layer-empty">No components yet.<br>Click above to add one.</div>
+    </div>
+  </div>
+
+  <!-- CENTER: canvas -->
+  <div class="canvas-area" id="canvas-area">
+    <div class="canvas-controls">
+      <label>Base month</label>
+      <input type="month" id="base-month">
+      <label style="margin-left:8px">Zoom</label>
+      <input type="number" id="canvas-scale" value="100" min="20" max="300" step="10"> <span style="font-size:11px;color:var(--text2)">%</span>
+      <label style="margin-left:8px">Canvas</label>
+      <select id="canvas-size">
+        <option value="794,1123">A4 Portrait</option>
+        <option value="1123,794">A4 Landscape</option>
+        <option value="800,800">Square 800</option>
+        <option value="1200,900">Wide 1200×900</option>
+        <option value="600,900">Tall 600×900</option>
+      </select>
+    </div>
+    <div id="canvas-wrap">
+      <canvas id="preview-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- RIGHT: properties -->
+  <div class="right-panel" id="right-panel">
+    <div class="panel-title">Properties</div>
+    <div class="panel-scroll" id="props-scroll">
+      <div class="no-sel">
+        <div class="big">🎯</div>
+        <div>Select a layer to edit it</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="bottom-bar">
+  <button class="btn" onclick="refreshCanvas()">🔄 Refresh Preview</button>
+  <button class="btn" onclick="clearAll()" style="color:var(--red);border-color:var(--red)">🗑️ Clear All</button>
+  <div style="flex:1"></div>
+  <button class="btn" onclick="copyJSON()">📋 Copy JSON</button>
+  <button class="btn primary" onclick="exportJSON()">⬇️ Export JSON</button>
+</div>
+
+<!-- JSON Modal -->
+<div class="modal-overlay" id="json-modal">
+  <div class="modal">
+    <div class="modal-head">
+      Exported JSON
+      <button class="btn" onclick="closeModal()" style="padding:4px 10px">✕</button>
+    </div>
+    <div class="modal-body"><pre id="json-output"></pre></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="copyFromModal()">📋 Copy</button>
+      <button class="btn primary" onclick="downloadJSON()">⬇️ Download</button>
+      <button class="btn" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const COMP_ICONS = {
+  'calendar-grid': '🗓️',
+  'calendar-row': '📆',
+  'calendar-col': '📊',
+  'image': '🖼️',
+  'text': '✏️'
+};
+
+let components = [];
+let selectedId = null;
+let idCounter = 0;
+let canvasW = 794, canvasH = 1123;
+let scale = 1;
+
+const canvas = document.getElementById('preview-canvas');
+const ctx = canvas.getContext('2d');
+const baseMonthInput = document.getElementById('base-month');
+const canvasScaleInput = document.getElementById('canvas-scale');
+const canvasSizeSelect = document.getElementById('canvas-size');
+
+function todayMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+baseMonthInput.value = todayMonth();
+
+function getBaseDate() {
+  const [y,m] = baseMonthInput.value.split('-').map(Number);
+  return new Date(y, m-1, 1);
+}
+
+function applyOffset(base, offset) {
+  return new Date(base.getFullYear(), base.getMonth() + offset, 1);
+}
+
+function daysInMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth()+1, 0).getDate();
+}
+
+function monthName(date) {
+  return date.toLocaleString('default', { month: 'long' });
+}
+
+function firstDayOfWeek(date, startDay) {
+  const first = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  return ((first - startDay) + 7) % 7;
+}
+
+canvasSizeSelect.addEventListener('change', () => {
+  const [w,h] = canvasSizeSelect.value.split(',').map(Number);
+  canvasW = w; canvasH = h;
+  updateCanvasSize();
+  refreshCanvas();
+});
+
+canvasScaleInput.addEventListener('input', () => {
+  scale = Math.max(0.2, Math.min(3, Number(canvasScaleInput.value) / 100));
+  updateCanvasSize();
+  refreshCanvas();
+});
+
+baseMonthInput.addEventListener('change', refreshCanvas);
+
+function updateCanvasSize() {
+  const wrap = document.getElementById('canvas-wrap');
+  canvas.width = canvasW;
+  canvas.height = canvasH;
+  const s = Math.max(0.2, Math.min(3, Number(canvasScaleInput.value)/100));
+  wrap.style.width = (canvasW * s) + 'px';
+  wrap.style.height = (canvasH * s) + 'px';
+  canvas.style.width = (canvasW * s) + 'px';
+  canvas.style.height = (canvasH * s) + 'px';
+}
+
+updateCanvasSize();
+
+// coordinate helpers: -100..100 → px
+function toX(x) { return ((x + 100) / 200) * canvasW; }
+function toY(y) { return ((100 - y) / 200) * canvasH; }
+function toW(w) { return (w / 200) * canvasW; }
+function toH(h) { return (h / 200) * canvasH; }
+
+function uid() { return 'c' + (++idCounter); }
+
+const DEFAULTS = {
+  'calendar-grid': {
+    type: 'calendar-grid',
+    label: 'Calendar Grid',
+    x: 0, y: 0,
+    size: [160, 120],
+    color: '#1a1a2e',
+    headerColor: '#e2e8f0',
+    dayColor: '#1e293b',
+    textColor: '#e2e8f0',
+    weekendColor: '#4a5568',
+    todayColor: '#6c8ef5',
+    monthOffset: 0,
+    dayStart: 1,
+    showWeekNumbers: false,
+    showMonthLabel: true,
+    opacity: 1, rotation: 0, zIndex: 0
+  },
+  'calendar-row': {
+    type: 'calendar-row',
+    label: 'Calendar Row',
+    x: 0, y: 30,
+    size: [180, 30],
+    color: '#1e293b',
+    textColor: '#e2e8f0',
+    accentColor: '#6c8ef5',
+    monthOffset: 0,
+    showMonthName: true,
+    opacity: 1, rotation: 0, zIndex: 0
+  },
+  'calendar-col': {
+    type: 'calendar-col',
+    label: 'Calendar Column',
+    x: 0, y: 0,
+    size: [30, 180],
+    color: '#1e293b',
+    textColor: '#e2e8f0',
+    accentColor: '#6c8ef5',
+    monthOffset: 0,
+    showMonthName: true,
+    opacity: 1, rotation: 0, zIndex: 0
+  },
+  'image': {
+    type: 'image',
+    label: 'Image',
+    x: 0, y: 0,
+    size: [80, 60],
+    imageUrl: 'https://placehold.co/400x300/1a1a2e/ffffff?text=Image',
+    fit: 'cover',
+    opacity: 1, rotation: 0, zIndex: 0
+  },
+  'text': {
+    type: 'text',
+    label: 'Text',
+    x: 0, y: 50,
+    size: [100, 20],
+    textContent: 'Hello Calendar',
+    color: '#1a1a2e',
+    fontSize: 24,
+    fontWeight: 'bold',
+    align: 'center',
+    opacity: 1, rotation: 0, zIndex: 0
+  }
+};
+
+function addComponent(type) {
+  const id = uid();
+  const comp = { id, ...JSON.parse(JSON.stringify(DEFAULTS[type])) };
+  components.push(comp);
+  renderLayerList();
+  selectComponent(id);
+  refreshCanvas();
+}
+
+function selectComponent(id) {
+  selectedId = id;
+  renderLayerList();
+  renderProps();
+}
+
+function deleteComponent(id) {
+  components = components.filter(c => c.id !== id);
+  if (selectedId === id) selectedId = null;
+  renderLayerList();
+  renderProps();
+  refreshCanvas();
+}
+
+function renderLayerList() {
+  document.getElementById('comp-count').textContent = components.length;
+  const list = document.getElementById('layer-list');
+  const empty = document.getElementById('layer-empty');
+  if (!components.length) {
+    list.innerHTML = '';
+    list.appendChild(empty);
+    return;
+  }
+  list.innerHTML = '';
+  [...components].reverse().forEach(c => {
+    const item = document.createElement('div');
+    item.className = 'layer-item' + (c.id === selectedId ? ' active' : '');
+    item.innerHTML = `
+      <span class="layer-icon">${COMP_ICONS[c.type]}</span>
+      <span class="layer-name">${c.label}</span>
+      <button class="del-btn" title="Delete" onclick="event.stopPropagation();deleteComponent('${c.id}')">✕</button>
+    `;
+    item.addEventListener('click', () => selectComponent(c.id));
+    list.appendChild(item);
+  });
+}
+
+function propRow(label, inputHtml) {
+  return `<div class="prop-row"><label>${label}</label>${inputHtml}</div>`;
+}
+
+function numInput(field, val, min, max, step=1) {
+  return `<input type="number" value="${val}" min="${min}" max="${max}" step="${step}" onchange="updateProp('${field}', parseFloat(this.value))" oninput="updateProp('${field}', parseFloat(this.value))">`;
+}
+
+function textInput(field, val) {
+  return `<input type="text" value="${escAttr(val)}" oninput="updateProp('${field}', this.value)">`;
+}
+
+function urlInput(field, val) {
+  return `<input type="url" value="${escAttr(val)}" oninput="updateProp('${field}', this.value)">`;
+}
+
+function colorInput(field, val) {
+  return `<input type="color" value="${val}" oninput="updateProp('${field}', this.value)">`;
+}
+
+function selectInput(field, val, options) {
+  const opts = options.map(([v,l]) => `<option value="${v}"${v==val?' selected':''}>${l}</option>`).join('');
+  return `<select onchange="updateProp('${field}', this.value)">${opts}</select>`;
+}
+
+function checkInput(field, val) {
+  return `<input type="checkbox" ${val?'checked':''} onchange="updateProp('${field}', this.checked)">`;
+}
+
+function escAttr(s) { return String(s).replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function renderProps() {
+  const scroll = document.getElementById('props-scroll');
+  if (!selectedId) {
+    scroll.innerHTML = `<div class="no-sel"><div class="big">🎯</div><div>Select a layer to edit it</div></div>`;
+    return;
+  }
+  const c = components.find(x => x.id === selectedId);
+  if (!c) return;
+
+  let html = '';
+
+  // Common: identity
+  html += `<div class="prop-group">
+    <div class="prop-group-title">Identity</div>
+    ${propRow('Label', textInput('label', c.label))}
+  </div>`;
+
+  // Common: position & size
+  html += `<div class="prop-group">
+    <div class="prop-group-title">Position</div>
+    ${propRow('X / Y', `<div class="xy-pair">${numInput('x',c.x,-100,100,0.5)}${numInput('y',c.y,-100,100,0.5)}</div>`)}
+    ${propRow('Size W×H', `<div class="xy-pair">${numInput('size0',c.size[0],1,200,0.5)}${numInput('size1',c.size[1],1,200,0.5)}</div>`)}
+    ${propRow('Rotation°', numInput('rotation',c.rotation,-360,360,1))}
+    ${propRow('Z-Index', numInput('zIndex',c.zIndex,0,100,1))}
+    ${propRow('Opacity', numInput('opacity',c.opacity,0,1,0.05))}
+  </div>`;
+
+  // Type-specific
+  if (c.type === 'calendar-grid') {
+    html += `<div class="prop-group">
+      <div class="prop-group-title">Grid Settings</div>
+      ${propRow('Month offset', numInput('monthOffset',c.monthOffset,-24,24,1))}
+      ${propRow('Day start', selectInput('dayStart',c.dayStart,[[0,'Sun'],[1,'Mon'],[2,'Tue'],[3,'Wed'],[4,'Thu'],[5,'Fri'],[6,'Sat']]))}
+      ${propRow('Week nums', checkInput('showWeekNumbers',c.showWeekNumbers))}
+      ${propRow('Month label', checkInput('showMonthLabel',c.showMonthLabel))}
+    </div>
+    <div class="prop-group">
+      <div class="prop-group-title">Colors</div>
+      ${propRow('Header bg', colorInput('headerColor',c.headerColor))}
+      ${propRow('Day bg', colorInput('dayColor',c.dayColor))}
+      ${propRow('Text', colorInput('textColor',c.textColor))}
+      ${propRow('Weekend', colorInput('weekendColor',c.weekendColor))}
+      ${propRow('Today', colorInput('todayColor',c.todayColor))}
+    </div>`;
+  }
+
+  if (c.type === 'calendar-row' || c.type === 'calendar-col') {
+    html += `<div class="prop-group">
+      <div class="prop-group-title">Settings</div>
+      ${propRow('Month offset', numInput('monthOffset',c.monthOffset,-24,24,1))}
+      ${propRow('Show name', checkInput('showMonthName',c.showMonthName))}
+    </div>
+    <div class="prop-group">
+      <div class="prop-group-title">Colors</div>
+      ${propRow('Background', colorInput('color',c.color))}
+      ${propRow('Text', colorInput('textColor',c.textColor))}
+      ${propRow('Accent', colorInput('accentColor',c.accentColor))}
+    </div>`;
+  }
+
+  if (c.type === 'image') {
+    html += `<div class="prop-group">
+      <div class="prop-group-title">Image</div>
+      ${propRow('URL', urlInput('imageUrl',c.imageUrl))}
+      ${propRow('Fit', selectInput('fit',c.fit,[['cover','Cover'],['contain','Contain'],['fill','Fill']]))}
+    </div>`;
+  }
+
+  if (c.type === 'text') {
+    html += `<div class="prop-group">
+      <div class="prop-group-title">Text</div>
+      ${propRow('Content', textInput('textContent',c.textContent))}
+      ${propRow('Color', colorInput('color',c.color))}
+      ${propRow('Font size', numInput('fontSize',c.fontSize,6,200,1))}
+      ${propRow('Weight', selectInput('fontWeight',c.fontWeight,[['normal','Normal'],['bold','Bold'],['300','Light'],['600','Semibold']]))}
+      ${propRow('Align', selectInput('align',c.align,[['left','Left'],['center','Center'],['right','Right']]))}
+    </div>`;
+  }
+
+  scroll.innerHTML = html;
+}
+
+function updateProp(field, value) {
+  const c = components.find(x => x.id === selectedId);
+  if (!c) return;
+  if (field === 'size0') { c.size[0] = value; }
+  else if (field === 'size1') { c.size[1] = value; }
+  else { c[field] = value; }
+  refreshCanvas();
+}
+
+// ---- DRAWING ----
+const imageCache = {};
+
+function loadImage(url) {
+  if (imageCache[url]) return Promise.resolve(imageCache[url]);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => { imageCache[url] = img; resolve(img); };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+async function refreshCanvas() {
+  ctx.clearRect(0, 0, canvasW, canvasH);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  const base = getBaseDate();
+  const sorted = [...components].sort((a,b) => (a.zIndex||0)-(b.zIndex||0));
+
+  for (const c of sorted) {
+    ctx.save();
+    const cx = toX(c.x);
+    const cy = toY(c.y);
+    const w = toW(c.size[0]);
+    const h = toH(c.size[1]);
+    ctx.globalAlpha = Math.max(0, Math.min(1, c.opacity ?? 1));
+
+    if (c.rotation) {
+      ctx.translate(cx + w/2, cy + h/2);
+      ctx.rotate((c.rotation * Math.PI) / 180);
+      ctx.translate(-(cx + w/2), -(cy + h/2));
+    }
+
+    if (c.type === 'calendar-grid') drawGrid(ctx, c, base, cx, cy, w, h);
+    else if (c.type === 'calendar-row') drawRow(ctx, c, base, cx, cy, w, h);
+    else if (c.type === 'calendar-col') drawCol(ctx, c, base, cx, cy, w, h);
+    else if (c.type === 'text') drawText(ctx, c, cx, cy, w, h);
+    else if (c.type === 'image') await drawImage(ctx, c, cx, cy, w, h);
+
+    // selection highlight
+    if (c.id === selectedId) {
+      ctx.strokeStyle = '#6c8ef5';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeRect(cx, cy, w, h);
+      ctx.setLineDash([]);
+    }
+
+    ctx.restore();
+  }
+}
+
+function drawGrid(ctx, c, base, x, y, w, h) {
+  const date = applyOffset(base, c.monthOffset || 0);
+  const days = daysInMonth(date);
+  const startDay = firstDayOfWeek(date, c.dayStart || 1);
+  const today = new Date();
+  const isThisMonth = today.getFullYear()===date.getFullYear() && today.getMonth()===date.getMonth();
+
+  const weekNums = c.showWeekNumbers;
+  const cols = 7 + (weekNums ? 1 : 0);
+  const headerH = c.showMonthLabel ? Math.min(h * 0.12, 28) : 0;
+  const dowH = Math.min(h * 0.1, 22);
+  const rows = Math.ceil((startDay + days) / 7);
+  const cellW = w / cols;
+  const cellH = (h - headerH - dowH) / rows;
+
+  // header
+  if (c.showMonthLabel) {
+    ctx.fillStyle = c.headerColor || '#1a1a2e';
+    ctx.fillRect(x, y, w, headerH);
+    ctx.fillStyle = c.textColor || '#e2e8f0';
+    ctx.font = `bold ${Math.min(headerH * 0.6, 18)}px Inter,sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${monthName(date)} ${date.getFullYear()}`, x + w/2, y + headerH/2);
+  }
+
+  // DOW labels
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const orderedDays = [...Array(7)].map((_,i) => dayNames[(i + (c.dayStart||1)) % 7]);
+  ctx.fillStyle = c.dayColor || '#1e293b';
+  ctx.fillRect(x, y + headerH, w, dowH);
+  ctx.font = `600 ${Math.min(dowH * 0.6, 11)}px Inter,sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if (weekNums) {
+    ctx.fillStyle = c.textColor || '#e2e8f0';
+    ctx.fillText('W', x + cellW/2, y + headerH + dowH/2);
+  }
+
+  orderedDays.forEach((d, i) => {
+    const isWeekend = ((i + (c.dayStart||1)) % 7 === 0) || ((i + (c.dayStart||1)) % 7 === 6);
+    const colX = x + (i + (weekNums?1:0)) * cellW;
+    ctx.fillStyle = isWeekend ? (c.weekendColor || '#4a5568') : (c.textColor || '#e2e8f0');
+    ctx.fillText(d, colX + cellW/2, y + headerH + dowH/2);
+  });
+
+  // Day cells
+  let cell = 0;
+  for (let r = 0; r < rows; r++) {
+    if (weekNums) {
+      const weekDate = new Date(date.getFullYear(), date.getMonth(), 1 + r*7 - startDay);
+      const weekNum = getISOWeek(weekDate);
+      ctx.fillStyle = c.dayColor || '#1e293b';
+      ctx.fillRect(x, y + headerH + dowH + r*cellH, cellW, cellH);
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x, y + headerH + dowH + r*cellH, cellW, cellH);
+      ctx.fillStyle = c.weekendColor || '#4a5568';
+      ctx.font = `500 ${Math.min(cellH*0.45, 10)}px Inter,sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(weekNum, x + cellW/2, y + headerH + dowH + r*cellH + cellH/2);
+    }
+
+    for (let col = 0; col < 7; col++) {
+      const colIdx = col + (weekNums?1:0);
+      const cellX = x + colIdx * cellW;
+      const cellY = y + headerH + dowH + r * cellH;
+      const dayNum = cell - startDay + 1;
+      const inMonth = dayNum >= 1 && dayNum <= days;
+
+      ctx.fillStyle = inMonth ? (c.dayColor || '#1e293b') : 'rgba(0,0,0,0.15)';
+      ctx.fillRect(cellX, cellY, cellW, cellH);
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(cellX, cellY, cellW, cellH);
+
+      if (inMonth) {
+        const isToday = isThisMonth && dayNum === today.getDate();
+        const isWE = ((col + (c.dayStart||1)) % 7 === 0) || ((col + (c.dayStart||1)) % 7 === 6);
+        if (isToday) {
+          const r2 = Math.min(cellW, cellH) * 0.35;
+          ctx.fillStyle = c.todayColor || '#6c8ef5';
+          ctx.beginPath();
+          ctx.arc(cellX + cellW/2, cellY + cellH/2, r2, 0, Math.PI*2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+        } else {
+          ctx.fillStyle = isWE ? (c.weekendColor || '#4a5568') : (c.textColor || '#e2e8f0');
+        }
+        ctx.font = `${isToday?'bold':'500'} ${Math.min(cellH*0.5, 13)}px Inter,sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(dayNum, cellX + cellW/2, cellY + cellH/2);
+      }
+      cell++;
+    }
+  }
+}
+
+function getISOWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+}
+
+function drawRow(ctx, c, base, x, y, w, h) {
+  const date = applyOffset(base, c.monthOffset || 0);
+  const days = daysInMonth(date);
+  const today = new Date();
+  const isThisMonth = today.getFullYear()===date.getFullYear() && today.getMonth()===date.getMonth();
+
+  const nameW = c.showMonthName ? Math.min(w * 0.12, 50) : 0;
+  const cellW = (w - nameW) / days;
+
+  ctx.fillStyle = c.color || '#1e293b';
+  ctx.fillRect(x, y, w, h);
+
+  if (c.showMonthName) {
+    ctx.fillStyle = c.accentColor || '#6c8ef5';
+    ctx.fillRect(x, y, nameW, h);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${Math.min(h*0.45, 11)}px Inter,sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.save();
+    ctx.translate(x + nameW/2, y + h/2);
+    ctx.fillText(monthName(date).slice(0,3), 0, 0);
+    ctx.restore();
+  }
+
+  for (let d = 1; d <= days; d++) {
+    const cx = x + nameW + (d-1)*cellW;
+    const isToday = isThisMonth && d === today.getDate();
+    const dow = new Date(date.getFullYear(), date.getMonth(), d).getDay();
+    const isWE = dow === 0 || dow === 6;
+
+    if (isToday) {
+      ctx.fillStyle = c.accentColor || '#6c8ef5';
+      ctx.fillRect(cx, y, cellW, h);
+      ctx.fillStyle = '#ffffff';
+    } else {
+      ctx.fillStyle = isWE ? 'rgba(255,255,255,0.05)' : 'transparent';
+      ctx.fillRect(cx, y, cellW, h);
+      ctx.fillStyle = c.textColor || '#e2e8f0';
+    }
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(cx, y, cellW, h);
+
+    ctx.font = `500 ${Math.min(cellW*0.7, h*0.5, 11)}px Inter,sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(d, cx + cellW/2, y + h/2);
+  }
+}
+
+function drawCol(ctx, c, base, x, y, w, h) {
+  const date = applyOffset(base, c.monthOffset || 0);
+  const days = daysInMonth(date);
+  const today = new Date();
+  const isThisMonth = today.getFullYear()===date.getFullYear() && today.getMonth()===date.getMonth();
+
+  const nameH = c.showMonthName ? Math.min(h * 0.08, 30) : 0;
+  const cellH = (h - nameH) / days;
+
+  ctx.fillStyle = c.color || '#1e293b';
+  ctx.fillRect(x, y, w, h);
+
+  if (c.showMonthName) {
+    ctx.fillStyle = c.accentColor || '#6c8ef5';
+    ctx.fillRect(x, y, w, nameH);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${Math.min(nameH*0.6, 11)}px Inter,sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(monthName(date).slice(0,3), x + w/2, y + nameH/2);
+  }
+
+  for (let d = 1; d <= days; d++) {
+    const cy = y + nameH + (d-1)*cellH;
+    const isToday = isThisMonth && d === today.getDate();
+    const dow = new Date(date.getFullYear(), date.getMonth(), d).getDay();
+    const isWE = dow === 0 || dow === 6;
+
+    if (isToday) {
+      ctx.fillStyle = c.accentColor || '#6c8ef5';
+      ctx.fillRect(x, cy, w, cellH);
+      ctx.fillStyle = '#ffffff';
+    } else {
+      ctx.fillStyle = isWE ? 'rgba(255,255,255,0.05)' : 'transparent';
+      ctx.fillRect(x, cy, w, cellH);
+      ctx.fillStyle = c.textColor || '#e2e8f0';
+    }
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(x, cy, w, cellH);
+
+    ctx.font = `500 ${Math.min(w*0.55, cellH*0.6, 11)}px Inter,sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(d, x + w/2, cy + cellH/2);
+  }
+}
+
+function drawText(ctx, c, x, y, w, h) {
+  ctx.fillStyle = c.color || '#1a1a2e';
+  ctx.font = `${c.fontWeight||'bold'} ${c.fontSize||24}px Inter,sans-serif`;
+  ctx.textBaseline = 'middle';
+  const align = c.align || 'center';
+  ctx.textAlign = align;
+  const tx = align === 'left' ? x : align === 'right' ? x + w : x + w/2;
+  ctx.fillText(c.textContent || '', tx, y + h/2);
+}
+
+async function drawImage(ctx, c, x, y, w, h) {
+  const img = await loadImage(c.imageUrl);
+  if (!img) {
+    ctx.fillStyle = '#2d2d3a';
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#64748b';
+    ctx.font = '12px Inter,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Image not found', x + w/2, y + h/2);
+    return;
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  const fit = c.fit || 'cover';
+  if (fit === 'fill') {
+    ctx.drawImage(img, x, y, w, h);
+  } else {
+    const iR = img.width / img.height;
+    const cR = w / h;
+    let dw, dh, dx, dy;
+    if ((fit === 'cover') === (iR > cR)) {
+      dh = h; dw = h * iR;
+    } else {
+      dw = w; dh = w / iR;
+    }
+    dx = x + (w - dw)/2;
+    dy = y + (h - dh)/2;
+    ctx.drawImage(img, dx, dy, dw, dh);
+  }
+  ctx.restore();
+}
+
+// ---- JSON ----
+function buildJSON() {
+  return {
+    version: 1,
+    components: components.map(c => {
+      const { id, ...rest } = c;
+      return rest;
+    })
+  };
+}
+
+function exportJSON() {
+  document.getElementById('json-output').textContent = JSON.stringify(buildJSON(), null, 2);
+  document.getElementById('json-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('json-modal').classList.remove('open');
+}
+
+function copyJSON() {
+  navigator.clipboard.writeText(JSON.stringify(buildJSON(), null, 2));
+}
+
+function copyFromModal() {
+  navigator.clipboard.writeText(document.getElementById('json-output').textContent);
+}
+
+function downloadJSON() {
+  const blob = new Blob([JSON.stringify(buildJSON(), null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'calendar-layout.json';
+  a.click();
+}
+
+function clearAll() {
+  if (!confirm('Clear all components?')) return;
+  components = []; selectedId = null;
+  renderLayerList(); renderProps(); refreshCanvas();
+}
+
+document.getElementById('json-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('json-modal')) closeModal();
+});
+
+// init
+refreshCanvas();
+</script>
+</body>
+</html>
