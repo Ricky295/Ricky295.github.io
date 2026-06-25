@@ -197,6 +197,15 @@
             border-left-color: #dc3545;
         }
 
+        /* Hidden elements for PiP */
+        #pip-canvas { 
+            display: none; 
+        }
+        
+        #pip-video { 
+            display: none; 
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 1.8em;
@@ -252,9 +261,18 @@
         </div>
     </div>
 
+    <!-- Hidden canvas and video for PiP -->
+    <canvas id="pip-canvas" width="640" height="360"></canvas>
+    <video id="pip-video" autoplay muted></video>
+
     <script>
-        let pipVideo = null;
-        let isPiPActive = false;
+        let currentUrl = '';
+        let animationFrame = null;
+        let frameCount = 0;
+
+        const pipCanvas = document.getElementById('pip-canvas');
+        const pipVideo = document.getElementById('pip-video');
+        const ctx = pipCanvas.getContext('2d');
 
         function showStatus(message, isError = false) {
             const status = document.getElementById('status');
@@ -285,6 +303,8 @@
                 fullUrl = 'https://' + url;
             }
 
+            currentUrl = fullUrl;
+
             const frame = document.getElementById('websiteFrame');
             const placeholder = document.getElementById('placeholder');
             const pipControls = document.getElementById('pipControls');
@@ -297,99 +317,30 @@
             showStatus('Website loaded! Click "Toggle PiP" to activate Picture-in-Picture mode.');
         }
 
-        async function togglePiP() {
-            try {
-                // Exit PiP if already active
-                if (document.pictureInPictureElement) {
-                    await document.exitPictureInPicture();
-                    isPiPActive = false;
-                    showStatus('PiP mode deactivated');
-                    return;
-                }
-
-                // Create a canvas for PiP demonstration
-                const canvas = document.createElement('canvas');
-                canvas.width = 640;
-                canvas.height = 360;
-                const ctx = canvas.getContext('2d');
-                
-                // Create animated content
-                let frame = 0;
-                function drawFrame() {
-                    // Background gradient
-                    const gradient = ctx.createLinearGradient(0, 0, 640, 360);
-                    gradient.addColorStop(0, '#667eea');
-                    gradient.addColorStop(1, '#764ba2');
-                    ctx.fillStyle = gradient;
-                    ctx.fillRect(0, 0, 640, 360);
-                    
-                    // Animated circles
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                    for (let i = 0; i < 5; i++) {
-                        const x = 320 + Math.cos(frame * 0.02 + i) * 150;
-                        const y = 180 + Math.sin(frame * 0.02 + i) * 100;
-                        ctx.beginPath();
-                        ctx.arc(x, y, 30 + i * 10, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
-                    
-                    // Text
-                    ctx.fillStyle = 'white';
-                    ctx.font = 'bold 36px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('🎬 PiP Mode Active', 320, 160);
-                    
-                    ctx.font = '24px Arial';
-                    ctx.fillText('Watching: ' + (document.getElementById('urlInput').value || 'Website'), 320, 220);
-                    
-                    frame++;
-                    if (isPiPActive) {
-                        requestAnimationFrame(drawFrame);
-                    }
-                }
-                
-                // Create video from canvas stream
-                const stream = canvas.captureStream(30); // 30 FPS
-                const video = document.createElement('video');
-                video.srcObject = stream;
-                video.muted = true;
-                video.autoplay = true;
-                video.playsInline = true;
-                
-                // Wait for video to be ready
-                await new Promise((resolve) => {
-                    video.onloadedmetadata = resolve;
-                    video.play();
-                });
-                
-                pipVideo = video;
-                isPiPActive = true;
-                
-                // Request PiP
-                await video.requestPictureInPicture();
-                showStatus('PiP mode activated! You can now move the window around.');
-                
-                // Start animation
-                drawFrame();
-                
-                // Handle PiP close
-                video.addEventListener('leavepictureinpicture', () => {
-                    isPiPActive = false;
-                    showStatus('PiP mode closed');
-                });
-                
-            } catch (error) {
-                console.error('PiP error:', error);
-                showStatus('PiP mode failed: ' + error.message, true);
+        function drawCanvas() {
+            const isDark = true;
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, 640, 360);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(1, '#764ba2');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 640, 360);
+            
+            // Animated circles
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            for (let i = 0; i < 5; i++) {
+                const x = 320 + Math.cos(frameCount * 0.02 + i) * 150;
+                const y = 180 + Math.sin(frameCount * 0.02 + i) * 100;
+                ctx.beginPath();
+                ctx.arc(x, y, 30 + i * 10, 0, Math.PI * 2);
+                ctx.fill();
             }
-        }
-
-        // Allow Enter key to load website
-        document.getElementById('urlInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                loadWebsite();
-            }
-        });
-    </script>
-</body>
-</html>
+            
+            // Text
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 36px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('🎬 PiP Mode Active', 320, 150);
+            
+            ctx.font = '20px
