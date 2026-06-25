@@ -231,14 +231,14 @@
         <div class="controls">
             <div class="input-group">
                 <input type="text" id="urlInput" placeholder="Enter website URL (e.g., https://www.youtube.com)">
-                <button class="btn-primary" onclick="loadWebsite()">Load Website</button>
+                <button class="btn-primary" id="loadBtn">Load Website</button>
             </div>
 
             <div class="examples">
-                <button class="example-btn" onclick="setUrl('https://www.youtube.com')">YouTube</button>
-                <button class="example-btn" onclick="setUrl('https://www.twitch.tv')">Twitch</button>
-                <button class="example-btn" onclick="setUrl('https://vimeo.com')">Vimeo</button>
-                <button class="example-btn" onclick="setUrl('https://www.netflix.com')">Netflix</button>
+                <button class="example-btn" data-url="https://www.youtube.com">YouTube</button>
+                <button class="example-btn" data-url="https://www.twitch.tv">Twitch</button>
+                <button class="example-btn" data-url="https://vimeo.com">Vimeo</button>
+                <button class="example-btn" data-url="https://www.netflix.com">Netflix</button>
             </div>
         </div>
 
@@ -256,7 +256,7 @@
             </div>
             <iframe id="websiteFrame" style="display: none;"></iframe>
             <div class="pip-controls" id="pipControls" style="display: none;">
-                <button class="pip-btn" onclick="togglePiP()">🔲 Toggle PiP</button>
+                <button class="pip-btn" id="pipBtn">🔲 Toggle PiP</button>
             </div>
         </div>
     </div>
@@ -266,6 +266,7 @@
     <video id="pip-video" autoplay muted></video>
 
     <script>
+        // Global variables
         let currentUrl = '';
         let animationFrame = null;
         let frameCount = 0;
@@ -273,6 +274,10 @@
         const pipCanvas = document.getElementById('pip-canvas');
         const pipVideo = document.getElementById('pip-video');
         const ctx = pipCanvas.getContext('2d');
+        const urlInput = document.getElementById('urlInput');
+        const loadBtn = document.getElementById('loadBtn');
+        const pipBtn = document.getElementById('pipBtn');
+        const exampleBtns = document.querySelectorAll('.example-btn');
 
         function showStatus(message, isError = false) {
             const status = document.getElementById('status');
@@ -285,12 +290,12 @@
         }
 
         function setUrl(url) {
-            document.getElementById('urlInput').value = url;
+            urlInput.value = url;
             loadWebsite();
         }
 
         function loadWebsite() {
-            const url = document.getElementById('urlInput').value.trim();
+            const url = urlInput.value.trim();
             
             if (!url) {
                 alert('Please enter a URL');
@@ -318,8 +323,6 @@
         }
 
         function drawCanvas() {
-            const isDark = true;
-            
             // Background gradient
             const gradient = ctx.createLinearGradient(0, 0, 640, 360);
             gradient.addColorStop(0, '#667eea');
@@ -343,4 +346,79 @@
             ctx.textAlign = 'center';
             ctx.fillText('🎬 PiP Mode Active', 320, 150);
             
-            ctx.font = '20px
+            ctx.font = '20px Arial';
+            const displayUrl = currentUrl.length > 40 ? currentUrl.substring(0, 40) + '...' : currentUrl;
+            ctx.fillText(displayUrl || 'No website loaded', 320, 200);
+            
+            ctx.font = '16px Arial';
+            ctx.fillText('Frame: ' + frameCount, 320, 240);
+            
+            frameCount++;
+        }
+
+        async function togglePiP() {
+            try {
+                // Exit PiP if already active
+                if (document.pictureInPictureElement) {
+                    await document.exitPictureInPicture();
+                    if (animationFrame) {
+                        cancelAnimationFrame(animationFrame);
+                        animationFrame = null;
+                    }
+                    showStatus('PiP mode deactivated');
+                    return;
+                }
+
+                // Start drawing on canvas
+                function animate() {
+                    drawCanvas();
+                    animationFrame = requestAnimationFrame(animate);
+                }
+                animate();
+
+                // Capture canvas stream
+                const stream = pipCanvas.captureStream(30);
+                pipVideo.srcObject = stream;
+                
+                // Wait for video to be ready
+                await pipVideo.play();
+                
+                // Request PiP
+                await pipVideo.requestPictureInPicture();
+                
+                showStatus('✅ PiP mode activated! You can now move the window around.');
+                
+                // Handle PiP close
+                pipVideo.addEventListener('leavepictureinpicture', () => {
+                    if (animationFrame) {
+                        cancelAnimationFrame(animationFrame);
+                        animationFrame = null;
+                    }
+                    showStatus('PiP mode closed');
+                }, { once: true });
+                
+            } catch (error) {
+                console.error('PiP error:', error);
+                showStatus('❌ PiP mode failed: ' + error.message, true);
+            }
+        }
+
+        // Event listeners
+        loadBtn.addEventListener('click', loadWebsite);
+        pipBtn.addEventListener('click', togglePiP);
+
+        exampleBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const url = this.getAttribute('data-url');
+                setUrl(url);
+            });
+        });
+
+        urlInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                loadWebsite();
+            }
+        });
+    </script>
+</body>
+</html>
