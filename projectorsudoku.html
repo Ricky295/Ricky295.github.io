@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projector Sudoku</title>
+    <!-- Tailwind CSS for modern responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for clean icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0F172A;
+            color: #F8FAFC;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Thick borders for the 3x3 Sudoku subgrids */
+        .sudoku-grid {
+            border: 4px solid #334155;
+            background-color: #1E293B;
+        }
+        .sudoku-cell {
+            border: 1px solid #334155;
+            transition: all 0.2s ease;
+        }
+        /* Highlight 3x3 boundaries */
+        .border-r-thick {
+            border-right: 3px solid #64748B;
+        }
+        .border-b-thick {
+            border-bottom: 3px solid #64748B;
+        }
+
+        /* Pulse animations for instructions */
+        @keyframes pulse-fast {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(0.97); }
+        }
+        .pulse-active {
+            animation: pulse-fast 2s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between overflow-x-hidden">
+
+    <!-- Header Section -->
+    <header class="border-b border-slate-800 bg-slate-950 bg-opacity-70 backdrop-blur-md py-4 px-6 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
+                    <i class="fa-solid fa-border-all text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-black tracking-tight text-white uppercase">
+                        Projector <span class="text-blue-500">Sudoku</span>
+                    </h1>
+                    <p class="text-xs text-slate-400 font-medium">Mental solver powered by Box Hidden Single logic</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <div class="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 flex items-center gap-3">
+                    <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Status:</span>
+                    <span id="status-badge" class="px-2 py-0.5 rounded text-xs font-bold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 uppercase">
+                        Ready
+                    </span>
+                </div>
+                <button onclick="toggleInfoModal()" class="text-slate-400 hover:text-white transition-colors p-2" title="How to play">
+                    <i class="fa-solid fa-circle-question text-xl"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-grow flex items-center justify-center p-4 md:p-8 max-w-6xl mx-auto w-full">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full items-start">
+            
+            <!-- Left Panel: The Sudoku Grid & Controls -->
+            <div class="lg:col-span-7 flex flex-col items-center justify-center">
+                <!-- Main Sudoku Board Wrapper -->
+                <div class="relative w-full max-w-[480px] aspect-square bg-slate-900 rounded-xl overflow-hidden shadow-2xl shadow-black border border-slate-800 p-4">
+                    
+                    <!-- Cover overlay before starting -->
+                    <div id="start-overlay" class="absolute inset-0 z-40 bg-slate-950 bg-opacity-95 flex flex-col items-center justify-center p-6 text-center backdrop-blur-sm transition-all duration-300">
+                        <div class="w-20 h-20 bg-blue-600/10 border border-blue-500/30 rounded-full flex items-center justify-center mb-6 text-blue-400 pulse-active">
+                            <i class="fa-solid fa-play text-3xl ml-1"></i>
+                        </div>
+                        <h2 class="text-3xl font-black text-white mb-2">Projector Mode</h2>
+                        <p class="text-slate-400 text-sm max-w-sm mb-6 leading-relaxed">
+                            A custom puzzle is generated! Solve mentally. No clicking or inputting answers on-screen allowed.
+                        </p>
+                        <button onclick="startGame()" class="px-8 py-4 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 transform hover:-translate-y-0.5 transition-all text-lg flex items-center gap-3">
+                            <span>Press <kbd class="px-2 py-1 bg-blue-800 text-xs rounded border border-blue-400 font-mono">SPACE</kbd> to Start</span>
+                        </button>
+                    </div>
+
+                    <!-- Complete board container -->
+                    <div id="sudoku-board-container" class="w-full h-full grid grid-cols-9 sudoku-grid bg-slate-950 select-none">
+                        <!-- Dynamic cells injected here -->
+                    </div>
+                </div>
+
+                <!-- Live controller instructions bar -->
+                <div class="w-full max-w-[480px] mt-6 bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 flex items-center justify-between text-center">
+                    <div class="flex flex-col items-start">
+                        <span class="text-xs text-blue-400 font-bold tracking-wider uppercase">Hotkeys</span>
+                        <div class="flex items-center gap-2 mt-1">
+                            <kbd class="px-3 py-1 bg-slate-800 rounded border border-slate-700 text-xs font-mono text-slate-300">Space</kbd>
+                            <span class="text-xs text-slate-400" id="space-instruction">Start / Declare Done</span>
+                        </div>
+                    </div>
+                    <button onclick="regenerateNewBoard()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors text-xs flex items-center gap-2">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        <span>New Grid</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Panel: Time, Difficulty, Scoring & Inputs -->
+            <div class="lg:col-span-5 flex flex-col gap-6 w-full">
+                
+                <!-- Game Configuration Card -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 relative overflow-hidden shadow-lg">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Logical Difficulty Target</h3>
+                    <div class="grid grid-cols-3 gap-2 mb-3">
+                        <button onclick="setDifficulty('easy')" id="btn-easy" class="py-2 rounded-lg border-2 border-blue-600 bg-blue-500/10 text-blue-400 font-bold transition-all text-sm">
+                            Easy (5-8)
+                        </button>
+                        <button onclick="setDifficulty('medium')" id="btn-medium" class="py-2 rounded-lg border-2 border-transparent bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-all text-sm">
+                            Medium (12-18)
+                        </button>
+                        <button onclick="setDifficulty('hard')" id="btn-hard" class="py-2 rounded-lg border-2 border-transparent bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-all text-sm">
+                            Hard (25-35)
+                        </button>
+                    </div>
+                    <button onclick="openCustomDifficultyModal()" class="w-full py-2 px-3 rounded-lg border border-slate-700 hover:border-slate-500 bg-slate-800/40 text-slate-300 font-semibold text-xs transition-all flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>Configure Custom Step Range</span>
+                    </button>
+                </div>
+
+                <!-- Large Status and Timer Card -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 relative overflow-hidden shadow-lg">
+                    <div class="absolute -right-12 -top-12 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl"></div>
+                    
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Elapsed Solve Time</h3>
+                    <div class="flex items-baseline gap-3">
+                        <div class="text-5xl font-extrabold tracking-tight text-white mono" id="timer-display">
+                            00:00.00
+                        </div>
+                        <span class="text-xs font-bold text-blue-400 uppercase tracking-wider px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-md" id="timer-status">
+                            Stopped
+                        </span>
+                    </div>
+
+                    <div class="mt-4 grid grid-cols-2 gap-4 pt-4 border-t border-slate-800">
+                        <div>
+                            <span class="block text-xs text-slate-500 uppercase tracking-wider">Empty Spaces (Digits)</span>
+                            <span class="text-lg font-bold text-slate-200" id="stats-empty-cells">0</span>
+                        </div>
+                        <div>
+                            <span class="block text-xs text-slate-500 uppercase tracking-wider">Initial Hints</span>
+                            <span class="text-lg font-bold text-slate-200" id="stats-hints">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input Panel: Activated only upon Declaring Done -->
+                <div id="evaluation-card" class="bg-slate-900 border-2 border-dashed border-slate-800 rounded-2xl p-6 transition-all duration-300 opacity-40 select-none pointer-events-none">
+                    <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-clipboard-question text-blue-400"></i>
+                        <span>Submit Mistakes</span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mb-6">
+                        The timer has stopped and the complete grid solution is now displayed. Enter the number of incorrect cells or forgotten empty spots.
+                    </p>
+
+                    <div class="flex flex-col gap-4">
+                        <label class="text-xs font-bold text-slate-300 uppercase tracking-wider block">
+                            How many mistakes did you make?
+                        </label>
+                        <div class="flex items-center gap-3">
+                            <button onclick="adjustMistakes(-1)" class="w-12 h-12 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xl flex items-center justify-center transition-colors border border-slate-700">
+                                -
+                            </button>
+                            <input type="number" id="mistake-input" min="0" value="0" class="flex-grow h-12 text-center text-xl font-bold bg-slate-950 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 mono" onchange="validateMistakes(this)">
+                            <button onclick="adjustMistakes(1)" class="w-12 h-12 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xl flex items-center justify-center transition-colors border border-slate-700">
+                                +
+                            </button>
+                        </div>
+                        
+                        <button onclick="calculateFinalResults()" class="mt-2 w-full py-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-600/20 text-md flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-calculator"></i>
+                            Calculate Final Score
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Final Scoreboard -->
+                <div id="score-card" class="bg-gradient-to-br from-blue-950/40 to-slate-900/60 border border-blue-500/30 rounded-2xl p-6 hidden animate-fadeIn animate-duration-300">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xs font-extrabold text-blue-400 uppercase tracking-widest">Performance Dashboard</h3>
+                        <i class="fa-solid fa-trophy text-amber-400 text-xl"></i>
+                    </div>
+
+                    <div class="text-center py-6">
+                        <span class="block text-xs text-slate-400 uppercase tracking-wider mb-1">Final Score</span>
+                        <span class="text-6xl font-black text-white tracking-tight font-mono tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-300 to-emerald-400" id="final-score-display">
+                            0
+                        </span>
+                        <div class="mt-4 flex justify-center">
+                            <span class="px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border border-emerald-500/20 bg-emerald-500/10 text-emerald-400" id="score-rating">
+                                Grandmaster
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-slate-800 text-xs text-slate-400 flex flex-col gap-3">
+                        <div class="flex justify-between">
+                            <span>Formula:</span>
+                            <span class="font-mono text-slate-300">((1e6 / time_s) * steps) * fraction_done</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Box HS logical steps:</span>
+                            <span class="font-bold text-white mono" id="score-steps">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Fraction Completed:</span>
+                            <span class="font-bold text-white mono" id="score-fraction">100%</span>
+                        </div>
+                        <div class="flex justify-between font-mono text-[10px] text-slate-500 italic">
+                            <span>* fraction_done is:</span>
+                            <span>(digits_to_fill - mistakes) / digits_to_fill</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Adjusted Solve Rate:</span>
+                            <span class="font-bold text-white mono" id="score-rate-ms">0.00 steps/min</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer Information -->
+    <footer class="border-t border-slate-900 bg-slate-950 py-4 px-6 text-center text-xs text-slate-500">
+        <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p>&copy; 2026 Projector Sudoku. Box Hidden Single Brain-Training environment.</p>
+            <div class="flex items-center gap-4">
+                <a href="#" onclick="toggleInfoModal()" class="hover:underline">Documentation</a>
+                <span>&bull;</span>
+                <span class="text-slate-400">High Contrast Active</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Custom Difficulty Range Modal -->
+    <div id="custom-difficulty-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 relative shadow-2xl">
+            <button onclick="closeCustomDifficultyModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-sliders text-blue-400"></i>
+                <span>Custom Difficulty</span>
+            </h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-2">
+                        Min Steps: <span id="min-steps-display" class="text-blue-400 font-bold">5</span>
+                    </label>
+                    <input type="range" id="min-steps-slider" min="1" max="40" value="5" 
+                        oninput="updateMinStepsDisplay()" 
+                        class="w-full accent-blue-500 bg-slate-800 rounded-lg appearance-none h-2">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-2">
+                        Max Steps: <span id="max-steps-display" class="text-blue-400 font-bold">8</span>
+                    </label>
+                    <input type="range" id="max-steps-slider" min="1" max="40" value="8" 
+                        oninput="updateMaxStepsDisplay()" 
+                        class="w-full accent-blue-500 bg-slate-800 rounded-lg appearance-none h-2">
+                </div>
+                <div class="bg-slate-950 p-3 rounded-lg text-xs text-blue-400 border border-blue-900/30 font-semibold text-center">
+                    Target logical range: <span id="range-display">5 - 8</span> steps
+                </div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="closeCustomDifficultyModal()" class="flex-1 py-2 rounded-lg border border-slate-700 text-slate-300 font-bold text-sm transition-all hover:bg-slate-800">
+                    Cancel
+                </button>
+                <button onclick="applyCustomDifficulty()" class="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-all">
+                    Apply & Gen
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instructions / Information Modal -->
+    <div id="info-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 relative shadow-2xl">
+            <button onclick="toggleInfoModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-circle-info text-blue-400"></i>
+                <span>About Projector Sudoku</span>
+            </h3>
+            
+            <div class="space-y-4 text-sm text-slate-300 leading-relaxed">
+                <p>
+                    <strong>Projector Sudoku</strong> is designed for presentation screens and mental arithmetic training. The generated grid is <strong>guaranteed 100% solvable</strong> using exclusively the <strong>Box Hidden Single (Box HS)</strong> technique.
+                </p>
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                    <p class="font-semibold text-white text-xs uppercase tracking-wider">Gameplay Rules:</p>
+                    <ul class="list-disc pl-5 space-y-1 text-xs text-slate-400">
+                        <li>The puzzle is generated instantly based on your targeted logic difficulty.</li>
+                        <li>Press <kbd class="px-1 bg-slate-800 rounded border border-slate-700 text-white">Space</kbd> or click Start to uncover the grid and start the micro-timer.</li>
+                        <li>You cannot click, modify, or play any cells directly. It is a projector solver layout meant to be tackled mentally!</li>
+                        <li>Once you solve the entire grid in your mind, press <kbd class="px-1 bg-slate-800 rounded border border-slate-700 text-white">Space</kbd> again.</li>
+                        <li>The board replaces empty cells with the completed solution. You'll specify how many mistakes you made.</li>
+                        <li>Your final score evaluates speed, logical steps, and precision using:</li>
+                    </ul>
+                </div>
+                <div>
+                    <span class="font-semibold text-white block mb-1">Scoring Algorithm:</span>
+                    <code class="block bg-slate-950 p-2 rounded text-blue-400 font-mono text-xs text-center border border-blue-950">
+                        Score = ((1,000,000 / time_seconds) * steps) * fraction_done
+                    </code>
+                    <p class="text-xs text-slate-400 mt-2">
+                        Steps are the minimum Box HS moves required to solve the grid. Fraction done is calculated as <code class="text-gray-200">(digits - mistakes) / digits</code>, where digits is the total number of empty cells to fill.
+                    </p>
+                </div>
+            </div>
+            
+            <button onclick="toggleInfoModal()" class="mt-6 w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all">
+                Got it, Let's Go!
+            </button>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="fixed bottom-6 right-6 z-[120] flex flex-col gap-3 pointer-events-none"></div>
+
+    <script>
+        // --- GAME CONFIGURATION ---
+        let difficulty = 'easy';
+        let customDifficulty = null;
+        const difficultyConfig = {
+            easy: { minSteps: 5, maxSteps: 8 },
+            medium: { minSteps: 12, maxSteps: 18 },
+            hard: { minSteps: 25, maxSteps: 35 }
+        };
+
+        // --- GAME STATE ---
+        let currentBoard = [];     // 2D Array representing current view (0 for blanks)
+        let solutionBoard = [];    // 2D Array representing full solution grid
+        let originalBoard = [];    // 2D Array representing starting puzzle layout
+        let isStarted = false;
+        let isFinished = false;
+        
+        let startTime = 0;
+        let stopTime = 0;
+        let timerInterval = null;
+        let emptyCellsCount = 0;
+        let stepsForSolve = 0;
+
+        // --- BOX HS SUDOKU GENERATION & SOLVER (OPTIMIZED) ---
+        class SudokuManager {
+            constructor() {
+                this.size = 9;
+                this.rowsPerBlock = 3;
+                this.colsPerBlock = 3;
+            }
+
+            isValid(grid, r, c, num) {
+                for (let i = 0; i < 9; i++) {
+                    if (grid[r][i] === num || grid[i][c] === num) return false;
+                }
+                const startR = Math.floor(r / 3) * 3;
+                const startC = Math.floor(c / 3) * 3;
+                for (let i = 0; i < 3; i++) {
+                    for (let j = 0; j < 3; j++) {
+                        if (grid[startR + i][startC + j] === num) return false;
+                    }
+                }
+                return true;
+            }
+
+            solveRandomly(grid) {
+                for (let r = 0; r < 9; r++) {
+                    for (let c = 0; c < 9; c++) {
+                        if (grid[r][c] === 0) {
+                            let nums = [1, 2, 3, 4, 5, 6, 7, 8, 9].sort(() => Math.random() - 0.5);
+                            for (let num of nums) {
+                                if (this.isValid(grid, r, c, num)) {
+                                    grid[r][c] = num;
+                                    if (this.solveRandomly(grid)) return true;
+                                    grid[r][c] = 0;
+                                }
+                            }
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+
+            countSteps(puzzle) {
+                let grid = JSON.parse(JSON.stringify(puzzle));
+                let steps = 0;
+
+                while (!this.isSolved(grid)) {
+                    let found = [];
+
+                    for (let boxIdx = 0; boxIdx < 9; boxIdx++) {
+                        let br = Math.floor(boxIdx / 3) * 3;
+                        let bc = (boxIdx % 3) * 3;
+
+                        for (let num = 1; num <= 9; num++) {
+                            let inBox = false;
+                            for (let i = 0; i < 3; i++) {
+                                for (let j = 0; j < 3; j++) {
+                                    if (grid[br + i][bc + j] === num) inBox = true;
+                                }
+                            }
+                            if (inBox) continue;
+
+                            let candidates = [];
+                            for (let i = 0; i < 3; i++) {
+                                for (let j = 0; j < 3; j++) {
+                                    let r = br + i, c = bc + j;
+                                    if (grid[r][c] === 0 && this.isValid(grid, r, c, num)) {
+                                        candidates.push({ r, c });
+                                    }
+                                }
+                            }
+                            if (candidates.length === 1) {
+                                found.push({ r: candidates[0].r, c: candidates[0].c, val: num });
+                            }
+                        }
+                    }
+
+                    if (found.length === 0) return -1; // Not Box HS only solvable
+                    found.forEach(cell => {
+                        grid[cell.r][cell.c] = cell.val;
+                    });
+                    steps++;
+                }
+                return steps;
+            }
+
+            isSolved(grid) {
+                return grid.every(row => row.every(cell => cell !== 0));
+            }
+
+            // Generate Box HS Solvable Puzzle with targeted logic steps
+            generateBoxHSOnlyPuzzle(targetSteps, timeoutMs = 2500) {
+                const startTime = Date.now();
+                let bestPuzzle = null;
+                let bestDiff = Infinity;
+
+                while (Date.now() - startTime < timeoutMs) {
+                    let full = Array.from({ length: 9 }, () => Array(9).fill(0));
+                    this.solveRandomly(full);
+
+                    let cells = [];
+                    for (let r = 0; r < 9; r++) {
+                        for (let c = 0; c < 9; c++) {
+                            cells.push({ r, c });
+                        }
+                    }
+                    cells.sort(() => Math.random() - 0.5);
+
+                    const targetStepCount = targetSteps.minSteps + Math.floor(Math.random() * (targetSteps.maxSteps - targetSteps.minSteps + 1));
+                    let puzzle = JSON.parse(JSON.stringify(full));
+
+                    for (let cell of cells) {
+                        let prevVal = puzzle[cell.r][cell.c];
+                        puzzle[cell.r][cell.c] = 0;
+                        let steps = this.countSteps(puzzle);
+
+                        // If not solvable with Box HS, keep original cell value
+                        if (steps === -1) {
+                            puzzle[cell.r][cell.c] = prevVal;
+                            continue;
+                        }
+
+                        // Optimization Rule: If the puzzle matches the targeted step-range, return immediately to save time!
+                        if (steps >= targetSteps.minSteps && steps <= targetSteps.maxSteps) {
+                            return { full, puzzle: JSON.parse(JSON.stringify(puzzle)), steps };
+                        }
+
+                        const diff = Math.abs(steps - targetStepCount);
+                        if (diff < bestDiff) {
+                            bestDiff = diff;
+                            bestPuzzle = { full, puzzle: JSON.parse(JSON.stringify(puzzle)), steps };
+                        }
+                    }
+                }
+
+                // Fallback to closest match found
+                if (bestPuzzle) {
+                    return bestPuzzle;
+                }
+
+                // Ultimate resilient fallback generator
+                let full = Array.from({ length: 9 }, () => Array(9).fill(0));
+                this.solveRandomly(full);
+                let puzzle = JSON.parse(JSON.stringify(full));
+                return { full, puzzle, steps: 0 };
+            }
+        }
+
+        // --- INITIATE BOARD GENERATION ---
+        function generateSudoku() {
+            const manager = new SudokuManager();
+            const config = customDifficulty || difficultyConfig[difficulty];
+            const { full, puzzle, steps } = manager.generateBoxHSOnlyPuzzle(config);
+            
+            solutionBoard = full;
+            originalBoard = JSON.parse(JSON.stringify(puzzle));
+            currentBoard = JSON.parse(JSON.stringify(puzzle));
+            stepsForSolve = steps;
+
+            // Count empty cells
+            emptyCellsCount = 0;
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (currentBoard[r][c] === 0) emptyCellsCount++;
+                }
+            }
+        }
+
+        // --- RENDER SUDOKU GRID ---
+        function renderBoard() {
+            const container = document.getElementById('sudoku-board-container');
+            container.innerHTML = '';
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const val = currentBoard[r][c];
+                    const isOriginal = originalBoard[r][c] !== 0;
+
+                    const cell = document.createElement('div');
+                    cell.className = 'sudoku-cell flex items-center justify-center font-bold text-2xl h-full aspect-square select-none relative';
+                    
+                    if ((c + 1) % 3 === 0 && c < 8) cell.classList.add('border-r-thick');
+                    if ((r + 1) % 3 === 0 && r < 8) cell.classList.add('border-b-thick');
+                    
+                    if (val !== 0) {
+                        cell.innerText = val;
+                        if (isOriginal) {
+                            cell.className += ' bg-slate-900 text-slate-200 font-extrabold';
+                        } else {
+                            // Reveals solved/solution numbers
+                            cell.className += ' bg-blue-950/40 text-blue-400 font-extrabold shadow-inner';
+                        }
+                    } else {
+                        cell.innerText = '';
+                        cell.className += ' bg-slate-950 text-slate-700';
+                        
+                        // Center hint mark indicator
+                        const indicator = document.createElement('span');
+                        indicator.className = 'text-slate-800 text-xs font-normal opacity-50 absolute';
+                        indicator.innerText = '?';
+                        cell.appendChild(indicator);
+                    }
+
+                    container.appendChild(cell);
+                }
+            }
+
+            // Update stats indicators
+            document.getElementById('stats-empty-cells').innerText = emptyCellsCount;
+            document.getElementById('stats-hints').innerText = 81 - emptyCellsCount;
+        }
+
+        // --- LIVE TIMER CONTROLS ---
+        function startTimer() {
+            startTime = performance.now();
+            timerInterval = setInterval(() => {
+                const elapsed = performance.now() - startTime;
+                updateTimerDisplay(elapsed);
+            }, 10);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+            stopTime = performance.now();
+        }
+
+        // --- GAME LOGIC FLOW ---
+        function startGame() {
+            if (isStarted) return;
+            
+            isStarted = true;
+            isFinished = false;
+            
+            // Uncover the grid
+            document.getElementById('start-overlay').classList.add('hidden');
+            
+            // Adjust status bar UI
+            document.getElementById('status-badge').innerText = 'Solving';
+            document.getElementById('status-badge').className = 'px-2 py-0.5 rounded text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase';
+            document.getElementById('timer-status').innerText = 'Active';
+            document.getElementById('timer-status').className = 'text-xs font-bold text-blue-400 uppercase tracking-wider px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-md';
+            
+            // Disable evaluations & scoreboards initially
+            document.getElementById('evaluation-card').classList.add('opacity-40', 'pointer-events-none', 'select-none');
+            document.getElementById('evaluation-card').classList.remove('border-blue-500/50');
+            document.getElementById('score-card').classList.add('hidden');
+            document.getElementById('mistake-input').value = '0';
+            
+            startTimer();
+            showToast('Solve started! Analyze the projector screen mentally.', 'success');
+        }
+
+        function declareDone() {
+            if (!isStarted || isFinished) return;
+            
+            isFinished = true;
+            stopTimer();
+
+            // Populate all cells with solutions
+            currentBoard = solutionBoard.map(row => [...row]);
+            renderBoard();
+
+            // Adjust status bars
+            document.getElementById('status-badge').innerText = 'Completed';
+            document.getElementById('status-badge').className = 'px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase';
+            document.getElementById('timer-status').innerText = 'Stopped';
+            document.getElementById('timer-status').className = 'text-xs font-bold text-slate-400 uppercase tracking-wider px-2 py-0.5 bg-slate-500/10 border border-slate-500/20 rounded-md';
+
+            // Activate evaluation inputs
+            const evalCard = document.getElementById('evaluation-card');
+            evalCard.classList.remove('opacity-40', 'pointer-events-none', 'select-none');
+            evalCard.classList.add('border-blue-500/50', 'animate-pulse');
+            setTimeout(() => {
+                evalCard.classList.remove('animate-pulse');
+            }, 1000);
+
+            showToast('Time frozen! Evaluate your calculations.', 'info');
+        }
+
+        function adjustMistakes(val) {
+            const input = document.getElementById('mistake-input');
+            let current = parseInt(input.value) || 0;
+            current = Math.max(0, current + val);
+            input.value = current;
+        }
+
+        function validateMistakes(input) {
+            let val = parseInt(input.value);
+            if (isNaN(val) || val < 0) {
+                input.value = 0;
+            }
+        }
+
+        function updateTimerDisplay(ms) {
+            const secondsTotal = ms / 1000;
+            const minutes = Math.floor(secondsTotal / 60);
+            const seconds = Math.floor(secondsTotal % 60);
+            const milliseconds = Math.floor((ms % 1000) / 10);
+
+            const displayStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+            document.getElementById('timer-display').innerText = displayStr;
+        }
+
+        function calculateFinalResults() {
+            if (!isFinished) return;
+
+            const timeInSeconds = (stopTime - startTime) / 1000;
+            const mistakesInput = parseInt(document.getElementById('mistake-input').value) || 0;
+
+            // Restrict mistakes from exceeding empty slots count (digits to be filled)
+            const mistakes = Math.min(mistakesInput, emptyCellsCount);
+            
+            // Formula parameters
+            const steps = stepsForSolve;
+            
+            // fraction_done is: (digits_to_fill - mistakes) / digits_to_fill
+            const fraction_done = emptyCellsCount > 0 ? Math.max(0, (emptyCellsCount - mistakes) / emptyCellsCount) : 0;
+            
+            // Formula: ((1e6 / time_in_seconds) * steps) * fraction_done
+            let finalScore = 0;
+            if (timeInSeconds > 0) {
+                finalScore = Math.round(((1000000 / timeInSeconds) * steps) * fraction_done);
+            }
+
+            // Print final dashboard scores
+            document.getElementById('final-score-display').innerText = finalScore.toLocaleString();
+            document.getElementById('score-steps').innerText = steps;
+            document.getElementById('score-fraction').innerText = `${Math.round(fraction_done * 100)}%`;
+            
+            const cellsPerMinute = (steps / timeInSeconds) * 60;
+            document.getElementById('score-rate-ms').innerText = `${cellsPerMinute.toFixed(1)} steps/min`;
+
+            // Score-Based Grading System (Purely unified by calculated finalScore thresholds)
+            const ratingLabel = document.getElementById('score-rating');
+            if (finalScore >= 150000) {
+                ratingLabel.innerText = "Mathematical Oracle";
+                ratingLabel.className = "px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border border-rose-500/20 bg-rose-500/10 text-rose-400";
+            } else if (finalScore >= 80000) {
+                ratingLabel.innerText = "Grandmaster Mind";
+                ratingLabel.className = "px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border border-purple-500/20 bg-purple-500/10 text-purple-400";
+            } else if (finalScore >= 40000) {
+                ratingLabel.innerText = "Elite Thinker";
+                ratingLabel.className = "px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border border-teal-500/20 bg-teal-500/10 text-teal-400";
+            } else if (finalScore >= 15000) {
+                ratingLabel.innerText = "Advanced Practitioner";
+                ratingLabel.className = "px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border border-blue-500/20 bg-blue-500/10 text-blue-400";
+            } else if (finalScore >= 5000) {
+                ratingLabel.innerText = "Apprentice Solver";
+                ratingLabel.className = "px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border border-amber-500/20 bg-amber-500/10 text-amber-400";
+            } else {
+                ratingLabel.innerText = "Novice Solver";
+                ratingLabel.className = "px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border border-red-500/20 bg-red-500/10 text-red-400";
+            }
+
+            document.getElementById('score-card').classList.remove('hidden');
+            document.getElementById('score-card').scrollIntoView({ behavior: 'smooth' });
+            showToast('Results finalized!', 'success');
+        }
+
+        // --- PRACTICE CONTROLS & DIFFICULTY HANDLERS ---
+        function setDifficulty(diff) {
+            difficulty = diff;
+            customDifficulty = null;
+            
+            // Adjust UI button layouts
+            const btns = ['easy', 'medium', 'hard'];
+            btns.forEach(b => {
+                const el = document.getElementById(`btn-${b}`);
+                if (b === diff) {
+                    el.className = 'py-2 rounded-lg border-2 border-blue-600 bg-blue-500/10 text-blue-400 font-bold transition-all text-sm';
+                } else {
+                    el.className = 'py-2 rounded-lg border-2 border-transparent bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-all text-sm';
+                }
+            });
+
+            regenerateNewBoard();
+        }
+
+        // --- CUSTOM MODAL HANDLERS ---
+        function openCustomDifficultyModal() {
+            document.getElementById('custom-difficulty-modal').classList.remove('hidden');
+        }
+
+        function closeCustomDifficultyModal() {
+            document.getElementById('custom-difficulty-modal').classList.add('hidden');
+        }
+
+        function updateMinStepsDisplay() {
+            const val = document.getElementById('min-steps-slider').value;
+            document.getElementById('min-steps-display').textContent = val;
+            updateRangeDisplay();
+        }
+
+        function updateMaxStepsDisplay() {
+            const val = document.getElementById('max-steps-slider').value;
+            document.getElementById('max-steps-display').textContent = val;
+            updateRangeDisplay();
+        }
+
+        function updateRangeDisplay() {
+            const min = document.getElementById('min-steps-slider').value;
+            const max = document.getElementById('max-steps-slider').value;
+            document.getElementById('range-display').textContent = `${min} - ${max}`;
+        }
+
+        function applyCustomDifficulty() {
+            const min = parseInt(document.getElementById('min-steps-slider').value);
+            const max = parseInt(document.getElementById('max-steps-slider').value);
+            if (min <= max) {
+                customDifficulty = { minSteps: min, maxSteps: max };
+                difficulty = null;
+
+                // Reset preset difficulty buttons
+                const btns = ['easy', 'medium', 'hard'];
+                btns.forEach(b => {
+                    document.getElementById(`btn-${b}`).className = 'py-2 rounded-lg border-2 border-transparent bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-all text-sm';
+                });
+
+                closeCustomDifficultyModal();
+                regenerateNewBoard();
+            } else {
+                showToast('Min steps must be smaller than or equal to Max steps!', 'warning');
+            }
+        }
+
+        function regenerateNewBoard() {
+            // Stop outstanding active timers
+            clearInterval(timerInterval);
+            isStarted = false;
+            isFinished = false;
+
+            // Generate next puzzle config
+            generateSudoku();
+            renderBoard();
+
+            // Reset workspace screens
+            document.getElementById('start-overlay').classList.remove('hidden');
+            document.getElementById('timer-display').innerText = '00:00.00';
+            document.getElementById('status-badge').innerText = 'Ready';
+            document.getElementById('status-badge').className = 'px-2 py-0.5 rounded text-xs font-bold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 uppercase';
+            document.getElementById('timer-status').innerText = 'Stopped';
+            document.getElementById('timer-status').className = 'text-xs font-bold text-slate-400 uppercase tracking-wider px-2 py-0.5 bg-slate-500/10 border border-slate-500/20 rounded-md';
+
+            // Close scoreboard panels
+            document.getElementById('evaluation-card').classList.add('opacity-40', 'pointer-events-none', 'select-none');
+            document.getElementById('evaluation-card').classList.remove('border-blue-500/50');
+            document.getElementById('score-card').classList.add('hidden');
+
+            showToast('New customized challenge generated!', 'info');
+        }
+
+        // --- KEYBOARD TRIGGERS ---
+        window.addEventListener('keydown', function(e) {
+            if (e.code === 'Space' && e.target === document.body) {
+                e.preventDefault();
+                
+                if (!isStarted) {
+                    startGame();
+                } else if (!isFinished) {
+                    declareDone();
+                }
+            }
+        });
+
+        // --- MODAL UTILS ---
+        function toggleInfoModal() {
+            const modal = document.getElementById('info-modal');
+            modal.classList.toggle('hidden');
+        }
+
+        // --- TOAST NOTIFICATIONS ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let bgClass = 'bg-slate-900 border-slate-800';
+            let textClass = 'text-slate-200';
+            let icon = 'fa-info-circle text-blue-400';
+
+            if (type === 'success') {
+                bgClass = 'bg-slate-900 border-emerald-500/30';
+                textClass = 'text-emerald-100';
+                icon = 'fa-circle-check text-emerald-400';
+            } else if (type === 'warning') {
+                bgClass = 'bg-slate-900 border-amber-500/30';
+                textClass = 'text-amber-100';
+                icon = 'fa-triangle-exclamation text-amber-400';
+            }
+
+            toast.className = `flex items-center gap-3 px-4 py-3 rounded-xl border ${bgClass} ${textClass} shadow-xl max-w-sm w-full transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto`;
+            toast.innerHTML = `
+                <i class="fa-solid ${icon} text-lg"></i>
+                <div class="text-xs font-bold flex-grow">${message}</div>
+                <button class="text-slate-500 hover:text-white" onclick="this.parentElement.remove()"><i class="fa-solid fa-xmark"></i></button>
+            `;
+
+            container.appendChild(toast);
+
+            // Trigger Transition In
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            // Auto dismiss toast after 3s
+            setTimeout(() => {
+                toast.classList.add('translate-y-2', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // --- WINDOW BOOTLOADER ---
+        window.onload = function() {
+            generateSudoku();
+            renderBoard();
+        }
+    </script>
+</body>
+</html>
