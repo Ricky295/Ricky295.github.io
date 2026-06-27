@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Advanced 2-Resistor Charger Calculator</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Google Fonts (Inter & JetBrains Mono) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            bg: '#0a0a0c',
+            surface: '#121216',
+            surface2: '#1a1a22',
+            border: '#27273a',
+            accent: '#d4ff00',
+            accentDim: '#a3c200',
+            accentMuted: '#404c00',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #0a0a0c;
+    }
+    /* Custom Scrollbar for sleek code/table looks */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #121216;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #27273a;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #d4ff00;
+    }
+  </style>
+</head>
+<body class="text-gray-200 font-sans min-height-screen antialiased selection:bg-accent selection:text-black">
+
+  <div class="max-w-7xl mx-auto px-4 py-8 lg:py-12">
+    <!-- Header Section -->
+    <header class="mb-10 border-l-4 border-accent pl-5 py-1">
+      <h1 class="text-3xl font-bold tracking-tight text-white lg:text-4xl">2-Resistor Charger Calculator</h1>
+      <p class="text-sm text-gray-400 mt-1 max-w-2xl font-mono">
+        Thévenin Voltage Divider Solver. Design direct CCCV charger profiles without active ICs.
+      </p>
+    </header>
+
+    <!-- Error Alert Box -->
+    <div id="errorBox" class="hidden mb-6 bg-red-950/40 border border-red-800 text-red-200 px-4 py-3 rounded-lg flex items-center gap-3">
+      <svg class="w-5 h-5 text-red-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+      <span id="errorMessage" class="text-sm font-mono"></span>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      
+      <!-- LEFT COLUMN: Control Panel & Schematic -->
+      <div class="lg:col-span-5 flex flex-col gap-6">
+        
+        <!-- Input Form -->
+        <div class="bg-surface border border-border rounded-xl p-6 shadow-xl">
+          <h2 class="text-xs font-mono uppercase tracking-wider text-gray-400 mb-5 pb-2 border-b border-border/50">Parameters</h2>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Source Voltage (V_in)</label>
+              <input type="number" id="vIn" value="5.2" step="0.1" min="0.1" class="w-full bg-surface2 border border-border text-white px-3 py-2 rounded-lg font-mono text-sm focus:border-accent focus:outline-none transition-colors">
+            </div>
+            
+            <div>
+              <label class="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Chemistry Preset</label>
+              <select id="preset" onchange="applyPreset()" class="w-full bg-surface2 border border-border text-white px-3 py-2 rounded-lg font-mono text-sm focus:border-accent focus:outline-none cursor-pointer transition-colors">
+                <option value="custom">— custom —</option>
+                <option value="liion" selected>Li-ion (4.2V / 3.0V)</option>
+                <option value="lipo_hv">Li-ion HV (4.35V / 3.0V)</option>
+                <option value="lifepo4">LiFePO4 (3.65V / 2.5V)</option>
+                <option value="lto">LTO (2.85V / 1.5V)</option>
+                <option value="nimh">NiMH (1.45V / 1.0V)</option>
+                <option value="nicd">NiCd (1.45V / 1.0V)</option>
+                <option value="lead">Lead-acid (2.45V / 1.75V)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Peak Charge V (V_cell)</label>
+              <input type="number" id="vCell" value="4.2" step="0.01" min="0.1" oninput="setCustomPreset()" class="w-full bg-surface2 border border-border text-white px-3 py-2 rounded-lg font-mono text-sm focus:border-accent focus:outline-none transition-colors">
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Dead Cutoff V (V_dead)</label>
+              <input type="number" id="vDead" value="3.0" step="0.1" min="0.1" oninput="setCustomPreset()" class="w-full bg-surface2 border border-border text-white px-3 py-2 rounded-lg font-mono text-sm focus:border-accent focus:outline-none transition-colors">
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Max Charge Current (mA)</label>
+              <input type="number" id="iMax" value="15" step="1" min="0.1" class="w-full bg-surface2 border border-border text-white px-3 py-2 rounded-lg font-mono text-sm focus:border-accent focus:outline-none transition-colors">
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Cell Capacity (mAh)</label>
+              <input type="number" id="cap" value="40" step="1" min="1" class="w-full bg-surface2 border border-border text-white px-3 py-2 rounded-lg font-mono text-sm focus:border-accent focus:outline-none transition-colors">
+            </div>
+
+            <div class="sm:col-span-2">
+              <label class="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Standard E-Series Tolerance</label>
+              <select id="eseries" class="w-full bg-surface2 border border-border text-white px-3 py-2 rounded-lg font-mono text-sm focus:border-accent focus:outline-none cursor-pointer transition-colors">
+                <option value="E6">E6 (20% tolerance)</option>
+                <option value="E12">E12 (10% tolerance)</option>
+                <option value="E24" selected>E24 (5% tolerance)</option>
+                <option value="E48">E48 (2% tolerance)</option>
+                <option value="E96">E96 (1% tolerance)</option>
+                <option value="E192">E192 (0.5% tolerance)</option>
+              </select>
+            </div>
+          </div>
+
+          <button onclick="calculate()" class="mt-6 w-full py-3 bg-accent text-bg hover:bg-[#e4ff54] active:scale-[0.98] transition-all font-semibold rounded-lg tracking-wide shadow-md shadow-accent/10">
+            Calculate Network
+          </button>
+        </div>
+
+        <!-- Interactive SVG Schematic -->
+        <div class="bg-surface border border-border rounded-xl p-6 shadow-xl flex flex-col">
+          <h2 class="text-xs font-mono uppercase tracking-wider text-gray-400 mb-3 pb-2 border-b border-border/50">Dynamic Circuit Diagram</h2>
+          <div class="flex items-center justify-center bg-surface2 rounded-lg border border-border/40 p-4 relative overflow-hidden">
+            <svg id="schematic" viewBox="0 0 420 280" class="w-full max-w-sm h-auto text-gray-300">
+              <!-- Ground Rail -->
+              <line x1="60" y1="240" x2="360" y2="240" stroke="#4b5563" stroke-width="2" />
+              <!-- Ground Symbol -->
+              <line x1="210" y1="240" x2="210" y2="250" stroke="#4b5563" stroke-width="2" />
+              <line x1="200" y1="250" x2="220" y2="250" stroke="#4b5563" stroke-width="2" />
+              <line x1="204" y1="254" x2="216" y2="254" stroke="#4b5563" stroke-width="2" />
+              <line x1="208" y1="258" x2="212" y2="258" stroke="#4b5563" stroke-width="2" />
+
+              <!-- Source Path -->
+              <line x1="60" y1="80" x2="110" y2="80" stroke="#4b5563" stroke-width="2" />
+              <circle cx="60" cy="80" r="4" fill="#d4ff00" />
+              <text x="50" y="65" fill="#e5e7eb" font-family="monospace" font-size="11px" font-weight="bold" id="sch_vin">Vin</text>
+
+              <!-- Resistor R1 -->
+              <line x1="110" y1="80" x2="140" y2="80" stroke="#4b5563" stroke-width="2" />
+              <!-- R1 zig-zag -->
+              <path d="M 140,80 L 145,70 L 153,90 L 161,70 L 169,90 L 177,70 L 185,90 L 190,80" fill="none" stroke="#d4ff00" stroke-width="2" />
+              <line x1="190" y1="80" x2="210" y2="80" stroke="#4b5563" stroke-width="2" />
+              <text x="145" y="60" fill="#a3c200" font-family="monospace" font-size="12px" font-weight="bold" id="sch_r1">R1</text>
+
+              <!-- Node Join -->
+              <circle cx="210" cy="80" r="4" fill="#4b5563" />
+
+              <!-- Resistor R2 Path -->
+              <line x1="210" y1="80" x2="210" y2="110" stroke="#4b5563" stroke-width="2" />
+              <!-- R2 zig-zag -->
+              <path d="M 210,110 L 200,115 L 220,123 L 200,131 L 220,139 L 200,147 L 220,155 L 210,160" fill="none" stroke="#d4ff00" stroke-width="2" />
+              <line x1="210" y1="160" x2="210" y2="240" stroke="#4b5563" stroke-width="2" />
+              <text x="230" y="140" fill="#a3c200" font-family="monospace" font-size="12px" font-weight="bold" id="sch_r2">R2</text>
+
+              <!-- Charge Output Path -->
+              <line x1="210" y1="80" x2="310" y2="80" stroke="#4b5563" stroke-width="2" />
+              <line x1="310" y1="80" x2="310" y2="110" stroke="#4b5563" stroke-width="2" />
+
+              <!-- Battery Cell Symbol -->
+              <!-- Flat Top Anode -->
+              <line x1="290" y1="110" x2="330" y2="110" stroke="#e5e7eb" stroke-width="3" />
+              <!-- Thin Cathode -->
+              <line x1="300" y1="118" x2="320" y2="118" stroke="#ef4444" stroke-width="2" />
+              <!-- Flat Anode 2 -->
+              <line x1="290" y1="126" x2="330" y2="126" stroke="#e5e7eb" stroke-width="3" />
+              <!-- Thin Cathode 2 -->
+              <line x1="300" y1="134" x2="320" y2="134" stroke="#ef4444" stroke-width="2" />
+              
+              <!-- Battery Connection to Ground -->
+              <line x1="310" y1="134" x2="310" y2="240" stroke="#4b5563" stroke-width="2" />
+
+              <!-- Labels -->
+              <text x="330" y="75" fill="#9ca3af" font-family="monospace" font-size="11px">V_out</text>
+              <text x="340" y="125" fill="#e5e7eb" font-family="monospace" font-size="12px" font-weight="bold" id="sch_vcell">Cell</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN: Real-time Output Metrics & Visual Charts -->
+      <div class="lg:col-span-7 flex flex-col gap-6">
+        
+        <!-- Results Hidden Placeholder -->
+        <div id="resultsPlaceholder" class="bg-surface border border-dashed border-border rounded-xl p-12 text-center text-gray-500 flex flex-col items-center justify-center min-h-[300px]">
+          <svg class="w-12 h-12 text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+          <p class="font-mono text-sm">Waiting for parameters. Click "Calculate Network" above.</p>
+        </div>
+
+        <!-- Calculated Cards Grid -->
+        <div id="resultsSection" class="hidden flex flex-col gap-6">
+          
+          <!-- Resistor Selection Panel -->
+          <div>
+            <p class="text-xs font-mono uppercase tracking-wider text-gray-400 mb-3">Calculated Divider Resistors</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" id="rCards">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Performance Summary -->
+          <div>
+            <p class="text-xs font-mono uppercase tracking-wider text-gray-400 mb-3">Network Summary</p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4" id="sCards">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Dynamic Live Chart -->
+          <div class="bg-surface border border-border rounded-xl p-6 shadow-xl">
+            <h3 class="text-xs font-mono uppercase tracking-wider text-gray-400 mb-4 pb-2 border-b border-border/50">Simulated Charging Profile Curve</h3>
+            <div class="relative h-[260px] w-full">
+              <canvas id="profileChart"></canvas>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Bottom detailed metrics log -->
+    <div id="tableSection" class="hidden mt-8">
+      <div class="bg-surface border border-border rounded-xl p-6 shadow-xl overflow-hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-2 border-b border-border/50">
+          <h3 class="text-xs font-mono uppercase tracking-wider text-gray-400">Tapered Charging Profile Steps</h3>
+          <span class="text-[10px] bg-accent/10 border border-accent/20 text-accent px-2.5 py-1 rounded-full font-mono">Simulated over battery lifecycle</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse font-mono text-xs">
+            <thead>
+              <tr class="bg-surface2 text-gray-400 border-b border-border">
+                <th class="p-3 font-medium">Cell Voltage (V)</th>
+                <th class="p-3 text-right font-medium">Charging Current (mA)</th>
+                <th class="p-3 text-right font-medium">Power to Battery (mW)</th>
+                <th class="p-3 text-right font-medium">Power Dissipated (mW)</th>
+                <th class="p-3 text-right font-medium">Efficiency (η)</th>
+              </tr>
+            </thead>
+            <tbody id="tBody" class="divide-y divide-border/40">
+              <!-- Filled dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Math/Reference Drawer -->
+    <section class="mt-12 bg-surface2/40 border border-border/60 rounded-xl p-6">
+      <h3 class="text-xs font-mono uppercase tracking-wider text-gray-400 mb-3 flex items-center gap-2">
+        <svg class="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+        Thevenin Divider Equations Reference
+      </h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-gray-400 font-mono">
+        <div class="bg-surface/50 p-4 rounded-lg border border-border/40">
+          <span class="text-accent block mb-1">1. Thevenin Source (R_th)</span>
+          <p class="mb-2">Computes internal resistance needed to limit initial charging current ($I_{\text{max}}$) at safe minimum dead battery threshold ($V_{\text{dead}}$).</p>
+          <code class="text-white block bg-black/40 p-2 rounded">R_th = (V_charge - V_dead) / I_max</code>
+        </div>
+        <div class="bg-surface/50 p-4 rounded-lg border border-border/40">
+          <span class="text-accent block mb-1">2. Upstream Resistor (R1)</span>
+          <p class="mb-2">Matches source input drops to safely scale the charging network to peak target voltage requirements.</p>
+          <code class="text-white block bg-black/40 p-2 rounded">R1 = R_th * (V_in / V_charge)</code>
+        </div>
+        <div class="bg-surface/50 p-4 rounded-lg border border-border/40">
+          <span class="text-accent block mb-1">3. Ground Resistor (R2)</span>
+          <p class="mb-2">Provides the stable passive pull-down ensuring strict voltage clamping to secure against cell overcharge risks.</p>
+          <code class="text-white block bg-black/40 p-2 rounded">R2 = R_th * (V_in / (V_in - V_charge))</code>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="mt-16 text-center text-[10px] text-gray-500 font-mono">
+      Designed for low-power CCCV chemistry optimization. Verify heat dissipation limits under peak operating conditions.
+    </footer>
+  </div>
+
+  <script>
+    const SERIES = {
+      E6:   [1.0, 1.5, 2.2, 3.3, 4.7, 6.8],
+      E12:  [1.0, 1.2, 1.5, 1.8, 2.2, 2.7, 3.3, 3.9, 4.7, 5.6, 6.8, 8.2],
+      E24:  [1.0, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2.0, 2.2, 2.4, 2.7, 3.0, 3.3, 3.6, 3.9, 4.3, 4.7, 5.1, 5.6, 6.2, 6.8, 7.5, 8.2, 9.1],
+      E48:  [1.00, 1.05, 1.10, 1.15, 1.21, 1.27, 1.33, 1.40, 1.47, 1.54, 1.62, 1.69, 1.78, 1.87, 1.96, 2.05, 2.15, 2.26, 2.37, 2.49, 2.61, 2.74, 2.87, 3.01, 3.16, 3.32, 3.48, 3.65, 3.83, 4.02, 4.22, 4.42, 4.64, 4.87, 5.11, 5.36, 5.62, 5.90, 6.19, 6.49, 6.81, 7.15, 7.50, 7.87, 8.25, 8.66, 9.09, 9.53],
+      E96:  [1.00, 1.02, 1.05, 1.07, 1.10, 1.13, 1.15, 1.18, 1.21, 1.24, 1.27, 1.30, 1.33, 1.37, 1.40, 1.43, 1.47, 1.50, 1.54, 1.58, 1.62, 1.65, 1.69, 1.74, 1.78, 1.82, 1.87, 1.91, 1.96, 2.00, 2.05, 2.10, 2.15, 2.21, 2.26, 2.32, 2.37, 2.43, 2.49, 2.55, 2.61, 2.67, 2.74, 2.80, 2.87, 2.94, 3.01, 3.09, 3.16, 3.24, 3.32, 3.40, 3.48, 3.57, 3.65, 3.74, 3.83, 3.92, 4.02, 4.12, 4.22, 4.32, 4.42, 4.53, 4.64, 4.75, 4.87, 4.99, 5.11, 5.23, 5.36, 5.49, 5.62, 5.76, 5.90, 6.04, 6.19, 6.34, 6.49, 6.65, 6.81, 6.98, 7.15, 7.32, 7.50, 7.68, 7.87, 8.06, 8.25, 8.45, 8.66, 8.87, 9.09, 9.31, 9.53, 9.76],
+      E192: [1.00, 1.01, 1.02, 1.04, 1.05, 1.06, 1.07, 1.09, 1.10, 1.11, 1.13, 1.14, 1.15, 1.17, 1.18, 1.20, 1.21, 1.23, 1.24, 1.26, 1.27, 1.29, 1.30, 1.32, 1.33, 1.35, 1.37, 1.38, 1.40, 1.42, 1.43, 1.45, 1.47, 1.49, 1.50, 1.52, 1.54, 1.56, 1.58, 1.60, 1.62, 1.64, 1.65, 1.67, 1.69, 1.72, 1.74, 1.76, 1.78, 1.80, 1.82, 1.84, 1.87, 1.89, 1.91, 1.93, 1.96, 1.98, 2.00, 2.03, 2.05, 2.08, 2.10, 2.13, 2.15, 2.18, 2.21, 2.23, 2.26, 2.29, 2.32, 2.34, 2.37, 2.40, 2.43, 2.46, 2.49, 2.52, 2.55, 2.58, 2.61, 2.64, 2.67, 2.71, 2.74, 2.77, 2.80, 2.84, 2.87, 2.91, 2.94, 2.98, 3.01, 3.05, 3.09, 3.12, 3.16, 3.20, 3.24, 3.28, 3.32, 3.36, 3.40, 3.44, 3.48, 3.52, 3.57, 3.61, 3.65, 3.70, 3.74, 3.79, 3.83, 3.88, 3.92, 3.97, 4.02, 4.07, 4.12, 4.17, 4.22, 4.27, 4.32, 4.37, 4.42, 4.48, 4.53, 4.59, 4.64, 4.70, 4.75, 4.81, 4.87, 4.93, 4.99, 5.05, 5.11, 5.17, 5.23, 5.30, 5.36, 5.42, 5.49, 5.56, 5.62, 5.69, 5.76, 5.83, 5.90, 5.97, 6.04, 6.12, 6.19, 6.26, 6.34, 6.42, 6.49, 6.57, 6.65, 6.73, 6.81, 6.90, 6.98, 7.06, 7.15, 7.23, 7.32, 7.41, 7.50, 7.59, 7.68, 7.77, 7.87, 7.96, 8.06, 8.16, 8.25, 8.35, 8.45, 8.56, 8.66, 8.76, 8.87, 8.98, 9.09, 9.20, 9.31, 9.42, 9.53, 9.65, 9.76, 9.88]
+    };
+
+    const PRESETS = {
+      liion:   { vCell: 4.20, vDead: 3.0 },
+      lipo_hv: { vCell: 4.35, vDead: 3.0 },
+      lifepo4: { vCell: 3.65, vDead: 2.5 },
+      lto:     { vCell: 2.85, vDead: 1.5 },
+      nimh:    { vCell: 1.45, vDead: 1.0 },
+      nicd:    { vCell: 1.45, vDead: 1.0 },
+      lead:    { vCell: 2.45, vDead: 1.75 },
+    };
+
+    let chartInstance = null;
+
+    function applyPreset() {
+      const key = document.getElementById('preset').value;
+      if (key === 'custom') return;
+      const p = PRESETS[key];
+      document.getElementById('vCell').value = p.vCell;
+      document.getElementById('vDead').value = p.vDead;
+      calculate();
+    }
+
+    function setCustomPreset() {
+      document.getElementById('preset').value = 'custom';
+    }
+
+    function nearestE(r, seriesName) {
+      const base = SERIES[seriesName];
+      const decades = [0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000, 100000, 1000000];
+      let best = null, bestDiff = Infinity;
+      for (const d of decades) {
+        for (const v of base) {
+          const val = v * d;
+          const diff = Math.abs(val - r);
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            best = val;
+          }
+        }
+      }
+      return best;
+    }
+
+    function fmtW(w) {
+      if (w < 0.001) return (w * 1000000).toFixed(1) + ' µW';
+      if (w < 1) return (w * 1000).toFixed(1) + ' mW';
+      return w.toFixed(2) + ' W';
+    }
+
+    function fmtR(r) {
+      if (r >= 1e6) return (r/1e6).toPrecision(4) + ' MΩ';
+      if (r >= 1e3) return (r/1e3).toPrecision(4) + ' kΩ';
+      return r.toPrecision(4) + ' Ω';
+    }
+
+    function showError(msg) {
+      const errorBox = document.getElementById('errorBox');
+      const errorMessage = document.getElementById('errorMessage');
+      errorMessage.textContent = msg;
+      errorBox.classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function hideError() {
+      document.getElementById('errorBox').classList.add('hidden');
+    }
+
+    function calculate() {
+      hideError();
+
+      const V_in = parseFloat(document.getElementById('vIn').value);
+      const V_charge = parseFloat(document.getElementById('vCell').value);
+      const V_dead = parseFloat(document.getElementById('vDead').value);
+      const I_mA = parseFloat(document.getElementById('iMax').value);
+      const cap = parseFloat(document.getElementById('cap').value);
+      const serName = document.getElementById('eseries').value;
+
+      const I_max = I_mA / 1000;
+
+      // Input Validation
+      if (isNaN(V_in) || isNaN(V_charge) || isNaN(V_dead) || isNaN(I_mA) || isNaN(cap)) {
+        showError("Please enter valid positive numeric values for all parameters.");
+        return;
+      }
+
+      if (V_charge >= V_in) {
+        showError(`Target peak voltage (${V_charge.toFixed(2)} V) must be lower than the source supply input (${V_in.toFixed(2)} V).`);
+        return;
+      }
+
+      if (V_dead >= V_charge) {
+        showError(`Cutoff/Dead threshold voltage (${V_dead.toFixed(2)} V) must be lower than the Peak Charge target (${V_charge.toFixed(2)} V).`);
+        return;
+      }
+
+      // Hide Placeholder, Show calculated components
+      document.getElementById('resultsPlaceholder').classList.add('hidden');
+      document.getElementById('resultsSection').classList.remove('hidden');
+      document.getElementById('tableSection').classList.remove('hidden');
+
+      // Core Thévenin Equivalent math
+      const R_th = (V_charge - V_dead) / I_max;
+      const R1_exact = R_th * V_in / V_charge;
+      const R2_exact = R_th * V_in / (V_in - V_charge);
+
+      const R1_std = nearestE(R1_exact, serName);
+      const R2_std = nearestE(R2_exact, serName);
+
+      // Recalculate true system response
+      const V_th_act = V_in * R2_std / (R1_std + R2_std);
+      const R_th_act = (R1_std * R2_std) / (R1_std + R2_std);
+      const I_act_mA = ((V_th_act - V_dead) / R_th_act) * 1000;
+
+      // Peak dissipation
+      const P_R1 = Math.pow(V_in - V_th_act, 2) / R1_std;
+      const P_R2 = Math.pow(V_th_act, 2) / R2_std;
+
+      const err1 = ((R1_std - R1_exact) / R1_exact) * 100;
+      const err2 = ((R2_std - R2_exact) / R2_exact) * 100;
+      const vErr = ((V_th_act - V_charge) / V_charge) * 100;
+
+      // Dynamic Interactive SVG labels updates
+      document.getElementById('sch_vin').textContent = `${V_in.toFixed(1)}V`;
+      document.getElementById('sch_r1').textContent = `R1: ${fmtR(R1_std)}`;
+      document.getElementById('sch_r2').textContent = `R2: ${fmtR(R2_std)}`;
+      document.getElementById('sch_vcell').textContent = `${V_charge.toFixed(2)}V Target`;
+
+      // Update Resistor Panels
+      const rCards = document.getElementById('rCards');
+      rCards.innerHTML = `
+        <div class="bg-surface border border-border rounded-xl p-4 shadow-md">
+          <div class="text-[10px] font-mono text-gray-400 uppercase tracking-wider mb-1">R1 (Top Pulldown Side)</div>
+          <div class="text-2xl font-bold font-mono text-accent mb-1">${fmtR(R1_std)}</div>
+          <div class="text-[10px] font-mono text-gray-400">
+            <div>Exact: ${fmtR(R1_exact)}</div>
+            <div>Error: <span class="${err1 >= 0 ? 'text-green-400' : 'text-red-400'}">${err1 >= 0 ? '+' : ''}${err1.toFixed(1)}%</span></div>
+            <div class="mt-1 border-t border-border/40 pt-1 text-gray-300">Max Dis: ${fmtW(P_R1)}</div>
+          </div>
+        </div>
+        <div class="bg-surface border border-border rounded-xl p-4 shadow-md">
+          <div class="text-[10px] font-mono text-gray-400 uppercase tracking-wider mb-1">R2 (Bottom Ground Side)</div>
+          <div class="text-2xl font-bold font-mono text-accent mb-1">${fmtR(R2_std)}</div>
+          <div class="text-[10px] font-mono text-gray-400">
+            <div>Exact: ${fmtR(R2_exact)}</div>
+            <div>Error: <span class="${err2 >= 0 ? 'text-green-400' : 'text-red-400'}">${err2 >= 0 ? '+' : ''}${err2.toFixed(1)}%</span></div>
+            <div class="mt-1 border-t border-border/40 pt-1 text-gray-300">Max Dis: ${fmtW(P_R2)}</div>
+          </div>
+        </div>
+      `;
+
+      // Update summary cards
+      const C_rate = I_act_mA / cap;
+      const est_h = (cap / I_act_mA) * 2.5;
+
+      document.getElementById('sCards').innerHTML = `
+        <div class="bg-surface border border-border rounded-xl p-3 shadow-md text-center">
+          <div class="text-[9px] font-mono text-gray-400 uppercase tracking-wider mb-1">True Clamp V</div>
+          <div class="text-lg font-bold font-mono text-white">${V_th_act.toFixed(2)} V</div>
+          <div class="text-[9px] font-mono text-gray-400 mt-1">vs target: ${vErr >= 0 ? '+' : ''}${vErr.toFixed(1)}%</div>
+        </div>
+        <div class="bg-surface border border-border rounded-xl p-3 shadow-md text-center">
+          <div class="text-[9px] font-mono text-gray-400 uppercase tracking-wider mb-1">Initial Amp</div>
+          <div class="text-lg font-bold font-mono text-white">${I_act_mA.toFixed(1)} mA</div>
+          <div class="text-[9px] font-mono text-gray-400 mt-1">at dead state</div>
+        </div>
+        <div class="bg-surface border border-border rounded-xl p-3 shadow-md text-center">
+          <div class="text-[9px] font-mono text-gray-400 uppercase tracking-wider mb-1">Initial C-Rate</div>
+          <div class="text-lg font-bold font-mono text-white">C/${(1/C_rate).toFixed(1)}</div>
+          <div class="text-[9px] font-mono text-gray-400 mt-1">@ ${cap} mAh</div>
+        </div>
+        <div class="bg-surface border border-border rounded-xl p-3 shadow-md text-center">
+          <div class="text-[9px] font-mono text-gray-400 uppercase tracking-wider mb-1">Est Charge Time</div>
+          <div class="text-lg font-bold font-mono text-accentDim">${est_h.toFixed(1)} h</div>
+          <div class="text-[9px] font-mono text-gray-400 mt-1">taper trickle</div>
+        </div>
+      `;
+
+      // Calculate table & chart datasets
+      const steps = [];
+      const numSteps = 12;
+      const stepSize = (V_th_act - V_dead) / numSteps;
+
+      for (let i = 0; i <= numSteps; i++) {
+        let v = V_dead + (stepSize * i);
+        if (v > V_th_act) v = V_th_act;
+        steps.push(v);
+      }
+
+      const tableData = [];
+      const chartLabels = [];
+      const chartCurrents = [];
+      const chartEfficiency = [];
+
+      const tbody = document.getElementById('tBody');
+      tbody.innerHTML = '';
+
+      steps.forEach(V_bat => {
+        const I = Math.max(0, (V_th_act - V_bat) / R_th_act * 1000);
+        const P_cell = V_bat * I;
+        const P_in = V_in * I;
+        const P_waste = P_in - P_cell;
+        const eff = P_in > 0 ? (P_cell / P_in * 100) : 100;
+
+        chartLabels.push(V_bat.toFixed(2));
+        chartCurrents.push(I.toFixed(2));
+        chartEfficiency.push(eff.toFixed(1));
+
+        const tr = document.createElement('tr');
+        if (V_bat >= V_th_act - 0.005) {
+          tr.className = "bg-accent/5 font-semibold border-t border-border";
+        } else {
+          tr.className = "hover:bg-surface2/30 transition-colors";
+        }
+
+        tr.innerHTML = `
+          <td class="p-3 text-white border-b border-border/40">${V_bat.toFixed(3)} V</td>
+          <td class="p-3 text-right text-accent font-semibold border-b border-border/40">${I.toFixed(2)} mA</td>
+          <td class="p-3 text-right text-gray-300 border-b border-border/40">${P_cell.toFixed(1)} mW</td>
+          <td class="p-3 text-right text-red-400 border-b border-border/40">${Math.max(0, P_waste).toFixed(1)} mW</td>
+          <td class="p-3 text-right text-gray-400 border-b border-border/40">${eff.toFixed(0)}%</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Render or Update dynamic chart
+      renderChart(chartLabels, chartCurrents, chartEfficiency);
+    }
+
+    function renderChart(labels, currents, efficiency) {
+      const ctx = document.getElementById('profileChart').getContext('2d');
+      
+      if (chartInstance) {
+        chartInstance.destroy();
+      }
+
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Current (mA)',
+              data: currents,
+              borderColor: '#d4ff00',
+              backgroundColor: 'rgba(212, 255, 0, 0.1)',
+              yAxisID: 'yCurrent',
+              borderWidth: 2.5,
+              tension: 0.35,
+              fill: true,
+              pointRadius: 4,
+              pointBackgroundColor: '#d4ff00'
+            },
+            {
+              label: 'Efficiency (%)',
+              data: efficiency,
+              borderColor: '#a3a3c2',
+              borderDash: [5, 5],
+              yAxisID: 'yEff',
+              borderWidth: 2,
+              tension: 0.1,
+              pointRadius: 0
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                color: '#9ca3af',
+                font: { family: 'JetBrains Mono', size: 10 }
+              }
+            }
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: 'Cell Voltage (V)',
+                color: '#9ca3af',
+                font: { family: 'JetBrains Mono', size: 10 }
+              },
+              grid: { color: 'rgba(39, 39, 58, 0.4)' },
+              ticks: { color: '#9ca3af', font: { family: 'JetBrains Mono' } }
+            },
+            yCurrent: {
+              type: 'linear',
+              position: 'left',
+              title: {
+                display: true,
+                text: 'Charging Current (mA)',
+                color: '#d4ff00',
+                font: { family: 'JetBrains Mono', size: 10 }
+              },
+              grid: { color: 'rgba(39, 39, 58, 0.4)' },
+              ticks: { color: '#d4ff00', font: { family: 'JetBrains Mono' } }
+            },
+            yEff: {
+              type: 'linear',
+              position: 'right',
+              title: {
+                display: true,
+                text: 'Efficiency (%)',
+                color: '#9ca3af',
+                font: { family: 'JetBrains Mono', size: 10 }
+              },
+              grid: { drawOnChartArea: false },
+              ticks: { color: '#9ca3af', font: { family: 'JetBrains Mono' } },
+              min: 0,
+              max: 100
+            }
+          }
+        }
+      });
+    }
+
+    // Trigger initial calculation on window mount
+    window.onload = function() {
+      calculate();
+    };
+  </script>
+</body>
+</html>
