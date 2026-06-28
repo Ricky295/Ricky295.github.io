@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku Maze Hunter</title>
+    <!-- Import the logical Sudoku generator library -->
+    <script src="https://ricky295.github.io/newsudoku.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f0f13;
+            --panel-bg: #1a1a24;
+            --border-color: #2d2d3d;
+            --accent-primary: #8b5cf6;
+            --accent-success: #10b981;
+            --accent-warning: #f59e0b;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --cell-size: 16px;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a78bfa, #8b5cf6, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 4px 10px rgba(139, 92, 246, 0.15);
+        }
+
+        p.subtitle {
+            margin: 4px 0 0;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        /* Layout Grid */
+        .game-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        @media (min-width: 1024px) {
+            .game-layout {
+                grid-template-columns: minmax(450px, 1.2fr) minmax(400px, 1fr);
+            }
+        }
+
+        /* Card Container Styling */
+        .panel {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+            color: #c084fc;
+        }
+
+        /* Stats & Controls Header */
+        .top-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 10px;
+            width: 100%;
+            max-width: 1200px;
+            margin-bottom: 15px;
+        }
+
+        .stat-card {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+            font-family: monospace;
+            color: var(--accent-success);
+        }
+
+        /* Interactive Buttons */
+        button {
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(124, 58, 237, 0.4);
+            filter: brightness(1.1);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        button.secondary {
+            background: #27273a;
+            border: 1px solid var(--border-color);
+            box-shadow: none;
+            color: var(--text-main);
+        }
+
+        button.secondary:hover {
+            background: #313149;
+            box-shadow: none;
+        }
+
+        /* Maze Viewport Elements */
+        .maze-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #maze-view-container {
+            border: 3px solid #3b82f6;
+            background: #000;
+            padding: 1px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+        }
+
+        #mazeTable {
+            border-collapse: collapse;
+            table-layout: fixed;
+            user-select: none;
+        }
+
+        #mazeTable td {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            padding: 0;
+            box-sizing: border-box;
+            background: #0d0d12;
+            text-align: center;
+            font-size: 10px;
+            font-weight: bold;
+            line-height: var(--cell-size);
+            vertical-align: middle;
+            position: relative;
+        }
+
+        .bb { border-bottom: 2px solid #3b82f6 !important; }
+        .br { border-right: 2px solid #3b82f6 !important; }
+
+        /* Collectibles styling */
+        .player-cell {
+            background-color: #10b981 !important;
+            border-radius: 50%;
+            transform: scale(0.85);
+            box-shadow: 0 0 8px #10b981;
+            z-index: 10;
+        }
+
+        .cell-known {
+            color: #fbbf24 !important;
+            text-shadow: 0 0 4px rgba(251, 191, 36, 0.6);
+            font-size: 11px;
+        }
+
+        .cell-mystery {
+            color: #ec4899 !important;
+            text-shadow: 0 0 4px rgba(236, 72, 153, 0.6);
+            font-size: 11px;
+            animation: pulse 1.5s infinite alternate;
+        }
+
+        @keyframes pulse {
+            from { opacity: 0.7; }
+            to { opacity: 1; filter: brightness(1.2); }
+        }
+
+        /* Sudoku Section Table Structure */
+        .sudoku-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        #sudoku-grid {
+            border-collapse: collapse;
+            background-color: var(--border-color);
+            border: 3px solid var(--text-main);
+            width: 100%;
+            max-width: 360px;
+            aspect-ratio: 1;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        .sudoku-cell {
+            background-color: #1e1e2d;
+            color: var(--text-main);
+            width: 11.11%;
+            height: 11.11%;
+            padding: 0;
+            text-align: center;
+            font-size: 1.4rem;
+            font-weight: 700;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.15s ease;
+            position: relative;
+            border: 1px solid #2d2d3d;
+        }
+
+        /* Bold Vertical Dividers (Columns 3 and 6) */
+        .sudoku-cell:nth-child(3),
+        .sudoku-cell:nth-child(6) {
+            border-right: 3px solid var(--text-main);
+        }
+
+        /* Bold Horizontal Dividers (Rows 3 and 6) */
+        tr:nth-child(3) .sudoku-cell,
+        tr:nth-child(6) .sudoku-cell {
+            border-bottom: 3px solid var(--text-main);
+        }
+
+        .sudoku-cell:hover {
+            background-color: #2b2b3d;
+        }
+
+        .sudoku-cell.given {
+            background-color: #171721;
+            color: var(--text-muted);
+            cursor: not-allowed;
+        }
+
+        .sudoku-cell.selected {
+            background-color: #4c1d95 !important;
+            box-shadow: inset 0 0 0 2px #a78bfa;
+        }
+
+        .sudoku-cell.wrong {
+            color: #ef4444;
+            animation: shake 0.3s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-3px); }
+            75% { transform: translateX(3px); }
+        }
+
+        /* Inventory Tray */
+        .inventory-panel {
+            width: 100%;
+            max-width: 360px;
+            margin-top: 10px;
+        }
+
+        .inventory-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .inventory-slot {
+            background-color: #242433;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .inventory-slot:hover {
+            border-color: var(--accent-primary);
+            background-color: #2c2c3e;
+        }
+
+        .inventory-slot.selected {
+            background-color: #3b0764;
+            border-color: #c084fc;
+            box-shadow: 0 0 8px rgba(192, 132, 252, 0.4);
+        }
+
+        .inventory-num {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #fbbf24;
+        }
+
+        .inventory-count {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            position: absolute;
+            bottom: 2px;
+            font-family: monospace;
+        }
+
+        .inventory-slot.empty {
+            opacity: 0.4;
+            cursor: default;
+        }
+        .inventory-slot.empty .inventory-num {
+            color: var(--text-muted);
+        }
+
+        /* HUD Tools & Interactive Controls */
+        .hud-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+            width: 100%;
+            max-width: 360px;
+        }
+
+        /* Minimap & HUD info overlay */
+        .minimap-wrapper {
+            margin-top: 15px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            background: #14141b;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            width: 90%;
+            max-width: 340px;
+        }
+
+        #minimap {
+            background: #000;
+            border: 1px solid #444;
+            image-rendering: pixelated;
+            border-radius: 4px;
+        }
+
+        .instructions {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* Mobile Controls */
+        .mobile-dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 45px);
+            grid-template-rows: repeat(3, 45px);
+            gap: 6px;
+            margin-top: 15px;
+        }
+
+        @media (min-width: 1024px) {
+            .mobile-dpad {
+                display: none; /* Hide DPAD on large screens */
+            }
+        }
+
+        .dpad-btn {
+            background: #27273a;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            touch-action: manipulation;
+        }
+        .dpad-btn:active {
+            background: var(--accent-primary);
+        }
+        .dpad-empty {
+            visibility: hidden;
+        }
+
+        /* Modals & Dialog Boxes */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 10, 14, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal {
+            background: var(--panel-bg);
+            border: 2px solid var(--accent-primary);
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 440px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+            animation: modalScale 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes modalScale {
+            from { transform: scale(0.85); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .modal h2 {
+            margin-top: 0;
+            font-size: 1.8rem;
+            color: var(--accent-success);
+        }
+
+        .modal p {
+            color: var(--text-muted);
+            line-height: 1.5;
+            font-size: 0.95rem;
+            margin-bottom: 20px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Difficulty selection styles */
+        .diff-selector {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+
+        .diff-btn {
+            flex: 1;
+            background: #27273a;
+            border: 1px solid var(--border-color);
+            box-shadow: none;
+            font-size: 0.85rem;
+            padding: 8px;
+        }
+
+        .diff-btn.active {
+            background: var(--accent-primary);
+            border-color: #a78bfa;
+            box-shadow: 0 4px 10px rgba(139, 92, 246, 0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>SUDOKU MAZE HUNTER</h1>
+        <p class="subtitle">Search the labyrinth for keys to solve the sacred matrix grid</p>
+    </header>
+
+    <!-- Top Info Bar -->
+    <div class="top-bar">
+        <div class="stat-card">
+            <div class="stat-label">Maze Position</div>
+            <div id="pos-stat" class="stat-value">X:000 Y:000</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Game Time</div>
+            <div id="timer-stat" class="stat-value">00:00.0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Sudoku Left</div>
+            <div id="sudoku-left-stat" class="stat-value">-- / --</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Audio Synth</div>
+            <button id="muteBtn" class="secondary" style="width:100%; padding: 4px 8px; font-size: 0.75rem;">🔊 Sound ON</button>
+        </div>
+    </div>
+
+    <!-- Active Game Grid -->
+    <div class="game-layout">
+        
+        <!-- Left Column: The Labyrinth Viewport -->
+        <div class="panel">
+            <div class="panel-title">
+                <span>The Labyrinth Viewport</span>
+                <span id="maze-dimension-indicator" style="font-size:0.75rem; color:var(--text-muted);">450 x 450 grid</span>
+            </div>
+            
+            <div class="maze-area">
+                <div id="maze-view-container">
+                    <table id="mazeTable"></table>
+                </div>
+
+                <!-- Minimap & Instruction Bar -->
+                <div class="minimap-wrapper">
+                    <canvas id="minimap" width="80" height="80"></canvas>
+                    <div class="instructions">
+                        <strong>Labyrinth Navigator:</strong><br>
+                        • Use <b>WASD</b> or <b>Arrow Keys</b> to walk.<br>
+                        • Snatch gold cells and purple <b>?</b> runes.<br>
+                        • Red dot on minimap is you.
+                    </div>
+                </div>
+
+                <!-- On-Screen DPAD for Touch Navigation -->
+                <div class="mobile-dpad">
+                    <div class="dpad-empty"></div>
+                    <div class="dpad-btn" id="dpad-up">▲</div>
+                    <div class="dpad-empty"></div>
+                    <div class="dpad-btn" id="dpad-left">◀</div>
+                    <div class="dpad-empty"></div>
+                    <div class="dpad-btn" id="dpad-right">▶</div>
+                    <div class="dpad-empty"></div>
+                    <div class="dpad-btn" id="dpad-down">▼</div>
+                    <div class="dpad-empty"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: The Sudoku Puzzle Matrix -->
+        <div class="panel">
+            <div class="panel-title">
+                <span>Decryption Sudoku Matrix</span>
+                <span id="diff-indicator" style="font-size:0.75rem; color:var(--accent-warning);">Normal</span>
+            </div>
+
+            <div class="sudoku-container">
+                <!-- Difficulty Selection -->
+                <div class="diff-selector">
+                    <button class="diff-btn" data-diff="easy">Easy</button>
+                    <button class="diff-btn active" data-diff="medium">Medium</button>
+                    <button class="diff-btn" data-diff="hard">Hard</button>
+                </div>
+
+                <!-- 9x9 Sudoku Grid as a Table -->
+                <table id="sudoku-grid"></table>
+
+                <!-- Inventory Bag -->
+                <div class="inventory-panel">
+                    <div class="stat-label">Maze Loot Inventory Bag (Click Slot to Equip)</div>
+                    <div class="inventory-grid" id="inventory-grid"></div>
+                </div>
+
+                <!-- Controls & Clearing Row -->
+                <div class="hud-row">
+                    <button id="eraseBtn" class="secondary" style="flex:1; margin-right:10px;">Erase Grid Cell</button>
+                    <button id="resetGameBtn" style="flex:1.2;">Generate New Labyrinth</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Victory Overlay -->
+    <div id="victory-modal" class="overlay hidden">
+        <div class="modal">
+            <h2>🏆 MAZE DECRYPTED!</h2>
+            <p>Incredible! You navigated the giant labyrinth, looted the key digit values, and successfully decoded the 9x9 Sudoku encryption core.</p>
+            <div class="stat-card" style="margin-bottom: 20px;">
+                <div class="stat-label">Completed Run Record</div>
+                <div id="victory-time" class="stat-value" style="color:var(--accent-success); font-size:1.8rem;">00:00</div>
+            </div>
+            <button id="playAgainBtn" style="width: 100%;">Construct New Labyrinth</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Web Audio Synthesizer Engine ---
+        let audioMuted = false;
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSynthTone(freq, type, duration, slideTo = 0) {
+            if (audioMuted) return;
+            try {
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                if (slideTo > 0) {
+                    osc.frequency.exponentialRampToValueAtTime(slideTo, audioCtx.currentTime + duration);
+                }
+                
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch (e) {
+                console.warn("Audio Context Error: ", e);
+            }
+        }
+
+        // Action sounds
+        const sounds = {
+            move: () => playSynthTone(120, 'sine', 0.08, 90),
+            lootKnown: () => {
+                playSynthTone(523.25, 'triangle', 0.1); // C5
+                setTimeout(() => playSynthTone(659.25, 'triangle', 0.15), 80); // E5
+            },
+            lootMystery: () => {
+                playSynthTone(440, 'sawtooth', 0.1); // A4
+                setTimeout(() => playSynthTone(880, 'sine', 0.2), 60); // A5
+            },
+            placeNum: () => playSynthTone(587.33, 'sine', 0.12, 700), // D5 -> slide
+            erase: () => playSynthTone(220, 'sine', 0.15, 110),
+            error: () => playSynthTone(130, 'sawtooth', 0.3),
+            victory: () => {
+                const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, idx) => {
+                    setTimeout(() => playSynthTone(freq, 'sine', 0.4), idx * 100);
+                });
+            }
+        };
+
+        // UI Mute Button Toggle
+        document.getElementById('muteBtn').addEventListener('click', () => {
+            audioMuted = !audioMuted;
+            document.getElementById('muteBtn').innerText = audioMuted ? "🔇 Sound OFF" : "🔊 Sound ON";
+            if (!audioMuted) {
+                audioCtx.resume();
+                playSynthTone(440, 'sine', 0.1);
+            }
+        });
+
+        // --- Core Constraints ---
+        const MAZE_W = 450;
+        const MAZE_H = 450;
+        const VIEW_SIZE = 35; // Responsive camera viewport window
+        
+        let mazeData = null;
+        let itemGrid = null; // Stores item codes: 0=empty, 1-9=known numbers, 10=mystery '?'
+
+        // Player & Camera States
+        let playerX = 0;
+        let playerY = 0;
+        let viewX = 0;
+        let viewY = 0;
+
+        // Player Inventory
+        let inventory = Array(10).fill(0); // Index 1-9 store quantities of collected digits
+
+        // Sudoku Game States
+        let sudokuSolved = Array(81).fill(0);
+        let sudokuPuzzle = Array(81).fill(0);
+        let sudokuUserGrid = Array(81).fill(0);
+        let selectedSudokuIndex = null;
+        let selectedInventoryNum = null;
+        let sudokuDifficulty = 'medium'; // easy, medium, hard
+
+        // Minimap Render Scale
+        const minimapCanvas = document.getElementById('minimap');
+        const minimapCtx = minimapCanvas.getContext('2d');
+
+        // Timer States
+        let startTime = 0;
+        let gameActive = false;
+        let timerInterval = null;
+
+        // Start initialization
+        window.addEventListener('DOMContentLoaded', () => {
+            setupDifficultyToggles();
+            setupDPadControls();
+            startNewGame();
+        });
+
+        // Setup Difficulty buttons
+        function setupDifficultyToggles() {
+            document.querySelectorAll('.diff-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    sudokuDifficulty = e.target.getAttribute('data-diff');
+                    document.getElementById('diff-indicator').innerText = sudokuDifficulty.charAt(0).toUpperCase() + sudokuDifficulty.slice(1);
+                    startNewGame();
+                });
+            });
+        }
+
+        // Setup Mobile DPAD bindings
+        function setupDPadControls() {
+            const directions = {
+                'dpad-up': 'arrowup',
+                'dpad-down': 'arrowdown',
+                'dpad-left': 'arrowleft',
+                'dpad-right': 'arrowright'
+            };
+            Object.entries(directions).forEach(([id, key]) => {
+                const btn = document.getElementById(id);
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    triggerMovement(key);
+                });
+                btn.addEventListener('mousedown', () => {
+                    triggerMovement(key);
+                });
+            });
+        }
+
+        // Global key handlers
+        window.addEventListener('keydown', (e) => {
+            if (!gameActive) return;
+            const key = e.key.toLowerCase();
+            if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(key)) {
+                e.preventDefault(); // Lock scroll
+                triggerMovement(key);
+            }
+        });
+
+        function startNewGame() {
+            gameActive = true;
+            inventory.fill(0);
+            selectedSudokuIndex = null;
+            selectedInventoryNum = null;
+
+            // Step 1: Generate Sudoku First (to count exact missing numbers we must supply in maze)
+            generateSudokuPuzzle();
+
+            // Step 2: Generate the 450x450 Eller's maze layout
+            generateEllersMaze();
+
+            // Step 3: Populate Maze with exact missing Sudoku values & mystery runes
+            populateMazeWithKeyItems();
+
+            // Reset Position
+            playerX = 0;
+            playerY = 0;
+            viewX = 0;
+            viewY = 0;
+
+            // Timer Initialization
+            clearInterval(timerInterval);
+            startTime = performance.now();
+            timerInterval = setInterval(updateRunningTimer, 100);
+
+            // Refreshes
+            renderInventorySlots();
+            renderSudokuBoard();
+            renderMazeViewport();
+            drawMinimap();
+            updateHUDStats();
+            
+            sounds.lootMystery(); // Chime indicating load complete
+        }
+
+        function updateRunningTimer() {
+            if (!gameActive) return;
+            const elapsed = (performance.now() - startTime) / 1000;
+            const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const secs = Math.floor(elapsed % 60).toString().padStart(2, '0');
+            const tenths = Math.floor((elapsed % 1) * 10);
+            document.getElementById('timer-stat').innerText = `${mins}:${secs}.${tenths}`;
+        }
+
+        function updateHUDStats() {
+            document.getElementById('pos-stat').innerText = `X:${String(playerX).padStart(3, '0')} Y:${String(playerY).padStart(3, '0')}`;
+            
+            let emptyCells = 0;
+            for (let i = 0; i < 81; i++) {
+                if (sudokuPuzzle[i] === 0 && sudokuUserGrid[i] !== sudokuSolved[i]) {
+                    emptyCells++;
+                }
+            }
+            document.getElementById('sudoku-left-stat').innerText = `${emptyCells} left`;
+        }
+
+        // --- 9x9 Sudoku Logic Integrating newsudoku.js Library ---
+        function generateSudokuPuzzle() {
+            let minDiff = 0.34;
+            let maxDiff = 0.66;
+            let targetClues = 30;
+
+            // Map standard difficulty inputs to logical criteria
+            if (sudokuDifficulty === 'easy') {
+                minDiff = 0.0;
+                maxDiff = 0.33;
+                targetClues = 40;
+            } else if (sudokuDifficulty === 'medium') {
+                minDiff = 0.34;
+                maxDiff = 0.66;
+                targetClues = 30;
+            } else if (sudokuDifficulty === 'hard') {
+                minDiff = 0.67;
+                maxDiff = 1.0;
+                targetClues = 17;
+            }
+
+            // Generate logical puzzle using imported Sudoku library global
+            const puzzleMatrix = window.Sudoku.generateSudoku(minDiff, maxDiff, targetClues);
+            
+            // Solve it using singles to gather full solution matrix keys
+            const solutionMatrix = window.Sudoku.solveWithSingles(puzzleMatrix, false);
+
+            // Flatten 9x9 matrix results back to 81-character simple arrays for existing bindings
+            sudokuPuzzle = puzzleMatrix.flat();
+            sudokuSolved = solutionMatrix.flat();
+            sudokuUserGrid = [...sudokuPuzzle];
+        }
+
+        // --- Eller's Algorithm Maze Generator ---
+        function generateEllersMaze() {
+            mazeData = new Uint8Array(MAZE_W * MAZE_H);
+            let currentSetArr = new Int32Array(MAZE_W);
+            let nextSetArr = new Int32Array(MAZE_W);
+            let setCounter = 1;
+
+            // Initial row sets
+            for (let x = 0; x < MAZE_W; x++) currentSetArr[x] = setCounter++;
+
+            for (let y = 0; y < MAZE_H; y++) {
+                const isLastRow = (y === MAZE_H - 1);
+                const rowOffset = y * MAZE_W;
+
+                // 1. Horizontal carvings
+                for (let x = 0; x < MAZE_W; x++) {
+                    let wallRight = 0;
+                    if (x < MAZE_W - 1 && currentSetArr[x] !== currentSetArr[x + 1]) {
+                        if (Math.random() > 0.5 || isLastRow) {
+                            const oldSet = currentSetArr[x + 1];
+                            const newSet = currentSetArr[x];
+                            for (let i = 0; i < MAZE_W; i++) {
+                                if (currentSetArr[i] === oldSet) currentSetArr[i] = newSet;
+                            }
+                        } else {
+                            wallRight = 1;
+                        }
+                    } else if (x === MAZE_W - 1) {
+                        wallRight = 1; // Maze boundary
+                    } else {
+                        wallRight = 1;
+                    }
+                    mazeData[rowOffset + x] |= wallRight;
+                }
+
+                if (isLastRow) {
+                    for (let x = 0; x < MAZE_W; x++) mazeData[rowOffset + x] |= 2; // Bottom bounds
+                    break;
+                }
+
+                // 2. Vertical carvings
+                nextSetArr.fill(0);
+                let setGroups = {};
+                for (let x = 0; x < MAZE_W; x++) {
+                    let id = currentSetArr[x];
+                    if (!setGroups[id]) setGroups[id] = [];
+                    setGroups[id].push(x);
+                }
+
+                for (let id in setGroups) {
+                    let indices = setGroups[id];
+                    let drops = 0;
+                    for (let i = 0; i < indices.length; i++) {
+                        let x = indices[i];
+                        if (i === indices.length - 1 && drops === 0 || Math.random() > 0.4) {
+                            nextSetArr[x] = id; 
+                            drops++;
+                        } else {
+                            mazeData[rowOffset + x] |= 2; // Bottom wall
+                        }
+                    }
+                }
+
+                // 3. Prep next row
+                for (let x = 0; x < MAZE_W; x++) {
+                    currentSetArr[x] = (nextSetArr[x] === 0) ? setCounter++ : nextSetArr[x];
+                }
+            }
+        }
+
+        // Map Populator with 80x Density Multiplier & 20,000 Mystery Runes (~11% Density)
+        function populateMazeWithKeyItems() {
+            itemGrid = new Uint8Array(MAZE_W * MAZE_H);
+
+            const requiredInventory = Array(10).fill(0);
+            for (let i = 0; i < 81; i++) {
+                if (sudokuPuzzle[i] === 0) {
+                    const trueNum = sudokuSolved[i];
+                    requiredInventory[trueNum]++;
+                }
+            }
+
+            const multiplier = 80; // Massive 80x density multiplier!
+
+            // Scatter duplicate copies of missing digits in the maze
+            for (let num = 1; num <= 9; num++) {
+                let instancesToSpawn = requiredInventory[num] * multiplier;
+                let spawned = 0;
+                let attempts = 0; // Prevent any rare lockups
+                const maxAttempts = instancesToSpawn * 10;
+                while (spawned < instancesToSpawn && attempts < maxAttempts) {
+                    attempts++;
+                    let rx = Math.floor(Math.random() * (MAZE_W - 2)) + 1;
+                    let ry = Math.floor(Math.random() * (MAZE_H - 2)) + 1;
+                    let idx = ry * MAZE_W + rx;
+
+                    if (idx !== 0 && itemGrid[idx] === 0) {
+                        itemGrid[idx] = num;
+                        spawned++;
+                    }
+                }
+            }
+
+            // Scatter exactly 20,000 mystery '?' items
+            let mysteryPlaced = 0;
+            const targetMystery = 20000;
+            let mysteryAttempts = 0;
+            const maxMysteryAttempts = targetMystery * 10;
+            while (mysteryPlaced < targetMystery && mysteryAttempts < maxMysteryAttempts) {
+                mysteryAttempts++;
+                let rx = Math.floor(Math.random() * (MAZE_W - 2)) + 1;
+                let ry = Math.floor(Math.random() * (MAZE_H - 2)) + 1;
+                let idx = ry * MAZE_W + rx;
+
+                if (idx !== 0 && itemGrid[idx] === 0) {
+                    itemGrid[idx] = 10;
+                    mysteryPlaced++;
+                }
+            }
+        }
+
+        // --- Maze Viewport Render (50x50 UI Slice of 450x450 maze) ---
+        function renderMazeViewport() {
+            if (!mazeData) return;
+
+            let htmlString = '';
+            for (let y = viewY; y < viewY + VIEW_SIZE; y++) {
+                htmlString += '<tr>';
+                const rowOffset = y * MAZE_W;
+
+                for (let x = viewX; x < viewX + VIEW_SIZE; x++) {
+                    const cellValue = mazeData[rowOffset + x];
+                    const itemValue = itemGrid[rowOffset + x];
+                    
+                    let classes = '';
+                    let content = '';
+                    
+                    if (cellValue & 1) classes += ' br'; 
+                    if (cellValue & 2) classes += ' bb'; 
+                    
+                    if (x === playerX && y === playerY) {
+                        classes += ' player-cell';
+                    } else if (itemValue >= 1 && itemValue <= 9) {
+                        classes += ' cell-known';
+                        content = itemValue;
+                    } else if (itemValue === 10) {
+                        classes += ' cell-mystery';
+                        content = '?';
+                    }
+
+                    htmlString += classes ? `<td class="${classes.trim()}">${content}</td>` : `<td>${content}</td>`;
+                }
+                htmlString += '</tr>';
+            }
+            document.getElementById('mazeTable').innerHTML = htmlString;
+        }
+
+        // Draw Player on Minimap
+        function drawMinimap() {
+            const size = minimapCanvas.width; // 80px
+            minimapCtx.fillStyle = '#000000';
+            minimapCtx.fillRect(0, 0, size, size);
+
+            const scaleX = size / MAZE_W;
+            const scaleY = size / MAZE_H;
+
+            const pX = Math.floor(playerX * scaleX);
+            const pY = Math.floor(playerY * scaleY);
+
+            minimapCtx.fillStyle = '#10b981';
+            minimapCtx.shadowColor = '#10b981';
+            minimapCtx.shadowBlur = 4;
+            minimapCtx.fillRect(pX - 1, pY - 1, 3, 3);
+            minimapCtx.shadowBlur = 0;
+        }
+
+        // --- Movement Controller ---
+        function triggerMovement(direction) {
+            const currentCellIdx = playerY * MAZE_W + playerX;
+            const currentCell = mazeData[currentCellIdx];
+            let nextX = playerX;
+            let nextY = playerY;
+
+            if (direction === 'arrowup' || direction === 'w') {
+                if (playerY > 0) {
+                    const cellAbove = mazeData[(playerY - 1) * MAZE_W + playerX];
+                    if (!(cellAbove & 2)) nextY--;
+                }
+            } else if (direction === 'arrowdown' || direction === 's') {
+                if (!(currentCell & 2)) nextY++;
+            } else if (direction === 'arrowleft' || direction === 'a') {
+                if (playerX > 0) {
+                    const cellLeft = mazeData[playerY * MAZE_W + (playerX - 1)];
+                    if (!(cellLeft & 1)) nextX--;
+                }
+            } else if (direction === 'arrowright' || direction === 'd') {
+                if (!(currentCell & 1)) nextX++;
+            }
+
+            if (nextX !== playerX || nextY !== playerY) {
+                playerX = nextX;
+                playerY = nextY;
+                sounds.move();
+
+                const newIdx = playerY * MAZE_W + playerX;
+                const currentItem = itemGrid[newIdx];
+
+                if (currentItem > 0) {
+                    if (currentItem >= 1 && currentItem <= 9) {
+                        inventory[currentItem]++;
+                        sounds.lootKnown();
+                    } else if (currentItem === 10) {
+                        const rolledNum = Math.floor(Math.random() * 9) + 1;
+                        inventory[rolledNum]++;
+                        sounds.lootMystery();
+                    }
+                    itemGrid[newIdx] = 0;
+                    renderInventorySlots();
+                }
+
+                const pad = 6;
+                if (playerX - viewX < pad && viewX > 0) viewX--;
+                if (playerX - viewX >= VIEW_SIZE - pad && viewX < MAZE_W - VIEW_SIZE) viewX++;
+                if (playerY - viewY < pad && viewY > 0) viewY--;
+                if (playerY - viewY >= VIEW_SIZE - pad && viewY < MAZE_H - VIEW_SIZE) viewY++;
+
+                renderMazeViewport();
+                drawMinimap();
+                updateHUDStats();
+            }
+        }
+
+        // --- Inventory Display ---
+        function renderInventorySlots() {
+            const grid = document.getElementById('inventory-grid');
+            grid.innerHTML = '';
+
+            for (let num = 1; num <= 9; num++) {
+                const count = inventory[num];
+                const slot = document.createElement('div');
+                slot.classList.add('inventory-slot');
+                if (count === 0) slot.classList.add('empty');
+                if (selectedInventoryNum === num) slot.classList.add('selected');
+
+                slot.innerHTML = `
+                    <div class="inventory-num">${num}</div>
+                    <div class="inventory-count">x${count}</div>
+                `;
+
+                if (count > 0) {
+                    slot.addEventListener('click', () => selectInventoryNumber(num));
+                }
+                grid.appendChild(slot);
+            }
+        }
+
+        function selectInventoryNumber(num) {
+            if (selectedInventoryNum === num) {
+                selectedInventoryNum = null;
+            } else {
+                selectedInventoryNum = num;
+            }
+            renderInventorySlots();
+            tryPlaceInSudoku();
+        }
+
+        // --- Sudoku Grid Actions (Using Elegant Table Elements) ---
+        function renderSudokuBoard() {
+            const grid = document.getElementById('sudoku-grid');
+            grid.innerHTML = '';
+
+            for (let r = 0; r < 9; r++) {
+                const tr = document.createElement('tr');
+                
+                for (let c = 0; c < 9; c++) {
+                    const i = r * 9 + c;
+                    const cell = document.createElement('td');
+                    cell.classList.add('sudoku-cell');
+
+                    const givenVal = sudokuPuzzle[i];
+                    const userVal = sudokuUserGrid[i];
+
+                    if (givenVal !== 0) {
+                        cell.innerText = givenVal;
+                        cell.classList.add('given');
+                    } else if (userVal !== 0) {
+                        cell.innerText = userVal;
+                        if (userVal !== sudokuSolved[i]) {
+                            cell.classList.add('wrong');
+                        }
+                    }
+
+                    if (selectedSudokuIndex === i) {
+                        cell.classList.add('selected');
+                    }
+
+                    if (givenVal === 0) {
+                        cell.addEventListener('click', () => {
+                            selectedSudokuIndex = (selectedSudokuIndex === i) ? null : i;
+                            renderSudokuBoard();
+                            tryPlaceInSudoku();
+                        });
+                    }
+
+                    tr.appendChild(cell);
+                }
+                grid.appendChild(tr);
+            }
+        }
+
+        function tryPlaceInSudoku() {
+            if (selectedSudokuIndex !== null && selectedInventoryNum !== null) {
+                const targetIdx = selectedSudokuIndex;
+                const placedNum = selectedInventoryNum;
+
+                if (inventory[placedNum] > 0) {
+                    inventory[placedNum]--;
+                    
+                    const prevVal = sudokuUserGrid[targetIdx];
+                    if (prevVal !== 0) {
+                        inventory[prevVal]++;
+                    }
+
+                    sudokuUserGrid[targetIdx] = placedNum;
+
+                    if (placedNum === sudokuSolved[targetIdx]) {
+                        sounds.placeNum();
+                    } else {
+                        sounds.error();
+                    }
+
+                    selectedSudokuIndex = null;
+                    selectedInventoryNum = null;
+
+                    renderInventorySlots();
+                    renderSudokuBoard();
+                    updateHUDStats();
+                    checkGlobalWinState();
+                }
+            }
+        }
+
+        // Erase actions
+        document.getElementById('eraseBtn').addEventListener('click', () => {
+            if (selectedSudokuIndex !== null) {
+                const prevVal = sudokuUserGrid[selectedSudokuIndex];
+                if (prevVal !== 0 && sudokuPuzzle[selectedSudokuIndex] === 0) {
+                    inventory[prevVal]++;
+                    sudokuUserGrid[selectedSudokuIndex] = 0;
+                    selectedSudokuIndex = null;
+                    sounds.erase();
+                    renderInventorySlots();
+                    renderSudokuBoard();
+                    updateHUDStats();
+                }
+            }
+        });
+
+        // Win Condition check
+        function checkGlobalWinState() {
+            let solved = true;
+            for (let i = 0; i < 81; i++) {
+                if (sudokuUserGrid[i] !== sudokuSolved[i]) {
+                    solved = false;
+                    break;
+                }
+            }
+
+            if (solved) {
+                gameActive = false;
+                clearInterval(timerInterval);
+                sounds.victory();
+                
+                document.getElementById('victory-time').innerText = document.getElementById('timer-stat').innerText;
+                document.getElementById('victory-modal').classList.remove('hidden');
+            }
+        }
+
+        document.getElementById('resetGameBtn').addEventListener('click', startNewGame);
+        document.getElementById('playAgainBtn').addEventListener('click', () => {
+            document.getElementById('victory-modal').classList.add('hidden');
+            startNewGame();
+        });
+    </script>
+</body>
+</html>
