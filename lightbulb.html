@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitor Lightbulb</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #ffcf9e;
+    transition: background-color 0.15s ease;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  #panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 20px 24px 24px;
+    box-sizing: border-box;
+    background: rgba(0,0,0,0.35);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #fff;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+    max-width: 480px;
+    margin: 0 auto;
+    border-radius: 16px 16px 0 0;
+  }
+
+  #panel.hidden {
+    transform: translateY(100%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .row {
+    margin-bottom: 16px;
+  }
+
+  .row:last-child {
+    margin-bottom: 0;
+  }
+
+  label {
+    display: block;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.75;
+    margin-bottom: 6px;
+  }
+
+  .switch {
+    display: flex;
+    gap: 4px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 3px;
+  }
+
+  .switch button {
+    flex: 1;
+    padding: 8px 6px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    opacity: 0.65;
+    transition: background 0.15s, opacity 0.15s;
+  }
+
+  .switch button.active {
+    background: rgba(255,255,255,0.9);
+    color: #111;
+    opacity: 1;
+    font-weight: 600;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255,255,255,0.25);
+    outline: none;
+    margin: 4px 0;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    border: none;
+    cursor: pointer;
+  }
+
+  .value-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    opacity: 0.85;
+  }
+
+  input[type="number"] {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 15px;
+    padding: 8px 10px;
+    width: 100%;
+    box-sizing: border-box;
+    outline: none;
+    -moz-appearance: textfield;
+  }
+
+  input[type="number"]:focus {
+    border-color: rgba(255,255,255,0.6);
+  }
+
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    opacity: 0.6;
+  }
+
+  .num-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .num-row .unit {
+    font-size: 13px;
+    opacity: 0.7;
+    min-width: 28px;
+  }
+
+  .mode-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .rgb-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .rgb-row span {
+    width: 14px;
+    font-size: 12px;
+    opacity: 0.8;
+  }
+
+  #hint {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    color: rgba(255,255,255,0.55);
+    font-size: 12px;
+    background: rgba(0,0,0,0.25);
+    padding: 6px 10px;
+    border-radius: 8px;
+    transition: opacity 0.4s ease;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  #hint.fade {
+    opacity: 0;
+  }
+</style>
+</head>
+<body>
+
+<div id="hint">Press H to hide/show controls</div>
+
+<div id="panel">
+  <div class="row">
+    <label>Color mode</label>
+    <div class="switch" id="modeSwitch">
+      <button data-mode="kelvin" class="active">Kelvin</button>
+      <button data-mode="nm">Wavelength</button>
+      <button data-mode="rgb">RGB</button>
+    </div>
+  </div>
+
+  <div class="row" id="modeControlsWrap">
+    <!-- populated by JS -->
+  </div>
+
+  <div class="row">
+    <label>Brightness</label>
+    <div class="value-label"><span>Dim</span><span id="brightnessVal">100%</span></div>
+    <input type="range" id="brightness" min="1" max="100" value="100">
+  </div>
+</div>
+
+<script>
+(function() {
+  const body = document.body;
+  const panel = document.getElementById('panel');
+  const hint = document.getElementById('hint');
+  const modeSwitch = document.getElementById('modeSwitch');
+  const controlsWrap = document.getElementById('modeControlsWrap');
+  const brightnessSlider = document.getElementById('brightness');
+  const brightnessVal = document.getElementById('brightnessVal');
+
+  let state = {
+    mode: 'kelvin',
+    kelvin: 4000,
+    nm: 590,
+    r: 255,
+    g: 207,
+    b: 158,
+    brightness: 100
+  };
+
+  // ---- Kelvin to RGB (Tanner Helland algorithm) ----
+  function kelvinToRGB(kelvin) {
+    const safeKelvin = clamp(kelvin, 1000, 40000);
+    const temp = safeKelvin / 100;
+    let r, g, b;
+
+    if (temp <= 66) {
+      r = 255;
+    } else {
+      r = temp - 60;
+      r = 329.698727446 * Math.pow(r, -0.1332047592);
+      r = clamp(r, 0, 255);
+    }
+
+    if (temp <= 66) {
+      g = temp;
+      g = 99.4708025861 * Math.log(g) - 161.1195681661;
+    } else {
+      g = temp - 60;
+      g = 288.1221695283 * Math.pow(g, -0.0755148492);
+    }
+    g = clamp(g, 0, 255);
+
+    if (temp >= 66) {
+      b = 255;
+    } else if (temp <= 19) {
+      b = 0;
+    } else {
+      b = temp - 10;
+      b = 138.5177312231 * Math.log(b) - 305.0447927307;
+      b = clamp(b, 0, 255);
+    }
+
+    return { r: Math.round(r), g: Math.round(g), b: Math.round(b) };
+  }
+
+  // ---- Wavelength (nm, ~380-780) to RGB ----
+  // Based on the classic Dan Bruton algorithm
+  function nmToRGB(wavelength) {
+    let r, g, b, factor;
+    const w = clamp(wavelength, 0, 2000);
+
+    if (w >= 380 && w < 440) {
+      r = -(w - 440) / (440 - 380);
+      g = 0;
+      b = 1;
+    } else if (w >= 440 && w < 490) {
+      r = 0;
+      g = (w - 440) / (490 - 440);
+      b = 1;
+    } else if (w >= 490 && w < 510) {
+      r = 0;
+      g = 1;
+      b = -(w - 510) / (510 - 490);
+    } else if (w >= 510 && w < 580) {
+      r = (w - 510) / (580 - 510);
+      g = 1;
+      b = 0;
+    } else if (w >= 580 && w < 645) {
+      r = 1;
+      g = -(w - 645) / (645 - 580);
+      b = 0;
+    } else if (w >= 645 && w <= 780) {
+      r = 1;
+      g = 0;
+      b = 0;
+    } else {
+      r = 0; g = 0; b = 0;
+    }
+
+    // intensity falloff near vision limits
+    if (w >= 380 && w < 420) {
+      factor = 0.3 + 0.7 * (w - 380) / (420 - 380);
+    } else if (w >= 420 && w < 701) {
+      factor = 1;
+    } else if (w >= 701 && w <= 780) {
+      factor = 0.3 + 0.7 * (780 - w) / (780 - 701);
+    } else {
+      factor = 0;
+    }
+
+    const gamma = 0.8;
+    const adjust = (c) => c === 0 ? 0 : Math.round(255 * Math.pow(c * factor, gamma));
+
+    return { r: adjust(r), g: adjust(g), b: adjust(b) };
+  }
+
+  function clamp(v, min, max) {
+    return Math.min(max, Math.max(min, v));
+  }
+
+  function applyBrightness(rgb, brightnessPct) {
+    const f = brightnessPct / 100;
+    return {
+      r: Math.round(rgb.r * f),
+      g: Math.round(rgb.g * f),
+      b: Math.round(rgb.b * f)
+    };
+  }
+
+  function getCurrentRawRGB() {
+    if (state.mode === 'kelvin') return kelvinToRGB(state.kelvin);
+    if (state.mode === 'nm') return nmToRGB(state.nm);
+    return {
+      r: clamp(state.r, 0, 255),
+      g: clamp(state.g, 0, 255),
+      b: clamp(state.b, 0, 255)
+    };
+  }
+
+  function render() {
+    const raw = getCurrentRawRGB();
+    const final = applyBrightness(raw, state.brightness);
+    body.style.backgroundColor = `rgb(${final.r}, ${final.g}, ${final.b})`;
+    brightnessVal.textContent = state.brightness + '%';
+    renderControls();
+    syncURL();
+  }
+
+  function renderControls() {
+    controlsWrap.innerHTML = '';
+
+    if (state.mode === 'kelvin') {
+      const label = document.createElement('label');
+      label.textContent = 'Color temperature';
+      const row = document.createElement('div');
+      row.className = 'num-row';
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.step = 50;
+      input.value = state.kelvin;
+      input.addEventListener('input', (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v)) {
+          state.kelvin = v;
+          render();
+        }
+      });
+      const unit = document.createElement('span');
+      unit.className = 'unit';
+      unit.textContent = 'K';
+      row.appendChild(input);
+      row.appendChild(unit);
+      controlsWrap.appendChild(label);
+      controlsWrap.appendChild(row);
+    }
+
+    if (state.mode === 'nm') {
+      const label = document.createElement('label');
+      label.textContent = 'Wavelength';
+      const row = document.createElement('div');
+      row.className = 'num-row';
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.step = 1;
+      input.value = state.nm;
+      input.addEventListener('input', (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v)) {
+          state.nm = v;
+          render();
+        }
+      });
+      const unit = document.createElement('span');
+      unit.className = 'unit';
+      unit.textContent = 'nm';
+      row.appendChild(input);
+      row.appendChild(unit);
+      controlsWrap.appendChild(label);
+      controlsWrap.appendChild(row);
+    }
+
+    if (state.mode === 'rgb') {
+      const label = document.createElement('label');
+      label.textContent = 'RGB';
+      controlsWrap.appendChild(label);
+      const wrap = document.createElement('div');
+      wrap.className = 'mode-controls';
+
+      ['r', 'g', 'b'].forEach((channel) => {
+        const row = document.createElement('div');
+        row.className = 'rgb-row';
+        const span = document.createElement('span');
+        span.textContent = channel.toUpperCase();
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.step = 1;
+        input.value = state[channel];
+        input.style.flex = '1';
+
+        input.addEventListener('input', (e) => {
+          const v = parseFloat(e.target.value);
+          if (!isNaN(v)) {
+            state[channel] = v;
+            render();
+          }
+        });
+
+        row.appendChild(span);
+        row.appendChild(input);
+        wrap.appendChild(row);
+      });
+
+      controlsWrap.appendChild(wrap);
+    }
+  }
+
+  // ---- Mode switch ----
+  modeSwitch.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    state.mode = btn.dataset.mode;
+    [...modeSwitch.querySelectorAll('button')].forEach(b =>
+      b.classList.toggle('active', b === btn)
+    );
+    render();
+  });
+
+  // ---- Brightness ----
+  brightnessSlider.addEventListener('input', (e) => {
+    state.brightness = parseInt(e.target.value);
+    render();
+  });
+
+  // ---- Hide/show panel with H key ----
+  let hidden = false;
+  function togglePanel() {
+    hidden = !hidden;
+    panel.classList.toggle('hidden', hidden);
+  }
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'h' || e.key === 'H') {
+      togglePanel();
+    }
+  });
+
+  // fade the corner hint after a few seconds
+  setTimeout(() => hint.classList.add('fade'), 4000);
+
+  // ---- URL sync ----
+  function syncURL() {
+    const params = new URLSearchParams();
+    params.set('mode', state.mode);
+    params.set('brightness', state.brightness);
+    if (state.mode === 'kelvin') params.set('kelvin', state.kelvin);
+    if (state.mode === 'nm') params.set('nm', state.nm);
+    if (state.mode === 'rgb') {
+      params.set('r', state.r);
+      params.set('g', state.g);
+      params.set('b', state.b);
+    }
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, '', newUrl);
+  }
+
+  function loadFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get('mode');
+    if (mode && ['kelvin', 'nm', 'rgb'].includes(mode)) {
+      state.mode = mode;
+      [...modeSwitch.querySelectorAll('button')].forEach(b =>
+        b.classList.toggle('active', b.dataset.mode === mode)
+      );
+    }
+    if (params.has('kelvin')) state.kelvin = parseFloat(params.get('kelvin'));
+    if (params.has('nm')) state.nm = parseFloat(params.get('nm'));
+    if (params.has('r')) state.r = parseFloat(params.get('r'));
+    if (params.has('g')) state.g = parseFloat(params.get('g'));
+    if (params.has('b')) state.b = parseFloat(params.get('b'));
+    if (params.has('brightness')) {
+      state.brightness = clamp(parseInt(params.get('brightness')), 1, 100);
+      brightnessSlider.value = state.brightness;
+    }
+  }
+
+  loadFromURL();
+  render();
+})();
+</script>
+
+</body>
+</html>
