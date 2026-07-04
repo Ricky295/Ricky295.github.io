@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Filament — Incandescent Bulb Calculator</title>
+<style>
+  :root{
+    --bg:#12100e;
+    --bg2:#1a1613;
+    --panel:#1f1a16;
+    --wire:#3a2f26;
+    --filament:#ff8c3d;
+    --filament-hot:#fff4e0;
+    --copper:#c87f4b;
+    --text:#f1e8dc;
+    --muted:#a89a8a;
+    --danger:#ff6b5b;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse 900px 500px at 50% -10%, rgba(255,140,60,0.08), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family: 'Courier New', ui-monospace, monospace;
+    padding:32px 20px 60px;
+  }
+  .wrap{max-width:1100px;margin:0 auto;}
+
+  header{
+    text-align:center;
+    margin-bottom:40px;
+    position:relative;
+  }
+  .filament-mark{
+    width:64px;height:90px;margin:0 auto 14px;
+    display:block;
+  }
+  h1{
+    font-family: Georgia, 'Times New Roman', serif;
+    font-weight:400;
+    font-size:2.4rem;
+    letter-spacing:0.5px;
+    margin:0;
+    background:linear-gradient(180deg, var(--filament-hot), var(--filament));
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+  header p{
+    color:var(--muted);
+    font-size:0.85rem;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    margin-top:8px;
+  }
+
+  .divider{
+    height:2px;
+    background:linear-gradient(90deg, transparent, var(--filament) 20%, var(--filament-hot) 50%, var(--filament) 80%, transparent);
+    margin:36px 0;
+    opacity:0.5;
+    box-shadow:0 0 12px var(--filament);
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--wire);
+    border-radius:4px;
+    padding:24px 26px;
+    margin-bottom:22px;
+  }
+  .panel-title{
+    font-family:Georgia, serif;
+    font-size:1.05rem;
+    color:var(--filament);
+    margin:0 0 18px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .panel-title::before{
+    content:"";
+    width:10px;height:10px;
+    background:var(--filament);
+    border-radius:50%;
+    box-shadow:0 0 8px var(--filament);
+    display:inline-block;
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
+    gap:16px;
+  }
+  label{
+    display:block;
+    font-size:0.72rem;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  select, input{
+    width:100%;
+    background:var(--bg2);
+    border:1px solid var(--wire);
+    color:var(--text);
+    padding:9px 10px;
+    border-radius:3px;
+    font-family:inherit;
+    font-size:0.95rem;
+  }
+  select:focus, input:focus{
+    outline:none;
+    border-color:var(--filament);
+    box-shadow:0 0 0 2px rgba(255,140,60,0.2);
+  }
+  .field{margin-bottom:0;}
+  .hint{font-size:0.72rem;color:var(--muted);margin-top:5px;}
+
+  .resistance-readout{
+    margin-top:18px;
+    padding:14px 16px;
+    background:var(--bg2);
+    border-left:3px solid var(--copper);
+    border-radius:0 3px 3px 0;
+    font-size:0.95rem;
+  }
+  .resistance-readout b{color:var(--filament-hot);}
+
+  .charts{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));
+    gap:16px;
+  }
+  .chart-box{
+    background:var(--bg2);
+    border:1px solid var(--wire);
+    border-radius:4px;
+    padding:14px;
+  }
+  .chart-box h3{
+    font-size:0.78rem;
+    text-transform:uppercase;
+    letter-spacing:1px;
+    color:var(--muted);
+    margin:0 0 8px;
+    font-weight:400;
+  }
+  svg{width:100%;height:auto;display:block;}
+  .axis-label{font-size:9px;fill:var(--muted);font-family:monospace;}
+  .grid-line{stroke:var(--wire);stroke-width:1;}
+  .curve{fill:none;stroke:var(--filament);stroke-width:2;}
+  .marker{fill:var(--filament-hot);stroke:var(--bg);stroke-width:1.5;}
+
+  .results{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+    gap:14px;
+    margin-top:8px;
+  }
+  .stat{
+    background:var(--bg2);
+    border:1px solid var(--wire);
+    border-radius:4px;
+    padding:16px;
+    text-align:center;
+  }
+  .stat .val{
+    font-family:Georgia, serif;
+    font-size:1.6rem;
+    color:var(--filament-hot);
+    display:block;
+  }
+  .stat .lbl{
+    font-size:0.68rem;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:1px;
+    margin-top:4px;
+    display:block;
+  }
+  .stat.warn .val{color:var(--danger);}
+
+  .bulb-preview{
+    width:100%;
+    display:flex;
+    justify-content:center;
+    margin-top:20px;
+  }
+
+  footer{
+    text-align:center;
+    color:var(--muted);
+    font-size:0.7rem;
+    margin-top:40px;
+    letter-spacing:0.5px;
+  }
+
+  @media (max-width:600px){
+    h1{font-size:1.7rem;}
+    .panel{padding:18px 16px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <svg class="filament-mark" viewBox="0 0 64 90">
+      <path d="M32 4 C 20 4, 14 14, 14 24 C 14 34, 22 34, 22 42 C 22 50, 12 50, 12 60 C 12 70, 20 70, 20 78 C 20 84, 26 86, 32 86 C 38 86, 44 84, 44 78 C 44 70, 52 70, 52 60 C 52 50, 42 50, 42 42 C 42 34, 50 34, 50 24 C 50 14, 44 4, 32 4 Z"
+        fill="none" stroke="#ff8c3d" stroke-width="2.2" opacity="0.9"/>
+      <path d="M32 4 C 20 4, 14 14, 14 24 C 14 34, 22 34, 22 42 C 22 50, 12 50, 12 60 C 12 70, 20 70, 20 78 C 20 84, 26 86, 32 86 C 38 86, 44 84, 44 78 C 44 70, 52 70, 52 60 C 52 50, 42 50, 42 42 C 42 34, 50 34, 50 24 C 50 14, 44 4, 32 4 Z"
+        fill="none" stroke="#fff4e0" stroke-width="0.8" opacity="0.7"/>
+    </svg>
+    <h1>Filament</h1>
+    <p>Incandescent Bulb Calculator</p>
+  </header>
+
+  <div class="panel">
+    <div class="panel-title">Filament & resistance</div>
+    <div class="grid">
+      <div class="field">
+        <label for="material">Material</label>
+        <select id="material">
+          <option value="tungsten">Tungsten</option>
+          <option value="carbon">Carbon</option>
+          <option value="nichrome">Other metal (Nichrome)</option>
+          <option value="custom">Custom (enter resistance)</option>
+        </select>
+      </div>
+      <div class="field" id="lengthField">
+        <label for="length">Filament length (mm)</label>
+        <input type="number" id="length" value="500" min="1" step="1">
+      </div>
+      <div class="field" id="thicknessField">
+        <label for="thickness">Filament thickness / diameter (µm)</label>
+        <input type="number" id="thickness" value="45" min="1" step="1">
+      </div>
+      <div class="field" id="customField" style="display:none;">
+        <label for="customR">Total resistance (Ω, cold)</label>
+        <input type="number" id="customR" value="60" min="0.1" step="0.1">
+      </div>
+    </div>
+    <div class="resistance-readout" id="resistanceReadout"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Response curves</div>
+    <div class="charts">
+      <div class="chart-box">
+        <h3>Voltage → Color Temperature</h3>
+        <svg id="chartTemp" viewBox="0 0 280 200"></svg>
+      </div>
+      <div class="chart-box">
+        <h3>Voltage → Current (A)</h3>
+        <svg id="chartAmps" viewBox="0 0 280 200"></svg>
+      </div>
+      <div class="chart-box">
+        <h3>Voltage → Brightness (lm)</h3>
+        <svg id="chartLumens" viewBox="0 0 280 200"></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Operating point</div>
+    <div class="grid" style="grid-template-columns: 1fr;">
+      <div class="field" style="max-width:260px;">
+        <label for="voltage">Applied voltage (V)</label>
+        <input type="number" id="voltage" value="120" min="0" step="1">
+      </div>
+    </div>
+
+    <div class="results" id="results"></div>
+
+    <div class="bulb-preview">
+      <svg id="bulbGlow" viewBox="0 0 120 160" width="120" height="160">
+        <defs>
+          <radialGradient id="glowGrad" cx="50%" cy="45%" r="55%">
+            <stop id="glowStop1" offset="0%" stop-color="#fff4e0"/>
+            <stop id="glowStop2" offset="60%" stop-color="#ff8c3d"/>
+            <stop offset="100%" stop-color="#12100e" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <circle cx="60" cy="65" r="55" fill="url(#glowGrad)" id="glowCircle"/>
+        <ellipse cx="60" cy="65" rx="34" ry="42" fill="rgba(30,26,22,0.35)" stroke="var(--wire)" stroke-width="1.5"/>
+        <path d="M42 130 h36 v10 a4 4 0 0 1 -4 4 h-28 a4 4 0 0 1 -4 -4 Z" fill="#5a5a5a"/>
+        <path d="M45 118 h30 v14 h-30 Z" fill="#4a4a4a"/>
+        <line x1="45" y1="122" x2="75" y2="122" stroke="#2a2a2a" stroke-width="1.5"/>
+        <line x1="45" y1="126" x2="75" y2="126" stroke="#2a2a2a" stroke-width="1.5"/>
+        <line x1="45" y1="130" x2="75" y2="130" stroke="#2a2a2a" stroke-width="1.5"/>
+      </svg>
+    </div>
+  </div>
+
+  <footer>Model: resistivity + blackbody approximation · educational estimate, not lab-grade</footer>
+</div>
+
+<script>
+// ---------- Material data ----------
+// resistivity in ohm-meter at ~20C, tempCoeff = alpha (per K, simplified linear model over range),
+// meltingK = approximate max operating temp (K), typical eff curve params
+const MATERIALS = {
+  tungsten: {
+    name: "Tungsten",
+    rho20: 5.6e-8,      // ohm*m at 20C
+    alpha: 0.0045,      // per K (resistance temp coefficient, simplified)
+    maxK: 3000,          // max safe operating color temp
+    baseK: 293
+  },
+  carbon: {
+    name: "Carbon",
+    rho20: 3.5e-5,       // much higher resistivity
+    alpha: -0.0005,       // carbon has slight negative coefficient
+    maxK: 2000,
+    baseK: 293
+  },
+  nichrome: {
+    name: "Nichrome (Ni-Cr)",
+    rho20: 1.10e-6,
+    alpha: 0.0004,
+    maxK: 1500,
+    baseK: 293
+  }
+};
+
+function els(id){return document.getElementById(id);}
+
+function coldResistance(){
+  const mat = els('material').value;
+  if(mat === 'custom'){
+    return parseFloat(els('customR').value) || 0.001;
+  }
+  const L = (parseFloat(els('length').value)||1) / 1000; // mm -> m
+  const d = (parseFloat(els('thickness').value)||1) * 1e-6; // um -> m
+  const r = d/2;
+  const A = Math.PI * r * r;
+  const m = MATERIALS[mat];
+  return (m.rho20 * L) / A;
+}
+
+// Resistance rises with temperature (roughly linear model referenced to cold R at 293K)
+function resistanceAtTemp(R0, mat, T){
+  const m = MATERIALS[mat];
+  return R0 * (1 + m.alpha*(T - m.baseK));
+}
+
+// Solve self-consistent operating temperature for given voltage:
+// P_electrical(T) = P_radiated(T)  (approx via Stefan-Boltzmann with fixed effective area)
+// We calibrate an effective radiating area so that at "rated" conditions results look sane,
+// then iterate. This is a simplified educational model, not a certified physical simulation.
+
+function solveForVoltage(V, matKey, R0, area){
+  const m = MATERIALS[matKey];
+  const sigma = 5.670374419e-8;
+  const emissivity = matKey === 'tungsten' ? 0.35 : (matKey==='carbon'? 0.85 : 0.9);
+  let T = 293;
+  if(V <= 0) return {T:293, I:0, P:0, R:R0};
+  // iterate: guess T, compute R(T), I=V/R, P=VI, then find T that radiates P via sigma*e*A*(T^4 - Tamb^4)
+  for(let i=0;i<200;i++){
+    const R = resistanceAtTemp(R0, matKey, T);
+    const I = V / R;
+    const P = V * I;
+    const Tamb = 293;
+    // T from radiative balance
+    const Trad = Math.pow( (P/(sigma*emissivity*area)) + Math.pow(Tamb,4), 0.25);
+    T = T + (Trad - T)*0.5; // damped iteration
+  }
+  const R = resistanceAtTemp(R0, matKey, T);
+  const I = V/R;
+  const P = V*I;
+  const maxT = m.maxK;
+  const overheated = T > maxT;
+  return {T, I, P, R, overheated, maxT};
+}
+
+// Effective radiating area: derive from filament geometry when available (surface area of cylinder)
+// for custom, assume a nominal small filament area so curves are still meaningful.
+function radiatingArea(matKey){
+  if(matKey === 'custom'){
+    return Math.PI * (25e-6) * 0.4; // nominal small filament, d=50um, L=40cm
+  }
+  const L = (parseFloat(els('length').value)||1) / 1000;
+  const d = (parseFloat(els('thickness').value)||1) * 1e-6;
+  return Math.PI * d * L; // lateral surface area of cylinder
+}
+
+// Luminous efficacy approximation from color temperature (very rough, incandescent regime 1000-3600K)
+// Peaks near tungsten operating temps around 3000-3400K for ~15-20 lm/W, falls off below.
+function luminousEfficacy(T){
+  // Empirical-ish curve calibrated to real incandescent bulbs:
+  // ~5 lm/W at 2400K (25W bulb), ~15 lm/W at 2900K (100W bulb), ~20lm/W near 3200K (halogen-like)
+  if(T < 500) return 0;
+  const k = (T-1600)/1000;
+  let eff = 1.2 * Math.pow(Math.max(k,0.01), 2.35);
+  return Math.max(eff, 0);
+}
+
+// 555nm theoretical max is 683 lm/W (monochromatic green). We express efficiency vs that ceiling.
+const LM_W_MAX_555 = 683;
+
+function lumens(P, T){
+  const eff = luminousEfficacy(T);
+  return eff * P;
+}
+
+// ---------- UI wiring ----------
+function updateFieldVisibility(){
+  const mat = els('material').value;
+  const isCustom = mat === 'custom';
+  els('lengthField').style.display = isCustom ? 'none' : 'block';
+  els('thicknessField').style.display = isCustom ? 'none' : 'block';
+  els('customField').style.display = isCustom ? 'block' : 'none';
+}
+
+function updateResistanceReadout(){
+  const mat = els('material').value;
+  const R0 = coldResistance();
+  let text = '';
+  if(mat === 'custom'){
+    text = `Total resistance (cold): <b>${R0.toFixed(2)} Ω</b>`;
+  } else {
+    const m = MATERIALS[mat];
+    const L = parseFloat(els('length').value)||0;
+    const d = parseFloat(els('thickness').value)||0;
+    text = `${m.name} filament — length <b>${L} mm</b>, thickness <b>${d} µm</b> → cold resistance <b>${R0.toFixed(2)} Ω</b>`;
+  }
+  els('resistanceReadout').innerHTML = text;
+}
+
+// ---------- Chart drawing (simple SVG line charts, no external libs) ----------
+function drawChart(svgId, points, xLabel, yLabel, markerV, markerY){
+  const svg = els(svgId);
+  const W = 280, H = 200, padL = 40, padR = 14, padT = 14, padB = 28;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+
+  const xs = points.map(p=>p.x);
+  const ys = points.map(p=>p.y);
+  const xMax = Math.max(...xs), xMin = 0;
+  const yMax = Math.max(...ys, 1e-9) * 1.1, yMin = 0;
+
+  function px(x){ return padL + (x-xMin)/(xMax-xMin||1) * plotW; }
+  function py(y){ return padT + plotH - (y-yMin)/(yMax-yMin||1) * plotH; }
+
+  let svgContent = '';
+
+  // grid lines
+  for(let i=0;i<=4;i++){
+    const gy = padT + plotH*i/4;
+    svgContent += `<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" class="grid-line"/>`;
+  }
+  for(let i=0;i<=4;i++){
+    const gx = padL + plotW*i/4;
+    svgContent += `<line x1="${gx}" y1="${padT}" x2="${gx}" y2="${H-padB}" class="grid-line"/>`;
+  }
+
+  // axes labels
+  svgContent += `<text x="${padL}" y="${H-8}" class="axis-label">0</text>`;
+  svgContent += `<text x="${W-padR-24}" y="${H-8}" class="axis-label">${xMax.toFixed(0)}</text>`;
+  svgContent += `<text x="${W/2-18}" y="${H-1}" class="axis-label">${xLabel}</text>`;
+  svgContent += `<text x="2" y="${padT+4}" class="axis-label">${yMax.toFixed(yMax<10?1:0)}</text>`;
+  svgContent += `<text x="2" y="${H-padB}" class="axis-label">0</text>`;
+  svgContent += `<text x="${padL-2}" y="${padT-4}" class="axis-label" text-anchor="start">${yLabel}</text>`;
+
+  // curve
+  let d = '';
+  points.forEach((p,i)=>{
+    const X = px(p.x), Y = py(p.y);
+    d += (i===0?'M':'L') + X.toFixed(1) + ',' + Y.toFixed(1) + ' ';
+  });
+  svgContent += `<path d="${d}" class="curve"/>`;
+
+  // marker for current voltage
+  if(markerV !== undefined && markerV >= xMin && markerV <= xMax){
+    const mx = px(markerV), my = py(markerY);
+    svgContent += `<line x1="${mx}" y1="${padT}" x2="${mx}" y2="${H-padB}" stroke="var(--copper)" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>`;
+    svgContent += `<circle cx="${mx}" cy="${my}" r="4" class="marker"/>`;
+  }
+
+  svg.innerHTML = svgContent;
+}
+
+function recompute(){
+  updateFieldVisibility();
+  updateResistanceReadout();
+
+  const mat = els('material').value;
+  const R0 = coldResistance();
+  const area = radiatingArea(mat);
+  const V = parseFloat(els('voltage').value) || 0;
+
+  // Determine a sensible voltage range for charts based on material/scale
+  let Vmax = Math.max(V*1.5, mat==='custom' ? 200 : 260);
+  Vmax = Math.min(Vmax, 400);
+  const steps = 40;
+  const tempPts = [], ampPts = [], lumenPts = [];
+
+  for(let i=0;i<=steps;i++){
+    const v = Vmax*i/steps;
+    const sol = solveForVoltage(v, mat, R0, area);
+    tempPts.push({x:v, y:sol.T});
+    ampPts.push({x:v, y:sol.I});
+    lumenPts.push({x:v, y: lumens(sol.P, sol.T)});
+  }
+
+  const current = solveForVoltage(V, mat, R0, area);
+  const curLumens = lumens(current.P, current.T);
+
+  drawChart('chartTemp', tempPts, 'V', 'K', V, current.T);
+  drawChart('chartAmps', ampPts, 'V', 'A', V, current.I);
+  drawChart('chartLumens', lumenPts, 'V', 'lm', V, curLumens);
+
+  // Results panel
+  const eff = current.P > 0 ? curLumens / current.P : 0;
+  const effPct555 = (eff / LM_W_MAX_555) * 100;
+
+  const overheatNote = current.overheated
+    ? `<div class="stat warn"><span class="val">⚠</span><span class="lbl">Exceeds ${MATERIALS[mat] ? MATERIALS[mat].maxK : ''}K safe limit — filament would fail</span></div>`
+    : '';
+
+  els('results').innerHTML = `
+    <div class="stat"><span class="val">${current.P.toFixed(1)} W</span><span class="lbl">Power usage</span></div>
+    <div class="stat"><span class="val">${current.I.toFixed(3)} A</span><span class="lbl">Current</span></div>
+    <div class="stat"><span class="val">${current.R.toFixed(2)} Ω</span><span class="lbl">Hot resistance</span></div>
+    <div class="stat"><span class="val">${current.T.toFixed(0)} K</span><span class="lbl">Color temperature</span></div>
+    <div class="stat"><span class="val">${curLumens.toFixed(0)} lm</span><span class="lbl">Expected brightness</span></div>
+    <div class="stat"><span class="val">${eff.toFixed(2)} lm/W</span><span class="lbl">Luminous efficacy</span></div>
+    <div class="stat"><span class="val">${effPct555.toFixed(2)}%</span><span class="lbl">Of 555nm theoretical limit (683 lm/W)</span></div>
+    ${overheatNote}
+  `;
+
+  // Glow preview: color + intensity from temperature
+  updateGlow(current.T, current.P);
+}
+
+function kelvinToRGB(T){
+  // Approximate blackbody RGB (Tanner Helland style approximation), clamped range
+  T = Math.max(1000, Math.min(T, 12000)) / 100;
+  let r,g,b;
+  if(T <= 66){
+    r = 255;
+    g = 99.47 * Math.log(T) - 161.12;
+    b = T <= 19 ? 0 : 138.52*Math.log(T-10) - 305.04;
+  } else {
+    r = 329.7 * Math.pow(T-60, -0.133);
+    g = 288.12 * Math.pow(T-60, -0.0755);
+    b = 255;
+  }
+  const clamp = v => Math.max(0, Math.min(255, Math.round(v)));
+  return `rgb(${clamp(r)},${clamp(g)},${clamp(b)})`;
+}
+
+function updateGlow(T, P){
+  const color = T > 700 ? kelvinToRGB(T) : '#3a2f26';
+  const intensity = Math.min(1, P/150);
+  els('glowStop1').setAttribute('stop-color', T>1200 ? '#fff4e0' : color);
+  els('glowStop2').setAttribute('stop-color', color);
+  els('glowCircle').style.opacity = (0.15 + intensity*0.85).toFixed(2);
+}
+
+['material','length','thickness','customR','voltage'].forEach(id=>{
+  els(id).addEventListener('input', recompute);
+});
+els('material').addEventListener('change', recompute);
+
+recompute();
+</script>
+</body>
+</html>
