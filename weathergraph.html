@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WeatherGraph — Strip Chart Recorder</title>
+<style>
+  :root {
+    --paper: #F0EBDD;
+    --paper-dark: #E5DCC3;
+    --ink: #1A1D1E;
+    --sepia: #8B6F47;
+    --sepia-light: #C9B896;
+    --red-pin: #A8342A;
+    --green-accent: #4C6B4C;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Courier New', ui-monospace, monospace;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(139,111,71,0.07) 28px),
+      radial-gradient(ellipse at top left, rgba(255,255,255,0.35), transparent 60%);
+  }
+  .device { max-width: 1180px; margin: 0 auto; padding: 28px 22px 60px; }
+
+  .panel-header {
+    border: 3px solid var(--ink);
+    background: linear-gradient(180deg, var(--paper-dark), var(--paper));
+    padding: 22px 28px; position: relative; margin-bottom: 22px;
+    box-shadow: 5px 5px 0 rgba(26,29,30,0.12);
+  }
+  .panel-header::before {
+    content: ""; position: absolute; top: 8px; left: 8px; right: 8px; bottom: 8px;
+    border: 1px dashed var(--sepia-light); pointer-events: none;
+  }
+  .brand-row { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  .brand { font-family: 'Arial Narrow', Helvetica, sans-serif; font-weight: 900; font-size: 2.4rem; letter-spacing: -0.5px; margin: 0; text-transform: uppercase; }
+  .brand span { color: var(--red-pin); }
+  .brand-sub { font-size: 0.72rem; letter-spacing: 3px; text-transform: uppercase; color: var(--sepia); border-top: 1px solid var(--sepia); padding-top: 4px; margin-top: 4px; }
+  .serial { font-size: 0.68rem; color: var(--sepia); text-align: right; line-height: 1.5; }
+  .serial b { color: var(--ink); }
+
+  .deck { border: 3px solid var(--ink); background: var(--paper); padding: 20px; margin-bottom: 22px; box-shadow: 5px 5px 0 rgba(26,29,30,0.12); }
+  .deck-label { font-family: 'Arial Narrow', sans-serif; font-weight: 800; font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase; color: var(--sepia); margin: 0 0 14px 0; display: flex; align-items: center; gap: 8px; }
+  .deck-label::after { content: ""; flex: 1; height: 1px; background: repeating-linear-gradient(90deg, var(--sepia) 0 4px, transparent 4px 8px); }
+
+  .grid-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 14px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 0.68rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink); }
+
+  input, select {
+    font-family: inherit; font-size: 0.88rem; padding: 9px 10px;
+    border: 2px solid var(--ink); background: #FBF8EF; color: var(--ink);
+    outline: none; border-radius: 0;
+  }
+  input:focus, select:focus { background: #fff; box-shadow: 0 0 0 3px rgba(168,52,42,0.18); }
+  select { cursor: pointer; }
+  input:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .api-desc { font-size: 0.72rem; color: var(--green-accent); background: rgba(76,107,76,0.08); border-left: 3px solid var(--green-accent); padding: 6px 9px; margin-top: 2px; line-height: 1.4; }
+
+  .checkbox-group { display: flex; gap: 16px; flex-wrap: wrap; padding: 10px 0 2px; }
+  .chk { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.5px; cursor: pointer; user-select: none; padding: 6px 12px; border: 2px solid var(--ink); background: #FBF8EF; transition: background 0.12s, color 0.12s; }
+  .chk.on { background: var(--ink); color: var(--paper); }
+  .chk input { display: none; }
+  .swatch { width: 10px; height: 10px; border: 1px solid currentColor; flex-shrink: 0; }
+
+  .run-btn {
+    font-family: 'Arial Narrow', sans-serif; font-weight: 900; font-size: 0.95rem; letter-spacing: 2px; text-transform: uppercase;
+    background: var(--red-pin); color: var(--paper); border: 3px solid var(--ink); padding: 13px 26px;
+    cursor: pointer; width: 100%; box-shadow: 4px 4px 0 rgba(26,29,30,0.25); transition: transform 0.08s, box-shadow 0.08s;
+  }
+  .run-btn:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 rgba(26,29,30,0.25); }
+  .run-btn:active { transform: translate(1px,1px); box-shadow: 2px 2px 0 rgba(26,29,30,0.25); }
+  .run-btn:disabled { background: var(--sepia-light); cursor: wait; transform: none; }
+
+  .status-line { font-size: 0.75rem; padding: 10px 14px; border-left: 4px solid var(--ink); background: #FBF8EF; margin-bottom: 18px; display: none; white-space: pre-wrap; line-height: 1.5; }
+  .status-line.show { display: block; }
+  .status-line.error { border-color: var(--red-pin); color: var(--red-pin); background: rgba(168,52,42,0.06); }
+  .status-line.ok { border-color: var(--green-accent); color: var(--green-accent); background: rgba(76,107,76,0.06); }
+  .status-line.info { border-color: var(--sepia); color: var(--sepia); }
+
+  .chart-plate { border: 3px solid var(--ink); background: #FBF8EF; padding: 20px; margin-bottom: 22px; box-shadow: 5px 5px 0 rgba(26,29,30,0.12); display: none; }
+  .chart-plate.show { display: block; }
+  .chart-title-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+  .chart-title-row h2 { font-family: 'Arial Narrow', sans-serif; font-size: 1rem; letter-spacing: 1px; text-transform: uppercase; margin: 0; }
+
+  .canvas-wrap { position: relative; width: 100%; border: 1px solid var(--sepia-light); background: #FBF8EF; }
+  canvas#chartCanvas { width: 100%; height: auto; display: block; }
+
+  .multi-legend { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+  .legend-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .legend-row .param-name { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; width: 130px; flex-shrink: 0; }
+  .legend-scale { display: flex; gap: 8px; flex-wrap: wrap; font-size: 0.64rem; }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .legend-swatch { width: 14px; height: 10px; border: 1px solid rgba(0,0,0,0.2); flex-shrink: 0; }
+  .axis-note { font-size: 0.6rem; color: var(--sepia); font-style: italic; }
+
+  .table-plate { border: 3px solid var(--ink); background: #FBF8EF; padding: 20px; box-shadow: 5px 5px 0 rgba(26,29,30,0.12); display: none; overflow-x: auto; }
+  .table-plate.show { display: block; }
+  .table-plate h2 { font-family: 'Arial Narrow', sans-serif; font-size: 1rem; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 12px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  th, td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--sepia-light); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { font-weight: 800; text-transform: uppercase; font-size: 0.66rem; letter-spacing: 1px; border-bottom: 2px solid var(--ink); color: var(--sepia); position: sticky; top: 0; background: #FBF8EF; }
+  tbody tr:nth-child(even) { background: rgba(139,111,71,0.05); }
+  tbody tr:hover { background: rgba(168,52,42,0.08); }
+  .cell-chip { display: inline-block; min-width: 44px; padding: 2px 6px; border-radius: 2px; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.35); font-weight: 700; }
+
+  footer { text-align: center; font-size: 0.65rem; color: var(--sepia); margin-top: 28px; letter-spacing: 1px; }
+
+  @media (max-width: 640px) {
+    .brand { font-size: 1.7rem; }
+    .serial { text-align: left; }
+    th, td { font-size: 0.7rem; padding: 5px 6px; }
+  }
+</style>
+</head>
+<body>
+<div class="device">
+
+  <div class="panel-header">
+    <div class="brand-row">
+      <div>
+        <h1 class="brand">WEATHER<span>GRAPH</span></h1>
+        <div class="brand-sub">Multi-Source Atmospheric Strip Recorder</div>
+      </div>
+      <div class="serial">
+        MODEL WG-5 &nbsp;·&nbsp; CANVAS PIXEL-GRADIENT ENGINE<br>
+        Client-side instrument — reads keys locally only
+      </div>
+    </div>
+  </div>
+
+  <div class="deck">
+    <p class="deck-label">01 — Data Source</p>
+    <div class="grid-row">
+      <div class="field">
+        <label for="apiSelect">Provider</label>
+        <select id="apiSelect"></select>
+      </div>
+      <div class="field">
+        <label for="apiKey">API Key</label>
+        <input type="password" id="apiKey" placeholder="paste key here — kept in browser only" autocomplete="off">
+      </div>
+    </div>
+    <div class="api-desc" id="apiDesc"></div>
+  </div>
+
+  <div class="deck">
+    <p class="deck-label">02 — Query Parameters</p>
+    <div class="grid-row">
+      <div class="field">
+        <label for="cityInput">City</label>
+        <input type="text" id="cityInput" placeholder="e.g. Milan, Tokyo, Denver" value="Milan">
+      </div>
+      <div class="field">
+        <label for="startInput">Start</label>
+        <input type="datetime-local" id="startInput">
+      </div>
+      <div class="field">
+        <label for="endInput">End</label>
+        <input type="datetime-local" id="endInput">
+      </div>
+      <div class="field">
+        <label for="resInput">Resolution</label>
+        <select id="resInput">
+          <option value="1">Every 1 hour</option>
+          <option value="3" selected>Every 3 hours</option>
+          <option value="6">Every 6 hours</option>
+          <option value="24">Every 24 hours (daily)</option>
+        </select>
+      </div>
+    </div>
+    <p class="deck-label" style="margin-top:6px;">03 — Parameters (all drawn on one recorder, each in its own band)</p>
+    <div class="checkbox-group" id="paramGroup">
+      <label class="chk on" data-param="temp"><input type="checkbox" checked><span class="swatch" style="background:#DC2626"></span>Temperature</label>
+      <label class="chk" data-param="precip"><input type="checkbox"><span class="swatch" style="background:#0891B2"></span>Precipitation</label>
+      <label class="chk" data-param="wind"><input type="checkbox"><span class="swatch" style="background:#4C6B4C"></span>Wind Speed</label>
+      <label class="chk" data-param="humidity"><input type="checkbox"><span class="swatch" style="background:#8B6F47"></span>Humidity</label>
+    </div>
+
+    <button class="run-btn" id="runBtn" style="margin-top:16px;">▸ Chart It</button>
+  </div>
+
+  <div class="status-line" id="statusLine"></div>
+
+  <div class="chart-plate" id="chartPlate">
+    <div class="chart-title-row">
+      <h2 id="chartTitle">Combined Trace</h2>
+      <span class="axis-note">one shared time axis, each variable in its own scaled band</span>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="chartCanvas" width="1000" height="620"></canvas>
+    </div>
+    <div class="multi-legend" id="multiLegend"></div>
+  </div>
+
+  <div class="table-plate" id="tablePlate">
+    <h2>Data Log</h2>
+    <div style="max-height:480px; overflow-y:auto;">
+      <table id="dataTable">
+        <thead><tr id="tableHead"></tr></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>WEATHERGRAPH WG-5 &nbsp;·&nbsp; ALL KEYS AND QUERIES RUN CLIENT-SIDE &nbsp;·&nbsp; NO DATA STORED</footer>
+</div>
+
+<script>
+/* ============================================================
+   PROVIDER REGISTRY
+   ============================================================ */
+const PROVIDERS = {
+  openmeteo: {
+    label: "Open-Meteo (no key needed)",
+    desc: "★ Best default: completely free, no API key, no rate limit for casual use, reliable CORS support for direct browser calls.",
+    needsKey: false,
+    fetcher: fetchOpenMeteo
+  },
+  openweathermap: {
+    label: "OpenWeatherMap — One Call 3.0",
+    desc: "Best all-rounder: one endpoint bundles current, hourly, daily and 47+ years of history. Free tier: 1,000 calls/day. Full historical range needs a paid add-on.",
+    needsKey: true,
+    fetcher: fetchOWM
+  },
+  weatherapi: {
+    label: "WeatherAPI.com",
+    desc: "Best for simplicity: one endpoint for forecast + up to 300 days of history, generous free tier (1M calls/mo), CORS-friendly.",
+    needsKey: true,
+    fetcher: fetchWeatherAPI
+  },
+  googlemaps: {
+    label: "Google Maps Platform — Weather API",
+    desc: "Best for Google-ecosystem apps: ties into Maps/Places geocoding + Google's forecast model. Note: typically blocks direct browser CORS — needs a backend proxy.",
+    needsKey: true,
+    fetcher: fetchGoogleWeather
+  },
+  gemini: {
+    label: "Gemini (Google Search grounding)",
+    desc: "Best for odd/ambiguous asks: uses Gemini + live Search grounding to assemble a timeline when no dedicated API fits — slower, less numerically precise.",
+    needsKey: true,
+    fetcher: fetchGemini
+  },
+  tomorrowio: {
+    label: "Tomorrow.io",
+    desc: "Best for hyperlocal + niche fields: minute-level nowcasting, pollen/fire-index/road-risk extras. Smaller free tier (500 calls/day). CORS supported.",
+    needsKey: true,
+    fetcher: fetchTomorrowIO
+  }
+};
+
+const apiSelect = document.getElementById('apiSelect');
+for (const [key, p] of Object.entries(PROVIDERS)) {
+  const opt = document.createElement('option');
+  opt.value = key;
+  opt.textContent = p.label;
+  apiSelect.appendChild(opt);
+}
+function updateApiDesc() {
+  const key = apiSelect.value;
+  document.getElementById('apiDesc').textContent = PROVIDERS[key].desc;
+  const keyInput = document.getElementById('apiKey');
+  keyInput.placeholder = PROVIDERS[key].needsKey
+    ? "paste your " + PROVIDERS[key].label.split('—')[0].trim() + " key here"
+    : "no key required for this provider";
+  keyInput.disabled = !PROVIDERS[key].needsKey;
+}
+apiSelect.addEventListener('change', updateApiDesc);
+updateApiDesc();
+
+(function setDefaultDates(){
+  const now = new Date();
+  const end = new Date(now.getTime() + 48*3600*1000);
+  const fmt = d => {
+    const pad = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
+  };
+  document.getElementById('startInput').value = fmt(now);
+  document.getElementById('endInput').value = fmt(end);
+})();
+
+document.querySelectorAll('.chk').forEach(label => {
+  label.addEventListener('click', () => {
+    const input = label.querySelector('input');
+    input.checked = !input.checked;
+    label.classList.toggle('on', input.checked);
+  });
+});
+function activeParams() {
+  const order = ['temp', 'precip', 'wind', 'humidity'];
+  const checked = new Set(
+    Array.from(document.querySelectorAll('.chk'))
+      .filter(l => l.querySelector('input').checked)
+      .map(l => l.dataset.param)
+  );
+  return order.filter(p => checked.has(p));
+}
+
+/* ============================================================
+   GEOCODING (shared) — Open-Meteo geocoding, free & keyless
+   ============================================================ */
+async function geocode(city) {
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Geocoding failed (HTTP ${res.status})`);
+  const data = await res.json();
+  if (!data.results || !data.results.length) throw new Error(`City "${city}" not found`);
+  const r = data.results[0];
+  return { lat: r.latitude, lon: r.longitude, name: r.name, country: r.country };
+}
+
+/* ============================================================
+   FETCHERS — each returns { rows: [{time, temp, precip, wind, humidity}], cityLabel }
+   ============================================================ */
+async function fetchOpenMeteo(ctx) {
+  const { lat, lon } = await geocode(ctx.city);
+  const startDate = ctx.start.toISOString().slice(0,10);
+  const endDate = ctx.end.toISOString().slice(0,10);
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&hourly=temperature_2m,precipitation,wind_speed_10m,relative_humidity_2m` +
+    `&start_date=${startDate}&end_date=${endDate}&timezone=auto`;
+  let res;
+  try { res = await fetch(url); }
+  catch (e) { throw new Error("Network/CORS error reaching Open-Meteo: " + e.message); }
+  if (!res.ok) throw new Error(`Open-Meteo returned HTTP ${res.status}`);
+  const data = await res.json();
+  const h = data.hourly;
+  const rows = h.time.map((t, i) => ({
+    time: new Date(t),
+    temp: h.temperature_2m[i],
+    precip: h.precipitation[i],
+    wind: h.wind_speed_10m[i],
+    humidity: h.relative_humidity_2m[i]
+  }));
+  return { rows, cityLabel: ctx.city };
+}
+
+async function fetchOWM(ctx) {
+  if (!ctx.key) throw new Error("Please paste your OpenWeatherMap API key.");
+  const { lat, lon } = await geocode(ctx.city);
+  const url = `https://api.openweathermap.org/data/3.0/onecall?lat=${lat}&lon=${lon}&units=metric&exclude=minutely,alerts&appid=${ctx.key}`;
+  let res;
+  try { res = await fetch(url); }
+  catch (e) { throw new Error("Network/CORS error reaching OpenWeatherMap: " + e.message); }
+  if (!res.ok) {
+    const body = await res.text().catch(()=> "");
+    throw new Error(`OpenWeatherMap HTTP ${res.status}. ${res.status === 401 ? "Key invalid or not yet activated (new keys take up to 2hrs)." : ""} ${body.slice(0,200)}`);
+  }
+  const data = await res.json();
+  const rows = (data.hourly || []).map(h => ({
+    time: new Date(h.dt * 1000),
+    temp: h.temp,
+    precip: (h.rain && h.rain["1h"]) || (h.snow && h.snow["1h"]) || 0,
+    wind: h.wind_speed,
+    humidity: h.humidity
+  }));
+  return { rows, cityLabel: ctx.city };
+}
+
+async function fetchWeatherAPI(ctx) {
+  if (!ctx.key) throw new Error("Please paste your WeatherAPI.com key.");
+  const days = Math.min(14, Math.max(1, Math.ceil((ctx.end - ctx.start) / 86400000) + 1));
+  const url = `https://api.weatherapi.com/v1/forecast.json?key=${ctx.key}&q=${encodeURIComponent(ctx.city)}&days=${days}&aqi=no&alerts=no`;
+  let res;
+  try { res = await fetch(url); }
+  catch (e) { throw new Error("Network/CORS error reaching WeatherAPI.com: " + e.message); }
+  if (!res.ok) {
+    const body = await res.json().catch(()=>({}));
+    throw new Error(`WeatherAPI.com HTTP ${res.status}: ${body?.error?.message || "unknown error"}`);
+  }
+  const data = await res.json();
+  const rows = [];
+  for (const day of data.forecast.forecastday) {
+    for (const h of day.hour) {
+      rows.push({
+        time: new Date(h.time.replace(' ', 'T')),
+        temp: h.temp_c,
+        precip: h.precip_mm,
+        wind: h.wind_kph,
+        humidity: h.humidity
+      });
+    }
+  }
+  return { rows, cityLabel: data.location.name };
+}
+
+async function fetchGoogleWeather(ctx) {
+  if (!ctx.key) throw new Error("Please paste your Google Maps Platform API key.");
+  const { lat, lon } = await geocode(ctx.city);
+  const url = `https://weather.googleapis.com/v1/forecast/hours:lookup?key=${ctx.key}&location.latitude=${lat}&location.longitude=${lon}&hours=48`;
+  let res;
+  try { res = await fetch(url); }
+  catch (e) {
+    throw new Error("Blocked reaching Google Weather API from the browser — expected: Google's Weather API doesn't send permissive CORS headers, so it needs a backend proxy, not direct client-side JS. (" + e.message + ")");
+  }
+  if (!res.ok) {
+    throw new Error(`Google Weather API HTTP ${res.status}. If this is a CORS/opaque response, you'll need a backend proxy.`);
+  }
+  const data = await res.json();
+  const rows = (data.forecastHours || []).map(h => ({
+    time: new Date(h.interval.startTime),
+    temp: h.temperature?.degrees,
+    precip: h.precipitation?.qpf?.quantity || 0,
+    wind: h.wind?.speed?.value,
+    humidity: h.relativeHumidity
+  }));
+  return { rows, cityLabel: ctx.city };
+}
+
+async function fetchTomorrowIO(ctx) {
+  if (!ctx.key) throw new Error("Please paste your Tomorrow.io key.");
+  const { lat, lon } = await geocode(ctx.city);
+  const url = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&apikey=${ctx.key}`;
+  let res;
+  try { res = await fetch(url); }
+  catch (e) { throw new Error("Network/CORS error reaching Tomorrow.io: " + e.message); }
+  if (!res.ok) throw new Error(`Tomorrow.io HTTP ${res.status}`);
+  const data = await res.json();
+  const rows = (data.timelines?.hourly || []).map(h => ({
+    time: new Date(h.time),
+    temp: h.values.temperature,
+    precip: h.values.precipitationIntensity,
+    wind: h.values.windSpeed,
+    humidity: h.values.humidity
+  }));
+  return { rows, cityLabel: ctx.city };
+}
+
+async function fetchGemini(ctx) {
+  if (!ctx.key) throw new Error("Please paste your Gemini API key.");
+  const prompt = `Use Google Search to find the weather forecast for ${ctx.city} from ${ctx.start.toISOString()} to ${ctx.end.toISOString()}. ` +
+    `Return ONLY a JSON array (no markdown, no prose) of objects like ` +
+    `{"time":"ISO8601","temp":celsius_number,"precip":mm_number,"wind":kph_number,"humidity":percent_number}, ` +
+    `one entry approximately every ${ctx.resolution} hour(s) across that window. If exact hourly data isn't found, interpolate reasonably from daily data. JSON only.`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${ctx.key}`;
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        tools: [{ google_search: {} }]
+      })
+    });
+  } catch (e) { throw new Error("Network/CORS error reaching Gemini API: " + e.message); }
+  if (!res.ok) {
+    const body = await res.text().catch(()=> "");
+    throw new Error(`Gemini API HTTP ${res.status}: ${body.slice(0,200)}`);
+  }
+  const data = await res.json();
+  let text = data.candidates?.[0]?.content?.parts?.map(p=>p.text).join('') || "";
+  text = text.trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
+  let parsed;
+  try { parsed = JSON.parse(text); }
+  catch (e) { throw new Error("Gemini didn't return parseable JSON. Raw start: " + text.slice(0,150)); }
+  const rows = parsed.map(r => ({
+    time: new Date(r.time),
+    temp: r.temp, precip: r.precip, wind: r.wind, humidity: r.humidity
+  }));
+  return { rows, cityLabel: ctx.city };
+}
+
+/* ============================================================
+   GRADIENT COLOR SCALES — each parameter has its own scale.
+   ============================================================ */
+const SCALES = {
+  temp: [
+    [-10, [30, 58, 95]],
+    [0,   [8, 145, 178]],
+    [10,  [132, 204, 22]],
+    [20,  [234, 179, 8]],
+    [30,  [220, 38, 38]],
+    [40,  [124, 58, 237]]
+  ],
+  precip: [
+    [0,  [222, 214, 191]],
+    [1,  [186, 230, 253]],
+    [5,  [56, 189, 248]],
+    [15, [37, 99, 235]],
+    [30, [30, 41, 143]],
+    [60, [88, 28, 135]]
+  ],
+  wind: [
+    [0,  [200, 222, 170]],
+    [10, [132, 204, 22]],
+    [25, [234, 179, 8]],
+    [45, [234, 88, 12]],
+    [70, [220, 38, 38]],
+    [100,[124, 58, 237]]
+  ],
+  humidity: [
+    [0,   [180, 140, 90]],
+    [25,  [214, 184, 100]],
+    [50,  [173, 197, 129]],
+    [75,  [56, 150, 178]],
+    [100, [30, 58, 138]]
+  ]
+};
+const UNITS = { temp: '°C', precip: 'mm/h', wind: 'km/h', humidity: '%' };
+const PARAM_LABEL = { temp: 'Temperature', precip: 'Precipitation', wind: 'Wind Speed', humidity: 'Humidity' };
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function colorForValue(scale, v) {
+  if (v === null || v === undefined || isNaN(v)) return [127,127,127];
+  if (v <= scale[0][0]) return scale[0][1];
+  if (v >= scale[scale.length-1][0]) return scale[scale.length-1][1];
+  for (let i = 0; i < scale.length - 1; i++) {
+    const [v0, c0] = scale[i], [v1, c1] = scale[i+1];
+    if (v >= v0 && v <= v1) {
+      const t = (v - v0) / (v1 - v0);
+      return [
+        Math.round(lerp(c0[0], c1[0], t)),
+        Math.round(lerp(c0[1], c1[1], t)),
+        Math.round(lerp(c0[2], c1[2], t))
+      ];
+    }
+  }
+  return [127,127,127];
+}
+function rgbStr(c) { return `rgb(${c[0]},${c[1]},${c[2]})`; }
+
+/* ============================================================
+   UNIFIED STRIP CHART — ONE canvas, ONE shared time axis at the
+   bottom. Each selected parameter gets its own horizontal BAND
+   stacked vertically (like a seismograph), each with its own
+   value scale on the left edge and its own color gradient.
+   Reads as one instrument while keeping each variable legible.
+   ============================================================ */
+function renderUnifiedChart(canvas, rows, params) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const PAD_L = 54, PAD_R = 20, PAD_T = 14, PAD_B = 40;
+  const BAND_GAP = 14;
+  const nBands = params.length;
+  const bandH = (canvas.height - PAD_T - PAD_B - BAND_GAP * (nBands - 1)) / nBands;
+  const innerW = W - PAD_L - PAD_R;
+  const n = rows.length;
+
+  ctx.clearRect(0, 0, W, canvas.height);
+  ctx.fillStyle = '#FBF8EF';
+  ctx.fillRect(0, 0, W, canvas.height);
+
+  const xFor = i => PAD_L + (innerW * i) / Math.max(1, n - 1);
+
+  params.forEach((p, bi) => {
+    const bandTop = PAD_T + bi * (bandH + BAND_GAP);
+    const bandBottom = bandTop + bandH;
+    const scale = SCALES[p];
+
+    ctx.strokeStyle = 'rgba(139,111,71,0.3)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([1, 3]);
+    for (let s = 0; s <= 3; s++) {
+      const yy = bandTop + (bandH * s) / 3;
+      ctx.beginPath();
+      ctx.moveTo(PAD_L, yy);
+      ctx.lineTo(W - PAD_R, yy);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    const vals = rows.map(r => r[p]).filter(v => v !== null && v !== undefined && !isNaN(v));
+    let min = 0, max = 1;
+    if (vals.length) {
+      min = Math.min(...vals); max = Math.max(...vals);
+      if (min === max) { min -= 1; max += 1; }
+      const pad = (max - min) * 0.12;
+      min -= pad; max += pad;
+    }
+    const yFor = v => bandTop + bandH - ((v - min) / (max - min)) * bandH;
+
+    const GREY = 'rgb(127,127,127)';
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = GREY;
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i < n; i++) {
+      const v = rows[i][p];
+      if (v === null || v === undefined || isNaN(v)) { started = false; continue; }
+      const x = xFor(i), y = yFor(v);
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    const bandYTop = Math.max(0, Math.floor(bandTop) - 8);
+    const bandYBot = Math.min(canvas.height - 1, Math.ceil(bandBottom) + 8);
+    const bandImgH = bandYBot - bandYTop + 1;
+    const img = ctx.getImageData(0, bandYTop, W, bandImgH);
+    const d = img.data;
+
+    for (let x = Math.floor(PAD_L); x <= Math.ceil(W - PAD_R); x++) {
+      const frac = ((x - PAD_L) / innerW) * (n - 1);
+      const i0 = Math.max(0, Math.min(n - 1, Math.floor(frac)));
+      const i1 = Math.max(0, Math.min(n - 1, Math.ceil(frac)));
+      const v0 = rows[i0][p], v1 = rows[i1][p];
+      if (v0 === null || v0 === undefined || isNaN(v0) || v1 === null || v1 === undefined || isNaN(v1)) continue;
+      const t = i1 === i0 ? 0 : (frac - i0) / (i1 - i0);
+      const vAtX = lerp(v0, v1, t);
+      const yAtX = yFor(vAtX);
+      const [r, g, b] = colorForValue(scale, vAtX);
+
+      const yTop = Math.max(0, Math.floor(yAtX) - 5) - bandYTop;
+      const yBot = Math.min(bandImgH - 1, Math.ceil(yAtX) + 5 - bandYTop);
+      for (let y = Math.max(0, yTop); y <= yBot; y++) {
+        const idx = (y * W + x) * 4;
+        if (d[idx] === 127 && d[idx+1] === 127 && d[idx+2] === 127 && d[idx+3] > 0) {
+          d[idx] = r; d[idx+1] = g; d[idx+2] = b;
+        }
+      }
+    }
+    ctx.putImageData(img, 0, bandYTop);
+
+    ctx.strokeStyle = '#1A1D1E';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(PAD_L, bandTop, innerW, bandH);
+
+    ctx.fillStyle = '#1A1D1E';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(max.toFixed(0), PAD_L - 6, bandTop + 9);
+    ctx.fillText(((max+min)/2).toFixed(0), PAD_L - 6, bandTop + bandH/2 + 3);
+    ctx.fillText(min.toFixed(0), PAD_L - 6, bandTop + bandH - 2);
+
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 10px monospace';
+    ctx.fillStyle = '#8B6F47';
+    ctx.fillText(`${PARAM_LABEL[p].toUpperCase()} (${UNITS[p]})`, PAD_L + 6, bandTop + 11);
+  });
+
+  ctx.fillStyle = '#8B6F47';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+  const labelCount = Math.min(7, n);
+  const axisY = PAD_T + nBands * bandH + (nBands - 1) * BAND_GAP + 16;
+  for (let s = 0; s < labelCount; s++) {
+    const idx = Math.round((n - 1) * s / Math.max(1, labelCount - 1));
+    const t = rows[idx].time;
+    const label = `${String(t.getDate()).padStart(2,'0')}/${String(t.getMonth()+1).padStart(2,'0')} ${String(t.getHours()).padStart(2,'0')}h`;
+    ctx.fillText(label, xFor(idx), axisY);
+  }
+
+  ctx.strokeStyle = 'rgba(139,111,71,0.18)';
+  ctx.lineWidth = 0.5;
+  for (let s = 0; s < labelCount; s++) {
+    const idx = Math.round((n - 1) * s / Math.max(1, labelCount - 1));
+    const x = xFor(idx);
+    ctx.beginPath();
+    ctx.moveTo(x, PAD_T);
+    ctx.lineTo(x, PAD_T + nBands * bandH + (nBands - 1) * BAND_GAP);
+    ctx.stroke();
+  }
+}
+
+function buildLegendHTML(params) {
+  return params.map(p => {
+    const scale = SCALES[p];
+    const items = scale.map(([v, c]) =>
+      `<div class="legend-item"><span class="legend-swatch" style="background:${rgbStr(c)}"></span>${v}${UNITS[p]}</div>`
+    ).join('');
+    return `<div class="legend-row"><span class="param-name">${PARAM_LABEL[p]}</span><div class="legend-scale">${items}</div></div>`;
+  }).join('');
+}
+
+/* ============================================================
+   MAIN RUN LOGIC
+   ============================================================ */
+function setStatus(msg, type) {
+  const el = document.getElementById('statusLine');
+  el.textContent = msg;
+  el.className = 'status-line show' + (type ? ' ' + type : '');
+}
+
+function resampleRows(rows, resolutionHours) {
+  if (resolutionHours <= 1) return rows;
+  const out = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (i === 0) { out.push(rows[i]); continue; }
+    const hoursSinceLast = (rows[i].time - out[out.length-1].time) / 3600000;
+    if (hoursSinceLast >= resolutionHours) out.push(rows[i]);
+  }
+  return out;
+}
+
+function sizeCanvasForBands(canvas, nBands) {
+  const perBand = 150;
+  const PAD_T = 14, PAD_B = 40, GAP = 14;
+  canvas.height = PAD_T + PAD_B + nBands * perBand + (nBands - 1) * GAP;
+}
+
+document.getElementById('runBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('runBtn');
+  const providerKey = apiSelect.value;
+  const provider = PROVIDERS[providerKey];
+  const city = document.getElementById('cityInput').value.trim();
+  const startVal = document.getElementById('startInput').value;
+  const endVal = document.getElementById('endInput').value;
+  const resolution = parseInt(document.getElementById('resInput').value, 10);
+  const key = document.getElementById('apiKey').value.trim();
+  const params = activeParams();
+
+  document.getElementById('chartPlate').classList.remove('show');
+  document.getElementById('tablePlate').classList.remove('show');
+
+  if (!city) { setStatus("Enter a city name first.", "error"); return; }
+  if (!startVal || !endVal) { setStatus("Set both a start and end time.", "error"); return; }
+  const start = new Date(startVal), end = new Date(endVal);
+  if (end <= start) { setStatus("End time must be after start time.", "error"); return; }
+  if (!params.length) { setStatus("Select at least one parameter to plot.", "error"); return; }
+  if (provider.needsKey && !key) { setStatus(`${provider.label} requires an API key — paste it in the field above.`, "error"); return; }
+
+  btn.disabled = true;
+  btn.textContent = "▸ Reading Instruments…";
+  setStatus(`Contacting ${provider.label}…`, "info");
+
+  try {
+    const result = await provider.fetcher({ city, start, end, resolution, key });
+    let rows = result.rows.filter(r => r.time >= start && r.time <= end);
+    if (!rows.length) rows = result.rows;
+    rows = resampleRows(rows.sort((a,b)=>a.time-b.time), resolution);
+    if (!rows.length) throw new Error("Provider returned no data for that window.");
+
+    renderOutputs(rows, params, result.cityLabel || city);
+    setStatus(`✓ ${rows.length} readings plotted from ${provider.label} for ${result.cityLabel || city}.`, "ok");
+  } catch (err) {
+    console.error(err);
+    setStatus(`✗ ${err.message}`, "error");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "▸ Chart It";
+  }
+});
+
+function renderOutputs(rows, params, cityLabel) {
+  document.getElementById('chartTitle').textContent = `Combined Trace — ${cityLabel}`;
+  const canvas = document.getElementById('chartCanvas');
+  sizeCanvasForBands(canvas, params.length);
+  renderUnifiedChart(canvas, rows, params);
+  document.getElementById('multiLegend').innerHTML = buildLegendHTML(params);
+  document.getElementById('chartPlate').classList.add('show');
+
+  const head = document.getElementById('tableHead');
+  const body = document.getElementById('tableBody');
+  const cols = [{k:'time', label:'Time'}];
+  if (params.includes('temp')) cols.push({k:'temp', label:'Temp (°C)'});
+  if (params.includes('precip')) cols.push({k:'precip', label:'Precip (mm/h)'});
+  if (params.includes('wind')) cols.push({k:'wind', label:'Wind (km/h)'});
+  if (params.includes('humidity')) cols.push({k:'humidity', label:'Humidity (%)'});
+
+  head.innerHTML = cols.map(c => `<th>${c.label}</th>`).join('');
+  body.innerHTML = rows.map(r => {
+    return '<tr>' + cols.map(c => {
+      if (c.k === 'time') {
+        const t = r.time;
+        return `<td>${String(t.getDate()).padStart(2,'0')}/${String(t.getMonth()+1).padStart(2,'0')} ${String(t.getHours()).padStart(2,'0')}:00</td>`;
+      }
+      const v = r[c.k];
+      if (v === null || v === undefined || isNaN(v)) return `<td>—</td>`;
+      const color = rgbStr(colorForValue(SCALES[c.k], v));
+      return `<td><span class="cell-chip" style="background:${color}">${v.toFixed(1)}</span></td>`;
+    }).join('') + '</tr>';
+  }).join('');
+
+  document.getElementById('tablePlate').classList.add('show');
+}
+</script>
+</body>
+</html>
