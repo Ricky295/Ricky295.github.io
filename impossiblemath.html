@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Closest Answer Quiz</title>
+<style>
+  :root {
+    --bg: #0f1220;
+    --panel: #171b2e;
+    --panel2: #1f2440;
+    --accent: #5b8cff;
+    --good: #35d07f;
+    --bad: #ff5470;
+    --text: #eef0fa;
+    --muted: #8a90ad;
+    --border: #2a2f4d;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    height: 100%;
+  }
+  #app {
+    max-width: 720px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 16px;
+    text-align: center;
+    min-width: 90px;
+  }
+  .stat .label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .stat .value {
+    font-size: 22px;
+    font-weight: 700;
+    margin-top: 2px;
+  }
+  #timer-value.warn { color: var(--bad); }
+
+  /* ---------- Setup screen ---------- */
+  .screen { display: none; flex: 1; flex-direction: column; }
+  .screen.active { display: flex; }
+
+  #setup-screen {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    gap: 18px;
+  }
+  #setup-screen h1 {
+    font-size: 28px;
+    margin: 0 0 4px;
+  }
+  #setup-screen p.sub {
+    color: var(--muted);
+    margin: 0 0 10px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .setup-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 20px;
+  }
+  .setup-row label {
+    font-size: 14px;
+    color: var(--muted);
+    min-width: 90px;
+    text-align: left;
+  }
+  .setup-row input[type=range] {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+  .setup-row .duration-out {
+    font-weight: 700;
+    min-width: 46px;
+    text-align: right;
+  }
+  .difficulty-group {
+    display: flex;
+    gap: 8px;
+  }
+  .diff-btn {
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--panel2);
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .diff-btn.selected {
+    border-color: var(--accent);
+    background: rgba(91,140,255,0.18);
+    color: var(--accent);
+  }
+  #start-btn {
+    margin-top: 8px;
+    padding: 16px 40px;
+    font-size: 18px;
+    font-weight: 700;
+    border-radius: 14px;
+    border: none;
+    background: var(--accent);
+    color: white;
+    cursor: pointer;
+  }
+  #start-btn:active { transform: scale(0.98); }
+
+  /* ---------- Game screen ---------- */
+  #game-screen { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 22px; }
+
+  .progress-wrap {
+    height: 8px;
+    background: var(--panel2);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  #timer-bar {
+    height: 100%;
+    background: var(--accent);
+    width: 100%;
+    transition: width 0.1s linear, background 0.3s;
+  }
+
+  .question-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 40px 20px;
+    text-align: center;
+    font-size: 44px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .question-box .qhint {
+    display: block;
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 400;
+    margin-top: 10px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ---------- Arrow answer grid ---------- */
+  .answer-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 12px;
+    height: 220px;
+  }
+  .answer-btn {
+    position: relative;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: var(--panel2);
+    color: var(--text);
+    font-size: 26px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .answer-btn:active { transform: scale(0.97); }
+  .answer-btn .arrow-icon {
+    font-size: 20px;
+    color: var(--muted);
+  }
+  .answer-btn.up { grid-column: 1 / 3; grid-row: 1; }
+  .answer-btn.left { grid-column: 1; grid-row: 2; }
+  .answer-btn.right { grid-column: 2; grid-row: 2; }
+  .answer-btn.down { grid-column: 1 / 3; grid-row: 3; }
+
+  /* actually simplify to a proper D-pad layout below via explicit grid-template-areas */
+  .answer-grid {
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    grid-template-areas:
+      ".    up    ."
+      "left .     right"
+      ".    down  .";
+    height: 300px;
+  }
+  .answer-btn.up { grid-area: up; }
+  .answer-btn.left { grid-area: left; }
+  .answer-btn.right { grid-area: right; }
+  .answer-btn.down { grid-area: down; }
+
+  .answer-btn.correct {
+    background: rgba(53,208,127,0.18);
+    border-color: var(--good);
+    color: var(--good);
+  }
+  .answer-btn.incorrect {
+    background: rgba(255,84,112,0.18);
+    border-color: var(--bad);
+    color: var(--bad);
+  }
+  .answer-btn.disabled { pointer-events: none; opacity: 0.55; }
+
+  .keyhint {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: -6px;
+  }
+
+  #feedback-flash {
+    text-align: center;
+    font-size: 15px;
+    font-weight: 700;
+    min-height: 20px;
+    color: var(--muted);
+  }
+  #feedback-flash.good { color: var(--good); }
+  #feedback-flash.bad { color: var(--bad); }
+
+  /* ---------- Results screen ---------- */
+  #results-screen {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+  }
+  #results-screen h1 { font-size: 26px; margin: 0; }
+  .final-score {
+    font-size: 64px;
+    font-weight: 800;
+    color: var(--accent);
+    margin: 6px 0;
+  }
+  .results-stats {
+    display: flex;
+    gap: 14px;
+    margin: 10px 0 6px;
+  }
+  #restart-btn {
+    margin-top: 10px;
+    padding: 14px 36px;
+    font-size: 16px;
+    font-weight: 700;
+    border-radius: 14px;
+    border: none;
+    background: var(--accent);
+    color: white;
+    cursor: pointer;
+  }
+
+  @media (max-width: 480px) {
+    .question-box { font-size: 34px; padding: 30px 14px; }
+    .answer-grid { height: 260px; }
+    .answer-btn { font-size: 20px; }
+    .final-score { font-size: 48px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="topbar" id="topbar" style="display:none;">
+    <div class="stat">
+      <div class="label">Score</div>
+      <div class="value" id="score-value">0</div>
+    </div>
+    <div class="stat">
+      <div class="label">Streak</div>
+      <div class="value" id="streak-value">0</div>
+    </div>
+    <div class="stat">
+      <div class="label">Time</div>
+      <div class="value" id="timer-value">60</div>
+    </div>
+  </div>
+
+  <!-- SETUP SCREEN -->
+  <div id="setup-screen" class="screen active">
+    <h1>Closest answer</h1>
+    <p class="sub">Solve the problem, then pick the <strong>closest</strong> answer — none of the options are exactly right. Answer fast for more points.</p>
+
+    <div class="setup-row">
+      <label for="duration-slider">Duration</label>
+      <input type="range" id="duration-slider" min="15" max="180" step="5" value="60">
+      <span class="duration-out" id="duration-out">60s</span>
+    </div>
+
+    <div class="setup-row">
+      <label>Difficulty</label>
+      <div class="difficulty-group" id="difficulty-group">
+        <button class="diff-btn" data-diff="easy">Easy</button>
+        <button class="diff-btn selected" data-diff="medium">Medium</button>
+        <button class="diff-btn" data-diff="hard">Hard</button>
+      </div>
+    </div>
+
+    <button id="start-btn">Start quiz</button>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div id="game-screen" class="screen">
+    <div class="progress-wrap"><div id="timer-bar"></div></div>
+
+    <div class="question-box">
+      <span id="question-text">12 + 7</span>
+      <span class="qhint">pick the closest answer</span>
+    </div>
+
+    <div class="answer-grid">
+      <button class="answer-btn up" data-dir="up">
+        <span class="arrow-icon">&#8593;</span><span class="answer-label">--</span>
+      </button>
+      <button class="answer-btn left" data-dir="left">
+        <span class="arrow-icon">&#8592;</span><span class="answer-label">--</span>
+      </button>
+      <button class="answer-btn right" data-dir="right">
+        <span class="arrow-icon">&#8594;</span><span class="answer-label">--</span>
+      </button>
+      <button class="answer-btn down" data-dir="down">
+        <span class="arrow-icon">&#8595;</span><span class="answer-label">--</span>
+      </button>
+    </div>
+
+    <div class="keyhint">Use arrow keys or tap a tile</div>
+    <div id="feedback-flash"></div>
+  </div>
+
+  <!-- RESULTS SCREEN -->
+  <div id="results-screen" class="screen">
+    <h1>Time's up!</h1>
+    <div class="final-score" id="final-score">0</div>
+    <div class="results-stats">
+      <div class="stat">
+        <div class="label">Answered</div>
+        <div class="value" id="final-answered">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Best streak</div>
+        <div class="value" id="final-streak">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Avg time</div>
+        <div class="value" id="final-avg">0s</div>
+      </div>
+    </div>
+    <button id="restart-btn">Play again</button>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- DOM refs ----------
+  const setupScreen = document.getElementById('setup-screen');
+  const gameScreen = document.getElementById('game-screen');
+  const resultsScreen = document.getElementById('results-screen');
+  const topbar = document.getElementById('topbar');
+
+  const durationSlider = document.getElementById('duration-slider');
+  const durationOut = document.getElementById('duration-out');
+  const difficultyGroup = document.getElementById('difficulty-group');
+  const startBtn = document.getElementById('start-btn');
+
+  const scoreValueEl = document.getElementById('score-value');
+  const streakValueEl = document.getElementById('streak-value');
+  const timerValueEl = document.getElementById('timer-value');
+  const timerBarEl = document.getElementById('timer-bar');
+  const questionTextEl = document.getElementById('question-text');
+  const feedbackEl = document.getElementById('feedback-flash');
+
+  const answerBtns = {
+    up: document.querySelector('.answer-btn.up'),
+    left: document.querySelector('.answer-btn.left'),
+    right: document.querySelector('.answer-btn.right'),
+    down: document.querySelector('.answer-btn.down'),
+  };
+
+  const finalScoreEl = document.getElementById('final-score');
+  const finalAnsweredEl = document.getElementById('final-answered');
+  const finalStreakEl = document.getElementById('final-streak');
+  const finalAvgEl = document.getElementById('final-avg');
+  const restartBtn = document.getElementById('restart-btn');
+
+  // ---------- State ----------
+  let difficulty = 'medium';
+  let quizDuration = 60;
+
+  let score = 0;
+  let streak = 0;
+  let bestStreak = 0;
+  let answeredCount = 0;
+  let totalAnswerTime = 0;
+
+  let timeRemaining = 60;
+  let countdownInterval = null;
+
+  let currentQuestion = null; // { text, correctAnswer }
+  let currentOptions = null;  // { up: val, left: val, right: val, down: val }
+  let closestDir = null;
+  let questionStartTime = 0;
+  let questionTimer = null;
+  let locked = false;
+
+  const MAX_POINTS = 1000;
+  const MIN_POINTS = 50;
+  // Decay curve: fast drop early, slow drop later.
+  // We use an exponential decay for the first phase blended into a linear tail.
+  function pointsForTime(elapsedMs) {
+    const t = elapsedMs / 1000; // seconds
+    // Exponential decay: fast at first
+    const decayRate = 0.054; // higher = faster early drop
+    const floor = MIN_POINTS;
+    const raw = floor + (MAX_POINTS - floor) * Math.exp(-decayRate * t);
+    return Math.max(floor, Math.round(raw));
+  }
+
+  // ---------- Setup screen interactions ----------
+  durationSlider.addEventListener('input', () => {
+    durationOut.textContent = durationSlider.value + 's';
+  });
+
+  difficultyGroup.addEventListener('click', (e) => {
+    const btn = e.target.closest('.diff-btn');
+    if (!btn) return;
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    difficulty = btn.dataset.diff;
+  });
+
+  startBtn.addEventListener('click', startQuiz);
+  restartBtn.addEventListener('click', () => {
+    resultsScreen.classList.remove('active');
+    setupScreen.classList.add('active');
+    topbar.style.display = 'none';
+  });
+
+  // ---------- Question generation ----------
+  function randInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  function generateQuestion() {
+    let a, b, op, text, correct;
+
+    const ranges = {
+      easy:   { addMax: 50,  mulMax: 12 },
+      medium: { addMax: 100, mulMax: 20 },
+      hard:   { addMax: 500, mulMax: 30 },
+    };
+    const r = ranges[difficulty];
+
+    const ops = difficulty === 'easy' ? ['+', '-', '*'] : ['+', '-', '*', '/'];
+    op = ops[randInt(0, ops.length - 1)];
+
+    if (op === '+') {
+      a = randInt(1, r.addMax);
+      b = randInt(1, r.addMax);
+      correct = a + b;
+      text = `${a} + ${b}`;
+    } else if (op === '-') {
+      a = randInt(1, r.addMax);
+      b = randInt(1, r.addMax);
+      if (b > a) { const tmp = a; a = b; b = tmp; }
+      correct = a - b;
+      text = `${a} - ${b}`;
+    } else if (op === '*') {
+      a = randInt(2, r.mulMax);
+      b = randInt(2, r.mulMax);
+      correct = a * b;
+      text = `${a} \u00D7 ${b}`;
+    } else { // division, engineered to be clean
+      b = randInt(2, Math.min(r.mulMax, 15));
+      correct = randInt(2, Math.min(r.mulMax, 15));
+      a = b * correct;
+      text = `${a} \u00F7 ${b}`;
+    }
+
+    return { text, correctAnswer: correct };
+  }
+
+  function generateOptions(correct) {
+    // Generate 4 wrong options whose ABSOLUTE DISTANCES from the correct
+    // answer are all clearly distinct, so there's never ambiguity about
+    // which one is closest (e.g. avoid a +4 and a -4 both being "distance 4").
+    const baseUnit = Math.max(2, Math.round(Math.abs(correct) * 0.06) + 1);
+
+    // Build 4 distinct distance tiers, well separated by a growing multiplier
+    // so tier gaps themselves increase (1x, ~2.2x, ~3.8x, ~6x of baseUnit).
+    const tierMultipliers = [1, 2.2, 3.8, 6];
+    // Shuffle tier order so the closest distance isn't always tier[0]
+    for (let i = tierMultipliers.length - 1; i > 0; i--) {
+      const j = randInt(0, i);
+      [tierMultipliers[i], tierMultipliers[j]] = [tierMultipliers[j], tierMultipliers[i]];
+    }
+
+    const distances = tierMultipliers.map((m, idx) => {
+      const jitter = 1 + (Math.random() * 0.3 - 0.15); // +/-15% jitter
+      return Math.max(idx + 1, Math.round(baseUnit * m * jitter));
+    });
+
+    // Ensure strictly increasing distances after jitter (dedupe/bump if needed)
+    const sortedIdx = [...distances.keys()].sort((a, b) => distances[a] - distances[b]);
+    for (let i = 1; i < sortedIdx.length; i++) {
+      const prevIdx = sortedIdx[i - 1];
+      const curIdx = sortedIdx[i];
+      if (distances[curIdx] <= distances[prevIdx]) {
+        distances[curIdx] = distances[prevIdx] + Math.max(1, Math.round(baseUnit * 0.4));
+      }
+    }
+
+    // Assign each distance a random sign (above/below correct)
+    const values = distances.map(dist => {
+      const sign = Math.random() < 0.5 ? 1 : -1;
+      let v = correct + sign * dist;
+      if (v === correct) v += sign; // safety, shouldn't trigger given dist >= 1
+      return v;
+    });
+
+    // Final safety: ensure no duplicate values and none equal correct
+    const seen = new Set();
+    for (let i = 0; i < values.length; i++) {
+      while (seen.has(values[i]) || values[i] === correct) {
+        values[i] += (Math.random() < 0.5 ? 1 : -1);
+      }
+      seen.add(values[i]);
+    }
+
+    // shuffle into 4 directions
+    const dirs = ['up', 'left', 'right', 'down'];
+    for (let i = dirs.length - 1; i > 0; i--) {
+      const j = randInt(0, i);
+      [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+    }
+
+    const options = {};
+    dirs.forEach((dir, idx) => { options[dir] = values[idx]; });
+
+    // Determine closest direction
+    let bestDir = dirs[0];
+    let bestDist = Math.abs(options[bestDir] - correct);
+    dirs.forEach(dir => {
+      const dist = Math.abs(options[dir] - correct);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestDir = dir;
+      }
+    });
+
+    return { options, closestDir: bestDir };
+  }
+
+  // ---------- Game flow ----------
+  function startQuiz() {
+    quizDuration = parseInt(durationSlider.value, 10);
+    timeRemaining = quizDuration;
+
+    score = 0;
+    streak = 0;
+    bestStreak = 0;
+    answeredCount = 0;
+    totalAnswerTime = 0;
+
+    scoreValueEl.textContent = '0';
+    streakValueEl.textContent = '0';
+    timerValueEl.textContent = String(timeRemaining);
+    timerValueEl.classList.remove('warn');
+    timerBarEl.style.width = '100%';
+    timerBarEl.style.background = 'var(--accent)';
+
+    setupScreen.classList.remove('active');
+    resultsScreen.classList.remove('active');
+    gameScreen.classList.add('active');
+    topbar.style.display = 'flex';
+
+    nextQuestion();
+
+    countdownInterval = setInterval(() => {
+      timeRemaining -= 1;
+      timerValueEl.textContent = String(Math.max(0, timeRemaining));
+      timerValueEl.classList.toggle('warn', timeRemaining <= 10);
+      if (timeRemaining <= 0) {
+        endQuiz();
+      }
+    }, 1000);
+  }
+
+  function nextQuestion() {
+    locked = false;
+    feedbackEl.textContent = '';
+    feedbackEl.className = '';
+
+    Object.values(answerBtns).forEach(btn => {
+      btn.classList.remove('correct', 'incorrect', 'disabled');
+    });
+
+    currentQuestion = generateQuestion();
+    const gen = generateOptions(currentQuestion.correctAnswer);
+    currentOptions = gen.options;
+    closestDir = gen.closestDir;
+
+    questionTextEl.textContent = currentQuestion.text;
+
+    Object.keys(answerBtns).forEach(dir => {
+      const label = answerBtns[dir].querySelector('.answer-label');
+      label.textContent = currentOptions[dir];
+    });
+
+    questionStartTime = performance.now();
+
+    // Per-question visual timer bar showing decay of point value, resets each question
+    updateTimerBarLoop();
+  }
+
+  function updateTimerBarLoop() {
+    if (questionTimer) cancelAnimationFrame(questionTimer);
+    function tick() {
+      if (locked) return;
+      const elapsed = performance.now() - questionStartTime;
+      const pts = pointsForTime(elapsed);
+      const pct = Math.max(0, Math.min(100, (pts - MIN_POINTS) / (MAX_POINTS - MIN_POINTS) * 100));
+      timerBarEl.style.width = pct + '%';
+      if (pct < 25) {
+        timerBarEl.style.background = 'var(--bad)';
+      } else if (pct < 60) {
+        timerBarEl.style.background = '#ffb454';
+      } else {
+        timerBarEl.style.background = 'var(--accent)';
+      }
+      questionTimer = requestAnimationFrame(tick);
+    }
+    tick();
+  }
+
+  function submitAnswer(dir) {
+    if (locked || !gameScreen.classList.contains('active')) return;
+    locked = true;
+    if (questionTimer) cancelAnimationFrame(questionTimer);
+
+    const elapsed = performance.now() - questionStartTime;
+    totalAnswerTime += elapsed;
+    answeredCount += 1;
+
+    const isCorrect = dir === closestDir;
+
+    Object.keys(answerBtns).forEach(d => answerBtns[d].classList.add('disabled'));
+
+    if (isCorrect) {
+      const pts = pointsForTime(elapsed);
+      score += pts;
+      streak += 1;
+      bestStreak = Math.max(bestStreak, streak);
+      answerBtns[dir].classList.add('correct');
+      feedbackEl.textContent = `+${pts} points \u2022 streak ${streak}`;
+      feedbackEl.className = 'good';
+    } else {
+      streak = 0;
+      answerBtns[dir].classList.add('incorrect');
+      answerBtns[closestDir].classList.add('correct');
+      feedbackEl.textContent = `Not quite \u2014 closest was ${currentOptions[closestDir]}`;
+      feedbackEl.className = 'bad';
+    }
+
+    scoreValueEl.textContent = String(score);
+    streakValueEl.textContent = String(streak);
+
+    setTimeout(() => {
+      if (timeRemaining > 0) {
+        nextQuestion();
+      }
+    }, 650);
+  }
+
+  function endQuiz() {
+    clearInterval(countdownInterval);
+    countdownInterval = null;
+    if (questionTimer) cancelAnimationFrame(questionTimer);
+    locked = true;
+
+    gameScreen.classList.remove('active');
+    resultsScreen.classList.add('active');
+    topbar.style.display = 'none';
+
+    finalScoreEl.textContent = String(score);
+    finalAnsweredEl.textContent = String(answeredCount);
+    finalStreakEl.textContent = String(bestStreak);
+    const avgSec = answeredCount > 0 ? (totalAnswerTime / answeredCount / 1000) : 0;
+    finalAvgEl.textContent = avgSec.toFixed(1) + 's';
+  }
+
+  // ---------- Input handling ----------
+  Object.keys(answerBtns).forEach(dir => {
+    answerBtns[dir].addEventListener('click', () => submitAnswer(dir));
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (!gameScreen.classList.contains('active')) return;
+    const map = { ArrowUp: 'up', ArrowLeft: 'left', ArrowRight: 'right', ArrowDown: 'down' };
+    if (map[e.key]) {
+      e.preventDefault();
+      submitAnswer(map[e.key]);
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
