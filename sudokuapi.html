@@ -1,559 +1,487 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sudoku API — Guide</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --paper: #FBF7EF;
-    --ink: #232019;
-    --pine: #3D5A4C;
-    --clay: #8B4A3C;
-    --hairline: #B8AFA0;
-    --card: #EDE7D8;
-    --muted: #7A7364;
-  }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku Engine API v3 Documentation</title>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent: #38bdf8; /* Sky Blue */
+            --accent-hover: #0ea5e9;
+            --success: #4ade80;
+            --warning: #fbbf24;
+            --danger: #f87171;
+            --code-bg: #020617;
+            --border: #475569;
+        }
 
-  * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
-  body {
-    margin: 0;
-    background: var(--paper);
-    color: var(--ink);
-    font-family: 'IBM Plex Sans', sans-serif;
-    line-height: 1.65;
-  }
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
 
-  a { color: var(--pine); }
+        /* Layout */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: 2rem;
+        }
 
-  .wrap { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
 
-  /* ---------- HERO ---------- */
-  .hero {
-    padding: 72px 24px 56px;
-    border-bottom: 2px solid var(--ink);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 28px;
-  }
+        /* Sidebar */
+        aside {
+            position: sticky;
+            top: 2rem;
+            height: fit-content;
+        }
 
-  .hero-grid {
-    display: grid;
-    grid-template-columns: repeat(9, 1fr);
-    gap: 2px;
-    background: var(--ink);
-    border: 3px solid var(--ink);
-    width: min(280px, 70vw);
-    aspect-ratio: 1;
-  }
-  .hero-grid div {
-    background: var(--card);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: 'IBM Plex Mono', monospace;
-    font-weight: 500;
-    font-size: clamp(10px, 2.4vw, 14px);
-    color: var(--pine);
-    opacity: 0;
-    animation: fillIn 0.4s ease forwards;
-  }
-  @keyframes fillIn {
-    from { opacity: 0; transform: scale(0.6); }
-    to { opacity: 1; transform: scale(1); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .hero-grid div { animation: none; opacity: 1; }
-  }
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
 
-  h1 {
-    font-family: 'Fraunces', serif;
-    font-weight: 700;
-    font-size: clamp(2.2em, 5vw, 3em);
-    margin: 0;
-    letter-spacing: -0.01em;
-  }
+        nav ul {
+            list-style: none;
+        }
 
-  .hero p.lede {
-    max-width: 46ch;
-    color: var(--muted);
-    font-size: 1.05em;
-    margin: 0;
-  }
+        nav li {
+            margin-bottom: 0.5rem;
+        }
 
-  .base-url-box {
-    background: var(--ink);
-    color: var(--paper);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.78em;
-    padding: 14px 18px;
-    border-radius: 2px;
-    word-break: break-all;
-    max-width: 100%;
-  }
+        nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
 
-  /* ---------- NAV ---------- */
-  nav.section-nav {
-    display: flex;
-    gap: 4px;
-    justify-content: center;
-    flex-wrap: wrap;
-    padding: 18px 24px;
-    border-bottom: 1px solid var(--hairline);
-    background: var(--card);
-  }
-  nav.section-nav a {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.78em;
-    text-decoration: none;
-    color: var(--ink);
-    padding: 6px 12px;
-    border: 1px solid transparent;
-  }
-  nav.section-nav a:hover { border-color: var(--ink); }
+        nav a:hover, nav a.active {
+            background-color: var(--bg-secondary);
+            color: var(--accent);
+        }
 
-  /* ---------- SECTIONS ---------- */
-  main { padding: 56px 0 100px; }
-  section { margin-bottom: 64px; scroll-margin-top: 24px; }
+        /* Main Content */
+        main h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(to right, var(--accent), #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
 
-  .section-head {
-    display: flex;
-    align-items: baseline;
-    gap: 14px;
-    margin-bottom: 6px;
-  }
-  .cell-mark {
-    width: 22px;
-    height: 22px;
-    border: 2px solid var(--ink);
-    flex-shrink: 0;
-    display: inline-block;
-  }
-  .cell-mark.filled { background: var(--pine); border-color: var(--pine); }
+        main h2 {
+            font-size: 1.8rem;
+            margin-top: 3rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-primary);
+        }
 
-  h2 {
-    font-family: 'Fraunces', serif;
-    font-weight: 600;
-    font-size: 1.9em;
-    margin: 0;
-  }
+        main h3 {
+            font-size: 1.3rem;
+            margin-top: 2rem;
+            margin-bottom: 0.5rem;
+            color: var(--accent);
+        }
 
-  .section-desc {
-    color: var(--muted);
-    margin: 10px 0 28px;
-    max-width: 62ch;
-  }
+        p {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
 
-  h3 {
-    font-family: 'IBM Plex Mono', monospace;
-    font-weight: 600;
-    font-size: 1.02em;
-    margin: 0 0 4px;
-    color: var(--pine);
-  }
+        /* Cards & Sections */
+        .endpoint-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            transition: transform 0.2s;
+        }
 
-  .badge {
-    display: inline-block;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.68em;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 2px 8px;
-    border: 1px solid var(--clay);
-    color: var(--clay);
-    margin-left: 8px;
-    vertical-align: middle;
-  }
+        .endpoint-card:hover {
+            border-color: var(--accent);
+        }
 
-  .endpoint {
-    background: var(--card);
-    border: 1px solid var(--hairline);
-    border-left: 3px solid var(--pine);
-    padding: 20px 22px;
-    margin-bottom: 18px;
-  }
+        .method-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.85rem;
+            margin-right: 0.5rem;
+            text-transform: uppercase;
+        }
 
-  .endpoint-title {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.88em;
-    font-weight: 600;
-    word-break: break-all;
-    margin-bottom: 10px;
-  }
+        .badge-get { background-color: rgba(56, 189, 248, 0.2); color: var(--accent); }
+        .badge-post { background-color: rgba(74, 222, 128, 0.2); color: var(--success); }
 
-  .description { color: var(--ink); font-size: 0.95em; margin-bottom: 12px; }
+        .url-bar {
+            background-color: var(--code-bg);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            color: var(--text-secondary);
+            margin: 1rem 0;
+            overflow-x: auto;
+            border-left: 4px solid var(--accent);
+        }
 
-  .params { display: grid; gap: 6px; margin: 14px 0; }
-  .param {
-    background: var(--paper);
-    border-left: 2px solid var(--hairline);
-    padding: 8px 12px;
-    font-size: 0.88em;
-  }
-  .param-name { font-family: 'IBM Plex Mono', monospace; color: var(--pine); font-weight: 600; }
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            background-color: var(--bg-card);
+            border-radius: 8px;
+            overflow: hidden;
+        }
 
-  .example {
-    background: var(--ink);
-    color: var(--paper);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.8em;
-    padding: 12px 14px;
-    border-radius: 2px;
-    margin: 10px 0;
-    overflow-x: auto;
-  }
-  .example-label {
-    font-size: 0.68em;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #A8C4B6;
-    margin-bottom: 6px;
-    font-family: 'IBM Plex Mono', monospace;
-  }
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
 
-  /* ---------- HOW-TO STEPS ---------- */
-  .steps { display: flex; flex-direction: column; gap: 0; }
-  .step {
-    display: grid;
-    grid-template-columns: 40px 1fr;
-    gap: 16px;
-    padding: 18px 0;
-    border-bottom: 1px solid var(--hairline);
-  }
-  .step:last-child { border-bottom: none; }
-  .step-mark {
-    width: 32px;
-    height: 32px;
-    border: 2px solid var(--ink);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: 'IBM Plex Mono', monospace;
-    font-weight: 600;
-    font-size: 0.85em;
-    flex-shrink: 0;
-  }
-  .step h4 {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 600;
-    margin: 4px 0 6px;
-    font-size: 1.02em;
-  }
-  .step p { margin: 0; color: var(--muted); font-size: 0.94em; }
-  .step code {
-    background: var(--card);
-    padding: 1px 6px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.9em;
-  }
+        th {
+            background-color: rgba(0,0,0,0.2);
+            color: var(--accent);
+            font-weight: 600;
+        }
 
-  /* ---------- TABLES ---------- */
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 16px 0;
-    font-size: 0.9em;
-  }
-  th {
-    background: var(--ink);
-    color: var(--paper);
-    text-align: left;
-    padding: 10px 14px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-weight: 500;
-    font-size: 0.85em;
-  }
-  td {
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--hairline);
-  }
-  tr:nth-child(even) td { background: var(--card); }
+        td {
+            color: var(--text-secondary);
+        }
 
-  .puzzle-format {
-    background: var(--card);
-    border-left: 3px solid var(--pine);
-    padding: 18px 20px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.82em;
-    line-height: 1.9;
-    margin: 14px 0;
-  }
+        code {
+            background-color: rgba(56, 189, 248, 0.1);
+            color: var(--accent);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: monospace;
+        }
 
-  .formula-box {
-    background: var(--ink);
-    color: var(--paper);
-    font-family: 'IBM Plex Mono', monospace;
-    padding: 16px 20px;
-    text-align: center;
-    font-size: 1.05em;
-    margin: 16px 0;
-    border-radius: 2px;
-  }
+        pre {
+            background-color: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 1rem 0;
+            border: 1px solid var(--border);
+        }
 
-  .diff-scale {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin: 16px 0;
-  }
-  .diff-row {
-    display: grid;
-    grid-template-columns: 90px 1fr 90px;
-    align-items: center;
-    gap: 12px;
-    font-size: 0.88em;
-  }
-  .diff-bar { height: 8px; background: var(--hairline); position: relative; }
-  .diff-bar span { position: absolute; top: 0; left: 0; height: 100%; background: var(--pine); }
+        pre code {
+            background: none;
+            color: #e2e8f0;
+            padding: 0;
+        }
 
-  footer {
-    border-top: 2px solid var(--ink);
-    padding: 24px;
-    text-align: center;
-    color: var(--muted);
-    font-size: 0.82em;
-    font-family: 'IBM Plex Mono', monospace;
-  }
-</style>
+        /* Difficulty Colors */
+        .diff-valid { color: var(--success); }
+        .diff-warn { color: var(--warning); }
+        .diff-error { color: var(--danger); }
+
+        /* Footer */
+        footer {
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+    </style>
 </head>
 <body>
 
-<div class="hero">
-  <div class="hero-grid" id="heroGrid"></div>
-  <h1>Sudoku API Guide</h1>
-  <p class="lede">Generate, solve, rate, and hint Sudoku puzzles over a simple GET endpoint. This page covers both how to use it and every method it exposes.</p>
-  <div class="base-url-box">https://script.google.com/macros/s/AKfycbxFoudmNX4hB3cGpWFjp5ojPq7L_Gv-u20tyl0ODCgL6bwleNvoo8LhjFGyKRUQ-5LW/exec</div>
+<div class="container">
+    <!-- Sidebar Navigation -->
+    <aside>
+        <div class="logo">
+            <span>🧩</span> Sudoku Engine v3
+        </div>
+        <nav>
+            <ul>
+                <li><a href="#intro" class="active">Introduction</a></li>
+                <li><a href="#generate">Generate Puzzle</a></li>
+                <li><a href="#seedgen">Seeded Generation</a></li>
+                <li><a href="#solve">Solve & Path</a></li>
+                <li><a href="#analyze">Analyze & Hint</a></li>
+                <li><a href="#daily">Daily Challenge</a></li>
+                <li><a href="#difficulty">Difficulty Logic</a></li>
+            </ul>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main>
+        <section id="intro">
+            <h1>Sudoku Engine API</h1>
+            <p>A robust RESTful API for generating, solving, and analyzing Sudoku puzzles. Built with Google Apps Script, featuring logical solving techniques, seeded generation for reproducibility, and difficulty rating.</p>
+            
+            <div class="url-bar">
+                Base URL: https://script.google.com/macros/s/AKfycbzVzqnvdupVkMH0gs9XUGefJoCcUz3PjcCT6oMRXtlZC82LN9pOlXXIJDiEXuLquZRq/exec
+            </div>
+        </section>
+
+        <section id="generate">
+            <h2>Generate Puzzle</h2>
+            <div class="endpoint-card">
+                <span class="method-badge badge-get">GET</span>
+                <strong>Generate Random Puzzle</strong>
+                <p>Generates a valid Sudoku puzzle within a specific difficulty range.</p>
+                
+                <h3>Parameters</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Param</th>
+                            <th>Type</th>
+                            <th>Default</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>method</code></td>
+                            <td>string</td>
+                            <td>-</td>
+                            <td>Must be <code>generate</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>min</code></td>
+                            <td>float</td>
+                            <td>0.0</td>
+                            <td>Minimum difficulty rating</td>
+                        </tr>
+                        <tr>
+                            <td><code>max</code></td>
+                            <td>float</td>
+                            <td>0.33</td>
+                            <td>Maximum difficulty rating</td>
+                        </tr>
+                        <tr>
+                            <td><code>clues</code></td>
+                            <td>int</td>
+                            <td>50</td>
+                            <td>Target number of starting clues</td>
+                        </tr>
+                        <tr>
+                            <td><code>impossible</code></td>
+                            <td>int</td>
+                            <td>0</td>
+                            <td>Set to <code>1</code> to generate an unsolvable puzzle</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Example Request</h3>
+                <pre><code>?method=generate&min=0.1&max=0.4&clues=30</code></pre>
+
+                <h3>Response</h3>
+                <pre><code>{
+  "status": "success",
+  "data": {
+    "puzzle": "000000000000000000..." 
+  }
+}</code></pre>
+            </div>
+        </section>
+
+        <section id="seedgen">
+            <h2>Seeded Generation</h2>
+            <div class="endpoint-card">
+                <span class="method-badge badge-get">GET</span>
+                <strong>Generate Deterministic Puzzle</strong>
+                <p>Generates a puzzle using a seed string. The same seed will always produce the same puzzle and the same random clue count (0-50).</p>
+                
+                <h3>Parameters</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Param</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>method</code></td>
+                            <td>string</td>
+                            <td>Must be <code>seedgen</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>seed</code></td>
+                            <td>string</td>
+                            <td>Any string used as the random seed</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Example Request</h3>
+                <pre><code>?method=seedgen&seed=my-daily-challenge</code></pre>
+
+                <h3>Response</h3>
+                <pre><code>{
+  "status": "success",
+  "data": {
+    "puzzle": "400000201...",
+    "seed": "my-daily-challenge",
+    "clues": 27
+  }
+}</code></pre>
+            </div>
+        </section>
+
+        <section id="solve">
+            <h2>Solver</h2>
+            
+            <h3>Solve Puzzle</h3>
+            <div class="endpoint-card">
+                <p>Returns the completed solution for a given puzzle string.</p>
+                <div class="url-bar">?method=solve&puzzle=...&full_solve=1</div>
+                <ul>
+                    <li><code>puzzle</code>: 81-character string (0 for empty)</li>
+                    <li><code>full_solve</code>: Optional. Set to <code>1</code> to use backtracking if logical steps fail.</li>
+                </ul>
+            </div>
+
+            <h3>Solve Path</h3>
+            <div class="endpoint-card">
+                <p>Returns a step-by-step logical deduction path. Useful for teaching or hint systems.</p>
+                <div class="url-bar">?method=solve_path&puzzle=...</div>
+                <h3>Response Example</h3>
+                <pre><code>{
+  "steps": [
+    { "technique": "BoxHS", "row": 1, "col": 0, "value": 1, "remaining": 50 },
+    { "technique": "NakedSingle", "row": 2, "col": 2, "value": 5, "remaining": 49 }
+  ],
+  "total_steps": 51
+}</code></pre>
+            </div>
+        </section>
+
+        <section id="analyze">
+            <h2>Analysis Tools</h2>
+            
+            <h3>Rate Difficulty</h3>
+            <div class="endpoint-card">
+                <p>Calculates the difficulty score based on logical techniques required.</p>
+                <div class="url-bar">?method=rate&puzzle=...</div>
+                <p><strong>Formula:</strong> <code>((steps / initialEmpty) + highestTechnique) / 3</code></p>
+            </div>
+
+            <h3>Get Hint</h3>
+            <div class="endpoint-card">
+                <p>Provides the next logical move without solving the whole puzzle.</p>
+                <div class="url-bar">?method=hint&puzzle=...</div>
+                <h3>Response</h3>
+                <pre><code>{
+  "technique": "Line HS",
+  "row": 4,
+  "col": 5,
+  "value": 9
+}</code></pre>
+            </div>
+        </section>
+
+        <section id="daily">
+            <h2>Daily Challenge</h2>
+            <div class="endpoint-card">
+                <span class="method-badge badge-get">GET</span>
+                <strong>Get Daily Puzzle</strong>
+                <p>Generates a consistent puzzle for a specific date. If no date is provided, uses today's date.</p>
+                <div class="url-bar">?method=daily&day=2026-07-08</div>
+            </div>
+        </section>
+
+        <section id="difficulty">
+            <h2>Difficulty Reference</h2>
+            <p>The engine uses a custom difficulty formula. Here is what the scores mean:</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Score Range</th>
+                        <th>Meaning</th>
+                        <th>Color Code</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>1.0</code></td>
+                        <td>Valid, Solvable</td>
+                        <td class="diff-valid">Green</td>
+                    </tr>
+                    <tr>
+                        <td><code>-0.1</code></td>
+                        <td>Unsolvable by basic techniques</td>
+                        <td class="diff-warn">Yellow</td>
+                    </tr>
+                    <tr>
+                        <td><code>-0.2</code></td>
+                        <td>Contradiction (Invalid Board)</td>
+                        <td class="diff-error">Red</td>
+                    </tr>
+                    <tr>
+                        <td><code>-0.3</code></td>
+                        <td>Multiple Solutions</td>
+                        <td class="diff-error">Red</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <footer>
+            <p>Sudoku Engine v3 &copy; 2026. Powered by Google Apps Script.</p>
+        </footer>
+    </main>
 </div>
 
-<nav class="section-nav">
-  <a href="#howto">How to use it</a>
-  <a href="#generate">Generate</a>
-  <a href="#solve">Solve</a>
-  <a href="#rate">Rate</a>
-  <a href="#hint">Hint</a>
-  <a href="#reference">Reference</a>
-</nav>
-
-<main class="wrap">
-
-  <section id="howto">
-    <div class="section-head"><span class="cell-mark filled"></span><h2>How to use it</h2></div>
-    <p class="section-desc">Every call is a GET request with a <code>method</code> query parameter. Responses are JSON wrapped in <code>{ status, data }</code>. No auth, no headers, no request body — just build a URL and fetch it.</p>
-
-    <div class="steps">
-      <div class="step">
-        <div class="step-mark">1</div>
-        <div>
-          <h4>Get a puzzle</h4>
-          <p>Call <code>?method=seedgen&seed=yourstring</code> for a reproducible puzzle, or <code>?method=generate&min=0&max=0.33&clues=45</code> to target a difficulty band. Both return an 81-character puzzle string.</p>
-        </div>
-      </div>
-      <div class="step">
-        <div class="step-mark">2</div>
-        <div>
-          <h4>Get the solution</h4>
-          <p>Pass that puzzle string to <code>?method=solve&puzzle=...&full_solve=1</code>. The <code>full_solve</code> flag guarantees a complete grid — without it, solving stops wherever logical techniques run out.</p>
-        </div>
-      </div>
-      <div class="step">
-        <div class="step-mark">3</div>
-        <div>
-          <h4>Check its difficulty</h4>
-          <p>Call <code>?method=rate&puzzle=...</code> any time — on a fresh puzzle or the player's current progress — to get a difficulty score back.</p>
-        </div>
-      </div>
-      <div class="step">
-        <div class="step-mark">4</div>
-        <div>
-          <h4>Offer a hint mid-game</h4>
-          <p>Send the player's current board state (not the original puzzle) to <code>?method=hint&puzzle=...</code>. It returns the next logical move and which technique produces it.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section id="generate">
-    <div class="section-head"><span class="cell-mark filled"></span><h2>Generate</h2></div>
-    <p class="section-desc">Three ways to get a new puzzle: by difficulty range, deterministically from a seed, or as today's daily.</p>
-
-    <h3>Standard generation</h3>
-    <div class="endpoint">
-      <div class="endpoint-title">?method=generate&min=0&max=0.33&clues=45&count=1</div>
-      <p class="description">Generates a puzzle whose rated difficulty falls inside <code>min</code>–<code>max</code>, with roughly <code>clues</code> starting numbers.</p>
-      <div class="params">
-        <div class="param"><span class="param-name">min</span> — float, default 0.0. Lower bound on difficulty.</div>
-        <div class="param"><span class="param-name">max</span> — float, default 0.33. Upper bound on difficulty.</div>
-        <div class="param"><span class="param-name">clues</span> — int, default 50. Target starting clue count.</div>
-        <div class="param"><span class="param-name">count</span> — int, default 1. Number of puzzles to return.</div>
-      </div>
-      <div class="example">
-        <div class="example-label">Response</div>
-        { "status": "success", "data": { "puzzle": "038900160..." } }
-      </div>
-    </div>
-
-    <h3>Impossible generation <span class="badge">Rates as −0.1</span></h3>
-    <div class="endpoint">
-      <div class="endpoint-title">?method=generate&impossible=1&clues=17</div>
-      <p class="description">Generates a puzzle that can't be finished with the logical techniques this engine knows — it needs guessing (backtracking) to complete. Clue count is pushed as low as possible automatically.</p>
-      <div class="params">
-        <div class="param"><span class="param-name">impossible</span> — flag, set to 1.</div>
-        <div class="param"><span class="param-name">clues</span> — int, default 17. Starting target; the engine tries to remove more if possible.</div>
-      </div>
-    </div>
-
-    <h3>Seed-based generation</h3>
-    <div class="endpoint">
-      <div class="endpoint-title">?method=seedgen&seed=mystring</div>
-      <p class="description">Same seed always returns the same puzzle. Difficulty isn't targeted — it falls out of whatever the seed produces.</p>
-      <div class="params">
-        <div class="param"><span class="param-name">seed</span> — string, required.</div>
-      </div>
-    </div>
-
-    <h3>Daily puzzle</h3>
-    <div class="endpoint">
-      <div class="endpoint-title">?method=daily&day=2026-04-21</div>
-      <p class="description">Deterministic puzzle for a given calendar date, in the easy-to-medium range. Defaults to today if <code>day</code> is omitted.</p>
-      <div class="params">
-        <div class="param"><span class="param-name">day</span> — YYYY-MM-DD, optional.</div>
-      </div>
-    </div>
-  </section>
-
-  <section id="solve">
-    <div class="section-head"><span class="cell-mark filled"></span><h2>Solve</h2></div>
-    <p class="section-desc">Two depths of solving, plus a step log if you want to show your work.</p>
-
-    <h3>Solve (logic only)</h3>
-    <div class="endpoint">
-      <div class="endpoint-title">?method=solve&puzzle=038900160...</div>
-      <p class="description">Applies logical techniques until it either finishes the grid or runs out of moves. If the puzzle needs guessing, the result comes back incomplete.</p>
-      <div class="params">
-        <div class="param"><span class="param-name">puzzle</span> — 81-char string, required.</div>
-      </div>
-    </div>
-
-    <h3>Solve (full)</h3>
-    <div class="endpoint">
-      <div class="endpoint-title">?method=solve&puzzle=...&full_solve=1</div>
-      <p class="description">Same as above, then falls back to backtracking to guarantee a complete solution. This is what you want when you just need the answer key.</p>
-      <div class="params">
-        <div class="param"><span class="param-name">full_solve</span> — flag, set to 1.</div>
-      </div>
-    </div>
-
-    <h3>Solution path</h3>
-    <div class="endpoint">
-      <div class="endpoint-title">?method=solve_path&puzzle=...</div>
-      <p class="description">Returns every logical step in order — technique, cell, and value — useful for building an explainable solve animation.</p>
-      <div class="example">
-        <div class="example-label">Response</div>
-        { "steps": [ { "technique": "BoxHS", "row": 0, "col": 1, "value": 4, "remaining": 39 }, ... ] }
-      </div>
-    </div>
-  </section>
-
-  <section id="rate">
-    <div class="section-head"><span class="cell-mark filled"></span><h2>Rate</h2></div>
-    <p class="section-desc">Score any puzzle state — a fresh puzzle, a partially solved board, whatever's on the grid.</p>
-
-    <div class="endpoint">
-      <div class="endpoint-title">?method=rate&puzzle=...</div>
-      <p class="description">Runs the same logical solving pass used internally by <code>generate</code>, and returns how hard it was.</p>
-      <div class="params">
-        <div class="param"><span class="param-name">puzzle</span> — 81-char string, required.</div>
-      </div>
-    </div>
-
-    <div class="formula-box">difficulty = ((steps / initialEmpty) + highestTechnique) / 3</div>
-    <p class="section-desc" style="margin-top:0;">Where <code>steps</code> is the number of solving passes needed, <code>initialEmpty</code> is how many cells started blank, and <code>highestTechnique</code> is the hardest technique the solve required (0 = box hidden single, 1 = line hidden single, 2 = naked single).</p>
-
-    <table>
-      <thead><tr><th>Score</th><th>Meaning</th></tr></thead>
-      <tbody>
-        <tr><td>0.0 – 1.0</td><td>Valid puzzle, difficulty as computed above</td></tr>
-        <tr><td>−0.1</td><td>Unsolvable by known techniques — needs guessing</td></tr>
-        <tr><td>−0.2</td><td>Contradiction — puzzle has no valid solution</td></tr>
-        <tr><td>−0.3</td><td>Multiple solutions — puzzle is under-constrained</td></tr>
-      </tbody>
-    </table>
-  </section>
-
-  <section id="hint">
-    <div class="section-head"><span class="cell-mark filled"></span><h2>Hint</h2></div>
-    <p class="section-desc">One move at a time, in order of simplicity.</p>
-
-    <div class="endpoint">
-      <div class="endpoint-title">?method=hint&puzzle=...</div>
-      <p class="description">Checks for a box hidden single first, then a row/column hidden single, then a naked single, and returns the first one it finds.</p>
-      <div class="example">
-        <div class="example-label">Response</div>
-        { "technique": "Box HS", "row": 2, "col": 4, "value": 7 }
-      </div>
-    </div>
-  </section>
-
-  <section id="reference">
-    <div class="section-head"><span class="cell-mark filled"></span><h2>Reference</h2></div>
-
-    <h3>Puzzle format</h3>
-    <p class="section-desc" style="margin-bottom:12px;">Rows 0–8, left to right, top to bottom. <code>0</code> means empty.</p>
-    <div class="puzzle-format">
-      5 3 0 | 0 7 0 | 0 0 0<br>
-      6 0 0 | 1 9 5 | 0 0 0<br>
-      0 9 8 | 0 0 0 | 0 6 0<br>
-      ------+-------+------<br>
-      8 0 0 | 0 6 0 | 0 0 3<br>
-      4 0 0 | 8 0 3 | 0 0 1<br>
-      7 0 0 | 0 2 0 | 0 0 6<br>
-      ------+-------+------<br>
-      0 6 0 | 0 0 0 | 2 8 0<br>
-      0 0 0 | 4 1 9 | 0 0 5<br>
-      0 0 0 | 0 8 0 | 0 7 9<br><br>
-      <strong>String:</strong> 530070000600195000098000060800060003400803001700020006060000280000419005000080079
-    </div>
-
-    <h3>Difficulty scale</h3>
-    <div class="diff-scale">
-      <div class="diff-row"><span>Easy</span><div class="diff-bar"><span style="width:33%"></span></div><span>0.0–0.33</span></div>
-      <div class="diff-row"><span>Medium</span><div class="diff-bar"><span style="width:66%"></span></div><span>0.33–0.67</span></div>
-      <div class="diff-row"><span>Hard</span><div class="diff-bar"><span style="width:100%"></span></div><span>0.67–1.0</span></div>
-    </div>
-
-    <h3>Techniques used</h3>
-    <table>
-      <thead><tr><th>Technique</th><th>Description</th></tr></thead>
-      <tbody>
-        <tr><td><strong>Box Hidden Single</strong></td><td>A value that fits in only one cell within a 3×3 box</td></tr>
-        <tr><td><strong>Line Hidden Single</strong></td><td>A value that fits in only one cell within a row or column</td></tr>
-        <tr><td><strong>Naked Single</strong></td><td>A cell with only one possible value left</td></tr>
-      </tbody>
-    </table>
-  </section>
-
-</main>
-
-<footer>Sudoku API — reference &amp; guide</footer>
-
 <script>
-  // Fill the hero grid with a real (static) puzzle, staggered for a subtle solve-in effect.
-  const PUZZLE = "530070000600195000098000060800060003400803001700020006060000280000419005000080079";
-  const gridEl = document.getElementById('heroGrid');
-  PUZZLE.split('').forEach((ch, i) => {
-    const cell = document.createElement('div');
-    cell.textContent = ch === '0' ? '' : ch;
-    cell.style.animationDelay = (i * 12) + 'ms';
-    gridEl.appendChild(cell);
-  });
+    // Simple smooth scrolling for sidebar links
+    document.querySelectorAll('nav a').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            document.querySelector(this.getAttribute('href')).scrollIntoView({
+                behavior: 'smooth'
+            });
+            
+            // Update active state
+            document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+            this.classList.add('active');
+        });
+    });
 </script>
 
 </body>
 </html>
+
