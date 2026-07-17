@@ -144,15 +144,25 @@
           <select id="paperPreset">
             <option value="A4">A4 (210 × 297)</option>
             <option value="A5">A5 (148 × 210)</option>
-            <option value="receipt58" selected>Receipt 58mm (auto height)</option>
-            <option value="receipt80">Receipt 80mm (auto height)</option>
+            <option value="thermal2in" selected>Thermal 2in / 56mm roll (48mm print)</option>
+            <option value="thermal3in">Thermal 3in / 80mm roll (72mm print)</option>
             <option value="pt210">Label — PT-210 (62mm, auto height)</option>
             <option value="custom">Custom…</option>
           </select>
         </div>
         <div class="field">
+          <label>Style</label>
+          <select id="colorStyle">
+            <option value="color">Color</option>
+            <option value="highsat">High-saturation</option>
+            <option value="grayscale">Grayscale</option>
+            <option value="bw">Black &amp; white</option>
+          </select>
+          <div class="hint">Affects screen &amp; PDF</div>
+        </div>
+        <div class="field">
           <label>Width (mm)</label>
-          <input type="number" id="widthMM" value="58" min="20" max="500">
+          <input type="number" id="widthMM" value="48" min="20" max="500">
         </div>
         <div class="field">
           <label>Height (mm)</label>
@@ -188,6 +198,7 @@
         <div class="check-item"><input type="checkbox" id="d_hilo" checked><label for="d_hilo">High / Low temp</label></div>
         <div class="check-item"><input type="checkbox" id="d_precip" checked><label for="d_precip">Precip probability</label></div>
         <div class="check-item"><input type="checkbox" id="d_precipsum"><label for="d_precipsum">Precip amount (mm)</label></div>
+        <div class="check-item"><input type="checkbox" id="d_humidity"><label for="d_humidity">Humidity (mean)</label></div>
         <div class="check-item"><input type="checkbox" id="d_wind"><label for="d_wind">Max wind speed</label></div>
         <div class="check-item"><input type="checkbox" id="d_uv"><label for="d_uv">UV index max</label></div>
         <div class="check-item"><input type="checkbox" id="d_sun"><label for="d_sun">Sunrise / sunset</label></div>
@@ -195,9 +206,16 @@
 
       <div class="group-title">Hourly forecast</div>
       <div class="check-grid" id="hourlyFields">
-        <div class="check-item"><input type="checkbox" id="h_enable"><label for="h_enable">Include next-24h strip</label></div>
+        <div class="check-item"><input type="checkbox" id="h_enable"><label for="h_enable">Include hourly strip</label></div>
         <div class="check-item"><input type="checkbox" id="h_temp" checked><label for="h_temp">Hourly temperature</label></div>
         <div class="check-item"><input type="checkbox" id="h_precip"><label for="h_precip">Hourly precip probability</label></div>
+      </div>
+      <div class="panel-row" style="margin-top:12px;">
+        <div class="field">
+          <label>Hours ahead</label>
+          <input type="number" id="hourCount" value="24" min="1" max="384">
+          <div class="hint">Up to 384h (16 days)</div>
+        </div>
       </div>
 
     </div>
@@ -255,13 +273,69 @@ const WMO = {
   95:['Thunderstorm','TS'],96:['Thunderstorm, hail','TS'],99:['Thunderstorm, hail','TS']
 };
 const PRESETS = {
-  A4:      { w:210, h:297, autoAllowed:false },
-  A5:      { w:148, h:210, autoAllowed:false },
-  receipt58:{ w:58,  h:200, autoAllowed:true },
-  receipt80:{ w:80,  h:250, autoAllowed:true },
-  pt210:   { w:62,  h:200, autoAllowed:true },
-  custom:  { w:100, h:200, autoAllowed:true }
+  A4:       { w:210, h:297, autoAllowed:false },
+  A5:       { w:148, h:210, autoAllowed:false },
+  thermal2in:{ w:48,  h:200, autoAllowed:true },
+  thermal3in:{ w:72,  h:250, autoAllowed:true },
+  pt210:    { w:62,  h:200, autoAllowed:true },
+  custom:   { w:100, h:200, autoAllowed:true }
 };
+
+const BASE_COLORS = { ink:'#221f1a', baro:'#2c4770', warn:'#b5651d', soft:'#57503f' };
+
+function hexToHsl(hex){
+  let r=parseInt(hex.slice(1,3),16)/255, g=parseInt(hex.slice(3,5),16)/255, b=parseInt(hex.slice(5,7),16)/255;
+  const max=Math.max(r,g,b), min=Math.min(r,g,b);
+  let h=0,s=0,l=(max+min)/2;
+  if(max!==min){
+    const d=max-min;
+    s = l>0.5 ? d/(2-max-min) : d/(max+min);
+    switch(max){
+      case r: h=(g-b)/d + (g<b?6:0); break;
+      case g: h=(b-r)/d + 2; break;
+      case b: h=(r-g)/d + 4; break;
+    }
+    h/=6;
+  }
+  return [h*360, s*100, l*100];
+}
+function hslToHex(h,s,l){
+  h/=360; s/=100; l/=100;
+  let r,g,b;
+  if(s===0){ r=g=b=l; } else {
+    const hue2rgb=(p,q,t)=>{ if(t<0)t+=1; if(t>1)t-=1; if(t<1/6)return p+(q-p)*6*t; if(t<1/2)return q; if(t<2/3)return p+(q-p)*(2/3-t)*6; return p; };
+    const q = l<0.5 ? l*(1+s) : l+s-l*s;
+    const p = 2*l-q;
+    r=hue2rgb(p,q,h+1/3); g=hue2rgb(p,q,h); b=hue2rgb(p,q,h-1/3);
+  }
+  const toHex=v=>Math.round(v*255).toString(16).padStart(2,'0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+function hexToRgbArr(hex){
+  return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+}
+
+function getPalette(mode){
+  const out = {};
+  for(const k in BASE_COLORS){
+    const [h,s,l] = hexToHsl(BASE_COLORS[k]);
+    if(mode==='color') out[k] = BASE_COLORS[k];
+    else if(mode==='highsat') out[k] = hslToHex(h, 100, Math.min(58, Math.max(38, l)));
+    else if(mode==='grayscale') out[k] = hslToHex(0, 0, l);
+    else if(mode==='bw') out[k] = k==='soft' ? '#3a3a3a' : '#000000';
+  }
+  return out;
+}
+
+function applyColorStyle(){
+  const mode = $('colorStyle').value;
+  const p = getPalette(mode);
+  const root = document.documentElement.style;
+  root.setProperty('--ink', p.ink);
+  root.setProperty('--baro', p.baro);
+  root.setProperty('--warn', p.warn);
+  root.setProperty('--ink-soft', p.soft);
+}
 
 const $ = id => document.getElementById(id);
 let currentData = null;
@@ -299,6 +373,8 @@ function applyPreset(){
 function syncHeightDisabled(){
   $('heightMM').disabled = $('autoHeight').checked;
 }
+$('colorStyle').addEventListener('change', applyColorStyle);
+applyColorStyle();
 $('paperPreset').addEventListener('change', applyPreset);
 $('autoHeight').addEventListener('change', syncHeightDisabled);
 $('widthMM').addEventListener('input', ()=>{ $('paperPreset').value = 'custom'; });
@@ -315,6 +391,7 @@ function selectedDailyVars(){
   if($('d_wind').checked) vars.push('wind_speed_10m_max');
   if($('d_uv').checked) vars.push('uv_index_max');
   if($('d_sun').checked) vars.push('sunrise','sunset');
+  if($('d_humidity').checked) vars.push('relative_humidity_2m_mean');
   return vars;
 }
 function selectedCurrentVars(){
@@ -364,6 +441,8 @@ async function fetchWeather(){
     const hourlyVars = selectedHourlyVars();
     if($('h_enable').checked && hourlyVars.length){
       params.set('hourly', hourlyVars.join(','));
+      const hrs = Math.max(1, Math.min(384, parseInt($('hourCount').value) || 24));
+      params.set('forecast_hours', String(hrs));
     }
 
     const wxRes = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
@@ -414,7 +493,9 @@ function renderBulletin(place, wx){
     const nowTs = Date.now();
     let startIdx = wx.hourly.time.findIndex(t => new Date(t).getTime() >= nowTs);
     if(startIdx < 0) startIdx = 0;
-    for(let i=startIdx; i<Math.min(startIdx+24, wx.hourly.time.length); i++){
+    const hrs = Math.max(1, Math.min(384, parseInt($('hourCount').value) || 24));
+    $('hourlySection').querySelector('.section-label').textContent = `Next ${hrs} Hours`;
+    for(let i=startIdx; i<Math.min(startIdx+hrs, wx.hourly.time.length); i++){
       const dt = new Date(wx.hourly.time[i]);
       const cell = document.createElement('div');
       cell.className = 'hr-cell';
@@ -436,6 +517,7 @@ function renderBulletin(place, wx){
   if($('d_wind').checked) cols.push(['Wind', ()=>true]);
   if($('d_uv').checked) cols.push(['UV', ()=>true]);
   if($('d_sun').checked) cols.push(['Sunrise', ()=>true], ['Sunset', ()=>true]);
+  if($('d_humidity').checked) cols.push(['Hum', ()=>true]);
 
   $('daysHead').innerHTML = cols.map(c=>`<th>${c[0]}</th>`).join('');
   const body = $('daysBody'); body.innerHTML = '';
@@ -460,6 +542,7 @@ function renderBulletin(place, wx){
       const ss = daily.sunset?.[i] ? new Date(daily.sunset[i]).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
       tds.push(`<td>${sr}</td><td>${ss}</td>`);
     }
+    if($('d_humidity').checked) tds.push(`<td>${daily.relative_humidity_2m_mean?.[i] ?? '—'}%</td>`);
     const tr = document.createElement('tr');
     tr.innerHTML = tds.join('');
     body.appendChild(tr);
@@ -504,7 +587,8 @@ function generatePDF(){
   const pageHpt = heightMM * MM;
   const doc = new jsPDF({ unit:'pt', format:[pageWpt, pageHpt] });
 
-  const inkColor=[34,31,26], baroColor=[44,71,112], warnColor=[181,101,29], softColor=[87,80,63];
+  const pal = getPalette($('colorStyle').value);
+  const inkColor=hexToRgbArr(pal.ink), baroColor=hexToRgbArr(pal.baro), warnColor=hexToRgbArr(pal.warn), softColor=hexToRgbArr(pal.soft);
   const margin = Math.max(12, pageWpt*0.06);
   const rightX = pageWpt - margin;
   let y = margin + 12;
@@ -564,14 +648,15 @@ function generatePDF(){
   y += 16;
 
   if($('h_enable').checked && wx.hourly && wx.hourly.time){
+    const hrs = Math.max(1, Math.min(384, parseInt($('hourCount').value) || 24));
     doc.setFont('courier','bold'); doc.setFontSize(F.small+1); doc.setTextColor(...softColor);
-    doc.text('NEXT 24H', margin, y); y += 11;
+    doc.text(`NEXT ${hrs}H`, margin, y); y += 11;
     doc.setFont('courier','normal'); doc.setFontSize(F.small); doc.setTextColor(...inkColor);
     const nowTs = Date.now();
     let startIdx = wx.hourly.time.findIndex(t => new Date(t).getTime() >= nowTs);
     if(startIdx < 0) startIdx = 0;
     let line = '';
-    for(let i=startIdx; i<Math.min(startIdx+24, wx.hourly.time.length); i+=3){
+    for(let i=startIdx; i<Math.min(startIdx+hrs, wx.hourly.time.length); i+=3){
       const dt = new Date(wx.hourly.time[i]);
       let seg = `${String(dt.getHours()).padStart(2,'0')}h`;
       if($('h_temp').checked && wx.hourly.temperature_2m) seg += ` ${Math.round(wx.hourly.temperature_2m[i])}°`;
@@ -605,6 +690,7 @@ function generatePDF(){
     cols.push(['RISE', (d,i)=> daily.sunrise?.[i] ? new Date(daily.sunrise[i]).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '-']);
     cols.push(['SET', (d,i)=> daily.sunset?.[i] ? new Date(daily.sunset[i]).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '-']);
   }
+  if($('d_humidity').checked) cols.push(['HUM', (d,i)=> `${daily.relative_humidity_2m_mean?.[i] ?? '-'}%`]);
 
   // Measure the widest actual content (header or any row) per column, in the fonts they'll
   // really be printed with, then distribute the leftover page width proportionally so the
@@ -658,6 +744,7 @@ function generatePDF(){
       const ss = daily.sunset?.[i] ? new Date(daily.sunset[i]).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '-';
       doc.text(sr, colX[ci++], y); doc.text(ss, colX[ci++], y);
     }
+    if($('d_humidity').checked){ doc.text(`${daily.relative_humidity_2m_mean?.[i] ?? '-'}%`, colX[ci++], y); }
     y += F.table + 6;
   });
 
