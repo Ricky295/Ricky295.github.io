@@ -15,6 +15,7 @@
     --baro:#2c4770;
     --warn:#b5651d;
     --rule:#b7ae94;
+    --font-scale:1;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -57,6 +58,7 @@
   .field input[type=number]{width:90px;}
   .field input:disabled{background:#e2ddc8;color:#9a927a;}
   .field .hint{font-size:9px;color:var(--ink-soft);letter-spacing:0.3px;text-transform:none;}
+  .field .hint.warn{color:var(--warn);font-weight:600;}
   .auto-toggle{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:0.5px;text-transform:uppercase;color:var(--ink-soft);margin-top:2px;}
 
   .group-title{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink-soft);border-bottom:1px solid var(--rule);padding-bottom:6px;margin:16px 0 10px;}
@@ -66,7 +68,7 @@
   .check-item input{accent-color:var(--baro);width:15px;height:15px;flex-shrink:0;}
   .check-item label{cursor:pointer;}
 
-  .bulletin{display:none;position:relative;background:var(--paper);border:1px solid var(--ink);box-shadow:0 10px 24px rgba(0,0,0,0.18);padding:30px 42px 34px;}
+  .bulletin{display:none;position:relative;background:var(--paper);border:1px solid var(--ink);box-shadow:0 10px 24px rgba(0,0,0,0.18);padding:30px 42px 34px;font-size:calc(1em * var(--font-scale));}
   .bulletin.show{display:block;}
   .sprockets{position:absolute;top:0;bottom:0;width:26px;display:flex;flex-direction:column;justify-content:space-around;align-items:center;padding:14px 0;}
   .sprockets.left{left:0;} .sprockets.right{right:0;}
@@ -91,6 +93,7 @@
   .hr-cell .t{color:var(--ink-soft);font-size:9px;}
   .hr-cell .v{font-weight:600;color:var(--baro);margin-top:4px;}
   .hr-cell .p{color:var(--warn);font-size:9px;margin-top:2px;}
+  .hr-cell.day-marker{background:var(--paper-dark);width:auto;flex:0 0 auto;padding:8px 10px;font-weight:700;color:var(--ink);writing-mode:vertical-rl;text-orientation:mixed;letter-spacing:1px;}
 
   table.days{width:100%;border-collapse:collapse;font-size:12px;}
   table.days th{text-align:left;font-size:9.5px;letter-spacing:0.5px;text-transform:uppercase;color:var(--ink-soft);border-bottom:1px solid var(--ink);padding:6px 5px 8px;font-weight:600;white-space:nowrap;}
@@ -146,9 +149,20 @@
             <option value="A5">A5 (148 × 210)</option>
             <option value="thermal2in" selected>Thermal 2in / 56mm roll (48mm print)</option>
             <option value="thermal3in">Thermal 3in / 80mm roll (72mm print)</option>
-            <option value="pt210">Label — PT-210 (62mm, auto height)</option>
+            <option value="p2x3">Photo 2×3 in (51 × 76)</option>
+            <option value="p4x6">Photo 4×6 in (102 × 152)</option>
+            <option value="p5x7">Photo 5×7 in (127 × 178)</option>
             <option value="custom">Custom…</option>
           </select>
+        </div>
+        <div class="field">
+          <label>Font size</label>
+          <select id="fontSize">
+            <option value="normal">Normal</option>
+            <option value="large">Large</option>
+            <option value="xl">XL</option>
+          </select>
+          <div class="hint">Affects screen &amp; PDF</div>
         </div>
         <div class="field">
           <label>Style</label>
@@ -209,12 +223,18 @@
         <div class="check-item"><input type="checkbox" id="h_enable"><label for="h_enable">Include hourly strip</label></div>
         <div class="check-item"><input type="checkbox" id="h_temp" checked><label for="h_temp">Hourly temperature</label></div>
         <div class="check-item"><input type="checkbox" id="h_precip"><label for="h_precip">Hourly precip probability</label></div>
+        <div class="check-item"><input type="checkbox" id="h_feels"><label for="h_feels">Hourly feels-like</label></div>
+        <div class="check-item"><input type="checkbox" id="h_humidity"><label for="h_humidity">Hourly humidity</label></div>
+        <div class="check-item"><input type="checkbox" id="h_wind"><label for="h_wind">Hourly wind speed</label></div>
+        <div class="check-item"><input type="checkbox" id="h_cloud"><label for="h_cloud">Hourly cloud cover</label></div>
+        <div class="check-item"><input type="checkbox" id="h_uv"><label for="h_uv">Hourly UV index</label></div>
+        <div class="check-item"><input type="checkbox" id="h_precipmm"><label for="h_precipmm">Hourly precip (mm)</label></div>
       </div>
       <div class="panel-row" style="margin-top:12px;">
         <div class="field">
           <label>Hours ahead</label>
           <input type="number" id="hourCount" value="24" min="1" max="384">
-          <div class="hint">Up to 384h (16 days)</div>
+          <div class="hint" id="hourHint">Keep under ~48h for a readable strip. Higher values print dense and may wrap awkwardly.</div>
         </div>
       </div>
 
@@ -252,7 +272,18 @@
 
     <div class="bull-foot">
       <div class="stamp" id="issuedStamp">Issued —</div>
-      <button class="printbtn" id="printBtn">Print PDF</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select id="exportFormat" style="font-family:'IBM Plex Mono',monospace;font-size:11px;border:1.5px solid var(--ink);background:#fff;padding:8px 8px;">
+          <option value="pdf">PDF</option>
+          <option value="png">PNG</option>
+          <option value="jpg">JPG</option>
+        </select>
+        <span id="dpiField" style="display:none;align-items:center;gap:5px;font-size:10px;letter-spacing:0.5px;text-transform:uppercase;color:var(--ink-soft);">
+          <label for="exportDPI">DPI</label>
+          <input type="number" id="exportDPI" value="203" min="72" max="600" style="width:60px;font-family:'IBM Plex Mono',monospace;font-size:11px;border:1.5px solid var(--ink);padding:6px;">
+        </span>
+        <button class="printbtn" id="printBtn">Export</button>
+      </div>
     </div>
   </div>
 
@@ -277,11 +308,13 @@ const PRESETS = {
   A5:       { w:148, h:210, autoAllowed:false },
   thermal2in:{ w:48,  h:200, autoAllowed:true },
   thermal3in:{ w:72,  h:250, autoAllowed:true },
-  pt210:    { w:62,  h:200, autoAllowed:true },
+  p2x3:     { w:51,  h:76,  autoAllowed:false },
+  p4x6:     { w:102, h:152, autoAllowed:false },
+  p5x7:     { w:127, h:178, autoAllowed:false },
   custom:   { w:100, h:200, autoAllowed:true }
 };
 
-const BASE_COLORS = { ink:'#221f1a', baro:'#2c4770', warn:'#b5651d', soft:'#57503f' };
+const BASE_COLORS = { ink:'#221f1a', baro:'#2c4770', warn:'#b5651d', soft:'#57503f', paper:'#e9e4d4', paperDark:'#dcd5bf', rule:'#b7ae94' };
 
 function hexToHsl(hex){
   let r=parseInt(hex.slice(1,3),16)/255, g=parseInt(hex.slice(3,5),16)/255, b=parseInt(hex.slice(5,7),16)/255;
@@ -315,14 +348,26 @@ function hexToRgbArr(hex){
   return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
 }
 
+// color:     original palette, unchanged.
+// highsat:   every font color pushed to 100% saturation (reddest red, bluest blue), same hue/lightness band.
+// grayscale: every font color converted to its own gray TONE (lightness preserved, hue/saturation stripped) —
+//            so the blue and orange still end up as visibly different shades of gray. Paper keeps a soft tint.
+// bw:        max contrast — pure black text (#000) on pure white paper (#fff), no tonal variation at all.
 function getPalette(mode){
   const out = {};
   for(const k in BASE_COLORS){
     const [h,s,l] = hexToHsl(BASE_COLORS[k]);
     if(mode==='color') out[k] = BASE_COLORS[k];
-    else if(mode==='highsat') out[k] = hslToHex(h, 100, Math.min(58, Math.max(38, l)));
+    else if(mode==='highsat'){
+      out[k] = (k==='paper'||k==='paperDark'||k==='rule') ? BASE_COLORS[k] : hslToHex(h, 100, Math.min(58, Math.max(38, l)));
+    }
     else if(mode==='grayscale') out[k] = hslToHex(0, 0, l);
-    else if(mode==='bw') out[k] = k==='soft' ? '#3a3a3a' : '#000000';
+    else if(mode==='bw'){
+      if(k==='paper') out[k] = '#ffffff';
+      else if(k==='paperDark') out[k] = '#f2f2f2';
+      else if(k==='rule') out[k] = '#000000';
+      else out[k] = '#000000';
+    }
   }
   return out;
 }
@@ -335,6 +380,9 @@ function applyColorStyle(){
   root.setProperty('--baro', p.baro);
   root.setProperty('--warn', p.warn);
   root.setProperty('--ink-soft', p.soft);
+  root.setProperty('--paper', p.paper);
+  root.setProperty('--paper-dark', p.paperDark);
+  root.setProperty('--rule', p.rule);
 }
 
 const $ = id => document.getElementById(id);
@@ -375,7 +423,29 @@ function syncHeightDisabled(){
 }
 $('colorStyle').addEventListener('change', applyColorStyle);
 applyColorStyle();
+function applyFontSize(){
+  const scale = { normal:1, large:1.22, xl:1.5 }[$('fontSize').value] || 1;
+  document.documentElement.style.setProperty('--font-scale', scale);
+}
+$('fontSize').addEventListener('change', applyFontSize);
+applyFontSize();
+function fontScaleValue(){
+  return { normal:1, large:1.22, xl:1.5 }[$('fontSize').value] || 1;
+}
 $('paperPreset').addEventListener('change', applyPreset);
+function updateHourHint(){
+  const hrs = parseInt($('hourCount').value) || 24;
+  const hint = $('hourHint');
+  if(hrs > 72){
+    hint.textContent = `${hrs}h is a lot of data — the hourly block will be dense and hard to read on paper. Consider 48h or less.`;
+    hint.classList.add('warn');
+  } else {
+    hint.textContent = 'Keep under ~48h for a readable strip. Higher values print dense and may wrap awkwardly.';
+    hint.classList.remove('warn');
+  }
+}
+$('hourCount').addEventListener('input', updateHourHint);
+updateHourHint();
 $('autoHeight').addEventListener('change', syncHeightDisabled);
 $('widthMM').addEventListener('input', ()=>{ $('paperPreset').value = 'custom'; });
 $('heightMM').addEventListener('input', ()=>{ $('paperPreset').value = 'custom'; });
@@ -410,6 +480,12 @@ function selectedHourlyVars(){
   const vars = [];
   if($('h_temp').checked) vars.push('temperature_2m');
   if($('h_precip').checked) vars.push('precipitation_probability');
+  if($('h_feels').checked) vars.push('apparent_temperature');
+  if($('h_humidity').checked) vars.push('relative_humidity_2m');
+  if($('h_wind').checked) vars.push('wind_speed_10m');
+  if($('h_cloud').checked) vars.push('cloud_cover');
+  if($('h_uv').checked) vars.push('uv_index');
+  if($('h_precipmm').checked) vars.push('precipitation');
   return vars;
 }
 
@@ -495,13 +571,28 @@ function renderBulletin(place, wx){
     if(startIdx < 0) startIdx = 0;
     const hrs = Math.max(1, Math.min(384, parseInt($('hourCount').value) || 24));
     $('hourlySection').querySelector('.section-label').textContent = `Next ${hrs} Hours`;
+    let lastDateKey = null;
     for(let i=startIdx; i<Math.min(startIdx+hrs, wx.hourly.time.length); i++){
       const dt = new Date(wx.hourly.time[i]);
+      const dateKey = dt.toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit'});
+      if(dateKey !== lastDateKey){
+        lastDateKey = dateKey;
+        const marker = document.createElement('div');
+        marker.className = 'hr-cell day-marker';
+        marker.textContent = dateKey;
+        strip.appendChild(marker);
+      }
       const cell = document.createElement('div');
       cell.className = 'hr-cell';
       let html = `<div class="t">${dt.getHours()}:00</div>`;
       if($('h_temp').checked && wx.hourly.temperature_2m) html += `<div class="v">${Math.round(wx.hourly.temperature_2m[i])}°</div>`;
+      if($('h_feels').checked && wx.hourly.apparent_temperature) html += `<div class="p">FL ${Math.round(wx.hourly.apparent_temperature[i])}°</div>`;
       if($('h_precip').checked && wx.hourly.precipitation_probability) html += `<div class="p">${wx.hourly.precipitation_probability[i]}%</div>`;
+      if($('h_precipmm').checked && wx.hourly.precipitation) html += `<div class="p">${wx.hourly.precipitation[i]}mm</div>`;
+      if($('h_humidity').checked && wx.hourly.relative_humidity_2m) html += `<div class="p">${wx.hourly.relative_humidity_2m[i]}%RH</div>`;
+      if($('h_wind').checked && wx.hourly.wind_speed_10m) html += `<div class="p">${Math.round(wx.hourly.wind_speed_10m[i])}km/h</div>`;
+      if($('h_cloud').checked && wx.hourly.cloud_cover) html += `<div class="p">${wx.hourly.cloud_cover[i]}%CC</div>`;
+      if($('h_uv').checked && wx.hourly.uv_index) html += `<div class="p">UV${wx.hourly.uv_index[i]}</div>`;
       cell.innerHTML = html;
       strip.appendChild(cell);
     }
@@ -566,7 +657,20 @@ function estimateHeightMM(widthMM, place, wx){
   mm += 6;
   const hasNow = $('c_temp').checked || $('c_feels').checked || $('c_cond').checked || $('c_humidity').checked || $('c_wind').checked || $('c_pressure').checked || $('c_cloud').checked || $('c_precip').checked;
   if(hasNow) mm += 24;
-  if($('h_enable').checked && wx.hourly) mm += 16;
+  if($('h_enable').checked && wx.hourly && wx.hourly.time){
+    const hrs = Math.max(1, Math.min(384, parseInt($('hourCount').value) || 24));
+    const nowTs = Date.now();
+    let startIdx = wx.hourly.time.findIndex(t => new Date(t).getTime() >= nowTs);
+    if(startIdx < 0) startIdx = 0;
+    const shownHours = Math.max(0, Math.min(startIdx+hrs, wx.hourly.time.length) - startIdx);
+    const sampleCount = Math.ceil(shownHours / 3);
+    // Roughly 3-4 entries fit per line at narrow widths, more on wide paper; each day also
+    // gets its own line-start, so widen the estimate a bit for many short per-day groups.
+    const perLine = widthMM <= 60 ? 3 : widthMM <= 90 ? 4 : 7;
+    const estDays = Math.min(16, Math.ceil(hrs/24) + 1);
+    const estLines = Math.ceil(sampleCount / perLine) + estDays;
+    mm += 8 + estLines * 3.6;
+  }
   const dayRows = (wx.daily?.time?.length || 0);
   mm += 10;
   mm += dayRows * 5.2;
@@ -574,7 +678,7 @@ function estimateHeightMM(widthMM, place, wx){
   return Math.max(60, Math.round(mm));
 }
 
-function generatePDF(){
+function generateOutput(){
   if(!currentData){ return; }
   const { place, wx } = currentData;
   const { jsPDF } = window.jspdf;
@@ -589,12 +693,17 @@ function generatePDF(){
 
   const pal = getPalette($('colorStyle').value);
   const inkColor=hexToRgbArr(pal.ink), baroColor=hexToRgbArr(pal.baro), warnColor=hexToRgbArr(pal.warn), softColor=hexToRgbArr(pal.soft);
+  const paperColor=hexToRgbArr(pal.paper), ruleGray=hexToRgbArr(pal.rule);
+  doc.setFillColor(...paperColor);
+  doc.rect(0, 0, pageWpt, pageHpt, 'F');
   const margin = Math.max(12, pageWpt*0.06);
   const rightX = pageWpt - margin;
   let y = margin + 12;
 
   const narrow = widthMM <= 90;
+  const fs = fontScaleValue();
   const F = { h1: narrow?16:22, h2: narrow?11:14, meta: narrow?7:8, temp: narrow?26:34, body: narrow?7.5:8.5, tableHead: narrow?7:7.5, table: narrow?7.5:8, small:7 };
+  for(const k in F){ F[k] = F[k] * fs; }
 
   doc.setFont('courier','bold'); doc.setFontSize(F.h1); doc.setTextColor(...inkColor);
   doc.text('WEATHERPRINT', margin, y);
@@ -609,7 +718,7 @@ function generatePDF(){
   doc.setFont('courier','normal'); doc.setFontSize(F.meta); doc.setTextColor(...softColor);
   doc.text(`LAT ${place.latitude.toFixed(2)}  LON ${place.longitude.toFixed(2)}  ELEV ${place.elevation ?? '-'} M`, margin, y);
   y += 14;
-  doc.setDrawColor(180,172,148); doc.setLineDashPattern([2,2],0); doc.line(margin, y, rightX, y); doc.setLineDashPattern([],0);
+  doc.setDrawColor(...ruleGray); doc.setLineDashPattern([2,2],0); doc.line(margin, y, rightX, y); doc.setLineDashPattern([],0);
   y += 20;
 
   const c = wx.current || {};
@@ -644,29 +753,52 @@ function generatePDF(){
     y = blockBottom + 12;
   }
 
-  doc.setDrawColor(180,172,148); doc.setLineDashPattern([2,2],0); doc.line(margin, y, rightX, y); doc.setLineDashPattern([],0);
+  doc.setDrawColor(...ruleGray); doc.setLineDashPattern([2,2],0); doc.line(margin, y, rightX, y); doc.setLineDashPattern([],0);
   y += 16;
 
   if($('h_enable').checked && wx.hourly && wx.hourly.time){
     const hrs = Math.max(1, Math.min(384, parseInt($('hourCount').value) || 24));
     doc.setFont('courier','bold'); doc.setFontSize(F.small+1); doc.setTextColor(...softColor);
     doc.text(`NEXT ${hrs}H`, margin, y); y += 11;
-    doc.setFont('courier','normal'); doc.setFontSize(F.small); doc.setTextColor(...inkColor);
     const nowTs = Date.now();
     let startIdx = wx.hourly.time.findIndex(t => new Date(t).getTime() >= nowTs);
     if(startIdx < 0) startIdx = 0;
-    let line = '';
+
+    // Group into per-day segments so the printout reads as "19/07  00h ... 21h" / "20/07  00h ...",
+    // instead of one giant paragraph where the date change is invisible.
+    let dayGroups = [];
+    let curDateKey = null, curSeg = null;
     for(let i=startIdx; i<Math.min(startIdx+hrs, wx.hourly.time.length); i+=3){
       const dt = new Date(wx.hourly.time[i]);
+      const dateKey = dt.toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit'});
+      if(dateKey !== curDateKey){
+        curDateKey = dateKey;
+        curSeg = { date: dateKey, parts: [] };
+        dayGroups.push(curSeg);
+      }
       let seg = `${String(dt.getHours()).padStart(2,'0')}h`;
       if($('h_temp').checked && wx.hourly.temperature_2m) seg += ` ${Math.round(wx.hourly.temperature_2m[i])}°`;
+      if($('h_feels').checked && wx.hourly.apparent_temperature) seg += ` FL${Math.round(wx.hourly.apparent_temperature[i])}°`;
       if($('h_precip').checked && wx.hourly.precipitation_probability) seg += `/${wx.hourly.precipitation_probability[i]}%`;
-      line += seg + '   ';
+      if($('h_precipmm').checked && wx.hourly.precipitation) seg += ` ${wx.hourly.precipitation[i]}mm`;
+      if($('h_humidity').checked && wx.hourly.relative_humidity_2m) seg += ` ${wx.hourly.relative_humidity_2m[i]}%RH`;
+      if($('h_wind').checked && wx.hourly.wind_speed_10m) seg += ` ${Math.round(wx.hourly.wind_speed_10m[i])}km/h`;
+      if($('h_cloud').checked && wx.hourly.cloud_cover) seg += ` ${wx.hourly.cloud_cover[i]}%CC`;
+      if($('h_uv').checked && wx.hourly.uv_index) seg += ` UV${wx.hourly.uv_index[i]}`;
+      curSeg.parts.push(seg);
     }
-    const wrapped = doc.splitTextToSize(line.trim(), pageWpt - margin*2);
-    doc.text(wrapped, margin, y);
-    y += wrapped.length * (F.small+3) + 8;
-    doc.setDrawColor(180,172,148); doc.setLineDashPattern([2,2],0); doc.line(margin, y, rightX, y); doc.setLineDashPattern([],0);
+
+    doc.setFont('courier','normal'); doc.setFontSize(F.small);
+    dayGroups.forEach(grp=>{
+      doc.setFont('courier','bold'); doc.setTextColor(...baroColor);
+      doc.text(grp.date, margin, y);
+      doc.setFont('courier','normal'); doc.setTextColor(...inkColor);
+      const wrapped = doc.splitTextToSize(grp.parts.join('   '), pageWpt - margin*2 - 34);
+      doc.text(wrapped, margin + 34, y);
+      y += Math.max(1, wrapped.length) * (F.small+3);
+    });
+    y += 8;
+    doc.setDrawColor(...ruleGray); doc.setLineDashPattern([2,2],0); doc.line(margin, y, rightX, y); doc.setLineDashPattern([],0);
     y += 16;
   }
 
@@ -749,20 +881,54 @@ function generatePDF(){
   });
 
   y += 6;
-  doc.setDrawColor(180,172,148); doc.setLineDashPattern([2,2],0); doc.line(margin, y, rightX, y); doc.setLineDashPattern([],0);
+  doc.setDrawColor(...ruleGray); doc.setLineDashPattern([2,2],0); doc.line(margin, y, rightX, y); doc.setLineDashPattern([],0);
   y += 12;
 
   doc.setFont('courier','normal'); doc.setFontSize(F.small); doc.setTextColor(...softColor);
   doc.text('ISSUED ' + new Date().toLocaleString('en-GB', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'}).toUpperCase(), margin, y);
   if(!narrow){ doc.text('DATA: OPEN-METEO', rightX, y, {align:'right'}); }
 
-  const filename = `weatherprint-${(place.name||'station').toLowerCase().replace(/[^a-z0-9]+/g,'-')}.pdf`;
-  doc.save(filename);
+  const baseName = (place.name||'station').toLowerCase().replace(/[^a-z0-9]+/g,'-');
+  const format = $('exportFormat').value;
+
+  if(format === 'pdf'){
+    doc.save(`weatherprint-${baseName}.pdf`);
+    return;
+  }
+
+  // Raster export: render the PDF page to a canvas at the requested DPI (px/mm), then save as PNG/JPG.
+  const dpi = Math.max(72, Math.min(600, parseInt($('exportDPI').value) || 203));
+  const pxPerMM = dpi / 25.4;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(widthMM * pxPerMM);
+  canvas.height = Math.round(heightMM * pxPerMM);
+  const ctx = canvas.getContext('2d');
+
+  // Rasterize the jsPDF page (already fully drawn above) to an image, then draw it onto
+  // a canvas sized to the requested DPI so PNG/JPG output matches the PDF pixel-for-pixel.
+  const pageDataUrl = doc.output('datauristring');
+  const img = new Image();
+  img.onload = () => {
+    ctx.fillStyle = pal.paper;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const mime = format === 'jpg' ? 'image/jpeg' : 'image/png';
+    const url = canvas.toDataURL(mime, 0.95);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `weatherprint-${baseName}.${format}`;
+    a.click();
+  };
+  img.onerror = () => { setStatus('Raster export failed — falling back to PDF.', true); doc.save(`weatherprint-${baseName}.pdf`); };
+  img.src = pageDataUrl;
 }
 
 $('fetchBtn').addEventListener('click', fetchWeather);
 $('cityInput').addEventListener('keydown', e=>{ if(e.key==='Enter') fetchWeather(); });
-$('printBtn').addEventListener('click', generatePDF);
+$('exportFormat').addEventListener('change', ()=>{
+  $('dpiField').style.display = $('exportFormat').value === 'pdf' ? 'none' : 'inline-flex';
+});
+$('printBtn').addEventListener('click', generateOutput);
 applyPreset();
 </script>
 </body>
