@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel News Analyzer - Fearmongering & Bias Detector</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0b0f19; /* Deep space dark */
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col justify-between">
+
+    <!-- Navigation Bar / Header -->
+    <header class="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600 p-2.5 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <i class="fa-solid fa-shield-halved text-xl text-white"></i>
+                </div>
+                <div>
+                    <span class="text-lg font-bold tracking-tight text-white block">Sentinel <span class="text-xs font-semibold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 ml-1">v2.0</span></span>
+                    <span class="text-xs text-slate-400 -mt-1 block">News Credibility & Fearmongering Index</span>
+                </div>
+            </div>
+
+            <!-- API Key Controls in Header -->
+            <div class="flex items-center space-x-3">
+                <div class="relative hidden sm:block">
+                    <input 
+                        type="password" 
+                        id="apiKeyInput" 
+                        placeholder="Paste Gemini API Key..." 
+                        class="bg-slate-900 border border-slate-800 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 block w-64 pl-10 pr-10 py-1.5 transition-all duration-200 placeholder-slate-500"
+                    >
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa-solid fa-key text-slate-500 text-xs"></i>
+                    </div>
+                    <button 
+                        id="toggleApiKeyVisibility"
+                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-slate-300"
+                        title="Toggle Visibility"
+                    >
+                        <i class="fa-solid fa-eye text-xs"></i>
+                    </button>
+                </div>
+                
+                <button 
+                    id="saveKeyBtn"
+                    class="bg-slate-900 hover:bg-indigo-600 text-xs font-semibold px-3.5 py-1.5 rounded-lg border border-slate-800 hover:border-indigo-500 transition-all duration-200"
+                >
+                    Save Key
+                </button>
+
+                <div id="statusBadge" class="flex items-center bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium px-2.5 py-1 rounded-full">
+                    <span class="w-1.5 h-1.5 mr-1.5 bg-emerald-400 rounded-full animate-ping"></span>
+                    <span>Canvas Key Active</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Alert Banner Container -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 max-w-md w-full"></div>
+
+    <!-- Main Workspace -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow w-full">
+        <!-- Dashboard Intro -->
+        <div class="mb-8 text-center sm:text-left">
+            <h1 class="text-3xl font-extrabold text-white tracking-tight">AI News Credibility & Sensationalism Auditor</h1>
+            <p class="mt-2 text-slate-400 text-sm max-w-3xl">
+                Audit headlines, full articles, or URLs against our rigorous linguistic indices. Sentinel connects directly with Gemini Grounding to fact-check live claims and evaluate dramatic framing.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Left Side: Inputs, Tabs and Presets -->
+            <section class="lg:col-span-5 space-y-6">
+                <!-- API Key Reminder for Mobile Users -->
+                <div class="sm:hidden bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-3">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center">
+                        <i class="fa-solid fa-key mr-2 text-indigo-400"></i> Gemini API Key (Optional)
+                    </h3>
+                    <input 
+                        type="password" 
+                        id="apiKeyMobileInput" 
+                        placeholder="Paste Gemini API Key..." 
+                        class="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 block w-full px-3 py-2"
+                    >
+                    <p class="text-[10px] text-slate-500">If left blank, the app will attempt to use the canvas system-level key.</p>
+                </div>
+
+                <!-- Input Panel with Tab Support -->
+                <div class="bg-slate-900/95 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h2 class="text-sm font-semibold text-white flex items-center">
+                            <i class="fa-solid fa-microchip text-indigo-400 mr-2.5"></i> 
+                            Audit Input Configuration
+                        </h2>
+                    </div>
+
+                    <!-- Tabs switcher -->
+                    <div class="grid grid-cols-2 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800/80">
+                        <button 
+                            id="tabTextBtn" 
+                            class="py-2 text-xs font-semibold rounded-lg text-white bg-indigo-600 transition-all duration-200"
+                        >
+                            <i class="fa-solid fa-file-text mr-1.5"></i> Raw Headline / Text
+                        </button>
+                        <button 
+                            id="tabUrlBtn" 
+                            class="py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 transition-all duration-200"
+                        >
+                            <i class="fa-solid fa-link mr-1.5"></i> Live Article URL
+                        </button>
+                    </div>
+
+                    <!-- Text Area Input (Active by default) -->
+                    <div id="textFormGroup" class="space-y-1">
+                        <label for="articleInput" class="block text-xs font-bold text-slate-400 uppercase tracking-wider">News Article Text or Headline</label>
+                        <textarea 
+                            id="articleInput" 
+                            rows="9" 
+                            class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-3 text-slate-100 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all placeholder-slate-600 focus:outline-none resize-none"
+                            placeholder="Paste the news headline or article body here (minimum 10 characters)..."
+                        ></textarea>
+                    </div>
+
+                    <!-- URL Input Group (Hidden by default) -->
+                    <div id="urlFormGroup" class="hidden space-y-1.5">
+                        <label for="urlInput" class="block text-xs font-bold text-slate-400 uppercase tracking-wider">Target Article URL</label>
+                        <div class="relative">
+                            <input 
+                                type="url" 
+                                id="urlInput" 
+                                class="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-slate-100 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all placeholder-slate-600 focus:outline-none"
+                                placeholder="https://example.com/news-story-to-verify"
+                            >
+                            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                <i class="fa-solid fa-globe text-slate-500 text-xs"></i>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-slate-400 leading-relaxed italic bg-indigo-950/15 border border-indigo-500/10 p-2.5 rounded-lg">
+                            <i class="fa-solid fa-circle-info text-indigo-400 mr-1"></i> Gemini's live grounding features will search, index, and verify the authenticity and claims of this specific web URL.
+                        </p>
+                    </div>
+
+                    <button 
+                        id="analyzeBtn"
+                        class="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 shadow-lg shadow-indigo-600/20 hover:shadow-indigo-500/30 flex items-center justify-center space-x-2 text-sm"
+                    >
+                        <span>Audit Credibility & Tone</span>
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    </button>
+                </div>
+
+                <!-- Preset Samples Card -->
+                <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center">
+                            <i class="fa-solid fa-folder-open text-amber-500 mr-2"></i> 
+                            Calibration Presets
+                        </h3>
+                    </div>
+                    <div class="space-y-3">
+                        <button 
+                            onclick="loadSample('factual_fear')"
+                            class="w-full text-left bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 hover:border-amber-500/30 p-3 rounded-xl transition-all duration-200 text-xs flex justify-between items-start space-x-3 group"
+                        >
+                            <div class="space-y-1">
+                                <span class="font-medium text-slate-200 group-hover:text-amber-400 transition-colors">Factual but Fearmongering</span>
+                                <p class="text-slate-500 line-clamp-1">"Ue, maxi multa da 550 milioni ad AliExpress: 'Non ha bloccato i prodotti illegali'"</p>
+                            </div>
+                            <span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-full shrink-0">Factual+Fear</span>
+                        </button>
+
+                        <button 
+                            onclick="loadSample('clickbait')"
+                            class="w-full text-left bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 hover:border-cyan-500/30 p-3 rounded-xl transition-all duration-200 text-xs flex justify-between items-start space-x-3 group"
+                        >
+                            <div class="space-y-1">
+                                <span class="font-medium text-slate-200 group-hover:text-cyan-400 transition-colors">Clickbait / Sensationalized</span>
+                                <p class="text-slate-500 line-clamp-1">Solar Flares Intersecting Earth: Is Our Power Grid Going to Crumble Forever Tonight?</p>
+                            </div>
+                            <span class="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[10px] px-2 py-0.5 rounded-full shrink-0">Clickbait</span>
+                        </button>
+
+                        <button 
+                            onclick="loadSample('fake')"
+                            class="w-full text-left bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 hover:border-rose-500/30 p-3 rounded-xl transition-all duration-200 text-xs flex justify-between items-start space-x-3 group"
+                        >
+                            <div class="space-y-1">
+                                <span class="font-medium text-slate-200 group-hover:text-rose-400 transition-colors">Completely Fake / Disinfo</span>
+                                <p class="text-slate-500 line-clamp-1">ALERT: Unstoppable invisible chemical cloud spreading to East Coast, millions threatened...</p>
+                            </div>
+                            <span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] px-2 py-0.5 rounded-full shrink-0">Fake</span>
+                        </button>
+
+                        <button 
+                            onclick="loadSample('factual')"
+                            class="w-full text-left bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 hover:border-emerald-500/30 p-3 rounded-xl transition-all duration-200 text-xs flex justify-between items-start space-x-3 group"
+                        >
+                            <div class="space-y-1">
+                                <span class="font-medium text-slate-200 group-hover:text-emerald-400 transition-colors">Dry Factual Reporting</span>
+                                <p class="text-slate-500 line-clamp-1">The European Union has fined AliExpress 550 million euros for regulatory non-compliance regarding unauthorized listings.</p>
+                            </div>
+                            <span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] px-2 py-0.5 rounded-full shrink-0">Factual</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Side: Analytics & Outputs -->
+            <section class="lg:col-span-7">
+                <!-- Idle State Panel -->
+                <div id="idleState" class="bg-slate-900/30 border-2 border-dashed border-slate-800 rounded-3xl p-12 text-center h-full flex flex-col justify-center items-center space-y-4">
+                    <div class="w-20 h-20 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800 text-slate-500 animate-pulse">
+                        <i class="fa-solid fa-chart-line text-3xl text-indigo-400"></i>
+                    </div>
+                    <div class="max-w-sm space-y-1.5">
+                        <h3 class="text-lg font-bold text-slate-300">Awaiting Analysis Target</h3>
+                        <p class="text-sm text-slate-500 leading-relaxed">
+                            Supply an article link or paste a dramatic headline. The audit will break down logical fallacies, verify physical reality, and score linguistic triggers with high sensitivity.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Loading State Panel (Hidden initially) -->
+                <div id="loadingState" class="hidden bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center h-full flex flex-col justify-center items-center space-y-6">
+                    <div class="relative">
+                        <!-- Glowing Spinner -->
+                        <div class="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <i class="fa-solid fa-magnifying-glass text-indigo-400 animate-pulse"></i>
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        <h3 class="text-base font-bold text-slate-200">Fact-Checking & Auditing via Gemini Grounding</h3>
+                        <p class="text-xs text-slate-400 max-w-xs mx-auto">
+                            Cross-referencing live web indices, checking linguistic panic markers, assessing "maxi/shock" adjectives, and auditing logical coherence...
+                        </p>
+                    </div>
+                    <div class="w-48 bg-slate-950 h-1 rounded-full overflow-hidden border border-slate-800">
+                        <div class="bg-indigo-500 h-full w-2/3 animate-infinite-scroll"></div>
+                    </div>
+                </div>
+
+                <!-- Analysis Results Panel (Hidden initially) -->
+                <div id="resultState" class="hidden bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-8">
+                    
+                    <!-- Top Category Highlight -->
+                    <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div class="flex items-center space-x-3.5">
+                            <div id="categoryIconBox" class="p-3.5 rounded-xl text-2xl flex items-center justify-center shadow-lg">
+                                <i class="fa-solid fa-circle-question"></i>
+                            </div>
+                            <div>
+                                <span class="text-xs text-slate-400 font-bold uppercase tracking-widest block">Audit Assessment Result</span>
+                                <span id="categoryLabel" class="text-xl font-extrabold text-white">None Detected</span>
+                            </div>
+                        </div>
+                        <div id="categoryIndicatorBadge" class="px-3.5 py-1 text-xs font-bold uppercase tracking-wider rounded-full border">
+                            UNAUDITED
+                        </div>
+                    </div>
+
+                    <!-- Visual Grid of the 4 Category States to show where target fell -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                        <div id="cat-factual" class="bg-slate-950 border border-slate-800/80 p-3 rounded-xl opacity-40 transition-all duration-300">
+                            <i class="fa-solid fa-circle-check text-emerald-500 text-lg mb-1.5 block"></i>
+                            <span class="font-bold text-slate-300 block">Factual</span>
+                            <span class="text-[10px] text-slate-500 mt-0.5 block">Objective, dry</span>
+                        </div>
+                        <div id="cat-clickbait" class="bg-slate-950 border border-slate-800/80 p-3 rounded-xl opacity-40 transition-all duration-300">
+                            <i class="fa-solid fa-magnet text-cyan-500 text-lg mb-1.5 block"></i>
+                            <span class="font-bold text-slate-300 block">Clickbait</span>
+                            <span class="text-[10px] text-slate-500 mt-0.5 block">Exaggerated curiosity</span>
+                        </div>
+                        <div id="cat-factual_fear" class="bg-slate-950 border border-slate-800/80 p-3 rounded-xl opacity-40 transition-all duration-300">
+                            <i class="fa-solid fa-skull-crossbones text-amber-500 text-lg mb-1.5 block"></i>
+                            <span class="font-bold text-slate-300 block">Factual But Fear</span>
+                            <span class="text-[10px] text-slate-500 mt-0.5 block">Real news, panic frame</span>
+                        </div>
+                        <div id="cat-fake" class="bg-slate-950 border border-slate-800/80 p-3 rounded-xl opacity-40 transition-all duration-300">
+                            <i class="fa-solid fa-mask-face text-rose-500 text-lg mb-1.5 block"></i>
+                            <span class="font-bold text-slate-300 block">Fake</span>
+                            <span class="text-[10px] text-slate-500 mt-0.5 block">Fabricated / Disinfo</span>
+                        </div>
+                    </div>
+
+                    <!-- Double Gauge Dashboard -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 py-2">
+                        
+                        <!-- Fearmongering Index Gauge -->
+                        <div class="flex items-center space-x-5 bg-slate-950/40 p-4 rounded-2xl border border-slate-800/80">
+                            <div class="relative w-24 h-24 flex items-center justify-center shrink-0">
+                                <!-- Circular Progress Bar -->
+                                <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                                    <circle cx="50" cy="50" r="40" stroke="#161e2e" stroke-width="8" fill="transparent" />
+                                    <circle id="fearGaugeCircle" cx="50" cy="50" r="40" stroke="#f43f5e" stroke-width="8" fill="transparent" stroke-dasharray="251.2" stroke-dashoffset="251.2" class="transition-all duration-1000 ease-out" />
+                                </svg>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                    <span id="fearScoreText" class="text-2xl font-black text-white">0%</span>
+                                    <span class="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Panic</span>
+                                </div>
+                            </div>
+                            <div class="space-y-1">
+                                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Fearmongering Index</h3>
+                                <p class="text-[11px] text-slate-500 leading-relaxed">
+                                    Measures rhetorical amplification, threat exaggeration, and catastrophic language sensitivity.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Confidence Gauge -->
+                        <div class="flex items-center space-x-5 bg-slate-950/40 p-4 rounded-2xl border border-slate-800/80">
+                            <div class="relative w-24 h-24 flex items-center justify-center shrink-0">
+                                <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                                    <circle cx="50" cy="50" r="40" stroke="#161e2e" stroke-width="8" fill="transparent" />
+                                    <circle id="confGaugeCircle" cx="50" cy="50" r="40" stroke="#06b6d4" stroke-width="8" fill="transparent" stroke-dasharray="251.2" stroke-dashoffset="251.2" class="transition-all duration-1000 ease-out" />
+                                </svg>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                    <span id="confScoreText" class="text-2xl font-black text-white">0%</span>
+                                    <span class="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Conf.</span>
+                                </div>
+                            </div>
+                            <div class="space-y-1">
+                                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Audit Confidence</h3>
+                                <p class="text-[11px] text-slate-500 leading-relaxed">
+                                    Decreases for sparse headlines without grounding context; increases with rich article bodies or proven sources.
+                                </p>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Citation Sources (Visible if Grounding tool returned attributions) -->
+                    <div id="sourcesContainer" class="space-y-3 hidden">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
+                            <i class="fa-solid fa-file-shield text-emerald-400 mr-2"></i> Verified Search References
+                        </h3>
+                        <div id="sourcesLinks" class="flex flex-wrap gap-2">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Detailed Explanation -->
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
+                            <i class="fa-solid fa-scale-balanced text-indigo-400 mr-2"></i> Linguistic Audit Breakdown
+                        </h3>
+                        <p id="explanationText" class="text-sm text-slate-300 leading-relaxed bg-slate-950/40 p-4 rounded-xl border border-slate-800/60">
+                            Awaiting text breakdown...
+                        </p>
+                    </div>
+
+                    <!-- Sensationalist Trigger Words -->
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
+                            <i class="fa-solid fa-circle-exclamation text-rose-400 mr-2"></i> Detected Rhetorical Amplifiers
+                        </h3>
+                        <div id="triggerTags" class="flex flex-wrap gap-2">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Factual Alternative Version -->
+                    <div class="bg-indigo-950/15 border border-indigo-500/20 rounded-2xl p-5 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-bold text-indigo-300 uppercase tracking-widest flex items-center">
+                                <i class="fa-solid fa-circle-check text-indigo-400 mr-2"></i> Proposed Neutral Alternative
+                            </h3>
+                            <button 
+                                id="copyAlternativeBtn"
+                                class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors flex items-center space-x-1"
+                                title="Copy alternative text"
+                            >
+                                <i class="fa-regular fa-copy"></i>
+                                <span>Copy</span>
+                            </button>
+                        </div>
+                        <p id="alternativeText" class="text-xs sm:text-sm text-slate-300 italic leading-relaxed">
+                            Generating unbiased summary alternatives...
+                        </p>
+                    </div>
+
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 bg-slate-950/50 py-6 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <span class="text-xs text-slate-500">
+                &copy; 2026 Sentinel Credibility. Powered by Gemini Core and Live Search Grounding engines.
+            </span>
+            <div class="flex items-center space-x-4">
+                <span class="text-xs text-slate-400">Strict mode enabled</span>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Preset sample database featuring exact calibration profiles
+        const SAMPLES = {
+            factual_fear: {
+                type: 'text',
+                content: 'Ue, maxi multa da 550 milioni ad AliExpress: "Non ha bloccato i prodotti illegali"'
+            },
+            clickbait: {
+                type: 'text',
+                content: 'Solar Flares Intersecting Earth: Is Our Power Grid Going to Crumble Forever Tonight? Major panic sweeps researchers!'
+            },
+            fake: {
+                type: 'text',
+                content: 'ALERT: Deadly unverified toxin leaks spreading across East Coast aquifers. Thousands are falling down silently as local governors block the news directly from major channels to suppress panic. Stockpile food immediately!'
+            },
+            factual: {
+                type: 'text',
+                content: 'The European Union regulatory committee has assessed a 550 million euro penalty against online retailer AliExpress for failing to comply with trade safety requirements on unverified listings.'
+            }
+        };
+
+        // App state management
+        const state = {
+            apiKey: localStorage.getItem('sentinel_gemini_key') || '',
+            analyzing: false,
+            activeTab: 'text' // 'text' or 'url'
+        };
+
+        // Retrieve DOM elements
+        const elements = {
+            apiKeyInput: document.getElementById('apiKeyInput'),
+            apiKeyMobileInput: document.getElementById('apiKeyMobileInput'),
+            toggleApiKeyVisibility: document.getElementById('toggleApiKeyVisibility'),
+            saveKeyBtn: document.getElementById('saveKeyBtn'),
+            statusBadge: document.getElementById('statusBadge'),
+            
+            // Tabs
+            tabTextBtn: document.getElementById('tabTextBtn'),
+            tabUrlBtn: document.getElementById('tabUrlBtn'),
+            textFormGroup: document.getElementById('textFormGroup'),
+            urlFormGroup: document.getElementById('urlFormGroup'),
+            
+            articleInput: document.getElementById('articleInput'),
+            urlInput: document.getElementById('urlInput'),
+            analyzeBtn: document.getElementById('analyzeBtn'),
+            
+            // Panels
+            idleState: document.getElementById('idleState'),
+            loadingState: document.getElementById('loadingState'),
+            resultState: document.getElementById('resultState'),
+            
+            // Result elements
+            categoryIconBox: document.getElementById('categoryIconBox'),
+            categoryLabel: document.getElementById('categoryLabel'),
+            categoryIndicatorBadge: document.getElementById('categoryIndicatorBadge'),
+            fearGaugeCircle: document.getElementById('fearGaugeCircle'),
+            fearScoreText: document.getElementById('fearScoreText'),
+            confGaugeCircle: document.getElementById('confGaugeCircle'),
+            confScoreText: document.getElementById('confScoreText'),
+            explanationText: document.getElementById('explanationText'),
+            triggerTags: document.getElementById('triggerTags'),
+            alternativeText: document.getElementById('alternativeText'),
+            copyAlternativeBtn: document.getElementById('copyAlternativeBtn'),
+            sourcesContainer: document.getElementById('sourcesContainer'),
+            sourcesLinks: document.getElementById('sourcesLinks'),
+            toastContainer: document.getElementById('toastContainer')
+        };
+
+        // Initialize state indicators
+        window.addEventListener('load', () => {
+            if (state.apiKey) {
+                elements.apiKeyInput.value = state.apiKey;
+                elements.apiKeyMobileInput.value = state.apiKey;
+                updateKeyStatus(true);
+            } else {
+                updateKeyStatus(false);
+            }
+        });
+
+        // Tab selection events
+        elements.tabTextBtn.addEventListener('click', () => {
+            state.activeTab = 'text';
+            elements.tabTextBtn.className = "py-2 text-xs font-semibold rounded-lg text-white bg-indigo-600 transition-all duration-200";
+            elements.tabUrlBtn.className = "py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 transition-all duration-200";
+            elements.textFormGroup.classList.remove('hidden');
+            elements.urlFormGroup.classList.add('hidden');
+        });
+
+        elements.tabUrlBtn.addEventListener('click', () => {
+            state.activeTab = 'url';
+            elements.tabUrlBtn.className = "py-2 text-xs font-semibold rounded-lg text-white bg-indigo-600 transition-all duration-200";
+            elements.tabTextBtn.className = "py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 transition-all duration-200";
+            elements.urlFormGroup.classList.remove('hidden');
+            elements.textFormGroup.classList.add('hidden');
+        });
+
+        // Toggle Key Visibility Action
+        elements.toggleApiKeyVisibility.addEventListener('click', () => {
+            const isPassword = elements.apiKeyInput.type === 'password';
+            elements.apiKeyInput.type = isPassword ? 'text' : 'password';
+            elements.toggleApiKeyVisibility.innerHTML = isPassword 
+                ? '<i class="fa-solid fa-eye-slash text-xs"></i>' 
+                : '<i class="fa-solid fa-eye text-xs"></i>';
+        });
+
+        // Save Key Action
+        elements.saveKeyBtn.addEventListener('click', () => {
+            const keyToSave = elements.apiKeyInput.value.trim() || elements.apiKeyMobileInput.value.trim();
+            if (keyToSave) {
+                state.apiKey = keyToSave;
+                localStorage.setItem('sentinel_gemini_key', keyToSave);
+                elements.apiKeyInput.value = keyToSave;
+                elements.apiKeyMobileInput.value = keyToSave;
+                updateKeyStatus(true);
+                showToast("API Key successfully configured & stored locally.", "success");
+            } else {
+                state.apiKey = '';
+                localStorage.removeItem('sentinel_gemini_key');
+                elements.apiKeyInput.value = '';
+                elements.apiKeyMobileInput.value = '';
+                updateKeyStatus(false);
+                showToast("Custom API key removed. Using standard system defaults.", "info");
+            }
+        });
+
+        function updateKeyStatus(hasCustomKey) {
+            if (hasCustomKey) {
+                elements.statusBadge.className = "flex items-center bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium px-2.5 py-1 rounded-full";
+                elements.statusBadge.innerHTML = `<span class="w-1.5 h-1.5 mr-1.5 bg-indigo-400 rounded-full"></span><span>Custom Key Loaded</span>`;
+                elements.saveKeyBtn.textContent = "Update Key";
+            } else {
+                elements.statusBadge.className = "flex items-center bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium px-2.5 py-1 rounded-full";
+                elements.statusBadge.innerHTML = `<span class="w-1.5 h-1.5 mr-1.5 bg-emerald-400 rounded-full animate-ping"></span><span>Canvas Key Active</span>`;
+                elements.saveKeyBtn.textContent = "Save Key";
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `p-4 rounded-xl shadow-lg border text-xs flex items-center justify-between space-x-3 transition-all duration-300 transform translate-y-2 opacity-0`;
+            
+            let colorClasses = "bg-slate-900 border-slate-800 text-slate-300";
+            let icon = '<i class="fa-solid fa-info text-indigo-400"></i>';
+            if (type === 'success') {
+                colorClasses = "bg-emerald-950/90 border-emerald-500/20 text-emerald-300";
+                icon = '<i class="fa-solid fa-circle-check text-emerald-400"></i>';
+            } else if (type === 'error') {
+                colorClasses = "bg-rose-950/90 border-rose-500/20 text-rose-300";
+                icon = '<i class="fa-solid fa-circle-exclamation text-rose-400"></i>';
+            }
+
+            toast.innerHTML = `
+                <div class="flex items-center space-x-2.5">
+                    ${icon}
+                    <span>${message}</span>
+                </div>
+                <button onclick="this.parentElement.remove()" class="text-slate-500 hover:text-slate-300 transition-colors"><i class="fa-solid fa-xmark"></i></button>
+            `;
+            
+            toast.className += ` ${colorClasses}`;
+            elements.toastContainer.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-1');
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+
+        window.loadSample = function(presetType) {
+            if (SAMPLES[presetType]) {
+                const sample = SAMPLES[presetType];
+                if (sample.type === 'text') {
+                    elements.articleInput.value = sample.content;
+                    // Switch back to text tab automatically
+                    elements.tabTextBtn.click();
+                }
+                showToast(`Loaded "${presetType}" preset for testing!`, 'success');
+            }
+        };
+
+        elements.copyAlternativeBtn.addEventListener('click', () => {
+            const textToCopy = elements.alternativeText.textContent;
+            if (textToCopy && !textToCopy.includes('Generating')) {
+                const tempTextarea = document.createElement('textarea');
+                tempTextarea.value = textToCopy;
+                document.body.appendChild(tempTextarea);
+                tempTextarea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast("Unbiased alternative copied!", "success");
+                } catch (e) {
+                    showToast("Failed to copy automatically.", "error");
+                }
+                document.body.removeChild(tempTextarea);
+            }
+        });
+
+        elements.analyzeBtn.addEventListener('click', async () => {
+            let inputContent = "";
+            if (state.activeTab === 'text') {
+                inputContent = elements.articleInput.value.trim();
+                if (!inputContent || inputContent.length < 10) {
+                    showToast("Please supply a longer text input for analysis.", "error");
+                    return;
+                }
+            } else {
+                inputContent = elements.urlInput.value.trim();
+                if (!inputContent || !inputContent.startsWith('http')) {
+                    showToast("Please supply a valid URL to analyze.", "error");
+                    return;
+                }
+            }
+
+            if (state.analyzing) return;
+            setUiState('loading');
+
+            try {
+                const responseData = await queryGeminiAnalysis(inputContent, state.activeTab);
+                renderResults(responseData);
+                setUiState('results');
+                showToast("Audit completed successfully.", "success");
+            } catch (err) {
+                console.error("Audit error:", err);
+                showToast(err.message || "Failed to reach analytical core. Try checking key settings.", "error");
+                setUiState('idle');
+            }
+        });
+
+        function setUiState(activeState) {
+            if (activeState === 'loading') {
+                state.analyzing = true;
+                elements.idleState.classList.add('hidden');
+                elements.resultState.classList.add('hidden');
+                elements.loadingState.classList.remove('hidden');
+                elements.analyzeBtn.disabled = true;
+                elements.analyzeBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>Auditing linguistic patterns...</span>`;
+            } else if (activeState === 'results') {
+                state.analyzing = false;
+                elements.loadingState.classList.add('hidden');
+                elements.idleState.classList.add('hidden');
+                elements.resultState.classList.remove('hidden');
+                elements.analyzeBtn.disabled = false;
+                elements.analyzeBtn.innerHTML = `<span>Audit Credibility & Tone</span> <i class="fa-solid fa-wand-magic-sparkles"></i>`;
+            } else {
+                state.analyzing = false;
+                elements.loadingState.classList.add('hidden');
+                elements.resultState.classList.add('hidden');
+                elements.idleState.classList.remove('hidden');
+                elements.analyzeBtn.disabled = false;
+                elements.analyzeBtn.innerHTML = `<span>Audit Credibility & Tone</span> <i class="fa-solid fa-wand-magic-sparkles"></i>`;
+            }
+        }
+
+        async function queryGeminiAnalysis(targetInput, inputType) {
+            const apiKey = state.apiKey;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            const systemInstruction = `You are a world-class computational linguist, editor, and media media fact-checker. 
+Your target is to classify news inputs strictly into one of four categories:
+1. "factual": Pure, balanced, calm, and objective. 
+2. "clickbait": Curiosity gap headlines, hyperbolic hooks that are somewhat factual underneath.
+3. "factual but fearmongering": Real factual base/underlying events (such as real fines, infrastructure failures, climate updates) but presented with dramatic, alarming, or anxious linguistic amplifiers, modifiers, or catastrophic words. For example: calling a normal regulatory action a "maxi multa shock", "scandalo totale", "tremble", "unprecedented horror" must score high on fearmongering (above 50%) and fall into this category.
+4. "fake": Outright lies, unverified conspiracy theories, severe false rumors.
+
+Critical instruction on metrics calibration:
+- SENSITIVITY: If a factual headline uses alarmist prefixes, dramatic formatting, or panic verbs, DO NOT give it a low score (such as 5-15%). Rate it strictly in the 40-75% range for fearmongering and label it "factual but fearmongering".
+- AUDIT CONFIDENCE: If the input is just a short, single-sentence headline, and you cannot ground-verify its factuality with Google Search results, your confidence MUST reflect this. Set confidence < 50%. Only output confidence > 85% if the article body is rich, or if search grounding strongly confirms the exact facts, or if it is a major established national reporting outlet.
+
+If a URL is supplied, perform Google Search grounding to index its context and actual facts before rating.`;
+
+            let promptText = "";
+            if (inputType === 'url') {
+                promptText = `Perform search grounding on this live article URL: "${targetInput}". 
+Verify the facts. Analyze the headline and copy text for fearmongering framing, clickbait style, and factual truth. 
+Return your complete assessment in the requested JSON structure.`;
+            } else {
+                promptText = `Perform full linguistic analysis and search grounding on this pasted headline/text: 
+"${targetInput}"
+
+Determine which of the 4 strict categories it belongs to, calibrate the fearmongering score stringently, and return the structured JSON output.`;
+            }
+
+            const payload = {
+                contents: [{ parts: [{ text: promptText }] }],
+                tools: [{ "google_search": {} }], // Grounding tool activated so Gemini can search the web for URL/Content fact checking!
+                systemInstruction: {
+                    parts: [{ text: systemInstruction }]
+                },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            classification: {
+                                type: "STRING",
+                                description: "Must be exactly one of: 'factual', 'clickbait', 'factual but fearmongering', 'fake'"
+                            },
+                            fearmongeringScore: {
+                                type: "INTEGER",
+                                description: "Calibration score from 0 (sterile dry reports) to 100 (complete hysteria/terror propagation)"
+                            },
+                            confidence: {
+                                type: "INTEGER",
+                                description: "Degree of certainty (0-100) based on source strength and search grounding results"
+                            },
+                            dominantBiasStrategy: {
+                                type: "STRING",
+                                description: "Specific strategy detected, e.g., Exaggerated Modifiers, Worst-Case Scenarios, Capitalization Overuse, Panic Inducement, or None"
+                            },
+                            explanation: {
+                                type: "STRING",
+                                description: "A detailed analysis explaining why the score was assigned. Explicitly call out sensational words (like 'maxi multa' or 'shocking') that caused the rating to shift."
+                            },
+                            keyTriggers: {
+                                type: "ARRAY",
+                                items: { type: "STRING" },
+                                description: "Sub-phrases, words, or framing elements responsible for amplifying anxiety or clickbait appeal."
+                            },
+                            alternativeHeadline: {
+                                type: "STRING",
+                                description: "A highly dry, neutral, factual translation of the headline reporting strictly the raw, verified event."
+                            }
+                        },
+                        required: ["classification", "fearmongeringScore", "confidence", "dominantBiasStrategy", "explanation", "keyTriggers", "alternativeHeadline"]
+                    }
+                }
+            };
+
+            // Implement standard exponential backoff retry routine
+            const maxRetries = 3;
+            let attempt = 0;
+            let delay = 1000;
+
+            while (attempt < maxRetries) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+                    }
+
+                    const jsonResult = await response.json();
+                    
+                    // Extract potential citations/grounding sources to show the user
+                    let groundingSources = [];
+                    const candidate = jsonResult.candidates?.[0];
+                    const metadata = candidate?.groundingMetadata;
+                    if (metadata && metadata.groundingAttributions) {
+                        groundingSources = metadata.groundingAttributions
+                            .map(attr => ({
+                                uri: attr.web?.uri,
+                                title: attr.web?.title
+                            }))
+                            .filter(src => src.uri && src.title);
+                    }
+                    
+                    const textResponse = candidate?.content?.parts?.[0]?.text;
+                    if (!textResponse) {
+                        throw new Error("Empty analysis payload received.");
+                    }
+
+                    const parsedData = JSON.parse(textResponse);
+                    // Append citations directly into output state object
+                    parsedData.sources = groundingSources;
+                    
+                    return parsedData;
+
+                } catch (err) {
+                    attempt++;
+                    if (attempt >= maxRetries) {
+                        throw new Error(err.message || "Failed to finalize audit connection.");
+                    }
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        function renderResults(data) {
+            // Reset active styles on category cards
+            const categories = ['factual', 'clickbait', 'factual_fear', 'fake'];
+            categories.forEach(cat => {
+                const card = document.getElementById(`cat-${cat}`);
+                if (card) {
+                    card.classList.add('opacity-40');
+                    card.classList.remove('bg-slate-900', 'border-indigo-500/30', 'ring-1', 'ring-indigo-500/20', 'scale-105', 'opacity-100');
+                }
+            });
+
+            // Parse result category and apply styling to the active category card
+            let mappedCat = 'factual';
+            let catColor = 'emerald';
+            let catText = 'Factual';
+            let catIcon = '<i class="fa-solid fa-circle-check text-emerald-400"></i>';
+
+            if (data.classification === 'clickbait') {
+                mappedCat = 'clickbait';
+                catColor = 'cyan';
+                catText = 'Clickbait';
+                catIcon = '<i class="fa-solid fa-magnet text-cyan-400"></i>';
+            } else if (data.classification === 'factual but fearmongering') {
+                mappedCat = 'factual_fear';
+                catColor = 'amber';
+                catText = 'Factual But Fearmongering';
+                catIcon = '<i class="fa-solid fa-skull-crossbones text-amber-400"></i>';
+            } else if (data.classification === 'fake') {
+                mappedCat = 'fake';
+                catColor = 'rose';
+                catText = 'Fake / Fabricated';
+                catIcon = '<i class="fa-solid fa-mask-face text-rose-400"></i>';
+            }
+
+            const activeCard = document.getElementById(`cat-${mappedCat}`);
+            if (activeCard) {
+                activeCard.classList.remove('opacity-40');
+                activeCard.classList.add('bg-slate-900', `border-${catColor}-500/40`, 'ring-1', `ring-${catColor}-500/20`, 'scale-105', 'opacity-100');
+            }
+
+            // Set main summary badge and labels
+            elements.categoryLabel.textContent = catText;
+            elements.categoryIconBox.innerHTML = catIcon;
+            
+            // Set indicator badge color classes dynamically
+            let badgeStyle = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+            let boxBgStyle = "bg-emerald-500/10";
+            if (catColor === 'cyan') {
+                badgeStyle = "bg-cyan-500/10 text-cyan-400 border-cyan-500/20";
+                boxBgStyle = "bg-cyan-500/10";
+            } else if (catColor === 'amber') {
+                badgeStyle = "bg-amber-500/10 text-amber-400 border-amber-500/20";
+                boxBgStyle = "bg-amber-500/10";
+            } else if (catColor === 'rose') {
+                badgeStyle = "bg-rose-500/10 text-rose-400 border-rose-500/20";
+                boxBgStyle = "bg-rose-500/10";
+            }
+            elements.categoryIndicatorBadge.className = `px-3.5 py-1 text-xs font-bold uppercase tracking-wider rounded-full border ${badgeStyle}`;
+            elements.categoryIndicatorBadge.textContent = data.classification;
+            elements.categoryIconBox.className = `p-3.5 rounded-xl text-2xl flex items-center justify-center shadow-lg ${boxBgStyle}`;
+
+            // Render gauge metrics
+            const circumference = 2 * Math.PI * 40; // 251.2
+            
+            // 1. Fearmongering gauge
+            const fearScore = Math.min(Math.max(data.fearmongeringScore, 0), 100);
+            const fearOffset = circumference - (fearScore / 100) * circumference;
+            elements.fearGaugeCircle.style.strokeDashoffset = fearOffset;
+            elements.fearScoreText.textContent = `${fearScore}%`;
+            
+            // Gauge coloring based on calibration level
+            if (fearScore >= 65) {
+                elements.fearGaugeCircle.style.stroke = '#f43f5e'; // Rose-500
+            } else if (fearScore >= 40) {
+                elements.fearGaugeCircle.style.stroke = '#f59e0b'; // Amber-500
+            } else {
+                elements.fearGaugeCircle.style.stroke = '#10b981'; // Emerald-500
+            }
+
+            // 2. Audit Confidence gauge
+            const confScore = Math.min(Math.max(data.confidence, 0), 100);
+            const confOffset = circumference - (confScore / 100) * circumference;
+            elements.confGaugeCircle.style.strokeDashoffset = confOffset;
+            elements.confScoreText.textContent = `${confScore}%`;
+
+            if (confScore >= 80) {
+                elements.confGaugeCircle.style.stroke = '#06b6d4'; // Cyan
+            } else if (confScore >= 50) {
+                elements.confGaugeCircle.style.stroke = '#3b82f6'; // Blue
+            } else {
+                elements.confGaugeCircle.style.stroke = '#a855f7'; // Purple (Low detail/unverified headline warning)
+            }
+
+            // Set main texts
+            elements.explanationText.textContent = data.explanation;
+            elements.alternativeText.textContent = `"${data.alternativeHeadline}"`;
+
+            // Render triggers
+            elements.triggerTags.innerHTML = '';
+            if (data.keyTriggers && data.keyTriggers.length > 0) {
+                data.keyTriggers.forEach(phrase => {
+                    const tag = document.createElement('span');
+                    tag.className = "bg-slate-950 border border-slate-800 text-slate-300 text-xs px-2.5 py-1.5 rounded-lg flex items-center space-x-1.5";
+                    tag.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-rose-500 text-[10px]"></i> <span>"${phrase}"</span>`;
+                    elements.triggerTags.appendChild(tag);
+                });
+            } else {
+                elements.triggerTags.innerHTML = `<span class="text-slate-500 text-xs italic">No specific rhetorical tricks or panic modifiers detected.</span>`;
+            }
+
+            // Render Grounding sources (if present)
+            if (data.sources && data.sources.length > 0) {
+                elements.sourcesContainer.classList.remove('hidden');
+                elements.sourcesLinks.innerHTML = '';
+                data.sources.forEach(src => {
+                    const link = document.createElement('a');
+                    link.href = src.uri;
+                    link.target = "_blank";
+                    link.className = "bg-slate-950 border border-slate-800 hover:border-indigo-500 text-[11px] text-indigo-400 hover:text-indigo-300 px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-all duration-200";
+                    link.innerHTML = `<i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> <span class="font-medium max-w-[150px] truncate">${src.title}</span>`;
+                    elements.sourcesLinks.appendChild(link);
+                });
+            } else {
+                elements.sourcesContainer.classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
