@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Speed Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-4 md:p-8">
+
+    <div class="max-w-3xl mx-auto bg-slate-800 rounded-3xl shadow-2xl p-6 md:p-10 border border-slate-700">
+        <h1 class="text-3xl font-bold text-blue-400 mb-6 text-center">Speed & Distance Tracker</h1>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="p-4 bg-slate-700 rounded-2xl">
+                <label class="block text-sm font-semibold mb-2">Mode</label>
+                <select id="mode" class="w-full bg-slate-900 border border-slate-600 rounded-lg p-2 text-white">
+                    <option value="direct">Direct Speed Input</option>
+                    <option value="calc">Calculate from Distance/Time</option>
+                </select>
+            </div>
+            
+            <div class="p-4 bg-slate-700 rounded-2xl">
+                <label class="block text-sm font-semibold mb-2">Units</label>
+                <select id="units" class="w-full bg-slate-900 border border-slate-600 rounded-lg p-2 text-white">
+                    <option value="kmh">km/h</option>
+                    <option value="mph">mi/h</option>
+                    <option value="ms">m/s</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="directInputs" class="space-y-4 mb-8">
+            <input type="number" id="speedInput" placeholder="Enter Speed" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-600">
+        </div>
+
+        <div id="calcInputs" class="hidden grid grid-cols-2 gap-4 mb-8">
+            <input type="number" id="distInput" placeholder="Distance" class="bg-slate-900 p-4 rounded-xl border border-slate-600">
+            <input type="number" id="timeInput" placeholder="Time (hours)" class="bg-slate-900 p-4 rounded-xl border border-slate-600">
+        </div>
+
+        <div class="space-y-4 mb-8">
+            <div>
+                <label class="text-sm">Update Frequency (Hz): <span id="hzVal">10</span></label>
+                <input type="range" id="hz" min="1" max="60" value="10" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+            </div>
+            <div>
+                <label class="text-sm">Decimal Places: <span id="decVal">2</span></label>
+                <input type="range" id="dec" min="0" max="6" value="2" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+            </div>
+        </div>
+
+        <div class="flex gap-4">
+            <button id="startBtn" class="flex-1 bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-bold transition">Start Simulation</button>
+            <button id="stopBtn" class="flex-1 bg-red-600 hover:bg-red-500 py-4 rounded-2xl font-bold transition">Stop</button>
+        </div>
+
+        <div class="mt-10 p-8 bg-slate-900 rounded-3xl text-center">
+            <div class="text-slate-400 text-sm uppercase tracking-widest">Traveled Distance</div>
+            <div id="display" class="text-5xl font-mono font-bold text-white mt-2">0.00</div>
+        </div>
+    </div>
+
+    <script>
+        let interval = null;
+        let startTime = 0;
+        let totalDist = 0;
+
+        const modeSel = document.getElementById('mode');
+        const direct = document.getElementById('directInputs');
+        const calc = document.getElementById('calcInputs');
+
+        modeSel.onchange = () => {
+            if(modeSel.value === 'direct') { direct.classList.remove('hidden'); calc.classList.add('hidden'); }
+            else { direct.classList.add('hidden'); calc.classList.remove('hidden'); }
+        };
+
+        const updateLabels = () => {
+            document.getElementById('hzVal').innerText = document.getElementById('hz').value;
+            document.getElementById('decVal').innerText = document.getElementById('dec').value;
+        };
+
+        ['hz', 'dec'].forEach(id => document.getElementById(id).oninput = updateLabels);
+
+        document.getElementById('startBtn').onclick = () => {
+            clearInterval(interval);
+            let speed = 0;
+            const units = document.getElementById('units').value;
+            const dec = parseInt(document.getElementById('dec').value);
+
+            if(modeSel.value === 'direct') {
+                speed = parseFloat(document.getElementById('speedInput').value);
+            } else {
+                speed = parseFloat(document.getElementById('distInput').value) / parseFloat(document.getElementById('timeInput').value);
+            }
+
+            startTime = Date.now();
+            const hz = parseInt(document.getElementById('hz').value);
+            
+            interval = setInterval(() => {
+                const elapsedHours = (Date.now() - startTime) / 3600000;
+                let currentDist = speed * elapsedHours;
+                
+                // Unit conversion logic
+                if(units === 'ms') currentDist *= 3.6; // convert km to m
+                if(units === 'mph') currentDist *= 0.621371; // convert km to mi
+                
+                document.getElementById('display').innerText = currentDist.toFixed(dec);
+            }, 1000/hz);
+        };
+
+        document.getElementById('stopBtn').onclick = () => clearInterval(interval);
+    </script>
+</body>
+</html>
