@@ -832,12 +832,32 @@
             }
         }
 
+        function extractAndParseJson(text) {
+            try {
+                // Attempt clean parse directly first
+                return JSON.parse(text.trim());
+            } catch (e) {
+                // Locate bounding curly braces to isolate raw JSON text block
+                const start = text.indexOf('{');
+                const end = text.lastIndexOf('}');
+                if (start !== -1 && end !== -1 && end > start) {
+                    try {
+                        const jsonSub = text.substring(start, end + 1);
+                        return JSON.parse(jsonSub);
+                    } catch (innerErr) {
+                        throw new Error("Isolating JSON sequence failed: " + innerErr.message);
+                    }
+                }
+                throw new Error("No structured analytical response block was found inside the AI output.");
+            }
+        }
+
         async function queryGeminiAnalysis(targetInput, inputType) {
             const apiKey = state.apiKey;
             // Configured to use stable, fast gemini-2.5-flash for maximum free-tier compatibility
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
-            const systemInstruction = `You are a world-class computational linguist, editor, and media media fact-checker. 
+            const systemInstruction = `You are a world-class computational linguist, editor, and media fact-checker. 
 Your target is to classify news inputs strictly into one of four categories:
 1. "factual": Pure, balanced, calm, and objective. 
 2. "clickbait": Curiosity gap headlines, hyperbolic hooks that are somewhat factual underneath.
@@ -848,7 +868,18 @@ Critical instruction on metrics calibration:
 - SENSITIVITY: If a factual headline uses alarmist prefixes, dramatic formatting, or panic verbs, DO NOT give it a low score (such as 5-15%). Rate it strictly in the 40-75% range for fearmongering and label it "factual but fearmongering".
 - AUDIT CONFIDENCE: This represents your absolute certainty in your own classification and scoring logic. It is NOT a metric of the truth value of the headline. If a headline is clearly, undeniably a piece of fake news, your Audit Confidence should be high (90%-100%) because the classification is straightforward. Only lower your confidence (< 60%) when the input lacks adequate linguistic context, is overly short, or is stylistically ambiguous (making it hard to reliably select between categories).
 
-If a URL is supplied, perform Google Search grounding to index its context and actual facts before rating.`;
+If a URL is supplied, perform Google Search grounding to index its context and actual facts before rating.
+
+You MUST respond strictly with a single JSON object containing exactly the following schema. Do not output any conversational introduction, preamble, or formatting other than a raw JSON block (or standard markdown JSON code fence):
+{
+  "classification": "exactly one of: 'factual', 'clickbait', 'factual but fearmongering', 'fake'",
+  "fearmongeringScore": 0-100 integer,
+  "confidence": 0-100 integer,
+  "dominantBiasStrategy": "string name of strategy",
+  "explanation": "detailed analysis text highlighting why the category and score were chosen",
+  "keyTriggers": ["string array of emotional trigger words"],
+  "alternativeHeadline": "dry factual rewording"
+}`;
 
             let promptText = "";
             if (inputType === 'url') {
@@ -867,44 +898,6 @@ Determine which of the 4 strict categories it belongs to, calibrate the fearmong
                 tools: [{ "google_search": {} }], // Grounding tool activated so Gemini can search the web for URL/Content fact checking!
                 systemInstruction: {
                     parts: [{ text: systemInstruction }]
-                },
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "OBJECT",
-                        properties: {
-                            classification: {
-                                type: "STRING",
-                                description: "Must be exactly one of: 'factual', 'clickbait', 'factual but fearmongering', 'fake'"
-                            },
-                            fearmongeringScore: {
-                                type: "INTEGER",
-                                description: "Calibration score from 0 (sterile dry reports) to 100 (complete hysteria/terror propagation)"
-                            },
-                            confidence: {
-                                type: "INTEGER",
-                                description: "Your absolute certainty (0-100) in your own analysis, classification, and score assignment."
-                            },
-                            dominantBiasStrategy: {
-                                type: "STRING",
-                                description: "Specific strategy detected, e.g., Exaggerated Modifiers, Worst-Case Scenarios, Capitalization Overuse, Panic Inducement, or None"
-                            },
-                            explanation: {
-                                type: "STRING",
-                                description: "A detailed analysis explaining why the score was assigned. Explicitly call out sensational words (like 'maxi multa' or 'shocking') that caused the rating to shift."
-                            },
-                            keyTriggers: {
-                                type: "ARRAY",
-                                items: { type: "STRING" },
-                                description: "Sub-phrases, words, or framing elements responsible for amplifying anxiety or clickbait appeal."
-                            },
-                            alternativeHeadline: {
-                                type: "STRING",
-                                description: "A highly dry, neutral, factual translation of the headline reporting strictly the raw, verified event."
-                            }
-                        },
-                        required: ["classification", "fearmongeringScore", "confidence", "dominantBiasStrategy", "explanation", "keyTriggers", "alternativeHeadline"]
-                    }
                 }
             };
 
@@ -946,7 +939,8 @@ Determine which of the 4 strict categories it belongs to, calibrate the fearmong
                         throw new Error("Empty analysis payload received.");
                     }
 
-                    const parsedData = JSON.parse(textResponse);
+                    // Extract and parse JSON without requiring API-level JSON-MIME enforcement
+                    const parsedData = extractAndParseJson(textResponse);
                     // Append citations directly into output state object
                     parsedData.sources = groundingSources;
                     
