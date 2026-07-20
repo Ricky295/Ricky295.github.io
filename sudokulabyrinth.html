@@ -987,25 +987,61 @@
             }
         }
 
-        // --- Maze Viewport Render (50x50 UI Slice of 450x450 maze) ---
+        // --- Maze Viewport Render (35x35 UI Slice of 450x450 maze) ---
+        // Perf: instead of rebuilding VIEW_SIZE*VIEW_SIZE <td> elements via innerHTML
+        // on every single move (expensive at high input rates), we build the table's
+        // DOM structure ONCE and then just patch the className/textContent of the
+        // cells that actually changed on each subsequent call.
+        let mazeCellNodes = null; // 2D array [row][col] of <td> elements, indexed by viewport-local coords
+        let prevCellClass = null; // parallel 2D array caching last-applied className per cell, to skip no-op DOM writes
+        let prevCellText = null;  // parallel 2D array caching last-applied textContent per cell
+
+        function buildMazeViewportDom() {
+            const table = document.getElementById('mazeTable');
+            table.innerHTML = '';
+            mazeCellNodes = new Array(VIEW_SIZE);
+            prevCellClass = new Array(VIEW_SIZE);
+            prevCellText = new Array(VIEW_SIZE);
+
+            const frag = document.createDocumentFragment();
+            for (let r = 0; r < VIEW_SIZE; r++) {
+                const tr = document.createElement('tr');
+                mazeCellNodes[r] = new Array(VIEW_SIZE);
+                prevCellClass[r] = new Array(VIEW_SIZE).fill(null);
+                prevCellText[r] = new Array(VIEW_SIZE).fill(null);
+                for (let c = 0; c < VIEW_SIZE; c++) {
+                    const td = document.createElement('td');
+                    tr.appendChild(td);
+                    mazeCellNodes[r][c] = td;
+                }
+                frag.appendChild(tr);
+            }
+            table.appendChild(frag);
+        }
+
         function renderMazeViewport() {
             if (!mazeData) return;
+            if (!mazeCellNodes) buildMazeViewportDom();
 
-            let htmlString = '';
-            for (let y = viewY; y < viewY + VIEW_SIZE; y++) {
-                htmlString += '<tr>';
+            for (let r = 0; r < VIEW_SIZE; r++) {
+                const y = viewY + r;
                 const rowOffset = y * MAZE_W;
+                const nodeRow = mazeCellNodes[r];
+                const classRow = prevCellClass[r];
+                const textRow = prevCellText[r];
 
-                for (let x = viewX; x < viewX + VIEW_SIZE; x++) {
-                    const cellValue = mazeData[rowOffset + x];
-                    const itemValue = itemGrid[rowOffset + x];
-                    
+                for (let c = 0; c < VIEW_SIZE; c++) {
+                    const x = viewX + c;
+                    const idx = rowOffset + x;
+                    const cellValue = mazeData[idx];
+                    const itemValue = itemGrid[idx];
+
                     let classes = '';
                     let content = '';
-                    
-                    if (cellValue & 1) classes += ' br'; 
-                    if (cellValue & 2) classes += ' bb'; 
-                    
+
+                    if (cellValue & 1) classes += ' br';
+                    if (cellValue & 2) classes += ' bb';
+
                     if (x === playerX && y === playerY) {
                         classes += ' player-cell';
                     } else if (itemValue >= 1 && itemValue <= 9) {
@@ -1015,12 +1051,19 @@
                         classes += ' cell-mystery';
                         content = '?';
                     }
+                    classes = classes.trim();
 
-                    htmlString += classes ? `<td class="${classes.trim()}">${content}</td>` : `<td>${content}</td>`;
+                    // Only touch the DOM if something actually changed for this cell.
+                    if (classRow[c] !== classes) {
+                        nodeRow[c].className = classes;
+                        classRow[c] = classes;
+                    }
+                    if (textRow[c] !== content) {
+                        nodeRow[c].textContent = content;
+                        textRow[c] = content;
+                    }
                 }
-                htmlString += '</tr>';
             }
-            document.getElementById('mazeTable').innerHTML = htmlString;
         }
 
         // Draw Player on Minimap
@@ -1040,6 +1083,25 @@
             minimapCtx.shadowBlur = 4;
             minimapCtx.fillRect(pX - 1, pY - 1, 3, 3);
             minimapCtx.shadowBlur = 0;
+        }
+
+        // --- Render scheduling ---
+        // Perf: at high input rates (e.g. holding a key or fast tapping, ~20/sec),
+        // calling renderMazeViewport()/drawMinimap() synchronously on every single
+        // keydown can queue up more paint work than the browser can keep up with,
+        // causing visible lag/backlog. Instead we just mark "a render is needed" and
+        // coalesce actual rendering to once per animation frame (~60fps max), which
+        // is more than enough to feel instant while avoiding redundant paints.
+        let renderPending = false;
+        function scheduleRender() {
+            if (renderPending) return;
+            renderPending = true;
+            requestAnimationFrame(() => {
+                renderPending = false;
+                renderMazeViewport();
+                drawMinimap();
+                updateHUDStats();
+            });
         }
 
         // --- Movement Controller ---
@@ -1092,9 +1154,7 @@
                 if (playerY - viewY < pad && viewY > 0) viewY--;
                 if (playerY - viewY >= VIEW_SIZE - pad && viewY < MAZE_H - VIEW_SIZE) viewY++;
 
-                renderMazeViewport();
-                drawMinimap();
-                updateHUDStats();
+                scheduleRender();
             }
         }
 
