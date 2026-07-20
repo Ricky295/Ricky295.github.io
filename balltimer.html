@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ball Timer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root{
+    --sky-top:#0a0e2a;
+    --sky-bot:#050714;
+    --moon:#f4f1ea;
+    --ink:#e7e6f0;
+    --dim:#8b8fb8;
+    --accent:#d97757;
+    --panel:#0d1030cc;
+    --line:#2a2f5c;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;height:100%;
+    background:radial-gradient(ellipse at 50% -10%, #1a1f4d 0%, var(--sky-top) 45%, var(--sky-bot) 100%);
+    font-family:'Courier New',ui-monospace,monospace;
+    color:var(--ink);
+    overflow:hidden;
+  }
+  #stars{position:fixed;inset:0;z-index:0;}
+  #stars span{
+    position:absolute;width:2px;height:2px;background:#fff;border-radius:50%;
+    opacity:.6;animation:twinkle 3s infinite ease-in-out;
+  }
+  @keyframes twinkle{0%,100%{opacity:.15}50%{opacity:.9}}
+
+  /* SETUP SCREEN */
+  #setup{
+    position:relative;z-index:2;
+    max-width:520px;margin:6vh auto;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:32px 30px;
+    backdrop-filter:blur(6px);
+  }
+  #setup h1{
+    font-family:Georgia,'Times New Roman',serif;
+    font-size:1.7rem;font-weight:700;letter-spacing:.5px;
+    margin:0 0 4px;color:var(--moon);
+  }
+  #setup .sub{color:var(--dim);font-size:.85rem;margin-bottom:26px;}
+  label{
+    display:block;font-size:.72rem;text-transform:uppercase;
+    letter-spacing:1.5px;color:var(--dim);margin:16px 0 6px;
+  }
+  input[type=text],input[type=number]{
+    width:100%;padding:10px 12px;
+    background:#05071a;border:1px solid var(--line);
+    color:var(--ink);border-radius:6px;font-family:inherit;font-size:.95rem;
+  }
+  input[type=color]{
+    width:100%;height:40px;border:1px solid var(--line);
+    background:#05071a;border-radius:6px;padding:2px;cursor:pointer;
+  }
+  .row{display:flex;gap:14px;}
+  .row>div{flex:1;}
+  .bgrow{display:flex;align-items:center;gap:10px;margin-top:6px;}
+  .bgrow label{margin:0;flex:none;text-transform:none;letter-spacing:0;font-size:.85rem;color:var(--ink);}
+
+  #duration{
+    margin-top:22px;padding:14px 16px;
+    background:#05071a;border:1px dashed var(--line);border-radius:8px;
+    font-size:.9rem;color:var(--dim);
+  }
+  #duration b{color:var(--accent);font-size:1.05rem;}
+
+  #startBtn{
+    margin-top:26px;width:100%;padding:14px;
+    background:var(--accent);color:#1a0d06;border:none;border-radius:8px;
+    font-family:inherit;font-weight:700;font-size:1rem;letter-spacing:.5px;
+    cursor:pointer;transition:transform .15s ease, filter .15s ease;
+  }
+  #startBtn:hover{filter:brightness(1.08);transform:translateY(-1px);}
+  #startBtn:active{transform:translateY(0);}
+
+  #linkBox{
+    margin-top:20px;
+  }
+  #linkBox label{margin-bottom:6px;}
+  #shareRow{display:flex;gap:8px;}
+  #shareLink{
+    flex:1;padding:9px 10px;background:#05071a;border:1px solid var(--line);
+    border-radius:6px;color:var(--dim);font-size:.78rem;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;
+  }
+  #copyBtn{
+    padding:9px 14px;background:transparent;border:1px solid var(--line);
+    color:var(--ink);border-radius:6px;cursor:pointer;font-family:inherit;font-size:.78rem;
+  }
+  #copyBtn:hover{border-color:var(--accent);color:var(--accent);}
+  #copyMsg{font-size:.72rem;color:var(--accent);margin-top:6px;height:14px;}
+
+  /* TIMER SCREEN */
+  #timerScreen{
+    position:fixed;inset:0;z-index:1;display:none;
+  }
+  #sky{position:absolute;inset:0;overflow:hidden;}
+  .ball{
+    position:absolute;top:-60px;border-radius:50%;
+    box-shadow:0 0 14px rgba(0,0,0,.4) inset, 0 6px 18px rgba(0,0,0,.35);
+  }
+  #hud{
+    position:absolute;top:26px;left:0;right:0;
+    text-align:center;z-index:3;pointer-events:none;
+  }
+  #clock{
+    font-size:clamp(2.2rem,7vw,4rem);font-weight:700;letter-spacing:4px;
+    color:var(--moon);text-shadow:0 0 24px rgba(244,241,234,.35);
+  }
+  #ballsLeft{
+    font-size:.85rem;color:var(--dim);letter-spacing:2px;text-transform:uppercase;margin-top:6px;
+  }
+  #ground{
+    position:absolute;bottom:0;left:0;right:0;height:6px;
+    background:linear-gradient(90deg,transparent,var(--line),transparent);
+  }
+  #doneMsg{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    font-family:Georgia,serif;font-size:2.4rem;color:var(--accent);
+    text-align:center;display:none;z-index:4;
+    text-shadow:0 0 30px rgba(217,119,87,.5);
+  }
+  #exitBtn{
+    position:absolute;top:20px;right:20px;z-index:5;
+    background:transparent;border:1px solid var(--line);color:var(--dim);
+    padding:8px 14px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:.75rem;
+  }
+  #exitBtn:hover{color:var(--ink);border-color:var(--dim);}
+
+  @media (max-width:560px){
+    #setup{margin:4vh 16px;padding:24px 20px;}
+  }
+</style>
+</head>
+<body>
+
+<div id="stars"></div>
+
+<!-- SETUP -->
+<div id="setup">
+  <h1>Ball Timer</h1>
+  <div class="sub">A countdown told in falling balls.</div>
+
+  <label for="numBalls">Number of balls</label>
+  <input type="number" id="numBalls" min="1" value="300">
+
+  <label for="secPerBall">Time per ball (ss.000)</label>
+  <input type="text" id="secPerBall" value="1.000">
+
+  <div id="duration">Total duration: <b id="durText">—</b></div>
+
+  <div class="row">
+    <div>
+      <label for="ballSize">Ball size (px)</label>
+      <input type="number" id="ballSize" min="2" value="12">
+    </div>
+    <div>
+      <label for="ballColor">Ball color</label>
+      <input type="color" id="ballColor" value="#3fff3f">
+    </div>
+  </div>
+
+  <label>Background</label>
+  <div class="bgrow">
+    <input type="checkbox" id="autoBg" checked style="width:auto;">
+    <label for="autoBg" style="margin:0;">Auto (based on ball brightness)</label>
+  </div>
+  <div id="manualBgWrap" style="display:none;margin-top:10px;">
+    <input type="color" id="bgColor" value="#000000">
+  </div>
+
+  <button id="startBtn">Start</button>
+
+  <div id="linkBox">
+    <label>Shareable link</label>
+    <div id="shareRow">
+      <div id="shareLink">—</div>
+      <button id="copyBtn">Copy</button>
+    </div>
+    <div id="copyMsg"></div>
+  </div>
+</div>
+
+<!-- TIMER -->
+<div id="timerScreen">
+  <button id="exitBtn">✕ Exit</button>
+  <div id="sky">
+    <div id="ground"></div>
+  </div>
+  <div id="hud">
+    <div id="clock">00:00:00</div>
+    <div id="ballsLeft"></div>
+  </div>
+  <div id="doneMsg">All balls have fallen.</div>
+</div>
+
+<script>
+(function(){
+  // ---------- Starfield ----------
+  const starsEl = document.getElementById('stars');
+  for(let i=0;i<80;i++){
+    const s = document.createElement('span');
+    s.style.left = Math.random()*100+'%';
+    s.style.top = Math.random()*70+'%';
+    s.style.animationDelay = (Math.random()*3)+'s';
+    s.style.width = s.style.height = (Math.random()>0.85 ? '3px':'2px');
+    starsEl.appendChild(s);
+  }
+
+  // ---------- Helpers ----------
+  function pad(n){ return n.toString().padStart(2,'0'); }
+  function fmtHMS(totalSeconds){
+    totalSeconds = Math.max(0, Math.round(totalSeconds));
+    const h = Math.floor(totalSeconds/3600);
+    const m = Math.floor((totalSeconds%3600)/60);
+    const s = totalSeconds%60;
+    return pad(h)+':'+pad(m)+':'+pad(s);
+  }
+  function fmtLong(totalSeconds){
+    totalSeconds = Math.round(totalSeconds);
+    const h = Math.floor(totalSeconds/3600);
+    const m = Math.floor((totalSeconds%3600)/60);
+    const s = totalSeconds%60;
+    let parts = [];
+    if(h>0) parts.push(h+' hour'+(h!==1?'s':''));
+    if(m>0) parts.push(m+' minute'+(m!==1?'s':''));
+    if(s>0 || parts.length===0) parts.push(s+' second'+(s!==1?'s':''));
+    return parts.join(' ');
+  }
+  function hexClean(h){
+    if(!h) return null;
+    h = h.replace(/["']/g,'').trim();
+    if(!h.startsWith('#')) h = '#'+h;
+    return /^#[0-9a-fA-F]{6}$/.test(h) ? h : null;
+  }
+  function isLight(hex){
+    const r = parseInt(hex.substr(1,2),16);
+    const g = parseInt(hex.substr(3,2),16);
+    const b = parseInt(hex.substr(5,2),16);
+    // perceived luminance
+    const lum = (0.299*r + 0.587*g + 0.114*b)/255;
+    return lum > 0.55;
+  }
+
+  // ---------- Elements ----------
+  const numBallsEl = document.getElementById('numBalls');
+  const secPerBallEl = document.getElementById('secPerBall');
+  const ballSizeEl = document.getElementById('ballSize');
+  const ballColorEl = document.getElementById('ballColor');
+  const autoBgEl = document.getElementById('autoBg');
+  const manualBgWrap = document.getElementById('manualBgWrap');
+  const bgColorEl = document.getElementById('bgColor');
+  const durText = document.getElementById('durText');
+  const shareLink = document.getElementById('shareLink');
+  const copyBtn = document.getElementById('copyBtn');
+  const copyMsg = document.getElementById('copyMsg');
+  const startBtn = document.getElementById('startBtn');
+  const setupEl = document.getElementById('setup');
+  const timerScreen = document.getElementById('timerScreen');
+  const skyEl = document.getElementById('sky');
+  const clockEl = document.getElementById('clock');
+  const ballsLeftEl = document.getElementById('ballsLeft');
+  const doneMsg = document.getElementById('doneMsg');
+  const exitBtn = document.getElementById('exitBtn');
+
+  function currentParams(){
+    return {
+      b: parseInt(numBallsEl.value)||0,
+      s: parseFloat(secPerBallEl.value)||0,
+      p: parseInt(ballSizeEl.value)||0,
+      bl: ballColorEl.value.replace('#',''),
+      bg: autoBgEl.checked ? 'auto' : bgColorEl.value.replace('#','')
+    };
+  }
+
+  function updateDurationAndLink(){
+    const p = currentParams();
+    const total = p.b * p.s;
+    durText.textContent = fmtLong(total) + '  (' + total.toFixed(3) + 's total)';
+    const url = new URL(window.location.href.split('?')[0]);
+    url.searchParams.set('b', p.b);
+    url.searchParams.set('s', p.s);
+    url.searchParams.set('p', p.p);
+    url.searchParams.set('bl', p.bl);
+    url.searchParams.set('bg', p.bg);
+    shareLink.textContent = url.toString();
+    shareLink.dataset.url = url.toString();
+  }
+
+  [numBallsEl, secPerBallEl, ballSizeEl, ballColorEl, bgColorEl].forEach(el=>{
+    el.addEventListener('input', updateDurationAndLink);
+  });
+  autoBgEl.addEventListener('change', ()=>{
+    manualBgWrap.style.display = autoBgEl.checked ? 'none' : 'block';
+    updateDurationAndLink();
+  });
+
+  copyBtn.addEventListener('click', ()=>{
+    const url = shareLink.dataset.url;
+    if(!url) return;
+    navigator.clipboard.writeText(url).then(()=>{
+      copyMsg.textContent = 'Copied!';
+      setTimeout(()=>copyMsg.textContent='',1500);
+    }).catch(()=>{
+      copyMsg.textContent = 'Could not copy — select manually.';
+    });
+  });
+
+  // ---------- URL param loading ----------
+  function loadFromURL(){
+    const params = new URLSearchParams(window.location.search);
+    if(!params.has('b') && !params.has('s') && !params.has('p') && !params.has('bl') && !params.has('bg')){
+      return false;
+    }
+    const b = parseInt(params.get('b'));
+    const s = parseFloat(params.get('s'));
+    const p = parseInt(params.get('p'));
+    const bl = hexClean(params.get('bl'));
+    const bgRaw = (params.get('bg')||'').replace(/["']/g,'').trim();
+
+    if(!b || !s || !p || !bl){
+      return false; // incomplete, fall back to manual setup
+    }
+
+    numBallsEl.value = b;
+    secPerBallEl.value = s.toFixed(3);
+    ballSizeEl.value = p;
+    ballColorEl.value = bl;
+
+    if(bgRaw.toLowerCase() === 'auto' || !bgRaw){
+      autoBgEl.checked = true;
+      manualBgWrap.style.display='none';
+    } else {
+      const bgHex = hexClean(bgRaw);
+      autoBgEl.checked = false;
+      manualBgWrap.style.display='block';
+      bgColorEl.value = bgHex || '#000000';
+    }
+    updateDurationAndLink();
+    return true;
+  }
+
+  const hasFullParams = loadFromURL();
+
+  if(hasFullParams){
+    const p = currentParams();
+    const total = (p.b*p.s);
+    const confirmMsg =
+      'Start timer now?\n\n'+
+      p.b+' balls, '+p.s.toFixed(3)+'s each\n'+
+      'Total duration: '+fmtLong(total)+'\n\n'+
+      'Click Cancel to review/edit settings first.';
+    if(window.confirm(confirmMsg)){
+      startTimer();
+    }
+  }
+
+  updateDurationAndLink();
+
+  // ---------- Start ----------
+  startBtn.addEventListener('click', startTimer);
+  exitBtn.addEventListener('click', ()=>{
+    stopAll();
+    timerScreen.style.display='none';
+    setupEl.style.display='block';
+    doneMsg.style.display='none';
+  });
+
+  let dropIntervalId = null;
+  let clockIntervalId = null;
+  let activeBalls = [];
+
+  function stopAll(){
+    if(dropIntervalId) clearInterval(dropIntervalId);
+    if(clockIntervalId) clearInterval(clockIntervalId);
+    if(physicsRAF) cancelAnimationFrame(physicsRAF);
+    physicsRAF = null;
+    activePhysicsBalls.length = 0;
+    skyEl.querySelectorAll('.ball').forEach(b=>b.remove());
+    activeBalls = [];
+  }
+
+  function startTimer(){
+    const p = currentParams();
+    if(!p.b || !p.s || !p.p || !hexClean('#'+p.bl)){
+      alert('Please fill in all fields with valid values.');
+      return;
+    }
+    const ballHex = hexClean('#'+p.bl) || '#3fff3f';
+    let bgHex;
+    if(p.bg === 'auto'){
+      bgHex = isLight(ballHex) ? '#000000' : '#ffffff';
+    } else {
+      bgHex = hexClean('#'+p.bg) || '#000000';
+    }
+
+    setupEl.style.display='none';
+    timerScreen.style.display='block';
+    doneMsg.style.display='none';
+
+    // Override the sky gradient background to reflect bg logic,
+    // but keep it feeling like "sky" by tinting rather than flat-filling.
+    timerScreen.style.background = bgHex;
+    skyEl.style.background = 'transparent';
+
+    const total = p.b * p.s;
+    let elapsed = 0;
+    let ballsDropped = 0;
+    const startTime = Date.now();
+
+    ballsLeftEl.textContent = p.b + ' balls remaining';
+    clockEl.textContent = fmtHMS(total);
+
+    clockIntervalId = setInterval(()=>{
+      const now = (Date.now()-startTime)/1000;
+      const remaining = Math.max(0, total-now);
+      clockEl.textContent = fmtHMS(remaining);
+      if(remaining<=0){
+        clearInterval(clockIntervalId);
+      }
+    }, 200);
+
+    function dropOne(){
+      ballsDropped++;
+      ballsLeftEl.textContent = (p.b-ballsDropped) + ' balls remaining';
+      spawnBall(p.p, ballHex);
+
+      if(ballsDropped >= p.b){
+        clearInterval(dropIntervalId);
+        waitForAllSettled();
+      }
+    }
+
+    function waitForAllSettled(){
+      const check = setInterval(()=>{
+        if(activePhysicsBalls.every(b=>b.settled)){
+          clearInterval(check);
+          doneMsg.style.display='block';
+          clockEl.textContent = '00:00:00';
+          ballsLeftEl.textContent = '0 balls remaining';
+        }
+      }, 150);
+    }
+
+    // spawn first ball immediately, then every p.s seconds
+    dropOne();
+    dropIntervalId = setInterval(dropOne, p.s*1000);
+  }
+
+  const activePhysicsBalls = [];
+  let physicsRAF = null;
+
+  function spawnBall(size, color){
+    const el = document.createElement('div');
+    el.className = 'ball';
+    el.style.width = size+'px';
+    el.style.height = size+'px';
+    el.style.background = 'radial-gradient(circle at 35% 30%, '+lighten(color,25)+', '+color+' 60%, '+darken(color,20)+')';
+    const maxLeft = Math.max(0, window.innerWidth - size);
+    const startX = Math.random()*maxLeft;
+    el.style.left = startX+'px';
+    el.style.top = '-'+(size+40)+'px';
+    skyEl.appendChild(el);
+
+    ensureHeightMap();
+    const ball = {
+      el, size, x:startX, y:-(size+40),
+      vy: 0,
+      vx: (Math.random()-0.5)*60, // slight horizontal drift/roll
+      rot: 0,
+      vrot: (Math.random()-0.5)*10,
+      bounces: 0,
+      maxBounces: 4 + Math.floor(Math.random()*3),
+      settled:false
+    };
+    activePhysicsBalls.push(ball);
+
+    if(!physicsRAF){
+      lastPhysicsTime = performance.now();
+      physicsRAF = requestAnimationFrame(physicsStep);
+    }
+  }
+
+  let lastPhysicsTime = 0;
+  const GRAVITY = 2200; // px/s^2
+  const BOUNCE_DAMPING = 0.55;
+
+  // Height-map: tracks the current pile height at discrete x-columns so
+  // balls settle into solid heaps instead of precarious towers.
+  const COLUMN_WIDTH = 4; // px per column bucket
+  let heightMap = null; // Float64Array, one entry per column, value = topmost Y of pile at that column
+  let heightMapCols = 0;
+
+  function ensureHeightMap(){
+    const cols = Math.ceil(window.innerWidth / COLUMN_WIDTH) + 1;
+    if(!heightMap || heightMapCols !== cols){
+      heightMapCols = cols;
+      heightMap = new Float64Array(cols).fill(window.innerHeight);
+    }
+  }
+
+  function colRange(x, size){
+    const c0 = Math.max(0, Math.floor(x / COLUMN_WIDTH));
+    const c1 = Math.min(heightMapCols-1, Math.floor((x+size) / COLUMN_WIDTH));
+    return [c0, c1];
+  }
+
+  function getRestY(x, size){
+    // Find the highest (smallest y) pile top under the ball's footprint,
+    // rest the ball just above it, capped at the actual ground line.
+    const [c0, c1] = colRange(x, size);
+    let minTop = window.innerHeight;
+    for(let c=c0; c<=c1; c++){
+      if(heightMap[c] < minTop) minTop = heightMap[c];
+    }
+    const restY = minTop - size;
+    return Math.min(restY, window.innerHeight - size - 6);
+  }
+
+
+
+  function physicsStep(now){
+    const dt = Math.min((now-lastPhysicsTime)/1000, 0.032);
+    lastPhysicsTime = now;
+
+    for(let i=activePhysicsBalls.length-1; i>=0; i--){
+      const b = activePhysicsBalls[i];
+      if(b.settled){
+        continue;
+      }
+
+      b.vy += GRAVITY*dt;
+      b.y += b.vy*dt;
+      b.x += b.vx*dt;
+      b.rot += b.vrot*dt*60;
+
+      // floor collision (accounting for piled balls beneath, via height-map)
+      const floorAtX = getRestY(b.x, b.size);
+      if(b.y >= floorAtX){
+        b.y = floorAtX;
+        b.vy = -b.vy*BOUNCE_DAMPING;
+        b.vx *= 0.7;
+        b.bounces++;
+        if(Math.abs(b.vy) < 60 || b.bounces >= b.maxBounces){
+          b.vy = 0;
+          b.vx = 0;
+          b.y = floorAtX;
+          b.settled = true;
+          // stamp this ball's top edge into the height-map so future
+          // balls land on top of it instead of sinking through
+          const [c0, c1] = colRange(b.x, b.size);
+          for(let c=c0; c<=c1; c++){
+            if(b.y < heightMap[c]) heightMap[c] = b.y;
+          }
+        }
+      }
+
+      // wall collisions
+      const maxX = window.innerWidth - b.size;
+      if(b.x < 0){ b.x = 0; b.vx = -b.vx*0.6; }
+      if(b.x > maxX){ b.x = maxX; b.vx = -b.vx*0.6; }
+
+      b.el.style.transform = 'translate('+b.x+'px,'+b.y+'px) rotate('+b.rot+'deg)';
+      b.el.style.left = '0px';
+      b.el.style.top = '0px';
+    }
+
+    if(activePhysicsBalls.length>0){
+      physicsRAF = requestAnimationFrame(physicsStep);
+    } else {
+      physicsRAF = null;
+    }
+  }
+
+  function lighten(hex, amt){
+    const {r,g,b} = hexToRgb(hex);
+    return 'rgb('+clamp(r+amt*2)+','+clamp(g+amt*2)+','+clamp(b+amt*2)+')';
+  }
+  function darken(hex, amt){
+    const {r,g,b} = hexToRgb(hex);
+    return 'rgb('+clamp(r-amt*2)+','+clamp(g-amt*2)+','+clamp(b-amt*2)+')';
+  }
+  function hexToRgb(hex){
+    return { r:parseInt(hex.substr(1,2),16), g:parseInt(hex.substr(3,2),16), b:parseInt(hex.substr(5,2),16) };
+  }
+  function clamp(v){ return Math.max(0,Math.min(255,v)); }
+
+})();
+</script>
+</body>
+</html>
