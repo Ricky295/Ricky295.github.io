@@ -219,8 +219,17 @@
       </div>
 
       <div class="group-title">Hourly forecast</div>
+      <div class="panel-row" style="margin-bottom:10px;">
+        <div class="field">
+          <label>Layout</label>
+          <select id="hourlyLayout">
+            <option value="strip" selected>Strip (day-grouped list)</option>
+            <option value="table">Table (hours × columns)</option>
+          </select>
+        </div>
+      </div>
       <div class="check-grid" id="hourlyFields">
-        <div class="check-item"><input type="checkbox" id="h_enable"><label for="h_enable">Include hourly strip</label></div>
+        <div class="check-item"><input type="checkbox" id="h_enable"><label for="h_enable">Include hourly forecast</label></div>
         <div class="check-item"><input type="checkbox" id="h_temp" checked><label for="h_temp">Hourly temperature</label></div>
         <div class="check-item"><input type="checkbox" id="h_precip"><label for="h_precip">Hourly precip probability</label></div>
         <div class="check-item"><input type="checkbox" id="h_feels"><label for="h_feels">Hourly feels-like</label></div>
@@ -256,8 +265,14 @@
     </div>
 
     <div id="hourlySection" style="display:none;">
-      <div class="section-label">Next 24 Hours</div>
+      <div class="section-label" id="hourlySectionLabel">Next 24 Hours</div>
       <div class="hourly-strip" id="hourlyStrip"></div>
+      <div class="days-scroll" id="hourlyTableWrap" style="display:none;">
+        <table class="days" id="hourlyTable">
+          <thead><tr id="hourlyTableHead"></tr></thead>
+          <tbody id="hourlyTableBody"></tbody>
+        </table>
+      </div>
     </div>
 
     <div>
@@ -446,6 +461,8 @@ function updateHourHint(){
 }
 $('hourCount').addEventListener('input', updateHourHint);
 updateHourHint();
+$('hourlyLayout').addEventListener('change', ()=>{ if(currentData) renderHourly(currentData.wx); });
+$('hourCount').addEventListener('change', ()=>{ if(currentData) renderHourly(currentData.wx); });
 $('autoHeight').addEventListener('change', syncHeightDisabled);
 $('widthMM').addEventListener('input', ()=>{ $('paperPreset').value = 'custom'; });
 $('heightMM').addEventListener('input', ()=>{ $('paperPreset').value = 'custom'; });
@@ -540,6 +557,125 @@ function windDir(deg){
   return dirs[Math.round(deg/22.5) % 16];
 }
 
+function hourlyVisibleRange(wx){
+  const nowTs = Date.now();
+  let startIdx = wx.hourly.time.findIndex(t => new Date(t).getTime() >= nowTs);
+  if(startIdx < 0) startIdx = 0;
+  const hrs = Math.max(1, Math.min(384, parseInt($('hourCount').value) || 24));
+  const endIdx = Math.min(startIdx + hrs, wx.hourly.time.length);
+  return { startIdx, endIdx, hrs };
+}
+
+// Ordered list of hourly fields the user can toggle, each with a label, unit suffix,
+// and accessor into wx.hourly. Shared by both the strip and table layouts, and by the PDF.
+const HOURLY_FIELD_DEFS = [
+  { id:'h_temp',     label:'Temp',   suffix:'°',   get:(wx,i)=> wx.hourly.temperature_2m ? Math.round(wx.hourly.temperature_2m[i]) : null },
+  { id:'h_feels',    label:'Feels',  suffix:'°',   get:(wx,i)=> wx.hourly.apparent_temperature ? Math.round(wx.hourly.apparent_temperature[i]) : null },
+  { id:'h_precip',   label:'Precip', suffix:'%',   get:(wx,i)=> wx.hourly.precipitation_probability ? wx.hourly.precipitation_probability[i] : null },
+  { id:'h_precipmm', label:'Rain',   suffix:'mm',  get:(wx,i)=> wx.hourly.precipitation ? wx.hourly.precipitation[i] : null },
+  { id:'h_humidity', label:'Hum',    suffix:'%',   get:(wx,i)=> wx.hourly.relative_humidity_2m ? wx.hourly.relative_humidity_2m[i] : null },
+  { id:'h_wind',     label:'Wind',   suffix:'km/h',get:(wx,i)=> wx.hourly.wind_speed_10m ? Math.round(wx.hourly.wind_speed_10m[i]) : null },
+  { id:'h_cloud',    label:'Cloud',  suffix:'%',   get:(wx,i)=> wx.hourly.cloud_cover ? wx.hourly.cloud_cover[i] : null },
+  { id:'h_uv',       label:'UV',     suffix:'',    get:(wx,i)=> wx.hourly.uv_index ? wx.hourly.uv_index[i] : null }
+];
+function activeHourlyFields(){
+  return HOURLY_FIELD_DEFS.filter(f => $(f.id).checked);
+}
+
+function renderHourly(wx){
+  const enabled = $('h_enable').checked && wx.hourly && wx.hourly.time;
+  $('hourlySection').style.display = enabled ? 'block' : 'none';
+  if(!enabled) return;
+
+  const layout = $('hourlyLayout').value;
+  const { hrs } = hourlyVisibleRange(wx);
+  $('hourlySectionLabel').textContent = `Next ${hrs} Hours`;
+  $('hourlyStrip').style.display = layout === 'strip' ? 'flex' : 'none';
+  $('hourlyTableWrap').style.display = layout === 'table' ? 'block' : 'none';
+
+  if(layout === 'strip'){
+    renderHourlyStrip(wx);
+  } else {
+    renderHourlyTable(wx);
+  }
+}
+
+function renderHourlyStrip(wx){
+  const strip = $('hourlyStrip'); strip.innerHTML = '';
+  const { startIdx, endIdx } = hourlyVisibleRange(wx);
+  const fields = activeHourlyFields();
+  let lastDateKey = null;
+  for(let i=startIdx; i<endIdx; i++){
+    const dt = new Date(wx.hourly.time[i]);
+    const dateKey = dt.toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit'});
+    if(dateKey !== lastDateKey){
+      lastDateKey = dateKey;
+      const marker = document.createElement('div');
+      marker.className = 'hr-cell day-marker';
+      marker.textContent = dateKey;
+      strip.appendChild(marker);
+    }
+    const cell = document.createElement('div');
+    cell.className = 'hr-cell';
+    let html = `<div class="t">${dt.getHours()}:00</div>`;
+    fields.forEach((f,fi)=>{
+      const v = f.get(wx,i);
+      if(v === null || v === undefined) return;
+      html += `<div class="${fi===0?'v':'p'}">${fi===0 && f.id==='h_temp' ? v+f.suffix : (f.label+' '+v+f.suffix)}</div>`;
+    });
+    cell.innerHTML = html;
+    strip.appendChild(cell);
+  }
+}
+
+// Table layout: days as rows, fixed hour-of-day slots as columns, each cell packing
+// every toggled field together. This is the classic "forecast grid" shape.
+const TABLE_HOUR_SLOTS = [0,3,6,9,12,15,18,21];
+
+function renderHourlyTable(wx){
+  const { startIdx, endIdx } = hourlyVisibleRange(wx);
+  const fields = activeHourlyFields();
+
+  // Build an index from "YYYY-MM-DDTHH" -> position in wx.hourly.time, restricted to the
+  // visible range, so we can look up each day/hour-slot combo directly.
+  const idx = {};
+  for(let i=startIdx; i<endIdx; i++){
+    const dt = new Date(wx.hourly.time[i]);
+    const key = dt.toISOString().slice(0,10) + 'T' + dt.getHours();
+    idx[key] = i;
+  }
+
+  // Days present in the visible range, in order.
+  const dayKeys = [];
+  for(let i=startIdx; i<endIdx; i++){
+    const dt = new Date(wx.hourly.time[i]);
+    const key = dt.toISOString().slice(0,10);
+    if(!dayKeys.includes(key)) dayKeys.push(key);
+  }
+
+  const head = $('hourlyTableHead');
+  head.innerHTML = '<th>Day</th>' + TABLE_HOUR_SLOTS.map(h=>`<th>${String(h).padStart(2,'0')}:00</th>`).join('');
+
+  const body = $('hourlyTableBody'); body.innerHTML = '';
+  dayKeys.forEach((dayKey, di)=>{
+    const dt = new Date(dayKey + 'T00:00:00');
+    const label = di===0 ? 'Today' : dt.toLocaleDateString('en-US', {weekday:'short'});
+    const tr = document.createElement('tr');
+    let html = `<td>${label}</td>`;
+    TABLE_HOUR_SLOTS.forEach(h=>{
+      const i = idx[dayKey + 'T' + h];
+      if(i === undefined){ html += `<td style="color:var(--rule);">·</td>`; return; }
+      const parts = fields.map(f=>{
+        const v = f.get(wx,i);
+        return (v===null||v===undefined) ? null : `${v}${f.suffix}`;
+      }).filter(Boolean);
+      html += `<td>${parts.length ? parts.join(' ') : '—'}</td>`;
+    });
+    tr.innerHTML = html;
+    body.appendChild(tr);
+  });
+}
+
 function renderBulletin(place, wx){
   const name = [place.name, place.admin1, place.country].filter(Boolean).join(', ');
   $('stationName').textContent = name;
@@ -563,42 +699,7 @@ function renderBulletin(place, wx){
   }
   $('nowDesc').innerHTML = rows.map(r=>`<div class="row"><span class="k">${r[0]}</span><span>${r[1]}</span></div>`).join('');
 
-  if($('h_enable').checked && wx.hourly && wx.hourly.time){
-    $('hourlySection').style.display = 'block';
-    const strip = $('hourlyStrip'); strip.innerHTML = '';
-    const nowTs = Date.now();
-    let startIdx = wx.hourly.time.findIndex(t => new Date(t).getTime() >= nowTs);
-    if(startIdx < 0) startIdx = 0;
-    const hrs = Math.max(1, Math.min(384, parseInt($('hourCount').value) || 24));
-    $('hourlySection').querySelector('.section-label').textContent = `Next ${hrs} Hours`;
-    let lastDateKey = null;
-    for(let i=startIdx; i<Math.min(startIdx+hrs, wx.hourly.time.length); i++){
-      const dt = new Date(wx.hourly.time[i]);
-      const dateKey = dt.toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit'});
-      if(dateKey !== lastDateKey){
-        lastDateKey = dateKey;
-        const marker = document.createElement('div');
-        marker.className = 'hr-cell day-marker';
-        marker.textContent = dateKey;
-        strip.appendChild(marker);
-      }
-      const cell = document.createElement('div');
-      cell.className = 'hr-cell';
-      let html = `<div class="t">${dt.getHours()}:00</div>`;
-      if($('h_temp').checked && wx.hourly.temperature_2m) html += `<div class="v">${Math.round(wx.hourly.temperature_2m[i])}°</div>`;
-      if($('h_feels').checked && wx.hourly.apparent_temperature) html += `<div class="p">FL ${Math.round(wx.hourly.apparent_temperature[i])}°</div>`;
-      if($('h_precip').checked && wx.hourly.precipitation_probability) html += `<div class="p">${wx.hourly.precipitation_probability[i]}%</div>`;
-      if($('h_precipmm').checked && wx.hourly.precipitation) html += `<div class="p">${wx.hourly.precipitation[i]}mm</div>`;
-      if($('h_humidity').checked && wx.hourly.relative_humidity_2m) html += `<div class="p">${wx.hourly.relative_humidity_2m[i]}%RH</div>`;
-      if($('h_wind').checked && wx.hourly.wind_speed_10m) html += `<div class="p">${Math.round(wx.hourly.wind_speed_10m[i])}km/h</div>`;
-      if($('h_cloud').checked && wx.hourly.cloud_cover) html += `<div class="p">${wx.hourly.cloud_cover[i]}%CC</div>`;
-      if($('h_uv').checked && wx.hourly.uv_index) html += `<div class="p">UV${wx.hourly.uv_index[i]}</div>`;
-      cell.innerHTML = html;
-      strip.appendChild(cell);
-    }
-  } else {
-    $('hourlySection').style.display = 'none';
-  }
+  renderHourly(wx);
 
   const cols = [['Day', ()=>true]];
   if($('d_sky').checked) cols.push(['Sky', ()=>true]);
@@ -659,17 +760,26 @@ function estimateHeightMM(widthMM, place, wx){
   if(hasNow) mm += 24;
   if($('h_enable').checked && wx.hourly && wx.hourly.time){
     const hrs = Math.max(1, Math.min(384, parseInt($('hourCount').value) || 24));
-    const nowTs = Date.now();
-    let startIdx = wx.hourly.time.findIndex(t => new Date(t).getTime() >= nowTs);
-    if(startIdx < 0) startIdx = 0;
-    const shownHours = Math.max(0, Math.min(startIdx+hrs, wx.hourly.time.length) - startIdx);
-    const sampleCount = Math.ceil(shownHours / 3);
-    // Roughly 3-4 entries fit per line at narrow widths, more on wide paper; each day also
-    // gets its own line-start, so widen the estimate a bit for many short per-day groups.
-    const perLine = widthMM <= 60 ? 3 : widthMM <= 90 ? 4 : 7;
-    const estDays = Math.min(16, Math.ceil(hrs/24) + 1);
-    const estLines = Math.ceil(sampleCount / perLine) + estDays;
-    mm += 8 + estLines * 3.6;
+    if($('hourlyLayout').value === 'table'){
+      const estDays = Math.min(16, Math.ceil(hrs/24) + 1);
+      const activeFieldCount = HOURLY_FIELD_DEFS.filter(f => $(f.id).checked).length || 1;
+      // Each cell wraps roughly 2 fields per line at typical column widths, so estimate
+      // how many lines the tallest cell in a row will need and size rows accordingly.
+      const linesPerCell = Math.max(1, Math.ceil(activeFieldCount / 2));
+      mm += 8 + estDays * (linesPerCell * 3.2 + 2);
+    } else {
+      const nowTs = Date.now();
+      let startIdx = wx.hourly.time.findIndex(t => new Date(t).getTime() >= nowTs);
+      if(startIdx < 0) startIdx = 0;
+      const shownHours = Math.max(0, Math.min(startIdx+hrs, wx.hourly.time.length) - startIdx);
+      const sampleCount = Math.ceil(shownHours / 3);
+      // Roughly 3-4 entries fit per line at narrow widths, more on wide paper; each day also
+      // gets its own line-start, so widen the estimate a bit for many short per-day groups.
+      const perLine = widthMM <= 60 ? 3 : widthMM <= 90 ? 4 : 7;
+      const estDays = Math.min(16, Math.ceil(hrs/24) + 1);
+      const estLines = Math.ceil(sampleCount / perLine) + estDays;
+      mm += 8 + estLines * 3.6;
+    }
   }
   const dayRows = (wx.daily?.time?.length || 0);
   mm += 10;
@@ -704,6 +814,12 @@ function generateOutput(){
   const fs = fontScaleValue();
   const F = { h1: narrow?16:22, h2: narrow?11:14, meta: narrow?7:8, temp: narrow?26:34, body: narrow?7.5:8.5, tableHead: narrow?7:7.5, table: narrow?7.5:8, small:7 };
   for(const k in F){ F[k] = F[k] * fs; }
+
+  // Shared font size for BOTH the hourly and daily tables, so they always match visually.
+  // Starts as F.table/F.tableHead; if the hourly table is rendered, its fitted size (which
+  // may grow or shrink from column-width math) overwrites these, and the daily table below
+  // then reuses the same final values instead of computing its own independently.
+  let sharedTableFS = F.table, sharedTableHeadFS = F.tableHead;
 
   doc.setFont('courier','bold'); doc.setFontSize(F.h1); doc.setTextColor(...inkColor);
   doc.text('WEATHERPRINT', margin, y);
@@ -758,46 +874,172 @@ function generateOutput(){
 
   if($('h_enable').checked && wx.hourly && wx.hourly.time){
     const hrs = Math.max(1, Math.min(384, parseInt($('hourCount').value) || 24));
-    doc.setFont('courier','bold'); doc.setFontSize(F.small+1); doc.setTextColor(...softColor);
-    doc.text(`NEXT ${hrs}H`, margin, y); y += 11;
     const nowTs = Date.now();
     let startIdx = wx.hourly.time.findIndex(t => new Date(t).getTime() >= nowTs);
     if(startIdx < 0) startIdx = 0;
+    const endIdx = Math.min(startIdx+hrs, wx.hourly.time.length);
+    const hLayout = $('hourlyLayout').value;
 
-    // Group into per-day segments so the printout reads as "19/07  00h ... 21h" / "20/07  00h ...",
-    // instead of one giant paragraph where the date change is invisible.
-    let dayGroups = [];
-    let curDateKey = null, curSeg = null;
-    for(let i=startIdx; i<Math.min(startIdx+hrs, wx.hourly.time.length); i+=3){
-      const dt = new Date(wx.hourly.time[i]);
-      const dateKey = dt.toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit'});
-      if(dateKey !== curDateKey){
-        curDateKey = dateKey;
-        curSeg = { date: dateKey, parts: [] };
-        dayGroups.push(curSeg);
+    doc.setFont('courier','bold'); doc.setFontSize(F.small+1); doc.setTextColor(...softColor);
+    doc.text(`NEXT ${hrs}H`, margin, y); y += 11;
+
+    if(hLayout === 'strip'){
+      // Group into per-day segments so the printout reads as "19/07  00h ... 21h" / "20/07  00h ...",
+      // instead of one giant paragraph where the date change is invisible.
+      let dayGroups = [];
+      let curDateKey = null, curSeg = null;
+      for(let i=startIdx; i<endIdx; i+=3){
+        const dt = new Date(wx.hourly.time[i]);
+        const dateKey = dt.toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit'});
+        if(dateKey !== curDateKey){
+          curDateKey = dateKey;
+          curSeg = { date: dateKey, parts: [] };
+          dayGroups.push(curSeg);
+        }
+        let seg = `${String(dt.getHours()).padStart(2,'0')}h`;
+        if($('h_temp').checked && wx.hourly.temperature_2m) seg += ` ${Math.round(wx.hourly.temperature_2m[i])}°`;
+        if($('h_feels').checked && wx.hourly.apparent_temperature) seg += ` FL${Math.round(wx.hourly.apparent_temperature[i])}°`;
+        if($('h_precip').checked && wx.hourly.precipitation_probability) seg += `/${wx.hourly.precipitation_probability[i]}%`;
+        if($('h_precipmm').checked && wx.hourly.precipitation) seg += ` ${wx.hourly.precipitation[i]}mm`;
+        if($('h_humidity').checked && wx.hourly.relative_humidity_2m) seg += ` ${wx.hourly.relative_humidity_2m[i]}%RH`;
+        if($('h_wind').checked && wx.hourly.wind_speed_10m) seg += ` ${Math.round(wx.hourly.wind_speed_10m[i])}km/h`;
+        if($('h_cloud').checked && wx.hourly.cloud_cover) seg += ` ${wx.hourly.cloud_cover[i]}%CC`;
+        if($('h_uv').checked && wx.hourly.uv_index) seg += ` UV${wx.hourly.uv_index[i]}`;
+        curSeg.parts.push(seg);
       }
-      let seg = `${String(dt.getHours()).padStart(2,'0')}h`;
-      if($('h_temp').checked && wx.hourly.temperature_2m) seg += ` ${Math.round(wx.hourly.temperature_2m[i])}°`;
-      if($('h_feels').checked && wx.hourly.apparent_temperature) seg += ` FL${Math.round(wx.hourly.apparent_temperature[i])}°`;
-      if($('h_precip').checked && wx.hourly.precipitation_probability) seg += `/${wx.hourly.precipitation_probability[i]}%`;
-      if($('h_precipmm').checked && wx.hourly.precipitation) seg += ` ${wx.hourly.precipitation[i]}mm`;
-      if($('h_humidity').checked && wx.hourly.relative_humidity_2m) seg += ` ${wx.hourly.relative_humidity_2m[i]}%RH`;
-      if($('h_wind').checked && wx.hourly.wind_speed_10m) seg += ` ${Math.round(wx.hourly.wind_speed_10m[i])}km/h`;
-      if($('h_cloud').checked && wx.hourly.cloud_cover) seg += ` ${wx.hourly.cloud_cover[i]}%CC`;
-      if($('h_uv').checked && wx.hourly.uv_index) seg += ` UV${wx.hourly.uv_index[i]}`;
-      curSeg.parts.push(seg);
+
+      doc.setFont('courier','normal'); doc.setFontSize(F.small);
+      dayGroups.forEach(grp=>{
+        doc.setFont('courier','bold'); doc.setTextColor(...baroColor);
+        doc.text(grp.date, margin, y);
+        doc.setFont('courier','normal'); doc.setTextColor(...inkColor);
+        const wrapped = doc.splitTextToSize(grp.parts.join('   '), pageWpt - margin*2 - 34);
+        doc.text(wrapped, margin + 34, y);
+        y += Math.max(1, wrapped.length) * (F.small+3);
+      });
+      y += 8;
+    } else {
+      // Table mode: days as rows, fixed hour-of-day slots as columns, each cell packing
+      // every toggled field together — the classic forecast-grid shape.
+      const TABLE_HOUR_SLOTS = [0,3,6,9,12,15,18,21];
+      const hFieldDefs = [
+        { id:'h_temp',     get:(i)=> wx.hourly.temperature_2m ? `${Math.round(wx.hourly.temperature_2m[i])}°` : null },
+        { id:'h_feels',    get:(i)=> wx.hourly.apparent_temperature ? `FL${Math.round(wx.hourly.apparent_temperature[i])}°` : null },
+        { id:'h_precip',   get:(i)=> wx.hourly.precipitation_probability ? `${wx.hourly.precipitation_probability[i]}%` : null },
+        { id:'h_precipmm', get:(i)=> wx.hourly.precipitation !== undefined ? `${wx.hourly.precipitation[i]}mm` : null },
+        { id:'h_humidity', get:(i)=> wx.hourly.relative_humidity_2m ? `${wx.hourly.relative_humidity_2m[i]}%RH` : null },
+        { id:'h_wind',     get:(i)=> wx.hourly.wind_speed_10m ? `${Math.round(wx.hourly.wind_speed_10m[i])}km/h` : null },
+        { id:'h_cloud',    get:(i)=> wx.hourly.cloud_cover ? `${wx.hourly.cloud_cover[i]}%CC` : null },
+        { id:'h_uv',       get:(i)=> wx.hourly.uv_index ? `UV${wx.hourly.uv_index[i]}` : null }
+      ].filter(f => $(f.id).checked);
+
+      // Index visible hours by "YYYY-MM-DDTHH" and collect the ordered list of days present.
+      const idx = {};
+      for(let i=startIdx; i<endIdx; i++){
+        const dt = new Date(wx.hourly.time[i]);
+        idx[dt.toISOString().slice(0,10) + 'T' + dt.getHours()] = i;
+      }
+      const dayKeys = [];
+      for(let i=startIdx; i<endIdx; i++){
+        const key = new Date(wx.hourly.time[i]).toISOString().slice(0,10);
+        if(!dayKeys.includes(key)) dayKeys.push(key);
+      }
+
+      // Each cell is a LIST of field strings (not one joined line), so we can wrap them
+      // onto multiple lines within a capped column width instead of overflowing sideways.
+      const fieldsFor = (dayKey, hour) => {
+        const i = idx[dayKey + 'T' + hour];
+        if(i === undefined) return null; // no data for this slot
+        const parts = hFieldDefs.map(f => f.get(i)).filter(Boolean);
+        return parts.length ? parts : ['-'];
+      };
+
+      const tColDefs = [{ head:'DAY', isLabel:true }];
+      TABLE_HOUR_SLOTS.forEach(h => tColDefs.push({ head:`${String(h).padStart(2,'0')}h` }));
+
+      // Precompute every cell's field list per day/column.
+      const grid = dayKeys.map(d => tColDefs.map((col,ci)=>{
+        if(ci===0) return null; // day-label column handled separately
+        return fieldsFor(d, TABLE_HOUR_SLOTS[ci-1]);
+      }));
+
+      const GAP4 = 6;
+      const availableW4 = rightX - margin;
+
+      // Cap each data column to a max width (in chars, converted to pt at the chosen font
+      // size) so one long field list can't blow the table sideways — long lists wrap instead.
+      // At larger font scales we shrink the char cap a bit too, so bigger text still fits by
+      // wrapping onto more lines rather than being blocked outright by the width constraint.
+      const MAX_COL_CHARS = Math.max(6, Math.round((narrow ? 8 : 11) / Math.sqrt(fs)));
+      const dayLabelChars = 5; // "TODAY"
+
+      function widthForChars(fs, chars){
+        doc.setFont('courier','normal'); doc.setFontSize(fs);
+        return doc.getTextWidth('M'.repeat(chars)); // courier is monospace, any char works
+      }
+
+      // Find the largest font size that still fits the available width — search both
+      // up and down from a reasonable starting point instead of only ever shrinking.
+      // The ceiling/floor scale with the user's font-size setting (fs) so "XL" can
+      // actually land bigger than "Normal" instead of both converging on the same cap.
+      const fsFloor = 5 * fs;
+      const fsCeiling = 13 * fs;
+      let dayColW = widthForChars(sharedTableFS, dayLabelChars);
+      let dataColW = widthForChars(sharedTableFS, MAX_COL_CHARS);
+      let tTotal = dayColW + dataColW*(tColDefs.length-1) + GAP4*(tColDefs.length-1);
+
+      if(tTotal > availableW4){
+        while(tTotal > availableW4 && sharedTableFS > fsFloor){
+          sharedTableFS -= 0.5; sharedTableHeadFS = Math.max(fsFloor, sharedTableHeadFS - 0.3);
+          dayColW = widthForChars(sharedTableFS, dayLabelChars);
+          dataColW = widthForChars(sharedTableFS, MAX_COL_CHARS);
+          tTotal = dayColW + dataColW*(tColDefs.length-1) + GAP4*(tColDefs.length-1);
+        }
+      } else {
+        while(true){
+          const nextFS = sharedTableFS + 0.5;
+          const nextHeadFS = sharedTableHeadFS + 0.3;
+          const nextDayColW = widthForChars(nextFS, dayLabelChars);
+          const nextDataColW = widthForChars(nextFS, MAX_COL_CHARS);
+          const nextTotal = nextDayColW + nextDataColW*(tColDefs.length-1) + GAP4*(tColDefs.length-1);
+          if(nextTotal > availableW4 || nextFS > fsCeiling) break;
+          sharedTableFS = nextFS; sharedTableHeadFS = nextHeadFS; dayColW = nextDayColW; dataColW = nextDataColW; tTotal = nextTotal;
+        }
+      }
+      const tFS = sharedTableFS, tHeadFS = sharedTableHeadFS;
+
+      const tColW = [dayColW, ...Array(tColDefs.length-1).fill(dataColW)];
+      const tColX = [margin];
+      for(let i=0;i<tColW.length;i++) tColX.push(tColX[i] + tColW[i] + GAP4);
+
+      doc.setFont('courier','bold'); doc.setFontSize(tHeadFS); doc.setTextColor(...softColor);
+      tColDefs.forEach((c,i)=> doc.text(c.head, tColX[i], y));
+      y += 4;
+      doc.setDrawColor(...inkColor); doc.setLineWidth(1); doc.line(margin, y, rightX, y);
+      y += 10;
+
+      const lineH = tFS + 3;
+      doc.setFont('courier','normal'); doc.setFontSize(tFS);
+      dayKeys.forEach((d,di)=>{
+        // Wrap each cell's field list to the column width, then take the tallest cell in
+        // this row (in line-count) to set the row height — this is the actual fix.
+        const wrappedRow = tColDefs.map((col,ci)=>{
+          if(ci===0) return [di===0 ? 'TODAY' : new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'short'}).toUpperCase()];
+          const fields = grid[di][ci];
+          if(fields === null) return ['·'];
+          return doc.splitTextToSize(fields.join(' '), dataColW);
+        });
+        const rowLines = Math.max(...wrappedRow.map(w => w.length));
+
+        wrappedRow.forEach((lines, ci)=>{
+          doc.setTextColor(ci===0 ? baroColor[0] : inkColor[0], ci===0 ? baroColor[1] : inkColor[1], ci===0 ? baroColor[2] : inkColor[2]);
+          doc.text(lines, tColX[ci], y);
+        });
+        y += rowLines * lineH + 3;
+      });
+      y += 6;
     }
 
-    doc.setFont('courier','normal'); doc.setFontSize(F.small);
-    dayGroups.forEach(grp=>{
-      doc.setFont('courier','bold'); doc.setTextColor(...baroColor);
-      doc.text(grp.date, margin, y);
-      doc.setFont('courier','normal'); doc.setTextColor(...inkColor);
-      const wrapped = doc.splitTextToSize(grp.parts.join('   '), pageWpt - margin*2 - 34);
-      doc.text(wrapped, margin + 34, y);
-      y += Math.max(1, wrapped.length) * (F.small+3);
-    });
-    y += 8;
     doc.setDrawColor(...ruleGray); doc.setLineDashPattern([2,2],0); doc.line(margin, y, rightX, y); doc.setLineDashPattern([],0);
     y += 16;
   }
@@ -828,8 +1070,8 @@ function generateOutput(){
   // really be printed with, then distribute the leftover page width proportionally so the
   // table always fills the sheet edge-to-edge instead of using fixed guessed widths.
   const colPad = narrow ? 8 : 12;
-  const headerFont = () => { doc.setFont('courier','bold'); doc.setFontSize(F.tableHead); };
-  const bodyFont = () => { doc.setFont('courier','normal'); doc.setFontSize(F.table); };
+  const headerFont = () => { doc.setFont('courier','bold'); doc.setFontSize(sharedTableHeadFS); };
+  const bodyFont = () => { doc.setFont('courier','normal'); doc.setFontSize(sharedTableFS); };
 
   const naturalW = cols.map(col=>{
     headerFont();
@@ -849,13 +1091,13 @@ function generateOutput(){
   let colX = [margin];
   for(let i=0;i<cols.length;i++) colX.push(colX[i] + colW[i]);
 
-  doc.setFont('courier','bold'); doc.setFontSize(F.tableHead); doc.setTextColor(...softColor);
+  doc.setFont('courier','bold'); doc.setFontSize(sharedTableHeadFS); doc.setTextColor(...softColor);
   cols.forEach((col,i)=> doc.text(col[0], colX[i], y));
   y += 4;
   doc.setDrawColor(...inkColor); doc.setLineWidth(1); doc.line(margin, y, rightX, y);
   y += 10;
 
-  doc.setFont('courier','normal'); doc.setFontSize(F.table);
+  doc.setFont('courier','normal'); doc.setFontSize(sharedTableFS);
   times.forEach((d, i)=>{
     const dt = new Date(d + 'T00:00:00');
     const dayName = i===0 ? 'TODAY' : dt.toLocaleDateString('en-US', {weekday:'short'}).toUpperCase();
@@ -877,7 +1119,7 @@ function generateOutput(){
       doc.text(sr, colX[ci++], y); doc.text(ss, colX[ci++], y);
     }
     if($('d_humidity').checked){ doc.text(`${daily.relative_humidity_2m_mean?.[i] ?? '-'}%`, colX[ci++], y); }
-    y += F.table + 6;
+    y += sharedTableFS + 6;
   });
 
   y += 6;
