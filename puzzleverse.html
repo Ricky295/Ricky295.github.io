@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -257,12 +256,13 @@
             <div class="text-center font-extrabold text-slate-200 text-sm">
                 Skill breakdown:
             </div>
-            <div class="w-full bg-slate-950 rounded-xl h-6 overflow-hidden border border-slate-700 p-0.5">
-                <div class="bg-sky-400 h-full rounded-lg transition-all duration-500" style="width: 100%"></div>
+            <div class="w-full bg-slate-950 rounded-xl h-6 overflow-hidden border border-slate-700 p-0.5 flex gap-0.5">
+                <div class="bg-sky-400 h-full transition-all duration-500 rounded-l-lg" style="width: 75%"></div>
+                <div class="bg-pink-400 h-full transition-all duration-500 rounded-r-lg" style="width: 25%"></div>
             </div>
             <div class="flex justify-between items-center text-xs font-bold pt-1">
-                <span class="text-sky-400 text-sm">Logic - 100%</span>
-                <span class="text-slate-400">Guesswork - 0%</span>
+                <span class="text-sky-400 text-sm">Logic - 75%</span>
+                <span class="text-pink-400 text-sm">Visual - 25%</span>
             </div>
         </div>
     </div>
@@ -440,7 +440,6 @@
             },
             {
                 id: 'sufufu',
-                comingSoon: true,
                 category: 'logic',
                 categoryName: 'Cat. 1: Logic',
                 title: 'Sufufu (TwinDoku)',
@@ -455,7 +454,6 @@
             // Cat 2: Math
             {
                 id: 'mathdoku',
-                comingSoon: true,
                 category: 'math',
                 categoryName: 'Cat. 2: Math',
                 title: 'Mathdoku',
@@ -468,7 +466,6 @@
             },
             {
                 id: 'shikaku',
-                comingSoon: true,
                 category: 'math',
                 categoryName: 'Cat. 2: Math',
                 title: 'Shikaku',
@@ -483,7 +480,6 @@
             // Cat 3: Routing
             {
                 id: 'snap',
-                comingSoon: true,
                 category: 'routing',
                 categoryName: 'Cat. 3: Routing',
                 title: 'Snap',
@@ -496,7 +492,6 @@
             },
             {
                 id: 'tubes',
-                comingSoon: true,
                 category: 'routing',
                 categoryName: 'Cat. 3: Routing',
                 title: 'Tubes',
@@ -511,7 +506,6 @@
             // Cat 4: Connectivity
             {
                 id: 'atoms',
-                comingSoon: true,
                 category: 'connectivity',
                 categoryName: 'Cat. 4: Connectivity',
                 title: 'Atoms',
@@ -524,7 +518,6 @@
             },
             {
                 id: 'king',
-                comingSoon: true,
                 category: 'connectivity',
                 categoryName: 'Cat. 4: Connectivity',
                 title: 'King',
@@ -539,7 +532,6 @@
             // Cat 5: Visual
             {
                 id: 'mosaic',
-                comingSoon: true,
                 category: 'visual',
                 categoryName: 'Cat. 5: Visual',
                 title: 'Mosaic',
@@ -552,7 +544,6 @@
             },
             {
                 id: 'mambo',
-                comingSoon: true,
                 category: 'visual',
                 categoryName: 'Cat. 5: Visual',
                 title: 'Mambo',
@@ -802,11 +793,11 @@
 
                         card.className = `game-card glass-panel rounded-3xl p-5 flex flex-col justify-between border border-slate-800 hover:border-indigo-500/50 group relative overflow-hidden ${isComingSoon ? 'opacity-80' : 'cursor-pointer'}`;
                         card.onclick = () => {
-                            if (isComingSoon) {
-                                AudioEngine.playClick();
-                                this.showToast(`${game.title} is Coming Soon! Play Sudoku for now.`);
-                            } else {
+                            AudioEngine.playClick();
+                            if (game.id === 'sudoku') {
                                 this.openSudokuDifficultyModal();
+                            } else {
+                                this.startGame(game.id);
                             }
                         };
 
@@ -834,9 +825,15 @@
                                         🔒 Locked
                                     </span>
                                 ` : `
-                                    <span class="text-indigo-400 flex items-center gap-1 bg-indigo-950/60 px-2.5 py-1 rounded-lg border border-indigo-800/50">
-                                        🧠 100% Logic
-                                    </span>
+                                    ${game.id === 'sudoku' ? `
+                                        <span class="text-indigo-400 flex items-center gap-1 bg-indigo-950/60 px-2.5 py-1 rounded-lg border border-indigo-800/50">
+                                            🧠 Logic + Visual
+                                        </span>
+                                    ` : `
+                                        <span class="text-indigo-400 flex items-center gap-1 bg-indigo-950/60 px-2.5 py-1 rounded-lg border border-indigo-800/50">
+                                            🧠 100% Logic
+                                        </span>
+                                    `}
                                     <div class="flex items-center gap-2">
                                         <span class="text-indigo-400 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                                             Play
@@ -1138,12 +1135,36 @@
                 document.getElementById('help-modal').classList.add('hidden');
             },
 
+            startGame(gameId) {
+                this.activeGameId = gameId;
+                this.currentLevel = 1;
+                this.hintsUsed = 0;
+                this.mistakesMade = 0;
+
+                const config = GAMES_CONFIG.find(g => g.id === gameId);
+                document.getElementById('active-game-title').innerText = config.title;
+                document.getElementById('main-menu-screen').classList.add('hidden');
+                document.getElementById('game-play-screen').classList.remove('hidden');
+                document.getElementById('level-selector-bar').innerHTML = '';
+
+                this.startTimer();
+                this.loadPuzzleEngine(gameId, this.currentLevel);
+            },
+
             loadPuzzleEngine(gameId, level) {
                 const area = document.getElementById('puzzle-area');
                 area.innerHTML = '';
 
                 if (gameId === 'sudoku') {
                     SudokuEngine.init(area, this.selectedSudokuDifficulty || 'medium');
+                    return;
+                }
+
+                const engine = GAME_ENGINES[gameId];
+                if (engine && typeof engine.init === 'function') {
+                    engine.init(area, level || 1);
+                } else {
+                    area.innerHTML = `<p class="text-slate-400 text-sm py-8">This game isn't wired up yet.</p>`;
                 }
             }
         };
@@ -2141,9 +2162,6 @@
                                 <input type="checkbox" id="sudoku-auto-clean" ${this.autoRemoveCandidates ? 'checked' : ''} onchange="SudokuEngine.toggleAutoClean(this.checked)" class="w-3.5 h-3.5 accent-sky-500 rounded">
                                 Auto-clean notes
                             </label>
-                            <span class="text-emerald-400 font-bold bg-emerald-950/80 px-2.5 py-1 rounded-lg border border-emerald-800/60 whitespace-nowrap">
-                                🧠 100% Logic
-                            </span>
                         </div>
 
                         <div id="sudoku-loading" class="text-slate-400 text-sm py-8 flex flex-col items-center gap-3">
@@ -3504,6 +3522,19 @@
                     }
                 }
             }
+        };
+
+        const GAME_ENGINES = {
+            sudoku: SudokuEngine,
+            sufufu: SufufuEngine,
+            mathdoku: MathdokuEngine,
+            shikaku: ShikakuEngine,
+            snap: SnapEngine,
+            tubes: TubesEngine,
+            atoms: AtomsEngine,
+            king: KingEngine,
+            mosaic: MosaicEngine,
+            mambo: MamboEngine
         };
 
         window.onload = () => {
