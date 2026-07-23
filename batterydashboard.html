@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Battery Diagnostics</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap');
+
+  :root {
+    --bg: #16181a;
+    --panel: #1e2124;
+    --line: #33383d;
+    --phosphor: #ffb454;
+    --phosphor-dim: #8a6a3a;
+    --ok: #7ee08a;
+    --bad: #ff6b6b;
+    --text: #d8dadc;
+    --text-dim: #7a7f84;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(255,180,84,0.05), transparent 40%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 3px);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    padding: 40px 20px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .scope {
+    width: 100%;
+    max-width: 760px;
+  }
+
+  .scope-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 2px solid var(--line);
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+
+  h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin: 0;
+    color: var(--text);
+  }
+
+  h1 span {
+    color: var(--phosphor);
+  }
+
+  .unit-tag {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  /* Gauge */
+  .gauge-row {
+    display: flex;
+    gap: 28px;
+    align-items: center;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+
+  .gauge {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    flex-shrink: 0;
+  }
+
+  .gauge svg { transform: rotate(-90deg); }
+
+  .gauge-track {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: 10;
+  }
+
+  .gauge-fill {
+    fill: none;
+    stroke: var(--phosphor);
+    stroke-width: 10;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.8s ease, stroke 0.4s ease;
+    filter: drop-shadow(0 0 6px rgba(255,180,84,0.5));
+  }
+
+  .gauge-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .gauge-pct {
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--phosphor);
+  }
+
+  .gauge-state {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .summary-lines {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .summary-line {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    border-bottom: 1px dashed var(--line);
+    padding-bottom: 8px;
+  }
+
+  .summary-line .k { color: var(--text-dim); }
+  .summary-line .v { color: var(--text); font-weight: 500; }
+  .summary-line .v.charging { color: var(--ok); }
+
+  /* Stat grid */
+  .grid-title {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--phosphor-dim);
+    margin: 28px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .grid-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .stat-cell {
+    background: var(--panel);
+    padding: 16px;
+  }
+
+  .stat-cell .label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .stat-cell .value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .stat-cell .value.live {
+    color: var(--phosphor);
+  }
+
+  .stat-cell .sub {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  /* Event log */
+  .log {
+    margin-top: 24px;
+    background: #101214;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 16px;
+    height: 120px;
+    overflow-y: auto;
+    font-size: 11px;
+    color: var(--ok);
+  }
+
+  .log div { padding: 2px 0; opacity: 0.9; }
+  .log div span { color: var(--text-dim); margin-right: 8px; }
+
+  /* Unsupported state */
+  .unsupported {
+    background: var(--panel);
+    border: 1px solid var(--bad);
+    border-radius: 6px;
+    padding: 28px;
+    text-align: center;
+  }
+
+  .unsupported .icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+  }
+
+  .unsupported .msg {
+    color: var(--bad);
+    font-weight: 700;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+
+  .unsupported .detail {
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  .blink {
+    animation: blink 1.6s infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="scope">
+  <div class="scope-header">
+    <h1>BATTERY<span>::</span>DIAGNOSTICS</h1>
+    <div class="unit-tag" id="clock">--:--:--</div>
+  </div>
+
+  <div id="content">
+    <!-- populated by JS -->
+  </div>
+</div>
+
+<script>
+const content = document.getElementById('content');
+const clockEl = document.getElementById('clock');
+
+function tickClock() {
+  clockEl.textContent = new Date().toLocaleTimeString('en-GB');
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+function renderUnsupported(reason) {
+  content.innerHTML = `
+    <div class="unsupported">
+      <div class="icon">⚠</div>
+      <div class="msg blink">SIGNAL NOT DETECTED</div>
+      <div class="detail">${reason}<br><br>
+      The Battery Status API was removed from most browsers (Chrome restricted it, Firefox/Safari never shipped it) over device-fingerprinting privacy concerns. Try an older Chromium build or a Chromium-based Android browser to see live readings.</div>
+    </div>
+  `;
+}
+
+function renderScope() {
+  content.innerHTML = `
+    <div class="gauge-row">
+      <div class="gauge">
+        <svg width="140" height="140" viewBox="0 0 140 140">
+          <circle class="gauge-track" cx="70" cy="70" r="58"></circle>
+          <circle id="gaugeFill" class="gauge-fill" cx="70" cy="70" r="58"
+            stroke-dasharray="364" stroke-dashoffset="364"></circle>
+        </svg>
+        <div class="gauge-label">
+          <div class="gauge-pct" id="gaugePct">--%</div>
+          <div class="gauge-state" id="gaugeState">reading</div>
+        </div>
+      </div>
+      <div class="summary-lines">
+        <div class="summary-line"><span class="k">CHARGING STATE</span><span class="v" id="sumCharging">--</span></div>
+        <div class="summary-line"><span class="k">TIME TO FULL</span><span class="v" id="sumChargingTime">--</span></div>
+        <div class="summary-line"><span class="k">TIME TO EMPTY</span><span class="v" id="sumDischargingTime">--</span></div>
+        <div class="summary-line"><span class="k">EVENTS LOGGED</span><span class="v" id="sumEvents">0</span></div>
+      </div>
+    </div>
+
+    <div class="grid-title">raw properties</div>
+    <div class="stat-grid">
+      <div class="stat-cell">
+        <div class="label">charging</div>
+        <div class="value live" id="rawCharging">--</div>
+        <div class="sub">boolean</div>
+      </div>
+      <div class="stat-cell">
+        <div class="label">level</div>
+        <div class="value live" id="rawLevel">--</div>
+        <div class="sub">0.0 – 1.0</div>
+      </div>
+      <div class="stat-cell">
+        <div class="label">chargingTime</div>
+        <div class="value live" id="rawChargingTime">--</div>
+        <div class="sub">seconds (Infinity if N/A)</div>
+      </div>
+      <div class="stat-cell">
+        <div class="label">dischargingTime</div>
+        <div class="value live" id="rawDischargingTime">--</div>
+        <div class="sub">seconds (Infinity if N/A)</div>
+      </div>
+    </div>
+
+    <div class="grid-title">event log</div>
+    <div class="log" id="eventLog"></div>
+  `;
+
+  const gaugeFill = document.getElementById('gaugeFill');
+  const gaugePct = document.getElementById('gaugePct');
+  const gaugeState = document.getElementById('gaugeState');
+  const sumCharging = document.getElementById('sumCharging');
+  const sumChargingTime = document.getElementById('sumChargingTime');
+  const sumDischargingTime = document.getElementById('sumDischargingTime');
+  const sumEvents = document.getElementById('sumEvents');
+  const rawCharging = document.getElementById('rawCharging');
+  const rawLevel = document.getElementById('rawLevel');
+  const rawChargingTime = document.getElementById('rawChargingTime');
+  const rawDischargingTime = document.getElementById('rawDischargingTime');
+  const eventLog = document.getElementById('eventLog');
+
+  let eventCount = 0;
+  const CIRC = 364;
+
+  function fmtTime(seconds) {
+    if (seconds === Infinity || seconds === undefined || seconds === null) return 'N/A';
+    if (seconds === 0) return '0s';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  }
+
+  function logEvent(msg) {
+    eventCount++;
+    sumEvents.textContent = eventCount;
+    const t = new Date().toLocaleTimeString('en-GB');
+    const div = document.createElement('div');
+    div.innerHTML = `<span>[${t}]</span>${msg}`;
+    eventLog.prepend(div);
+  }
+
+  function paint(battery) {
+    const pct = Math.round(battery.level * 100);
+    const offset = CIRC - (CIRC * battery.level);
+    gaugeFill.style.strokeDashoffset = offset;
+    gaugeFill.style.stroke = pct <= 20 && !battery.charging ? 'var(--bad)' : 'var(--phosphor)';
+    gaugePct.textContent = pct + '%';
+    gaugeState.textContent = battery.charging ? 'charging' : 'on battery';
+
+    sumCharging.textContent = battery.charging ? 'CHARGING' : 'DISCHARGING';
+    sumCharging.className = 'v' + (battery.charging ? ' charging' : '');
+    sumChargingTime.textContent = battery.charging ? fmtTime(battery.chargingTime) : 'N/A';
+    sumDischargingTime.textContent = !battery.charging ? fmtTime(battery.dischargingTime) : 'N/A';
+
+    rawCharging.textContent = String(battery.charging);
+    rawLevel.textContent = battery.level.toFixed(2);
+    rawChargingTime.textContent = battery.chargingTime === Infinity ? 'Infinity' : battery.chargingTime + 's';
+    rawDischargingTime.textContent = battery.dischargingTime === Infinity ? 'Infinity' : battery.dischargingTime + 's';
+  }
+
+  navigator.getBattery().then(battery => {
+    paint(battery);
+    logEvent('Connected to battery manager.');
+
+    battery.addEventListener('chargingchange', () => {
+      paint(battery);
+      logEvent(`chargingchange → ${battery.charging}`);
+    });
+    battery.addEventListener('levelchange', () => {
+      paint(battery);
+      logEvent(`levelchange → ${battery.level.toFixed(2)}`);
+    });
+    battery.addEventListener('chargingtimechange', () => {
+      paint(battery);
+      logEvent(`chargingtimechange → ${battery.chargingTime}`);
+    });
+    battery.addEventListener('dischargingtimechange', () => {
+      paint(battery);
+      logEvent(`dischargingtimechange → ${battery.dischargingTime}`);
+    });
+  }).catch(err => {
+    renderUnsupported('getBattery() rejected: ' + err.message);
+  });
+}
+
+if ('getBattery' in navigator) {
+  renderScope();
+} else {
+  renderUnsupported('navigator.getBattery is not present in this browser.');
+}
+</script>
+
+</body>
+</html>
