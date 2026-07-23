@@ -511,6 +511,27 @@
             border-color: #a78bfa;
             box-shadow: 0 4px 10px rgba(139, 92, 246, 0.3);
         }
+
+        .mode-btn, .cpu-level-btn {
+            flex: 1;
+            background: #27273a;
+            border: 1px solid var(--border-color);
+            box-shadow: none;
+            font-size: 0.85rem;
+            padding: 8px;
+            color: var(--text-main);
+        }
+        .mode-btn.active, .cpu-level-btn.active {
+            background: var(--accent-primary);
+            border-color: #a78bfa;
+            box-shadow: 0 4px 10px rgba(139, 92, 246, 0.3);
+        }
+
+        .path-hint {
+            outline: 2px solid #38bdf8 !important;
+            outline-offset: -2px;
+            z-index: 5;
+        }
     </style>
 </head>
 <body>
@@ -535,8 +556,75 @@
             <div id="sudoku-left-stat" class="stat-value">-- / --</div>
         </div>
         <div class="stat-card">
+            <div class="stat-label">Puzzles Done</div>
+            <div id="puzzles-done-stat" class="stat-value">0 / 1</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Labyrinth Moves</div>
+            <div id="lab-moves-stat" class="stat-value">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">On-Screen Moves</div>
+            <div id="screen-moves-stat" class="stat-value">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Moves/Sec (Now)</div>
+            <div id="mps-now-stat" class="stat-value">0.0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Moves/Sec (Avg)</div>
+            <div id="mps-avg-stat" class="stat-value">0.0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Moves/Sec (Max)</div>
+            <div id="mps-max-stat" class="stat-value">0.0</div>
+        </div>
+        <div class="stat-card">
             <div class="stat-label">Audio Synth</div>
             <button id="muteBtn" class="secondary" style="width:100%; padding: 4px 8px; font-size: 0.75rem;">🔊 Sound ON</button>
+        </div>
+    </div>
+
+    <!-- Mode Selector -->
+    <div class="panel" style="width:100%; max-width:1200px; margin-bottom:15px;">
+        <div class="panel-title">
+            <span>Game Mode</span>
+            <span id="mode-indicator" style="font-size:0.75rem; color:var(--accent-warning);">Normal</span>
+        </div>
+        <div class="diff-selector" style="margin-bottom:10px;">
+            <button class="mode-btn active" data-mode="normal">Normal</button>
+            <button class="mode-btn" data-mode="vscpu">Vs CPU</button>
+            <button class="mode-btn" data-mode="tas">TAS (Auto)</button>
+        </div>
+        <div id="vscpu-options" class="hidden" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <span class="stat-label" style="margin:0;">CPU Level:</span>
+            <div class="diff-selector" style="margin:0; flex:none;">
+                <button class="cpu-level-btn" data-cpulevel="easy">Easy</button>
+                <button class="cpu-level-btn active" data-cpulevel="medium">Medium</button>
+                <button class="cpu-level-btn" data-cpulevel="hard">Hard</button>
+            </div>
+            <span class="stat-label" style="margin:0;">CPU Status:</span>
+            <span id="cpu-status" class="stat-value" style="font-size:0.9rem;">Idle</span>
+            <span class="stat-label" style="margin:0;">CPU Moves/s:</span>
+            <span id="cpu-mps" class="stat-value" style="font-size:0.9rem;">0.0</span>
+            <span class="stat-label" style="margin:0;">CPU Progress:</span>
+            <span id="cpu-progress" class="stat-value" style="font-size:0.9rem;">0/0</span>
+        </div>
+        <div id="tas-options" class="hidden" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <label class="stat-label" style="margin:0; display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="tas-auto-maze" checked> Auto-Labyrinth
+            </label>
+            <label class="stat-label" style="margin:0; display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="tas-auto-sudoku" checked> Auto-Sudoku
+            </label>
+            <label class="stat-label" style="margin:0; display:flex; align-items:center; gap:6px;">
+                Bot Speed:
+                <input type="range" id="tas-speed" min="1" max="60" value="15" style="width:100px;">
+                <span id="tas-speed-label">15 mv/s</span>
+            </label>
+            <label class="stat-label" style="margin:0; display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="tas-show-path" checked> Show Path-to-Target
+            </label>
         </div>
     </div>
 
@@ -594,6 +682,10 @@
                     <button class="diff-btn" data-diff="easy">Easy</button>
                     <button class="diff-btn active" data-diff="medium">Medium</button>
                     <button class="diff-btn" data-diff="hard">Hard</button>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; justify-content:center; margin-bottom:15px;">
+                    <label for="puzzleCountInput" class="stat-label" style="margin:0;">Sudokus to solve (same labyrinth):</label>
+                    <input type="number" id="puzzleCountInput" min="1" max="50" value="1" style="width:60px; background:#1e1e2d; color:var(--text-main); border:1px solid var(--border-color); border-radius:6px; padding:6px; text-align:center; font-weight:700;">
                 </div>
 
                 <!-- 9x9 Sudoku Grid as a Table -->
@@ -726,12 +818,116 @@
         let gameActive = false;
         let timerInterval = null;
 
+        // --- Mode & Puzzle-Count States ---
+        let gameMode = 'normal'; // 'normal' | 'vscpu' | 'tas'
+        let cpuLevel = 'medium';
+        let puzzleCount = 1;
+        let puzzlesCompleted = 0;
+
+        const CPU_PROFILES = {
+            easy:   { mps: 2,  boxHS: 25, lineHS: 40, nakedSingle: 60, switchTime: 20 },
+            medium: { mps: 5,  boxHS: 15, lineHS: 25, nakedSingle: 35, switchTime: 10 },
+            hard:   { mps: 10, boxHS: 10, lineHS: 15, nakedSingle: 20, switchTime: 5 }
+        };
+
+        // --- Move / Moves-per-second Stat Tracking (Labyrinth) ---
+        let labyrinthMoveCount = 0;   // total moves made in the labyrinth (this puzzle-cycle run)
+        let onScreenMoveCount = 0;    // total moves made while the maze viewport was the visible/active one
+        let moveTimestamps = [];      // rolling timestamps (ms) of recent moves, for "instant" mps window
+        let maxMovesPerSec = 0;
+        const MPS_WINDOW_MS = 1000;   // 1-second rolling window for "instant" moves/sec
+
+        function recordLabyrinthMove(isOnScreen) {
+            labyrinthMoveCount++;
+            if (isOnScreen) onScreenMoveCount++;
+            const now = performance.now();
+            moveTimestamps.push(now);
+            // Trim anything older than the rolling window
+            const cutoff = now - MPS_WINDOW_MS;
+            while (moveTimestamps.length && moveTimestamps[0] < cutoff) moveTimestamps.shift();
+            const instantMps = moveTimestamps.length; // moves within last 1000ms == moves/sec
+            if (instantMps > maxMovesPerSec) maxMovesPerSec = instantMps;
+        }
+
+        function computeAverageMps() {
+            if (!gameActive && labyrinthMoveCount === 0) return 0;
+            const elapsedSec = (performance.now() - startTime) / 1000;
+            if (elapsedSec <= 0) return 0;
+            return labyrinthMoveCount / elapsedSec;
+        }
+
+        function resetMoveStats() {
+            labyrinthMoveCount = 0;
+            onScreenMoveCount = 0;
+            moveTimestamps = [];
+            maxMovesPerSec = 0;
+        }
+
+        function updateMoveStatsHUD() {
+            document.getElementById('lab-moves-stat').innerText = labyrinthMoveCount;
+            document.getElementById('screen-moves-stat').innerText = onScreenMoveCount;
+            const now = performance.now();
+            const cutoff = now - MPS_WINDOW_MS;
+            while (moveTimestamps.length && moveTimestamps[0] < cutoff) moveTimestamps.shift();
+            const instantMps = moveTimestamps.length;
+            document.getElementById('mps-now-stat').innerText = instantMps.toFixed(1);
+            document.getElementById('mps-avg-stat').innerText = computeAverageMps().toFixed(1);
+            document.getElementById('mps-max-stat').innerText = maxMovesPerSec.toFixed(1);
+            document.getElementById('puzzles-done-stat').innerText = `${puzzlesCompleted} / ${puzzleCount}`;
+        }
+
         // Start initialization
         window.addEventListener('DOMContentLoaded', () => {
             setupDifficultyToggles();
             setupDPadControls();
+            setupModeToggles();
+            setupCpuLevelToggles();
+            setupTasControls();
             startNewGame();
         });
+
+        // --- Mode Selector Setup ---
+        function setupModeToggles() {
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    gameMode = e.target.getAttribute('data-mode');
+
+                    const labels = { normal: 'Normal', vscpu: 'Vs CPU', tas: 'TAS (Auto)' };
+                    document.getElementById('mode-indicator').innerText = labels[gameMode];
+
+                    document.getElementById('vscpu-options').classList.toggle('hidden', gameMode !== 'vscpu');
+                    document.getElementById('tas-options').classList.toggle('hidden', gameMode !== 'tas');
+
+                    startNewGame();
+                });
+            });
+        }
+
+        function setupCpuLevelToggles() {
+            document.querySelectorAll('.cpu-level-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.cpu-level-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    cpuLevel = e.target.getAttribute('data-cpulevel');
+                    if (gameMode === 'vscpu') startNewGame();
+                });
+            });
+        }
+
+        function setupTasControls() {
+            const speedSlider = document.getElementById('tas-speed');
+            const speedLabel = document.getElementById('tas-speed-label');
+            speedSlider.addEventListener('input', () => {
+                speedLabel.innerText = `${speedSlider.value} mv/s`;
+            });
+            document.getElementById('tas-auto-maze').addEventListener('change', () => { /* read live in loop */ });
+            document.getElementById('tas-auto-sudoku').addEventListener('change', () => { /* read live in loop */ });
+            document.getElementById('tas-show-path').addEventListener('change', () => {
+                if (!document.getElementById('tas-show-path').checked) clearPathHint();
+            });
+        }
 
         // Setup Difficulty buttons
         function setupDifficultyToggles() {
@@ -781,6 +977,10 @@
             inventory.fill(0);
             selectedSudokuIndex = null;
             selectedInventoryNum = null;
+            puzzlesCompleted = 0;
+
+            const countInput = document.getElementById('puzzleCountInput');
+            puzzleCount = Math.max(1, parseInt(countInput.value, 10) || 1);
 
             // Step 1: Generate Sudoku First (to count exact missing numbers we must supply in maze)
             generateSudokuPuzzle();
@@ -801,6 +1001,7 @@
             clearInterval(timerInterval);
             startTime = performance.now();
             timerInterval = setInterval(updateRunningTimer, 100);
+            resetMoveStats();
 
             // Refreshes
             renderInventorySlots();
@@ -808,8 +1009,31 @@
             renderMazeViewport();
             drawMinimap();
             updateHUDStats();
-            
+
             sounds.lootMystery(); // Chime indicating load complete
+
+            stopCpuSimulation();
+            stopTasBot();
+            if (gameMode === 'vscpu') startCpuSimulation();
+            if (gameMode === 'tas') startTasBot();
+        }
+
+        // Advances to the next sudoku puzzle while KEEPING the same labyrinth
+        // (maze layout + remaining item drops carry over; only the puzzle + its
+        // required items are regenerated on top of the existing maze).
+        function startNextPuzzleSameLabyrinth() {
+            selectedSudokuIndex = null;
+            selectedInventoryNum = null;
+            inventory.fill(0);
+
+            generateSudokuPuzzle();
+            populateMazeWithKeyItems(); // scatter new required digits into the same maze
+
+            renderInventorySlots();
+            renderSudokuBoard();
+            updateHUDStats();
+
+            sounds.lootMystery();
         }
 
         function updateRunningTimer() {
@@ -819,11 +1043,13 @@
             const secs = Math.floor(elapsed % 60).toString().padStart(2, '0');
             const tenths = Math.floor((elapsed % 1) * 10);
             document.getElementById('timer-stat').innerText = `${mins}:${secs}.${tenths}`;
+            updateMoveStatsHUD();
         }
 
         function updateHUDStats() {
             document.getElementById('pos-stat').innerText = `X:${String(playerX).padStart(3, '0')} Y:${String(playerY).padStart(3, '0')}`;
-            
+            updateMoveStatsHUD();
+
             let emptyCells = 0;
             for (let i = 0; i < 81; i++) {
                 if (sudokuPuzzle[i] === 0 && sudokuUserGrid[i] !== sudokuSolved[i]) {
@@ -1051,6 +1277,11 @@
                         classes += ' cell-mystery';
                         content = '?';
                     }
+                    if (typeof highlightedCells !== 'undefined' && highlightedCells.length &&
+                        gameMode === 'tas' && document.getElementById('tas-show-path').checked &&
+                        highlightedCells.includes(`${x},${y}`)) {
+                        classes += ' path-hint';
+                    }
                     classes = classes.trim();
 
                     // Only touch the DOM if something actually changed for this cell.
@@ -1131,6 +1362,7 @@
                 playerX = nextX;
                 playerY = nextY;
                 sounds.move();
+                recordLabyrinthMove(true); // human plays on the visible viewport
 
                 const newIdx = playerY * MAZE_W + playerX;
                 const currentItem = itemGrid[newIdx];
@@ -1295,10 +1527,21 @@
             }
 
             if (solved) {
+                puzzlesCompleted++;
+                updateHUDStats();
+
+                if (puzzlesCompleted < puzzleCount) {
+                    sounds.victory();
+                    startNextPuzzleSameLabyrinth();
+                    return;
+                }
+
                 gameActive = false;
                 clearInterval(timerInterval);
+                stopCpuSimulation();
+                stopTasBot();
                 sounds.victory();
-                
+
                 document.getElementById('victory-time').innerText = document.getElementById('timer-stat').innerText;
                 document.getElementById('victory-modal').classList.remove('hidden');
             }
@@ -1309,6 +1552,561 @@
             document.getElementById('victory-modal').classList.add('hidden');
             startNewGame();
         });
+
+        // ==========================================================================
+        // PATHFINDING — bidirectional BFS ("dvojsmerné prehľadávanie" / bidirectional
+        // search) over the maze grid. Bidirectional BFS is the right call here over
+        // plain single-source BFS: our targets are always a handful of specific item
+        // cells inside a *450x450* maze, so growing two smaller frontiers (one from
+        // the player, one from the target) that meet in the middle explores roughly
+        // 2*sqrt(N) cells instead of N — a big win at this grid size, and simple to
+        // implement since maze connectivity is undirected (a corridor you can walk
+        // one way you can walk back).
+        // ==========================================================================
+        function canMove(x, y, dx, dy) {
+            const idx = y * MAZE_W + x;
+            const cell = mazeData[idx];
+            if (dx === 1) return !(cell & 1);
+            if (dx === -1) return x > 0 && !(mazeData[idx - 1] & 1);
+            if (dy === 1) return !(cell & 2);
+            if (dy === -1) return y > 0 && !(mazeData[idx - MAZE_W] & 2);
+            return false;
+        }
+
+        function neighborsOf(x, y) {
+            const out = [];
+            if (canMove(x, y, 1, 0)) out.push([x + 1, y]);
+            if (canMove(x, y, -1, 0)) out.push([x - 1, y]);
+            if (canMove(x, y, 0, 1)) out.push([x, y + 1]);
+            if (canMove(x, y, 0, -1)) out.push([x, y - 1]);
+            return out;
+        }
+
+        // Bidirectional BFS between two points. Returns an array of [x,y] steps
+        // (excluding the start, including the target), or null if unreachable.
+        function bidirectionalBFS(sx, sy, tx, ty) {
+            if (sx === tx && sy === ty) return [];
+            const key = (x, y) => y * MAZE_W + x;
+
+            const cameFromStart = new Map([[key(sx, sy), null]]);
+            const cameFromTarget = new Map([[key(tx, ty), null]]);
+            let frontierStart = [[sx, sy]];
+            let frontierTarget = [[tx, ty]];
+            let meet = null;
+
+            const maxIterations = 20000; // safety cap for pathological mazes
+            let iter = 0;
+
+            while (frontierStart.length && frontierTarget.length && iter < maxIterations) {
+                iter++;
+                // Expand the smaller frontier first — standard bidirectional BFS
+                // optimization to keep both explored sets balanced.
+                if (frontierStart.length <= frontierTarget.length) {
+                    const next = [];
+                    for (const [x, y] of frontierStart) {
+                        for (const [nx, ny] of neighborsOf(x, y)) {
+                            const k = key(nx, ny);
+                            if (!cameFromStart.has(k)) {
+                                cameFromStart.set(k, [x, y]);
+                                if (cameFromTarget.has(k)) { meet = [nx, ny]; break; }
+                                next.push([nx, ny]);
+                            }
+                        }
+                        if (meet) break;
+                    }
+                    frontierStart = next;
+                } else {
+                    const next = [];
+                    for (const [x, y] of frontierTarget) {
+                        for (const [nx, ny] of neighborsOf(x, y)) {
+                            const k = key(nx, ny);
+                            if (!cameFromTarget.has(k)) {
+                                cameFromTarget.set(k, [x, y]);
+                                if (cameFromStart.has(k)) { meet = [nx, ny]; break; }
+                                next.push([nx, ny]);
+                            }
+                        }
+                        if (meet) break;
+                    }
+                    frontierTarget = next;
+                }
+                if (meet) break;
+            }
+
+            if (!meet) return null;
+
+            // Reconstruct start->meet
+            let pathA = [];
+            let cur = meet;
+            while (cur) {
+                pathA.push(cur);
+                cur = cameFromStart.get(key(cur[0], cur[1]));
+            }
+            pathA.reverse(); // sx,sy ... meet
+
+            // Reconstruct meet->target
+            let pathB = [];
+            cur = cameFromTarget.get(key(meet[0], meet[1]));
+            while (cur) {
+                pathB.push(cur);
+                cur = cameFromTarget.get(key(cur[0], cur[1]));
+            }
+            // pathB currently goes meet-neighbor ... target already in forward order
+
+            const full = pathA.concat(pathB);
+            full.shift(); // drop the start cell itself
+            return full;
+        }
+
+        // ==========================================================================
+        // SUDOKU SOLVING HELPERS shared by CPU + TAS: naked singles / hidden singles
+        // detection, used to (a) judge "how many cells could I fill right now" and
+        // (b) drive TAS/CPU auto-fill decisions.
+        // ==========================================================================
+        function getCandidates(grid, i) {
+            if (grid[i] !== 0) return [];
+            const r = Math.floor(i / 9), c = i % 9;
+            const used = new Set();
+            for (let k = 0; k < 9; k++) {
+                used.add(grid[r * 9 + k]);
+                used.add(grid[k * 9 + c]);
+            }
+            const br = Math.floor(r / 3) * 3, bc = Math.floor(c / 3) * 3;
+            for (let dr = 0; dr < 3; dr++)
+                for (let dc = 0; dc < 3; dc++)
+                    used.add(grid[(br + dr) * 9 + (bc + dc)]);
+            const cands = [];
+            for (let n = 1; n <= 9; n++) if (!used.has(n)) cands.push(n);
+            return cands;
+        }
+
+        // Find every cell currently solvable as a naked single (only 1 candidate)
+        // in the *given* combined grid (puzzle + placed inventory digits).
+        function findNakedSingles(grid) {
+            const out = [];
+            for (let i = 0; i < 81; i++) {
+                if (grid[i] === 0) {
+                    const cands = getCandidates(grid, i);
+                    if (cands.length === 1) out.push({ index: i, value: cands[0] });
+                }
+            }
+            return out;
+        }
+
+        // Find hidden singles restricted to boxes ("box HS") — a candidate that
+        // only fits one cell within its 3x3 box.
+        function findBoxHiddenSingles(grid) {
+            const out = [];
+            for (let boxR = 0; boxR < 3; boxR++) {
+                for (let boxC = 0; boxC < 3; boxC++) {
+                    const cellsInBox = [];
+                    for (let dr = 0; dr < 3; dr++)
+                        for (let dc = 0; dc < 3; dc++)
+                            cellsInBox.push((boxR * 3 + dr) * 9 + (boxC * 3 + dc));
+                    for (let n = 1; n <= 9; n++) {
+                        const spots = cellsInBox.filter(i => grid[i] === 0 && getCandidates(grid, i).includes(n));
+                        if (spots.length === 1) out.push({ index: spots[0], value: n });
+                    }
+                }
+            }
+            return out;
+        }
+
+        // Find hidden singles restricted to rows/cols ("line HS").
+        function findLineHiddenSingles(grid) {
+            const out = [];
+            for (let r = 0; r < 9; r++) {
+                for (let n = 1; n <= 9; n++) {
+                    const spots = [];
+                    for (let c = 0; c < 9; c++) {
+                        const i = r * 9 + c;
+                        if (grid[i] === 0 && getCandidates(grid, i).includes(n)) spots.push(i);
+                    }
+                    if (spots.length === 1) out.push({ index: spots[0], value: n });
+                }
+            }
+            for (let c = 0; c < 9; c++) {
+                for (let n = 1; n <= 9; n++) {
+                    const spots = [];
+                    for (let r = 0; r < 9; r++) {
+                        const i = r * 9 + c;
+                        if (grid[i] === 0 && getCandidates(grid, i).includes(n)) spots.push(i);
+                    }
+                    if (spots.length === 1) out.push({ index: spots[0], value: n });
+                }
+            }
+            return out;
+        }
+
+        // ==========================================================================
+        // VS CPU MODE — a fully separate mirrored maze+sudoku instance (same seed
+        // logic as the player's, generated fresh alongside it) that the CPU "solves"
+        // using a real setTimeout-driven simulation loop honoring the timing table.
+        // The CPU cannot walk the maze and solve sudoku simultaneously: it works in
+        // phases (gather loot for a while, then switch-cost, then solve for a
+        // while), which is tracked and surfaced in the CPU status HUD.
+        // ==========================================================================
+        let cpuState = null;
+        let cpuTimerHandle = null;
+
+        function buildCpuMirrorInstance() {
+            // Mirror the CURRENT sudoku + maze (same seed/content = fair race)
+            return {
+                mazeData: mazeData,      // same maze reference — CPU doesn't mutate it
+                itemGrid: Uint8Array.from(itemGrid), // CPU has its own separate loot copy to collect from
+                puzzle: [...sudokuPuzzle],
+                solved: [...sudokuSolved],
+                userGrid: [...sudokuPuzzle],
+                inventory: Array(10).fill(0),
+                x: 0, y: 0,
+                phase: 'idle', // 'walking' | 'solving' | 'switching'
+                movesDone: 0,
+                cpuMoveTimestamps: [],
+                walkTargetPath: null,
+                solvedCount: 0,
+                totalNeeded: 0
+            };
+        }
+
+        function cpuComputeNeeded(cpu) {
+            let needed = 0;
+            for (let i = 0; i < 81; i++) if (cpu.userGrid[i] !== cpu.solved[i]) needed++;
+            return needed;
+        }
+
+        function startCpuSimulation() {
+            cpuState = buildCpuMirrorInstance();
+            cpuState.totalNeeded = cpuComputeNeeded(cpuState);
+            cpuState.phase = 'switching';
+            cpuState.switchTarget = 'walking'; // always start by gathering loot
+            cpuState.switchElapsed = 0;
+            document.getElementById('cpu-status').innerText = 'Starting...';
+            scheduleCpuTick();
+        }
+
+        function stopCpuSimulation() {
+            if (cpuTimerHandle) clearTimeout(cpuTimerHandle);
+            cpuTimerHandle = null;
+            cpuState = null;
+        }
+
+        function scheduleCpuTick() {
+            cpuTimerHandle = setTimeout(cpuTick, 100);
+        }
+
+        // Each tick = 100ms of simulated CPU activity, so behavior scales smoothly
+        // regardless of frame rate and matches the timing table (moves/sec, and
+        // per-technique second-costs) in real elapsed time.
+        function cpuTick() {
+            if (!cpuState || gameMode !== 'vscpu' || !gameActive) return;
+            const profile = CPU_PROFILES[cpuLevel];
+            const dt = 0.1; // seconds per tick
+
+            if (cpuState.phase === 'switching') {
+                cpuState.switchElapsed = (cpuState.switchElapsed || 0) + dt;
+                document.getElementById('cpu-status').innerText = 'Switching context...';
+                if (cpuState.switchElapsed >= profile.switchTime) {
+                    // Decide what to switch INTO, using whichever decision was
+                    // pinned when we entered "switching" (cpuState.switchTarget) —
+                    // deciding fresh again here (re-reading current state) could
+                    // flip-flop back to 'switching' on the very next tick if
+                    // conditions are borderline, causing an infinite switch loop.
+                    cpuState.phase = cpuState.switchTarget || (cpuNeedsMoreLoot(cpuState) ? 'walking' : 'solving');
+                    cpuState.switchTarget = null;
+                    cpuState.switchElapsed = 0;
+                    cpuState.walkAccum = 0;
+                    cpuState.solveAccum = 0;
+                }
+            } else if (cpuState.phase === 'walking') {
+                document.getElementById('cpu-status').innerText = 'Exploring labyrinth...';
+                cpuState.walkAccum = (cpuState.walkAccum || 0) + dt;
+                const stepInterval = 1 / profile.mps;
+                while (cpuState.walkAccum >= stepInterval) {
+                    cpuState.walkAccum -= stepInterval;
+                    cpuStepWalk(cpuState);
+                }
+                document.getElementById('cpu-mps').innerText = profile.mps.toFixed(1);
+
+                // Switch back to solving as soon as EITHER: (a) it has fully
+                // restocked everything it still needs, or (b) it already has at
+                // least one digit in hand that unlocks an immediate placement —
+                // no point wandering further before cashing that in.
+                if (!cpuNeedsMoreLoot(cpuState) || cpuHasPendingSolve(cpuState)) {
+                    cpuState.phase = 'switching';
+                    cpuState.switchTarget = 'solving';
+                    cpuState.switchElapsed = 0;
+                    cpuState.walkTargetPath = null;
+                }
+            } else if (cpuState.phase === 'solving') {
+                document.getElementById('cpu-status').innerText = 'Solving sudoku...';
+                document.getElementById('cpu-mps').innerText = '0.0';
+                cpuState.solveAccum = (cpuState.solveAccum || 0) + dt;
+                cpuAdvanceSolve(cpuState, dt);
+
+                if (cpuComputeNeeded(cpuState) === 0) {
+                    // CPU finished its sudoku copy
+                    document.getElementById('cpu-status').innerText = 'Finished!';
+                    document.getElementById('cpu-progress').innerText = `${cpuState.totalNeeded}/${cpuState.totalNeeded}`;
+                    return; // stop ticking, CPU is done
+                }
+                if (cpuNeedsMoreLoot(cpuState) && !cpuHasPendingSolve(cpuState)) {
+                    cpuState.phase = 'switching';
+                    cpuState.switchTarget = 'walking';
+                    cpuState.switchElapsed = 0;
+                }
+            }
+
+            document.getElementById('cpu-progress').innerText =
+                `${cpuState.totalNeeded - cpuComputeNeeded(cpuState)}/${cpuState.totalNeeded}`;
+
+            scheduleCpuTick();
+        }
+
+        // Does the CPU still need to walk the maze to gather digits it hasn't
+        // collected yet but still needs for empty cells?
+        function cpuNeedsMoreLoot(cpu) {
+            const needCounts = Array(10).fill(0);
+            for (let i = 0; i < 81; i++) {
+                if (cpu.userGrid[i] === 0) needCounts[cpu.solved[i]]++;
+            }
+            for (let n = 1; n <= 9; n++) {
+                if (needCounts[n] > cpu.inventory[n]) return true;
+            }
+            return false;
+        }
+
+        // Is there at least one logically-solvable cell (naked/hidden single) the
+        // CPU can currently place using digits already in its inventory?
+        function cpuHasPendingSolve(cpu) {
+            const singles = findNakedSingles(cpu.userGrid).concat(
+                findBoxHiddenSingles(cpu.userGrid), findLineHiddenSingles(cpu.userGrid));
+            return singles.some(s => cpu.inventory[s.value] > 0);
+        }
+
+        function cpuStepWalk(cpu) {
+            // Walk toward the nearest useful (needed & not yet collected) item.
+            if (!cpu.walkTargetPath || cpu.walkTargetPath.length === 0) {
+                const target = findNearestUsefulItem(cpu.itemGrid, cpu.x, cpu.y, cpu.userGrid, cpu.solved);
+                if (!target) return;
+                cpu.walkTargetPath = bidirectionalBFS(cpu.x, cpu.y, target.x, target.y) || [];
+            }
+            if (cpu.walkTargetPath.length > 0) {
+                const [nx, ny] = cpu.walkTargetPath.shift();
+                cpu.x = nx; cpu.y = ny;
+                cpu.movesDone++;
+                recordLabyrinthMove(false); // CPU moves happen off-screen (separate mirrored maze)
+
+                const idx = ny * MAZE_W + nx;
+                const item = cpu.itemGrid[idx];
+                if (item >= 1 && item <= 9) {
+                    cpu.inventory[item]++;
+                    cpu.itemGrid[idx] = 0;
+                } else if (item === 10) {
+                    const rolled = Math.floor(Math.random() * 9) + 1;
+                    cpu.inventory[rolled]++;
+                    cpu.itemGrid[idx] = 0;
+                }
+            }
+        }
+
+        function cpuAdvanceSolve(cpu, dt) {
+            // Try, in priority order, box-HS, line-HS, then naked singles — each has
+            // its own time cost from the profile. We accumulate time-until-next and
+            // commit a placement once its "thinking time" has elapsed.
+            const profile = CPU_PROFILES[cpuLevel];
+            if (cpu.pendingSolve) {
+                cpu.pendingSolve.timeLeft -= dt;
+                if (cpu.pendingSolve.timeLeft <= 0) {
+                    const { index, value } = cpu.pendingSolve;
+                    if (cpu.userGrid[index] === 0 && cpu.inventory[value] > 0) {
+                        cpu.userGrid[index] = value;
+                        cpu.inventory[value]--;
+                    }
+                    cpu.pendingSolve = null;
+                }
+                return;
+            }
+
+            const boxHS = findBoxHiddenSingles(cpu.userGrid).find(s => cpu.inventory[s.value] > 0);
+            if (boxHS) {
+                cpu.pendingSolve = { ...boxHS, timeLeft: profile.boxHS };
+                return;
+            }
+            const lineHS = findLineHiddenSingles(cpu.userGrid).find(s => cpu.inventory[s.value] > 0);
+            if (lineHS) {
+                cpu.pendingSolve = { ...lineHS, timeLeft: profile.lineHS };
+                return;
+            }
+            const naked = findNakedSingles(cpu.userGrid).find(s => cpu.inventory[s.value] > 0);
+            if (naked) {
+                cpu.pendingSolve = { ...naked, timeLeft: profile.nakedSingle };
+                return;
+            }
+            // Nothing solvable right now with current inventory — needs more loot.
+        }
+
+        // ==========================================================================
+        // TAS MODE — visible auto-play. Auto-walks the PLAYER'S own maze/sudoku
+        // (same instance the human would normally control) at an adjustable
+        // moves/sec, using bidirectional BFS to path to the "most useful" item,
+        // and/or auto-fills the sudoku via singles as soon as digits are available.
+        // ==========================================================================
+        let tasTimerHandle = null;
+        let tasWalkPath = null;
+        let tasAccum = 0;
+        let tasLastTick = 0;
+
+        function startTasBot() {
+            tasWalkPath = null;
+            tasAccum = 0;
+            tasLastTick = performance.now();
+            scheduleTasTick();
+        }
+
+        function stopTasBot() {
+            if (tasTimerHandle) clearTimeout(tasTimerHandle);
+            tasTimerHandle = null;
+            clearPathHint();
+        }
+
+        function scheduleTasTick() {
+            tasTimerHandle = setTimeout(tasTick, 50); // 20Hz driver loop
+        }
+
+        function tasTick() {
+            if (gameMode !== 'tas' || !gameActive) return;
+            const now = performance.now();
+            const dt = (now - tasLastTick) / 1000;
+            tasLastTick = now;
+
+            const autoMaze = document.getElementById('tas-auto-maze').checked;
+            const autoSudoku = document.getElementById('tas-auto-sudoku').checked;
+            const showPath = document.getElementById('tas-show-path').checked;
+            const speed = parseFloat(document.getElementById('tas-speed').value) || 15;
+
+            if (autoSudoku) tasTryAutoFillSudoku();
+
+            if (autoMaze) {
+                tasAccum += dt;
+                const stepInterval = 1 / speed;
+                let moved = false;
+                while (tasAccum >= stepInterval) {
+                    tasAccum -= stepInterval;
+                    if (tasStepWalk(showPath)) moved = true;
+                }
+                if (moved) scheduleRender();
+            }
+
+            scheduleTasTick();
+        }
+
+        // Decide the best walking target: prefer the item that gets us CLOSEST to
+        // completing a solvable cell right now (a "certain" number we already know
+        // where to place, so grabbing it immediately yields a placement), and only
+        // fall back to the nearest generic needed digit ("uncertain", stockpiled
+        // for later) when nothing is currently solvable. In testing this is more
+        // useful than beelining for whichever digit merely has the closest copy:
+        // certain-number-first keeps a steady stream of confirmed placements
+        // (visible TAS progress) instead of hoarding random digits that may not
+        // resolve into a placement for a long time.
+        function tasStepWalk(showPath) {
+            if (!tasWalkPath || tasWalkPath.length === 0) {
+                const target = findNearestUsefulItem(itemGrid, playerX, playerY, sudokuUserGrid, sudokuSolved);
+                if (!target) return false;
+                tasWalkPath = bidirectionalBFS(playerX, playerY, target.x, target.y) || [];
+                if (showPath) highlightPath(tasWalkPath, target);
+            }
+            if (tasWalkPath.length > 0) {
+                const [nx, ny] = tasWalkPath.shift();
+                playerX = nx; playerY = ny;
+                recordLabyrinthMove(true);
+                sounds.move();
+
+                const idx = ny * MAZE_W + nx;
+                const item = itemGrid[idx];
+                if (item >= 1 && item <= 9) {
+                    inventory[item]++;
+                    itemGrid[idx] = 0;
+                    renderInventorySlots();
+                } else if (item === 10) {
+                    const rolled = Math.floor(Math.random() * 9) + 1;
+                    inventory[rolled]++;
+                    itemGrid[idx] = 0;
+                    renderInventorySlots();
+                }
+
+                const pad = 6;
+                if (playerX - viewX < pad && viewX > 0) viewX--;
+                if (playerX - viewX >= VIEW_SIZE - pad && viewX < MAZE_W - VIEW_SIZE) viewX++;
+                if (playerY - viewY < pad && viewY > 0) viewY--;
+                if (playerY - viewY >= VIEW_SIZE - pad && viewY < MAZE_H - VIEW_SIZE) viewY++;
+                return true;
+            }
+            return false;
+        }
+
+        // Finds the item cell that is most useful right now: prioritizes digits
+        // that would IMMEDIATELY complete a naked/hidden single once collected
+        // (a "certain" placement), tie-broken by straight-line distance; falls
+        // back to the nearest copy of any still-needed digit otherwise.
+        function findNearestUsefulItem(itemsGrid, fromX, fromY, userGrid, solvedGrid) {
+            const singles = findNakedSingles(userGrid).concat(
+                findBoxHiddenSingles(userGrid), findLineHiddenSingles(userGrid));
+            const certainDigits = new Set(singles.map(s => s.value));
+
+            const needCounts = Array(10).fill(0);
+            for (let i = 0; i < 81; i++) if (userGrid[i] === 0) needCounts[solvedGrid[i]]++;
+
+            let best = null, bestDist = Infinity, bestIsCertain = false;
+            for (let y = 0; y < MAZE_H; y++) {
+                for (let x = 0; x < MAZE_W; x++) {
+                    const v = itemsGrid[y * MAZE_W + x];
+                    if (v < 1 || v > 9) continue; // skip empty + mystery for targeting purposes
+                    if (needCounts[v] <= 0) continue;
+                    const isCertain = certainDigits.has(v);
+                    const dist = Math.abs(x - fromX) + Math.abs(y - fromY);
+                    if (isCertain && !bestIsCertain) {
+                        best = { x, y, value: v }; bestDist = dist; bestIsCertain = true;
+                    } else if (isCertain === bestIsCertain && dist < bestDist) {
+                        best = { x, y, value: v }; bestDist = dist; bestIsCertain = isCertain;
+                    }
+                }
+            }
+            return best;
+        }
+
+        function tasTryAutoFillSudoku() {
+            let placed = false;
+            let guard = 0;
+            while (guard++ < 81) {
+                const singles = findNakedSingles(sudokuUserGrid).concat(
+                    findBoxHiddenSingles(sudokuUserGrid), findLineHiddenSingles(sudokuUserGrid));
+                const usable = singles.find(s => inventory[s.value] > 0);
+                if (!usable) break;
+                sudokuUserGrid[usable.index] = usable.value;
+                inventory[usable.value]--;
+                placed = true;
+            }
+            if (placed) {
+                sounds.placeNum();
+                renderInventorySlots();
+                renderSudokuBoard();
+                updateHUDStats();
+                checkGlobalWinState();
+            }
+        }
+
+        // --- Path-to-target highlight (TAS "Show Path" toggle) ---
+        let highlightedCells = [];
+        function highlightPath(path, target) {
+            clearPathHint();
+            highlightedCells = path.map(([x, y]) => `${x},${y}`);
+            // Actual visual application happens inside renderMazeViewport via a
+            // lightweight lookup, so it stays correct across viewport scrolling.
+        }
+        function clearPathHint() {
+            highlightedCells = [];
+        }
     </script>
 </body>
 </html>
