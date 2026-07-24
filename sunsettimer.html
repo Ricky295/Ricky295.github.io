@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sunset Clock</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0a0a12;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #sky {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+  #gradient {
+    position: absolute;
+    inset: 0;
+  }
+  .star {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: white;
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 2s ease;
+  }
+  #sun {
+    position: absolute;
+    left: 50%;
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    transform: translateX(-50%);
+    box-shadow: 0 0 60px 20px rgba(255,180,80,0.5);
+    z-index: 1;
+  }
+  #horizon {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 22%;
+    background: #05050a;
+    z-index: 2;
+  }
+  #hillshine {
+    position: absolute;
+    bottom: 22%;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    z-index: 3;
+  }
+  #ui {
+    position: absolute;
+    top: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    color: white;
+    z-index: 10;
+    background: rgba(0,0,0,0.25);
+    padding: 20px 32px;
+    border-radius: 16px;
+    backdrop-filter: blur(4px);
+  }
+  #timeDisplay {
+    font-size: 48px;
+    font-weight: 300;
+    letter-spacing: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+  #status {
+    font-size: 14px;
+    opacity: 0.8;
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+  }
+  #controls {
+    margin-top: 14px;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  button, input {
+    font-family: inherit;
+    font-size: 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.1);
+    color: white;
+    padding: 8px 14px;
+    cursor: pointer;
+  }
+  button:hover { background: rgba(255,255,255,0.2); }
+  input[type="number"] {
+    width: 60px;
+    cursor: text;
+    text-align: center;
+  }
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+</style>
+</head>
+<body>
+
+<div id="sky">
+  <div id="gradient"></div>
+  <div id="hillshine"></div>
+  <div id="horizon"></div>
+  <div id="sun"></div>
+  <div id="ui">
+    <div id="timeDisplay">00:00</div>
+    <div id="status">Set a timer to begin</div>
+    <div id="controls">
+      <input type="number" id="minutesInput" min="0" max="999" value="5" placeholder="min">
+      <button id="startBtn">Start</button>
+      <button id="pauseBtn">Pause</button>
+      <button id="resetBtn">Reset</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const sky = document.getElementById('sky');
+const gradientEl = document.getElementById('gradient');
+const sunEl = document.getElementById('sun');
+const hillshineEl = document.getElementById('hillshine');
+const timeDisplay = document.getElementById('timeDisplay');
+const statusEl = document.getElementById('status');
+const minutesInput = document.getElementById('minutesInput');
+const startBtn = document.getElementById('startBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+let totalSeconds = 5 * 60;
+let remaining = totalSeconds;
+let running = false;
+let endTime = null; // timestamp (ms) when timer should hit zero
+let rafId = null;
+
+// Generate stars
+const NUM_STARS = 120;
+const stars = [];
+for (let i = 0; i < NUM_STARS; i++) {
+  const s = document.createElement('div');
+  s.className = 'star';
+  const x = Math.random() * 100;
+  const y = Math.random() * 70; // stars only in upper sky
+  s.style.left = x + '%';
+  s.style.top = y + '%';
+  s.style.width = s.style.height = (Math.random() * 1.5 + 1) + 'px';
+  sky.appendChild(s);
+  stars.push(s);
+}
+
+// Sky color stops across the "day" from progress 0 (full time left, daytime) to 1 (time's up, night)
+// progress: 0 = start (bright day), 1 = fully set (night)
+function skyColors(p) {
+  // Define keyframes: [position, topColor, midColor, bottomColor]
+  const stops = [
+    { p: 0.0,  top: '#8ec9ff', mid: '#bfe3ff', bot: '#eaf6ff' }, // midday-ish
+    { p: 0.55, top: '#4a7fc9', mid: '#ffb26b', bot: '#ffdf9e' }, // late afternoon
+    { p: 0.75, top: '#2a4a7a', mid: '#ff7d4d', bot: '#ffb56b' }, // golden sunset
+    { p: 0.9,  top: '#16213d', mid: '#a8456b', bot: '#e8815a' }, // deep dusk
+    { p: 1.0,  top: '#04040c', mid: '#0a0a1a', bot: '#141428' }  // night
+  ];
+  let a = stops[0], b = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (p >= stops[i].p && p <= stops[i+1].p) {
+      a = stops[i]; b = stops[i+1];
+      break;
+    }
+  }
+  const range = (b.p - a.p) || 1;
+  const t = Math.min(1, Math.max(0, (p - a.p) / range));
+  function lerpColor(c1, c2, t) {
+    const h1 = hexToRgb(c1), h2 = hexToRgb(c2);
+    const r = Math.round(h1.r + (h2.r - h1.r) * t);
+    const g = Math.round(h1.g + (h2.g - h1.g) * t);
+    const bl = Math.round(h1.b + (h2.b - h1.b) * t);
+    return `rgb(${r},${g},${bl})`;
+  }
+  return {
+    top: lerpColor(a.top, b.top, t),
+    mid: lerpColor(a.mid, b.mid, t),
+    bot: lerpColor(a.bot, b.bot, t)
+  };
+}
+
+function hexToRgb(hex) {
+  hex = hex.replace('#', '');
+  return {
+    r: parseInt(hex.substring(0,2), 16),
+    g: parseInt(hex.substring(2,4), 16),
+    b: parseInt(hex.substring(4,6), 16)
+  };
+}
+
+function sunColor(p) {
+  // yellow -> orange -> deep red as it sets
+  if (p < 0.5) return `rgb(255, ${Math.round(230 - p*40)}, 120)`;
+  const t = (p - 0.5) / 0.5;
+  const r = 255;
+  const g = Math.round(210 - t * 150);
+  const b = Math.round(100 - t * 90);
+  return `rgb(${r},${Math.max(g,20)},${Math.max(b,10)})`;
+}
+
+// stable star flicker without regenerating randomness every frame
+let starBaseOpacities = stars.map(() => 0.5 + Math.random() * 0.5);
+function renderStars(progress) {
+  const starOpacity = progress > 0.6 ? Math.min(1, (progress - 0.6) / 0.4) : 0;
+  stars.forEach((s, i) => {
+    s.style.opacity = starOpacity * starBaseOpacities[i];
+  });
+}
+
+function formatTime(sec) {
+  sec = Math.max(0, Math.round(sec));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function update() {
+  const progress = totalSeconds > 0 ? 1 - (remaining / totalSeconds) : 1;
+  renderSky(progress);
+  renderStars(progress);
+  timeDisplay.textContent = formatTime(remaining);
+
+  if (remaining <= 0) {
+    statusEl.textContent = 'The sun has set';
+  } else if (running) {
+    statusEl.textContent = 'Setting...';
+  } else {
+    statusEl.textContent = 'Paused';
+  }
+}
+
+function renderSky(progress) {
+  progress = Math.min(1, Math.max(0, progress));
+  const colors = skyColors(progress);
+  gradientEl.style.background = `linear-gradient(to bottom, ${colors.top} 0%, ${colors.mid} 55%, ${colors.bot} 78%)`;
+
+  const startY = 18;
+  const endY = 84;
+  const sunY = startY + (endY - startY) * progress;
+  sunEl.style.top = sunY + '%';
+  sunEl.style.background = sunColor(progress);
+  const glowSize = 20 + progress * 10;
+  sunEl.style.boxShadow = `0 0 ${60 + progress*40}px ${glowSize}px ${sunColor(progress)}`;
+  sunEl.style.opacity = progress > 0.95 ? Math.max(0, (1 - (progress - 0.95) / 0.05)) : 1;
+
+  hillshineEl.style.background = colors.bot;
+  hillshineEl.style.boxShadow = `0 0 20px 4px ${colors.bot}`;
+  hillshineEl.style.opacity = progress > 0.85 ? Math.max(0.1, 1 - (progress-0.85)/0.15) : 0.6;
+}
+
+function playAlarm() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+    const beepTimes = [0, 0.5, 1.0, 1.5];
+    beepTimes.forEach(t => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now + t);
+      gain.gain.setValueAtTime(0, now + t);
+      gain.gain.linearRampToValueAtTime(0.3, now + t + 0.02);
+      gain.gain.linearRampToValueAtTime(0, now + t + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + t);
+      osc.stop(now + t + 0.4);
+    });
+    setTimeout(() => ctx.close(), 2500);
+  } catch (e) {
+    // audio not available, ignore
+  }
+}
+
+function loop() {
+  if (!running) return;
+  const now = performance.now();
+  remaining = (endTime - now) / 1000;
+  if (remaining <= 0) {
+    remaining = 0;
+    update();
+    stopTimer();
+    playAlarm();
+    return;
+  }
+  update();
+  rafId = requestAnimationFrame(loop);
+}
+
+function startTimer() {
+  if (running) return;
+  if (remaining <= 0) return;
+  running = true;
+  endTime = performance.now() + remaining * 1000;
+  rafId = requestAnimationFrame(loop);
+  update();
+}
+
+function stopTimer() {
+  running = false;
+  if (rafId) cancelAnimationFrame(rafId);
+  update();
+}
+
+function resetTimer() {
+  stopTimer();
+  const mins = parseFloat(minutesInput.value) || 0;
+  totalSeconds = Math.max(1, Math.round(mins * 60));
+  remaining = totalSeconds;
+  update();
+}
+
+startBtn.addEventListener('click', () => {
+  if (remaining <= 0) {
+    resetTimer();
+  }
+  startTimer();
+});
+pauseBtn.addEventListener('click', stopTimer);
+resetBtn.addEventListener('click', resetTimer);
+minutesInput.addEventListener('change', () => {
+  if (!running) resetTimer();
+});
+
+// init
+resetTimer();
+</script>
+</body>
+</html>
