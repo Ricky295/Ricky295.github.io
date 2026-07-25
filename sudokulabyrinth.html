@@ -4,8 +4,760 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sudoku Maze Hunter</title>
-    <!-- Import the logical Sudoku generator library -->
-    <script src="https://ricky295.github.io/newsudoku.js"></script>
+    <script>
+/**
+ * newsudoku.js
+ * Core functionality for generating, solving (using singles), and validating
+ * Sudoku puzzles.
+ * 
+ * Direct JavaScript port of sudoku.py with exact logic preservation.
+ */
+
+// --- Utility Functions ---
+
+function convertToMatrix(sudokuString) {
+    /**
+     * Converts a single 81-character string into a 9x9 array (matrix).
+     * Assumes the string contains only digits '0'-'9'.
+     */
+    if (sudokuString.length !== 81) {
+        throw new Error("Sudoku string must be exactly 81 characters long.");
+    }
+    
+    const matrix = [];
+    for (let i = 0; i < 9; i++) {
+        const rowStart = i * 9;
+        const rowEnd = (i + 1) * 9;
+        const rowString = sudokuString.substring(rowStart, rowEnd);
+        // Convert each character (which is a digit) to an integer
+        const row = Array.from(rowString, char => parseInt(char));
+        matrix.push(row);
+    }
+    
+    return matrix;
+}
+
+function range1To9() {
+    /**
+     * Returns a deterministic list of digits 1 through 9.
+     */
+    return [1, 2, 3, 4, 5, 6, 7, 8, 9];
+}
+
+function shuffle(array) {
+    /**
+     * Shuffles an array in place (Fisher-Yates shuffle).
+     */
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+function getBoxIndex(row, col) {
+    /**
+     * Returns the 3x3 box index (0-8).
+     */
+    return Math.floor(row / 3) * 3 + Math.floor(col / 3);
+}
+
+function deepCopyBoard(board) {
+    /**
+     * Deep copies a 9x9 array.
+     */
+    return board.map(row => [...row]);
+}
+
+function convertToString(array) {
+    /**
+     * Converts the 9x9 board array into a single 81-character string.
+     */
+    return array.flat().join('');
+}
+
+// --- Sudoku Logic: Full Random Solution Generator ---
+
+function solveGridRandomBacktracking(grid) {
+    /**
+     * Randomized backtracking function to fill a complete Sudoku grid.
+     * Returns true if a solution is found, false otherwise.
+     */
+    for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+            if (grid[r][c] === 0) {
+                // Get possible values and shuffle them for randomization
+                const possibleNums = range1To9();
+                shuffle(possibleNums);
+                
+                for (const num of possibleNums) {
+                    // Check if the number is valid in the current context
+                    let isValid = true;
+                    
+                    // Row check
+                    if (grid[r].includes(num)) {
+                        isValid = false;
+                    }
+                    
+                    // Column check
+                    if (isValid) {
+                        for (let i = 0; i < 9; i++) {
+                            if (grid[i][c] === num) {
+                                isValid = false;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Box check
+                    if (isValid) {
+                        const startRow = Math.floor(r / 3) * 3;
+                        const startCol = Math.floor(c / 3) * 3;
+                        for (let rowBox = startRow; rowBox < startRow + 3; rowBox++) {
+                            for (let colBox = startCol; colBox < startCol + 3; colBox++) {
+                                if (grid[rowBox][colBox] === num) {
+                                    isValid = false;
+                                    break;
+                                }
+                            }
+                            if (!isValid) break;
+                        }
+                    }
+                    
+                    if (isValid) {
+                        grid[r][c] = num;
+                        if (solveGridRandomBacktracking(grid)) {
+                            return true;
+                        }
+                        grid[r][c] = 0; // Backtrack
+                    }
+                }
+                return false; // No number works for this cell
+            }
+        }
+    }
+    return true; // Grid is solved
+}
+
+function generateSolutionRandom() {
+    /**
+     * Generates a fully solved, truly random Sudoku grid using backtracking.
+     */
+    // Initialize an empty board
+    const solution = Array(9).fill(null).map(() => Array(9).fill(0));
+    
+    // Use the randomized backtracking solver to fill it
+    solveGridRandomBacktracking(solution);
+    
+    return solution;
+}
+
+// --- Sudoku Logic: Core Constraints ---
+
+function getPossibleValues(board, row, col) {
+    /**
+     * Returns a list of numbers (1-9) that can be placed at (row, col)
+     * based on row, column, and 3x3 box constraints.
+     */
+    if (board[row][col] !== 0) {
+        return [];
+    }
+
+    const used = new Set();
+    
+    // Check row
+    for (let c = 0; c < 9; c++) {
+        used.add(board[row][c]);
+    }
+    
+    // Check column
+    for (let r = 0; r < 9; r++) {
+        used.add(board[r][col]);
+    }
+    
+    // Check 3x3 box
+    const startRow = Math.floor(row / 3) * 3;
+    const startCol = Math.floor(col / 3) * 3;
+    for (let r = startRow; r < startRow + 3; r++) {
+        for (let c = startCol; c < startCol + 3; c++) {
+            used.add(board[r][c]);
+        }
+    }
+    
+    const possible = [];
+    for (let num = 1; num <= 9; num++) {
+        if (!used.has(num)) {
+            possible.push(num);
+        }
+    }
+    
+    return possible;
+}
+
+function eliminatePossibilities(possibilities, rPlaced, cPlaced, valPlaced, puzzle) {
+    /**
+     * Updates the possibilities matrix after placing a 'valPlaced' at (rPlaced, cPlaced).
+     * Returns true if any empty cell now has 0 possibilities (contradiction).
+     */
+    let contradiction = false;
+    
+    // 1. Eliminate in the same row/col
+    for (let i = 0; i < 9; i++) {
+        // Row check
+        if (possibilities[rPlaced][i].has(valPlaced)) {
+            possibilities[rPlaced][i].delete(valPlaced);
+            if (possibilities[rPlaced][i].size === 0 && puzzle[rPlaced][i] === 0) {
+                contradiction = true;
+            }
+        }
+        
+        // Column check
+        if (possibilities[i][cPlaced].has(valPlaced)) {
+            possibilities[i][cPlaced].delete(valPlaced);
+            if (possibilities[i][cPlaced].size === 0 && puzzle[i][cPlaced] === 0) {
+                contradiction = true;
+            }
+        }
+    }
+    
+    // 2. Eliminate in the 3x3 box
+    const startRow = Math.floor(rPlaced / 3) * 3;
+    const startCol = Math.floor(cPlaced / 3) * 3;
+    for (let r = startRow; r < startRow + 3; r++) {
+        for (let c = startCol; c < startCol + 3; c++) {
+            if (possibilities[r][c].has(valPlaced)) {
+                possibilities[r][c].delete(valPlaced);
+                if (possibilities[r][c].size === 0 && puzzle[r][c] === 0) {
+                    contradiction = true;
+                }
+            }
+        }
+    }
+    
+    return contradiction;
+}
+
+// --- Sudoku Logic: Singles Techniques ---
+
+function findHiddenSingles(puzzle, possibilities, unitType, unitIndex) {
+    /**
+     * Finds ALL Hidden Singles within a single unit ('row', 'col', or 'box').
+     * (Used by the main solver, not the hint function.)
+     * Returns: array of [r, c, val] tuples.
+     */
+    const updates = [];
+    const allNums = range1To9();
+    const unitPoss = {};
+    
+    for (const num of allNums) {
+        unitPoss[num] = [];
+    }
+    
+    // Determine coordinates based on unit type
+    let coords = [];
+    if (unitType === 'row') {
+        coords = Array(9).fill(null).map((_, c) => [unitIndex, c]);
+    } else if (unitType === 'col') {
+        coords = Array(9).fill(null).map((_, r) => [r, unitIndex]);
+    } else if (unitType === 'box') {
+        const startRow = Math.floor(unitIndex / 3) * 3;
+        const startCol = (unitIndex % 3) * 3;
+        for (let r = startRow; r < startRow + 3; r++) {
+            for (let c = startCol; c < startCol + 3; c++) {
+                coords.push([r, c]);
+            }
+        }
+    }
+    
+    // Analyze the unit's possibilities
+    for (const [r, c] of coords) {
+        if (puzzle[r][c] === 0) {
+            for (const num of possibilities[r][c]) {
+                unitPoss[num].push([r, c]);
+            }
+        }
+    }
+    
+    // Check for Hidden Singles
+    for (const [num, locations] of Object.entries(unitPoss)) {
+        if (locations.length === 1) {
+            const [r, c] = locations[0];
+            if (puzzle[r][c] === 0) {
+                updates.push([r, c, parseInt(num)]);
+            }
+        }
+    }
+    
+    return updates;
+}
+
+function findNakedSingles(puzzle, possibilities) {
+    /**
+     * Finds Naked Singles in all cells.
+     * Returns: array of [r, c, val] tuples.
+     */
+    const updates = [];
+    for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+            if (puzzle[r][c] === 0 && possibilities[r][c].size === 1) {
+                const val = [...possibilities[r][c]][0];
+                updates.push([r, c, val]);
+            }
+        }
+    }
+    return updates;
+}
+
+// --- Sudoku Logic: Core Solver Loop (Strict Priority) ---
+
+function findAndApplyUpdates(techniqueType, puzzle, possibilities, emptyCellsCount) {
+    /**
+     * Finds and applies all singles of a specific type (BoxHS, LineHS, NakedSingle).
+     */
+    let updates = [];
+    
+    if (techniqueType === 'BoxHS') {
+        for (let boxIdx = 0; boxIdx < 9; boxIdx++) {
+            const boxUpdates = findHiddenSingles(puzzle, possibilities, 'box', boxIdx);
+            updates = updates.concat(boxUpdates);
+        }
+    } else if (techniqueType === 'LineHS') {
+        for (let idx = 0; idx < 9; idx++) {
+            const rowUpdates = findHiddenSingles(puzzle, possibilities, 'row', idx);
+            const colUpdates = findHiddenSingles(puzzle, possibilities, 'col', idx);
+            updates = updates.concat(rowUpdates, colUpdates);
+        }
+    } else if (techniqueType === 'NakedSingle') {
+        updates = findNakedSingles(puzzle, possibilities);
+    }
+    
+    if (updates.length === 0) {
+        return [emptyCellsCount, false];
+    }
+    
+    // Make updates unique (remove duplicates)
+    const uniqueUpdates = [];
+    const seen = new Set();
+    for (const [r, c, val] of updates) {
+        const key = `${r},${c},${val}`;
+        if (!seen.has(key)) {
+            seen.add(key);
+            uniqueUpdates.push([r, c, val]);
+        }
+    }
+    
+    // Apply all unique updates for this technique
+    let contradiction = false;
+    for (const [r, c, val] of uniqueUpdates) {
+        if (puzzle[r][c] === 0) {
+            puzzle[r][c] = val;
+            emptyCellsCount--;
+            
+            // Update possibilities for neighbors and check for contradiction
+            if (eliminatePossibilities(possibilities, r, c, val, puzzle)) {
+                contradiction = true;
+            }
+            
+            // Mark the current cell as solved
+            possibilities[r][c] = new Set();
+        }
+    }
+    
+    return [emptyCellsCount, contradiction];
+}
+
+function solveWithSingles(sudoku, returnDifficulty = false) {
+    /**
+     * Solves a Sudoku puzzle using only singles techniques (Box HS -> Line HS -> Naked Single).
+     * 
+     * If returnDifficulty is true:
+     *   Returns difficulty score or -0.1 if stuck, -0.2 if contradiction
+     * If returnDifficulty is false:
+     *   Returns the solved puzzle or original board if stuck/invalid
+     */
+    const puzzle = deepCopyBoard(sudoku);
+    const initialEmptyCells = puzzle.flat().filter(x => x === 0).length;
+    let highestTechnique = 0;
+    
+    if (initialEmptyCells === 0) {
+        return returnDifficulty ? 0.0 : puzzle;
+    }
+    
+    // Initialize possibilities
+    const possibilities = Array(9).fill(null).map(() => 
+        Array(9).fill(null).map(() => new Set())
+    );
+    
+    let emptyCellsCount = 0;
+    for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+            if (puzzle[r][c] === 0) {
+                possibilities[r][c] = new Set(getPossibleValues(puzzle, r, c));
+                if (possibilities[r][c].size === 0) {
+                    return returnDifficulty ? -0.2 : sudoku;
+                }
+                emptyCellsCount++;
+            } else {
+                possibilities[r][c] = new Set();
+            }
+        }
+    }
+    
+    // Solving loop with STRICT priority (Box HS -> Line HS -> Naked Single)
+    let steps = 0;
+    let contradiction = false;
+    
+    while (emptyCellsCount > 0) {
+        // 1. Box Hidden Single
+        [emptyCellsCount, contradiction] = findAndApplyUpdates('BoxHS', puzzle, possibilities, emptyCellsCount);
+        const boxUpdates = emptyCellsCount < initialEmptyCells - steps;
+        if (boxUpdates) {
+            steps++;
+            if (contradiction) break;
+            continue;
+        }
+        
+        highestTechnique = Math.max(1, highestTechnique);
+        
+        // 2. Line Hidden Single
+        const prevCount = emptyCellsCount;
+        [emptyCellsCount, contradiction] = findAndApplyUpdates('LineHS', puzzle, possibilities, emptyCellsCount);
+        if (emptyCellsCount < prevCount) {
+            steps++;
+            if (contradiction) break;
+            continue;
+        }
+        
+        highestTechnique = 2;
+        
+        // 3. Naked Single
+        const prevCount2 = emptyCellsCount;
+        [emptyCellsCount, contradiction] = findAndApplyUpdates('NakedSingle', puzzle, possibilities, emptyCellsCount);
+        if (emptyCellsCount < prevCount2) {
+            steps++;
+            if (contradiction) break;
+            continue;
+        }
+        
+        // Stuck
+        break;
+    }
+    
+    // Final check and return
+    if (contradiction) {
+        return returnDifficulty ? -0.2 : sudoku;
+    } else if (emptyCellsCount === 0) {
+        // Fully solved
+        const difficulty = initialEmptyCells > 0 ? steps / initialEmptyCells : 0.0;
+        return returnDifficulty ? (difficulty + highestTechnique) / 3 : puzzle;
+    } else {
+        // Stuck, requires advanced techniques
+        return returnDifficulty ? -0.1 : sudoku;
+    }
+}
+
+// --- Sudoku Generation ---
+
+function generateSudoku(minDifficulty, maxDifficulty, targetClues = 25, maxAttempts = 100) {
+    /**
+     * Generates a Sudoku puzzle with difficulty in [minDifficulty, maxDifficulty].
+     * Uses truly random solution generation and attempts indefinitely until
+     * a puzzle matching the difficulty criteria is found.
+     * maxAttempts is useless, keeping the argument for legacy support.
+     */
+    let attempt = 0;
+    
+    while (true) {
+        attempt++;
+        
+        // Generate a random complete solution
+        const solution = generateSolutionRandom();
+        const puzzle = deepCopyBoard(solution);
+        
+        // Create list of all cell positions
+        const positions = [];
+        for (let r = 0; r < 9; r++) {
+            for (let c = 0; c < 9; c++) {
+                positions.push([r, c]);
+            }
+        }
+        shuffle(positions);
+        
+        // Remove cells while maintaining solvability
+        let cluesRemaining = 81;
+        
+        for (const [r, c] of positions) {
+            if (cluesRemaining <= targetClues) break;
+            
+            const originalValue = puzzle[r][c];
+            puzzle[r][c] = 0;
+            
+            // Check if still solvable with singles
+            const difficulty = solveWithSingles(puzzle, true);
+            
+            if (difficulty < 0) {
+                // Not solvable, restore the cell
+                puzzle[r][c] = originalValue;
+            } else {
+                cluesRemaining--;
+                
+                // Check if we've reached desired difficulty range
+                if (cluesRemaining <= targetClues && 
+                    difficulty >= minDifficulty && 
+                    difficulty <= maxDifficulty) {
+                    return puzzle;
+                }
+            }
+        }
+        
+        // Check final difficulty
+        const finalDifficulty = solveWithSingles(puzzle, true);
+        if (finalDifficulty >= minDifficulty && 
+            finalDifficulty <= maxDifficulty && 
+            cluesRemaining <= targetClues + 5) {
+            return puzzle;
+        }
+    }
+}
+
+function generateDailySudoku(date) {
+    /**
+     * Generates a deterministic daily Sudoku puzzle based on the date.
+     * Uses a seeded random generator for reproducibility.
+     */
+    // Create a seed from the date
+    const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD
+    const seed = hashCode(dateString);
+    
+    // Save current Math.random
+    const originalRandom = Math.random;
+    
+    // Use seeded random
+    Math.random = seededRandom(seed);
+    
+    // Generate puzzle
+    const puzzle = generateSudoku(0.3, 0.7, 30);
+    
+    // Restore original Math.random
+    Math.random = originalRandom;
+    
+    return puzzle;
+}
+
+// Helper function for seeded random
+function seededRandom(seed) {
+    let s = seed;
+    return function() {
+        s = Math.sin(s) * 10000;
+        return s - Math.floor(s);
+    };
+}
+
+function hashCode(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash);
+}
+
+// --- Hint System ---
+
+function getSortedHiddenSingleUpdate(puzzle, possibilities, unitType) {
+    /**
+     * Finds the first Hidden Single by iterating through digits (1-9) first,
+     * then unit indices (0-8).
+     * Returns [r, c, val] or null.
+     */
+    for (const num of range1To9()) {
+        for (let unitIndex = 0; unitIndex < 9; unitIndex++) {
+            // Determine coordinates based on unit type
+            let coords = [];
+            if (unitType === 'row') {
+                coords = Array(9).fill(null).map((_, c) => [unitIndex, c]);
+            } else if (unitType === 'col') {
+                coords = Array(9).fill(null).map((_, r) => [r, unitIndex]);
+            } else if (unitType === 'box') {
+                const startRow = Math.floor(unitIndex / 3) * 3;
+                const startCol = (unitIndex % 3) * 3;
+                for (let r = startRow; r < startRow + 3; r++) {
+                    for (let c = startCol; c < startCol + 3; c++) {
+                        coords.push([r, c]);
+                    }
+                }
+            }
+            
+            // Analyze the unit's possibilities for *only* the current 'num'
+            const locations = [];
+            for (const [r, c] of coords) {
+                if (puzzle[r][c] === 0 && possibilities[r][c].has(num)) {
+                    locations.push([r, c]);
+                }
+            }
+            
+            // Check for Hidden Single: the digit appears only once in this unit
+            if (locations.length === 1) {
+                const [r, c] = locations[0];
+                return [r, c, num];
+            }
+        }
+    }
+    
+    return null;
+}
+
+function hint(sudoku, priority = 0) {
+    /**
+     * Provides the next logical step (hint) based on a priority order.
+     * 
+     * priority=0: Box HS -> Line HS -> Naked Single (Standard)
+     * priority=1: Naked Single -> Box HS -> Line HS (Easier singles first)
+     * 
+     * Format: [technique, [r, c], digit]
+     */
+    const puzzle = deepCopyBoard(sudoku);
+    
+    // --- 1. Initialize Possibilities (needed for all techniques) ---
+    const possibilities = Array(9).fill(null).map(() => 
+        Array(9).fill(null).map(() => new Set())
+    );
+    const emptyCells = [];
+    
+    for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+            if (puzzle[r][c] === 0) {
+                possibilities[r][c] = new Set(getPossibleValues(puzzle, r, c));
+                if (possibilities[r][c].size === 0) {
+                    return ["Contradiction", [r, c], 0];
+                }
+                emptyCells.push([r, c]);
+            }
+        }
+    }
+    
+    if (emptyCells.length === 0) {
+        return ["Solved", [-1, -1], 0];
+    }
+    
+    // --- 2. Define Technique Order based on priority ---
+    let techniqueOrder;
+    
+    if (priority === 1) {
+        // Priority 1: Naked Single -> Box HS -> Line HS
+        techniqueOrder = [
+            ["Naked Single", null],
+            ["Box HS", 'box'],
+            ["Line HS", 'row_col']
+        ];
+    } else {
+        // Default priority 0: Box HS -> Line HS -> Naked Single
+        techniqueOrder = [
+            ["Box HS", 'box'],
+            ["Line HS", 'row_col'],
+            ["Naked Single", null]
+        ];
+    }
+    
+    // --- 3. Execute Techniques in Order ---
+    for (const [techniqueName, unitType] of techniqueOrder) {
+        let update = null;
+        
+        if (techniqueName === "Naked Single") {
+            const updates = findNakedSingles(puzzle, possibilities);
+            if (updates.length > 0) {
+                const [r, c, val] = updates[0];
+                return ["Naked Single", [r, c], val];
+            }
+        } else if (unitType === 'box') {
+            // Box HS: Finds the first one by digit (1-9) then box index (0-8)
+            update = getSortedHiddenSingleUpdate(puzzle, possibilities, 'box');
+            if (update) {
+                const [r, c, val] = update;
+                return ["Box HS", [r, c], val];
+            }
+        } else if (unitType === 'row_col') {
+            // Line HS (Row): Finds the first one by digit (1-9) then row index (0-8)
+            update = getSortedHiddenSingleUpdate(puzzle, possibilities, 'row');
+            if (update) {
+                const [r, c, val] = update;
+                return ["Line HS", [r, c], val];
+            }
+            
+            // Line HS (Column): Finds the first one by digit (1-9) then col index (0-8)
+            update = getSortedHiddenSingleUpdate(puzzle, possibilities, 'col');
+            if (update) {
+                const [r, c, val] = update;
+                return ["Line HS", [r, c], val];
+            }
+        }
+    }
+    
+    // --- 4. Guess (Fallback if stuck) ---
+    if (priority === 0) {
+        // Find the cell with the fewest possibilities for an educated guess
+        let bestCell = null;
+        let minPossibilities = 10;
+        
+        for (const [r, c] of emptyCells) {
+            const numPossibilities = possibilities[r][c].size;
+            if (numPossibilities > 1 && numPossibilities < minPossibilities) {
+                minPossibilities = numPossibilities;
+                bestCell = [r, c];
+            }
+        }
+        
+        if (bestCell) {
+            const [r, c] = bestCell;
+            const possArray = [...possibilities[r][c]];
+            const val = possArray[Math.floor(Math.random() * possArray.length)];
+            return ["Guess", [r, c], val];
+        }
+    }
+    
+    // If the puzzle is stuck and we didn't guess
+    return ["Stuck", [-1, -1], 0];
+}
+
+// --- Export Functions ---
+// For use with <script src="newsudoku.js">
+if (typeof window !== 'undefined') {
+    window.Sudoku = {
+        convertToMatrix,
+        convertToString,
+        range1To9,
+        shuffle,
+        getBoxIndex,
+        deepCopyBoard,
+        generateSolutionRandom,
+        getPossibleValues,
+        solveWithSingles,
+        generateSudoku,
+        generateDailySudoku,
+        hint
+    };
+}
+
+// For use with Node.js (CommonJS)
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        convertToMatrix,
+        convertToString,
+        range1To9,
+        shuffle,
+        getBoxIndex,
+        deepCopyBoard,
+        generateSolutionRandom,
+        getPossibleValues,
+        solveWithSingles,
+        generateSudoku,
+        generateDailySudoku,
+        hint
+    };
+}
+
+    </script>
     <style>
         :root {
             --bg-color: #0f0f13;
@@ -127,6 +879,40 @@
             color: var(--accent-success);
         }
 
+        /* Compact in-panel stat rows (Labyrinth / Sudoku sections) */
+        .mini-stat-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding: 8px 10px;
+            background: #14141c;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+
+        .mini-stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+            min-width: 70px;
+        }
+
+        .mini-stat-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .mini-stat-value {
+            font-size: 1rem;
+            font-weight: 700;
+            font-family: monospace;
+            color: var(--accent-success);
+        }
+
         /* Interactive Buttons */
         button {
             background: linear-gradient(135deg, #7c3aed, #6d28d9);
@@ -161,6 +947,93 @@
         button.secondary:hover {
             background: #313149;
             box-shadow: none;
+        }
+
+        /* CPU Visualization Panel */
+        .cpu-viz-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .cpu-viz-box {
+            background: #14141c;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .cpu-viz-title {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 6px;
+            text-align: center;
+        }
+
+        #cpu-radar {
+            display: block;
+            margin: 0 auto;
+            background: #050508;
+            border-radius: 6px;
+        }
+
+        #cpu-mini-sudoku {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 1px;
+            background: var(--border-color);
+            border: 1px solid var(--border-color);
+            max-width: 130px;
+            margin: 0 auto;
+        }
+
+        .cpu-mini-cell {
+            aspect-ratio: 1;
+            background: #0d0d12;
+        }
+
+        .cpu-mini-cell.filled {
+            background: var(--accent-success);
+        }
+
+        .cpu-mini-cell.clue {
+            background: #374151;
+        }
+
+        #cpu-inventory-bars {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .cpu-inv-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.7rem;
+            font-family: monospace;
+        }
+
+        .cpu-inv-num {
+            width: 12px;
+            color: var(--text-muted);
+        }
+
+        .cpu-inv-bar-track {
+            flex: 1;
+            height: 8px;
+            background: #0d0d12;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .cpu-inv-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #f59e0b, #fbbf24);
         }
 
         /* Maze Viewport Elements */
@@ -542,42 +1415,10 @@
     </header>
 
     <!-- Top Info Bar -->
-    <div class="top-bar">
-        <div class="stat-card">
-            <div class="stat-label">Maze Position</div>
-            <div id="pos-stat" class="stat-value">X:000 Y:000</div>
-        </div>
+    <div class="top-bar" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
         <div class="stat-card">
             <div class="stat-label">Game Time</div>
             <div id="timer-stat" class="stat-value">00:00.0</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Sudoku Left</div>
-            <div id="sudoku-left-stat" class="stat-value">-- / --</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Puzzles Done</div>
-            <div id="puzzles-done-stat" class="stat-value">0 / 1</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Labyrinth Moves</div>
-            <div id="lab-moves-stat" class="stat-value">0</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">On-Screen Moves</div>
-            <div id="screen-moves-stat" class="stat-value">0</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Moves/Sec (Now)</div>
-            <div id="mps-now-stat" class="stat-value">0.0</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Moves/Sec (Avg)</div>
-            <div id="mps-avg-stat" class="stat-value">0.0</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Moves/Sec (Max)</div>
-            <div id="mps-max-stat" class="stat-value">0.0</div>
         </div>
         <div class="stat-card">
             <div class="stat-label">Audio Synth</div>
@@ -596,19 +1437,37 @@
             <button class="mode-btn" data-mode="vscpu">Vs CPU</button>
             <button class="mode-btn" data-mode="tas">TAS (Auto)</button>
         </div>
-        <div id="vscpu-options" class="hidden" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <span class="stat-label" style="margin:0;">CPU Level:</span>
-            <div class="diff-selector" style="margin:0; flex:none;">
-                <button class="cpu-level-btn" data-cpulevel="easy">Easy</button>
-                <button class="cpu-level-btn active" data-cpulevel="medium">Medium</button>
-                <button class="cpu-level-btn" data-cpulevel="hard">Hard</button>
+        <div id="vscpu-options" class="hidden">
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+                <span class="stat-label" style="margin:0;">CPU Level:</span>
+                <div class="diff-selector" style="margin:0; flex:none;">
+                    <button class="cpu-level-btn" data-cpulevel="easy">Easy</button>
+                    <button class="cpu-level-btn active" data-cpulevel="medium">Medium</button>
+                    <button class="cpu-level-btn" data-cpulevel="hard">Hard</button>
+                </div>
+                <span class="stat-label" style="margin:0;">CPU Status:</span>
+                <span id="cpu-status" class="stat-value" style="font-size:0.9rem;">Idle</span>
+                <span class="stat-label" style="margin:0;">CPU Moves/s:</span>
+                <span id="cpu-mps" class="stat-value" style="font-size:0.9rem;">0.0</span>
+                <span class="stat-label" style="margin:0;">CPU Progress:</span>
+                <span id="cpu-progress" class="stat-value" style="font-size:0.9rem;">0/0</span>
             </div>
-            <span class="stat-label" style="margin:0;">CPU Status:</span>
-            <span id="cpu-status" class="stat-value" style="font-size:0.9rem;">Idle</span>
-            <span class="stat-label" style="margin:0;">CPU Moves/s:</span>
-            <span id="cpu-mps" class="stat-value" style="font-size:0.9rem;">0.0</span>
-            <span class="stat-label" style="margin:0;">CPU Progress:</span>
-            <span id="cpu-progress" class="stat-value" style="font-size:0.9rem;">0/0</span>
+
+            <!-- CPU Live Visualization: radar of its maze wandering + mini sudoku board -->
+            <div class="cpu-viz-row">
+                <div class="cpu-viz-box">
+                    <div class="cpu-viz-title">CPU Radar (relative position)</div>
+                    <canvas id="cpu-radar" width="140" height="140"></canvas>
+                </div>
+                <div class="cpu-viz-box">
+                    <div class="cpu-viz-title">CPU Sudoku Progress</div>
+                    <div id="cpu-mini-sudoku"></div>
+                </div>
+                <div class="cpu-viz-box">
+                    <div class="cpu-viz-title">CPU Inventory</div>
+                    <div id="cpu-inventory-bars"></div>
+                </div>
+            </div>
         </div>
         <div id="tas-options" class="hidden" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <label class="stat-label" style="margin:0; display:flex; align-items:center; gap:6px;">
@@ -637,7 +1496,16 @@
                 <span>The Labyrinth Viewport</span>
                 <span id="maze-dimension-indicator" style="font-size:0.75rem; color:var(--text-muted);">450 x 450 grid</span>
             </div>
-            
+
+            <div class="mini-stat-row">
+                <div class="mini-stat"><span class="mini-stat-label">Position</span><span id="pos-stat" class="mini-stat-value">X:000 Y:000</span></div>
+                <div class="mini-stat"><span class="mini-stat-label">Moves</span><span id="lab-moves-stat" class="mini-stat-value">0</span></div>
+                <div class="mini-stat"><span class="mini-stat-label">On-Screen</span><span id="screen-moves-stat" class="mini-stat-value">0</span></div>
+                <div class="mini-stat"><span class="mini-stat-label">Mv/s Now</span><span id="mps-now-stat" class="mini-stat-value">0.0</span></div>
+                <div class="mini-stat"><span class="mini-stat-label">Mv/s Avg</span><span id="mps-avg-stat" class="mini-stat-value">0.0</span></div>
+                <div class="mini-stat"><span class="mini-stat-label">Mv/s Max</span><span id="mps-max-stat" class="mini-stat-value">0.0</span></div>
+            </div>
+
             <div class="maze-area">
                 <div id="maze-view-container">
                     <table id="mazeTable"></table>
@@ -674,6 +1542,11 @@
             <div class="panel-title">
                 <span>Decryption Sudoku Matrix</span>
                 <span id="diff-indicator" style="font-size:0.75rem; color:var(--accent-warning);">Normal</span>
+            </div>
+
+            <div class="mini-stat-row">
+                <div class="mini-stat"><span class="mini-stat-label">Digits Left</span><span id="sudoku-left-stat" class="mini-stat-value">-- left</span></div>
+                <div class="mini-stat"><span class="mini-stat-label">Puzzles Done</span><span id="puzzles-done-stat" class="mini-stat-value">0 / 1</span></div>
             </div>
 
             <div class="sudoku-container">
@@ -714,6 +1587,11 @@
             <div class="stat-card" style="margin-bottom: 20px;">
                 <div class="stat-label">Completed Run Record</div>
                 <div id="victory-time" class="stat-value" style="color:var(--accent-success); font-size:1.8rem;">00:00</div>
+            </div>
+            <div class="mini-stat-row" style="margin-bottom:20px;">
+                <div class="mini-stat"><span class="mini-stat-label">Total Moves</span><span id="victory-total-moves" class="mini-stat-value">0</span></div>
+                <div class="mini-stat"><span class="mini-stat-label">Avg Mv/Sec</span><span id="victory-avg-mps" class="mini-stat-value">0.0</span></div>
+                <div class="mini-stat"><span class="mini-stat-label">Max Mv/Sec</span><span id="victory-max-mps" class="mini-stat-value">0.0</span></div>
             </div>
             <button id="playAgainBtn" style="width: 100%;">Construct New Labyrinth</button>
         </div>
@@ -824,22 +1702,36 @@
         let puzzleCount = 1;
         let puzzlesCompleted = 0;
 
+        // Movement speed and context-switch overhead back to original values;
+        // only the per-technique "thinking" times stay buffed, so CPUs solve
+        // digits faster once they have them, without wandering the maze faster.
         const CPU_PROFILES = {
-            easy:   { mps: 2,  boxHS: 25, lineHS: 40, nakedSingle: 60, switchTime: 20 },
-            medium: { mps: 5,  boxHS: 15, lineHS: 25, nakedSingle: 35, switchTime: 10 },
-            hard:   { mps: 10, boxHS: 10, lineHS: 15, nakedSingle: 20, switchTime: 5 }
+            easy:   { mps: 2,  boxHS: 12, lineHS: 20, nakedSingle: 28, switchTime: 20 },
+            medium: { mps: 5,  boxHS: 6,  lineHS: 10, nakedSingle: 15, switchTime: 10 },
+            hard:   { mps: 10, boxHS: 2,  lineHS: 4,  nakedSingle: 6,  switchTime: 5  }
         };
 
         // --- Move / Moves-per-second Stat Tracking (Labyrinth) ---
-        let labyrinthMoveCount = 0;   // total moves made in the labyrinth (this puzzle-cycle run)
-        let onScreenMoveCount = 0;    // total moves made while the maze viewport was the visible/active one
-        let moveTimestamps = [];      // rolling timestamps (ms) of recent moves, for "instant" mps window
+        // Only the PLAYER's own on-screen moves should ever show up in the HUD
+        // stats (position counter, moves/sec now/avg/max, victory summary). CPU
+        // moves happen on a separate mirrored maze the player never sees, so they
+        // must never bleed into these numbers — tracked in their own counter
+        // instead, entirely isolated from the player-facing stats.
+        let labyrinthMoveCount = 0;   // player's on-screen moves only (this puzzle-cycle run)
+        let onScreenMoveCount = 0;    // kept as an alias of labyrinthMoveCount for back-compat with existing HUD id
+        let cpuOffScreenMoveCount = 0; // CPU's own move count, tracked separately, never shown in player HUD
+        let moveTimestamps = [];      // rolling timestamps (ms) of recent ON-SCREEN moves, for "instant" mps window
         let maxMovesPerSec = 0;
         const MPS_WINDOW_MS = 1000;   // 1-second rolling window for "instant" moves/sec
 
         function recordLabyrinthMove(isOnScreen) {
+            if (!isOnScreen) {
+                // CPU / off-screen move — track separately, do NOT touch player stats.
+                cpuOffScreenMoveCount++;
+                return;
+            }
             labyrinthMoveCount++;
-            if (isOnScreen) onScreenMoveCount++;
+            onScreenMoveCount++;
             const now = performance.now();
             moveTimestamps.push(now);
             // Trim anything older than the rolling window
@@ -859,6 +1751,7 @@
         function resetMoveStats() {
             labyrinthMoveCount = 0;
             onScreenMoveCount = 0;
+            cpuOffScreenMoveCount = 0;
             moveTimestamps = [];
             maxMovesPerSec = 0;
         }
@@ -1174,14 +2067,23 @@
                 }
             }
 
-            const multiplier = 80; // Massive 80x density multiplier!
+            // Total distinct empty cells that need a digit — this drives how dense
+            // spawning needs to be. Fewer clues (hard mode) = more empty cells =
+            // we need a HIGHER per-digit multiplier just to keep find-distance sane,
+            // not the same flat 80x used for every difficulty.
+            const totalNeeded = requiredInventory.reduce((a, b) => a + b, 0);
+            // Scale inversely with how sparse the "need" is: more needed digits per
+            // puzzle -> proportionally denser scatter so average nearest-copy
+            // distance stays roughly constant regardless of difficulty.
+            const baseMultiplier = 80;
+            const multiplier = totalNeeded > 40 ? baseMultiplier * 2.5 : baseMultiplier; // hard/dense puzzles get notably denser scatter
 
             // Scatter duplicate copies of missing digits in the maze
             for (let num = 1; num <= 9; num++) {
                 let instancesToSpawn = requiredInventory[num] * multiplier;
                 let spawned = 0;
                 let attempts = 0; // Prevent any rare lockups
-                const maxAttempts = instancesToSpawn * 10;
+                const maxAttempts = instancesToSpawn * 15;
                 while (spawned < instancesToSpawn && attempts < maxAttempts) {
                     attempts++;
                     let rx = Math.floor(Math.random() * (MAZE_W - 2)) + 1;
@@ -1195,11 +2097,11 @@
                 }
             }
 
-            // Scatter exactly 20,000 mystery '?' items
+            // Mystery '?' runes: restored to the original flat 20,000 target.
             let mysteryPlaced = 0;
             const targetMystery = 20000;
             let mysteryAttempts = 0;
-            const maxMysteryAttempts = targetMystery * 10;
+            const maxMysteryAttempts = targetMystery * 15;
             while (mysteryPlaced < targetMystery && mysteryAttempts < maxMysteryAttempts) {
                 mysteryAttempts++;
                 let rx = Math.floor(Math.random() * (MAZE_W - 2)) + 1;
@@ -1543,6 +2445,9 @@
                 sounds.victory();
 
                 document.getElementById('victory-time').innerText = document.getElementById('timer-stat').innerText;
+                document.getElementById('victory-total-moves').innerText = labyrinthMoveCount;
+                document.getElementById('victory-avg-mps').innerText = computeAverageMps().toFixed(2);
+                document.getElementById('victory-max-mps').innerText = maxMovesPerSec.toFixed(1);
                 document.getElementById('victory-modal').classList.remove('hidden');
             }
         }
@@ -1781,13 +2686,87 @@
             cpuState.switchTarget = 'walking'; // always start by gathering loot
             cpuState.switchElapsed = 0;
             document.getElementById('cpu-status').innerText = 'Starting...';
+            renderCpuMiniSudoku(cpuState);
+            renderCpuVisuals(cpuState);
             scheduleCpuTick();
+        }
+
+        // --- CPU Visualization: radar trail, mini sudoku grid, inventory bars ---
+        function renderCpuVisuals(cpu) {
+            renderCpuRadar(cpu);
+            renderCpuInventory(cpu);
+        }
+
+        function renderCpuRadar(cpu) {
+            const canvas = document.getElementById('cpu-radar');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const W = canvas.width, H = canvas.height;
+            ctx.fillStyle = '#050508';
+            ctx.fillRect(0, 0, W, H);
+
+            // Draw a trailing breadcrumb of recent CPU positions, centered on current pos
+            if (!cpu.trail) cpu.trail = [];
+            cpu.trail.push([cpu.x, cpu.y]);
+            if (cpu.trail.length > 300) cpu.trail.shift();
+
+            const scale = 0.6; // px per maze-cell, relative view
+            const cx = W / 2, cy = H / 2;
+            ctx.strokeStyle = 'rgba(139,92,246,0.5)';
+            ctx.beginPath();
+            cpu.trail.forEach(([tx, ty], i) => {
+                const px = cx + (tx - cpu.x) * scale;
+                const py = cy + (ty - cpu.y) * scale;
+                if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            });
+            ctx.stroke();
+
+            // CPU position marker
+            ctx.fillStyle = '#10b981';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function renderCpuMiniSudoku(cpu) {
+            const container = document.getElementById('cpu-mini-sudoku');
+            if (!container) return;
+            container.innerHTML = '';
+            for (let i = 0; i < 81; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cpu-mini-cell';
+                if (cpu.puzzle[i] !== 0) cell.classList.add('clue');
+                else if (cpu.userGrid[i] !== 0) cell.classList.add('filled');
+                container.appendChild(cell);
+            }
+        }
+
+        function renderCpuInventory(cpu) {
+            const container = document.getElementById('cpu-inventory-bars');
+            if (!container) return;
+            const maxInv = Math.max(1, ...cpu.inventory.slice(1));
+            container.innerHTML = '';
+            for (let n = 1; n <= 9; n++) {
+                const row = document.createElement('div');
+                row.className = 'cpu-inv-row';
+                const pct = Math.min(100, (cpu.inventory[n] / maxInv) * 100);
+                row.innerHTML = `<span class="cpu-inv-num">${n}</span>
+                    <span class="cpu-inv-bar-track"><span class="cpu-inv-bar-fill" style="width:${pct}%"></span></span>
+                    <span>${cpu.inventory[n]}</span>`;
+                container.appendChild(row);
+            }
         }
 
         function stopCpuSimulation() {
             if (cpuTimerHandle) clearTimeout(cpuTimerHandle);
             cpuTimerHandle = null;
             cpuState = null;
+            const canvas = document.getElementById('cpu-radar');
+            if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+            const miniSudoku = document.getElementById('cpu-mini-sudoku');
+            if (miniSudoku) miniSudoku.innerHTML = '';
+            const invBars = document.getElementById('cpu-inventory-bars');
+            if (invBars) invBars.innerHTML = '';
         }
 
         function scheduleCpuTick() {
@@ -1826,12 +2805,18 @@
                     cpuStepWalk(cpuState);
                 }
                 document.getElementById('cpu-mps').innerText = profile.mps.toFixed(1);
+                renderCpuVisuals(cpuState);
 
-                // Switch back to solving as soon as EITHER: (a) it has fully
-                // restocked everything it still needs, or (b) it already has at
-                // least one digit in hand that unlocks an immediate placement —
-                // no point wandering further before cashing that in.
-                if (!cpuNeedsMoreLoot(cpuState) || cpuHasPendingSolve(cpuState)) {
+                // Only head back to solving once the CPU has fully restocked every
+                // digit it still needs for its remaining empty cells. Previously it
+                // would also bail out early the moment a single placeable digit
+                // showed up in its inventory (cpuHasPendingSolve) — that caused
+                // constant walk<->solve thrashing, eating switchTime over and over
+                // for the sake of cashing in one digit at a time. Committing to a
+                // full "scouting run" before switching back means far fewer context
+                // switches overall, even though each individual placement happens
+                // slightly later.
+                if (!cpuNeedsMoreLoot(cpuState)) {
                     cpuState.phase = 'switching';
                     cpuState.switchTarget = 'solving';
                     cpuState.switchElapsed = 0;
@@ -1841,7 +2826,12 @@
                 document.getElementById('cpu-status').innerText = 'Solving sudoku...';
                 document.getElementById('cpu-mps').innerText = '0.0';
                 cpuState.solveAccum = (cpuState.solveAccum || 0) + dt;
+                const prevFilled = cpuState.userGrid.filter(v => v !== 0).length;
                 cpuAdvanceSolve(cpuState, dt);
+                if (cpuState.userGrid.filter(v => v !== 0).length !== prevFilled) {
+                    renderCpuMiniSudoku(cpuState);
+                    renderCpuInventory(cpuState);
+                }
 
                 if (cpuComputeNeeded(cpuState) === 0) {
                     // CPU finished its sudoku copy
@@ -2045,10 +3035,21 @@
             return false;
         }
 
-        // Finds the item cell that is most useful right now: prioritizes digits
-        // that would IMMEDIATELY complete a naked/hidden single once collected
-        // (a "certain" placement), tie-broken by straight-line distance; falls
-        // back to the nearest copy of any still-needed digit otherwise.
+        // Finds the item cell that is most useful right now, using TRUE maze-walk
+        // distance instead of straight-line distance. The old version scanned every
+        // item on the map and ranked candidates by Manhattan distance — but Manhattan
+        // distance has almost no relationship to actual walking distance in a maze
+        // full of walls, so it would frequently send the walker toward a target that
+        // "looked" close on the coordinate grid but was actually hundreds of corridor
+        // steps away (while a truly closer-by-corridor item sat ignored because its
+        // straight-line distance looked slightly worse).
+        //
+        // Fix: flood-fill outward from the walker's actual position via BFS over real
+        // corridors (same connectivity bidirectionalBFS uses), and grab the first
+        // "certain" item we reach; if none turns up within a reasonable search radius,
+        // fall back to the first "any needed digit" item reached. This guarantees the
+        // chosen target is genuinely the nearest reachable one — not just nearest as
+        // the crow flies — which is what was driving the 200+ move detours.
         function findNearestUsefulItem(itemsGrid, fromX, fromY, userGrid, solvedGrid) {
             const singles = findNakedSingles(userGrid).concat(
                 findBoxHiddenSingles(userGrid), findLineHiddenSingles(userGrid));
@@ -2057,22 +3058,46 @@
             const needCounts = Array(10).fill(0);
             for (let i = 0; i < 81; i++) if (userGrid[i] === 0) needCounts[solvedGrid[i]]++;
 
-            let best = null, bestDist = Infinity, bestIsCertain = false;
-            for (let y = 0; y < MAZE_H; y++) {
-                for (let x = 0; x < MAZE_W; x++) {
+            const key = (x, y) => y * MAZE_W + x;
+            const visited = new Set([key(fromX, fromY)]);
+            let frontier = [[fromX, fromY]];
+
+            let bestAny = null;       // nearest reachable item of any still-needed digit
+            const maxSearchCells = 60000; // generous cap so we never hang on a pathological maze
+            let scanned = 0;
+
+            while (frontier.length && scanned < maxSearchCells) {
+                const next = [];
+                for (const [x, y] of frontier) {
+                    scanned++;
                     const v = itemsGrid[y * MAZE_W + x];
-                    if (v < 1 || v > 9) continue; // skip empty + mystery for targeting purposes
-                    if (needCounts[v] <= 0) continue;
-                    const isCertain = certainDigits.has(v);
-                    const dist = Math.abs(x - fromX) + Math.abs(y - fromY);
-                    if (isCertain && !bestIsCertain) {
-                        best = { x, y, value: v }; bestDist = dist; bestIsCertain = true;
-                    } else if (isCertain === bestIsCertain && dist < bestDist) {
-                        best = { x, y, value: v }; bestDist = dist; bestIsCertain = isCertain;
+                    if (v >= 1 && v <= 9 && needCounts[v] > 0) {
+                        // First "certain" (immediately-placeable) item found by true walk
+                        // distance wins outright — it's the closest one that matters most.
+                        if (certainDigits.has(v)) {
+                            return { x, y, value: v };
+                        }
+                        // Otherwise remember the first "any needed digit" item as a
+                        // fallback, but keep searching a bit further in case a certain
+                        // one turns up nearby too.
+                        if (!bestAny) bestAny = { x, y, value: v };
+                    }
+                    for (const [nx, ny] of neighborsOf(x, y)) {
+                        const k = key(nx, ny);
+                        if (!visited.has(k)) {
+                            visited.add(k);
+                            next.push([nx, ny]);
+                        }
                     }
                 }
+                frontier = next;
+                // Once we already have a fallback target and have searched reasonably
+                // far past it, no point exhaustively flood-filling the whole maze —
+                // stop early and commit to the fallback.
+                if (bestAny && scanned > 4000) break;
             }
-            return best;
+
+            return bestAny;
         }
 
         function tasTryAutoFillSudoku() {
