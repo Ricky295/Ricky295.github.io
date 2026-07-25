@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atmosphere AI - Gemini Weather Art Generator</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                        display: ['"Space Grotesk"', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#0f172a',
+                        }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'spin-slow': 'spin 12s linear infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar for aesthetic appeal */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(51, 65, 85, 0.8);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(71, 85, 105, 1);
+        }
+        
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glow-effect {
+            box-shadow: 0 0 35px -5px rgba(59, 130, 246, 0.25);
+        }
+
+        /* Weather Art Image Skeleton Loader */
+        .shimmer {
+            background: linear-gradient(90deg, #1e293b 0%, #334155 50%, #1e293b 100%);
+            background-size: 200% 100%;
+            animation: shimmer 1.8s infinite;
+        }
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans bg-slate-950 text-slate-100 antialiased selection:bg-blue-500 selection:text-white">
+
+    <!-- Header Navigation -->
+    <header class="sticky top-0 z-40 glass-panel border-b border-slate-800/80">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+            <!-- Brand Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                    <i class="fa-solid font-bold fa-wand-magic-sparkles text-white text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-display font-bold text-lg sm:text-xl tracking-tight text-white flex items-center gap-2">
+                        Atmosphere <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">Gemini AI</span>
+                    </h1>
+                    <p class="text-[10px] sm:text-xs text-slate-400 hidden sm:block">Open-Meteo Weather & Gemini Image Generator</p>
+                </div>
+            </div>
+
+            <!-- API Key & Controls Trigger -->
+            <div class="flex items-center gap-2 sm:gap-3">
+                <button id="apiKeyBtn" onclick="toggleApiKeyModal()" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-300 hover:text-white transition flex items-center gap-2">
+                    <i class="fa-solid fa-key text-amber-400"></i>
+                    <span id="apiKeyStatus">API Key: <span class="text-emerald-400">Default/Active</span></span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Search & Control Header Bar -->
+        <section class="glass-panel p-4 sm:p-5 rounded-2xl glow-effect space-y-4">
+            <div class="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+                <!-- Location Input Field with Auto-complete -->
+                <div class="relative flex-1">
+                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <i class="fa-solid fa-location-dot text-blue-400"></i>
+                    </div>
+                    <input type="text" id="cityInput" placeholder="Enter city (e.g. Tokyo, Paris, New York, Rome)..." 
+                        class="w-full pl-10 pr-10 py-2.5 bg-slate-900/90 border border-slate-700/80 rounded-xl text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition">
+                    <button id="clearSearchBtn" onclick="clearCityInput()" class="hidden absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                    <!-- Search Suggestions Dropdown -->
+                    <div id="searchResults" class="hidden absolute left-0 right-0 top-full mt-2 glass-panel border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 max-h-60 overflow-y-auto">
+                    </div>
+                </div>
+
+                <!-- GPS Location Button & Fetch Button -->
+                <div class="flex items-center gap-2">
+                    <button onclick="useGPSLocation()" title="Use GPS Location" class="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs sm:text-sm font-semibold text-slate-200 hover:text-white transition flex items-center gap-2 whitespace-nowrap">
+                        <i class="fa-solid fa-crosshairs text-blue-400"></i>
+                        <span>Use GPS</span>
+                    </button>
+                    <button onclick="fetchWeatherAndGenerate()" class="flex-1 md:flex-none px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-xl text-xs sm:text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition transform active:scale-95 flex items-center justify-center gap-2 whitespace-nowrap">
+                        <i class="fa-solid fa-rotate-right" id="searchBtnSpinner"></i>
+                        <span>Get Weather Art</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Art Style & AI Options -->
+            <div class="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div class="flex flex-wrap items-center gap-2 flex-1 min-w-[280px]">
+                    <span class="text-slate-400 font-medium whitespace-nowrap"><i class="fa-solid fa-palette text-indigo-400 mr-1"></i> Art Style:</span>
+                    <div class="relative flex-1 min-w-[200px]">
+                        <input type="text" id="artStyleInput" list="artStylePresets" 
+                            value="Van Gogh Starry Night style, expressive oil painting brushstrokes, swirling starry skies" 
+                            placeholder="Type any style (e.g. Starry Night, Cyberpunk, Monet, 3D Pixar)..." 
+                            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500">
+                        <datalist id="artStylePresets">
+                            <option value="Van Gogh Starry Night style, expressive oil painting brushstrokes, swirling skies"></option>
+                            <option value="Cinematic Photorealism, 8k resolution, dramatic volumetric lighting"></option>
+                            <option value="Studio Ghibli Anime, vibrant lush watercolors, dreamy fantasy"></option>
+                            <option value="Cyberpunk futuristic city, neon glow, wet reflections, sci-fi atmosphere"></option>
+                            <option value="Claude Monet Impressionism, soft romantic lighting, textured oil brushstrokes"></option>
+                            <option value="Cozy Pixel Art, 16-bit retro video game aesthetic"></option>
+                            <option value="Ukiyo-e Japanese woodblock print, traditional watercolor textures"></option>
+                            <option value="Synthwave 80s retro sunset aesthetic, glowing neon grid horizon"></option>
+                            <option value="Surrealist dreamscape, Salvador Dali inspired fantasy art"></option>
+                        </datalist>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 text-xs">
+                    <span class="text-slate-400 font-medium whitespace-nowrap"><i class="fa-solid fa-microchip text-cyan-400 mr-1"></i> Model:</span>
+                    <select id="aiModelSelect" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
+                        <option value="imagen-4.0-generate-001">Imagen 4.0 (High Precision)</option>
+                        <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash Image</option>
+                    </select>
+
+                    <label class="flex items-center gap-1.5 cursor-pointer select-none hover:text-slate-200 text-slate-400 ml-2">
+                        <input type="checkbox" id="includeCityLandmarks" checked class="rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-blue-500">
+                        <span class="hidden sm:inline">Include Landmarks</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Quick Style Suggestion Pills -->
+            <div class="flex items-center gap-1.5 overflow-x-auto pt-1 pb-0.5 text-[11px] text-slate-400">
+                <span class="text-slate-500 font-medium mr-1 text-[10px] uppercase tracking-wider whitespace-nowrap">Presets:</span>
+                <button onclick="setArtStyle('Van Gogh Starry Night style, expressive oil painting brushstrokes, swirling skies')" class="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 hover:text-white transition whitespace-nowrap">✨ Starry Night</button>
+                <button onclick="setArtStyle('Cinematic Photorealism, 8k resolution, dramatic volumetric lighting')" class="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-300 hover:text-white transition whitespace-nowrap">📸 Photorealistic</button>
+                <button onclick="setArtStyle('Studio Ghibli Anime, vibrant lush watercolors, dreamy fantasy')" class="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-300 hover:text-white transition whitespace-nowrap">🎨 Ghibli Anime</button>
+                <button onclick="setArtStyle('Cyberpunk futuristic city, neon glow, wet reflections, sci-fi')" class="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-fuchsia-300 hover:text-white transition whitespace-nowrap">🌆 Cyberpunk</button>
+                <button onclick="setArtStyle('Claude Monet Impressionism, soft romantic lighting, textured oil')" class="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-blue-300 hover:text-white transition whitespace-nowrap">🖼️ Monet Impressionism</button>
+            </div>
+        </section>
+
+        <!-- Current Weather & Generated Artwork Grid -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Generated Artwork Card (Left 7 Cols on Desktop) -->
+            <div class="lg:col-span-7 glass-panel rounded-3xl p-4 sm:p-6 flex flex-col justify-between space-y-4 relative overflow-hidden group">
+                <div class="flex items-center justify-between z-10">
+                    <div class="flex items-center gap-2">
+                        <span class="px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-semibold border border-blue-500/30 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            AI Generated Artwork
+                        </span>
+                        <span id="artTargetLabel" class="text-xs text-slate-400">Current Weather</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="regenerateArtwork()" title="Regenerate Art" class="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                        </button>
+                        <button onclick="downloadArtwork()" id="downloadBtn" disabled title="Download Image" class="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition disabled:opacity-40 disabled:cursor-not-allowed">
+                            <i class="fa-solid fa-download"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Artwork Container / Canvas Display -->
+                <div class="relative w-full aspect-video sm:aspect-[16/10] rounded-2xl overflow-hidden bg-slate-900/90 border border-slate-800 flex items-center justify-center">
+                    <!-- Shimmer Loading Overlay -->
+                    <div id="imageLoader" class="hidden absolute inset-0 shimmer z-20 flex flex-col items-center justify-center p-6 text-center space-y-3">
+                        <div class="w-12 h-12 rounded-full border-4 border-blue-500/30 border-t-blue-500 animate-spin"></div>
+                        <p id="loaderText" class="text-xs font-medium text-slate-200">Consulting Gemini AI & painting weather scenery...</p>
+                    </div>
+
+                    <!-- Generated Image Output -->
+                    <img id="weatherArtImg" src="https://placehold.co/1200x750/0f172a/3b82f6?text=Atmosphere+AI+Weather+Artwork" 
+                         alt="Weather Artwork" 
+                         class="w-full h-full object-cover transition-all duration-700">
+
+                    <!-- Overlay Prompt Info Bar -->
+                    <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-transparent p-4 flex items-end justify-between">
+                        <div class="max-w-md">
+                            <p id="imagePromptText" class="text-[11px] sm:text-xs text-slate-300 line-clamp-2 italic font-mono bg-slate-900/60 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-slate-700/50">
+                                Prompt will appear here once weather is loaded...
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Art Style Tags -->
+                <div id="promptTagContainer" class="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-slate-400">
+                    <!-- Dynamic tags will be injected here -->
+                </div>
+            </div>
+
+            <!-- Current Weather Overview Card (Right 5 Cols on Desktop) -->
+            <div class="lg:col-span-5 glass-panel rounded-3xl p-6 flex flex-col justify-between space-y-6">
+                <!-- Location & Date Header -->
+                <div>
+                    <div class="flex items-center justify-between">
+                        <span id="currentDateStr" class="text-xs font-medium text-blue-400 uppercase tracking-wider">Today</span>
+                        <span id="dayNightBadge" class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            <i class="fa-solid fa-sun mr-1"></i> Day
+                        </span>
+                    </div>
+                    <h2 id="cityNameDisplay" class="text-3xl font-display font-extrabold text-white mt-1">Select City</h2>
+                    <p id="weatherConditionText" class="text-sm font-medium text-slate-300 mt-1 flex items-center gap-2">
+                        <span>Awaiting location input...</span>
+                    </p>
+                </div>
+
+                <!-- Temperature Big Display -->
+                <div class="flex items-baseline gap-4 my-2">
+                    <span id="currentTemp" class="text-6xl sm:text-7xl font-display font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-slate-400">
+                        --°
+                    </span>
+                    <div>
+                        <div class="text-sm text-slate-400">Feels like <span id="feelsLikeTemp" class="text-slate-200 font-semibold">--°</span></div>
+                        <div class="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                            <span>High: <strong id="todayMaxTemp" class="text-slate-300">--°</strong></span>
+                            <span>•</span>
+                            <span>Low: <strong id="todayMinTemp" class="text-slate-300">--°</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Weather Metrics Grid -->
+                <div class="grid grid-cols-2 gap-3 pt-2">
+                    <div class="glass-card p-3 rounded-2xl flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-droplet"></i>
+                        </div>
+                        <div>
+                            <div class="text-[11px] text-slate-400 font-medium">Humidity</div>
+                            <div id="humidityVal" class="text-base font-bold text-slate-100">--%</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-3 rounded-2xl flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-wind"></i>
+                        </div>
+                        <div>
+                            <div class="text-[11px] text-slate-400 font-medium">Wind Speed</div>
+                            <div id="windVal" class="text-base font-bold text-slate-100">-- km/h</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-3 rounded-2xl flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-cloud-rain"></i>
+                        </div>
+                        <div>
+                            <div class="text-[11px] text-slate-400 font-medium">Precipitation</div>
+                            <div id="precipVal" class="text-base font-bold text-slate-100">-- mm</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-3 rounded-2xl flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-sun"></i>
+                        </div>
+                        <div>
+                            <div class="text-[11px] text-slate-400 font-medium">UV Index</div>
+                            <div id="uvVal" class="text-base font-bold text-slate-100">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 8-Day Forecast Table Section -->
+        <section class="glass-panel rounded-3xl p-6 space-y-4">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+                <div>
+                    <h3 class="font-display font-bold text-lg text-white flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-days text-blue-400"></i>
+                        8-Day Weather Forecast
+                    </h3>
+                    <p class="text-xs text-slate-400">Click any day to generate its specific atmospheric artwork</p>
+                </div>
+                <!-- View Mode Switch -->
+                <div class="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-xs">
+                    <button id="viewTableBtn" onclick="switchForecastView('table')" class="px-3 py-1 rounded-lg font-medium bg-blue-600 text-white transition">
+                        <i class="fa-solid fa-table-list mr-1"></i> Table
+                    </button>
+                    <button id="viewGridBtn" onclick="switchForecastView('grid')" class="px-3 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition">
+                        <i class="fa-solid fa-grip mr-1"></i> Cards
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table View Container -->
+            <div id="forecastTableView" class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead>
+                        <tr class="text-xs uppercase text-slate-400 border-b border-slate-800/60 font-semibold">
+                            <th class="py-3 px-4">Day</th>
+                            <th class="py-3 px-4">Condition</th>
+                            <th class="py-3 px-4 text-center">Temp Bar</th>
+                            <th class="py-3 px-4 text-right">Min / Max</th>
+                            <th class="py-3 px-4 text-center">Rain</th>
+                            <th class="py-3 px-4 text-center">Wind</th>
+                            <th class="py-3 px-4 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="forecastTableBody" class="divide-y divide-slate-800/40">
+                        <!-- Table rows generated dynamically -->
+                        <tr>
+                            <td colspan="7" class="py-8 text-center text-slate-500">
+                                Load a city to see the 8-day weather forecast.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Grid Cards View Container (Hidden by default) -->
+            <div id="forecastGridView" class="hidden grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 pt-2">
+                <!-- Grid items generated dynamically -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- API Key Modal -->
+    <div id="apiKeyModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div class="glass-panel max-w-md w-full rounded-3xl p-6 space-y-5 border border-slate-700 shadow-2xl relative">
+            <button onclick="toggleApiKeyModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white p-2">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg border border-amber-500/30">
+                    <i class="fa-solid fa-key"></i>
+                </div>
+                <div>
+                    <h3 class="font-display font-bold text-lg text-white">Gemini API Key Setup</h3>
+                    <p class="text-xs text-slate-400">Custom key or built-in default</p>
+                </div>
+            </div>
+
+            <div class="space-y-3 text-xs text-slate-300">
+                <p>By default, this app will use standard Gemini API credentials. If you wish to use your own personal Google AI Studio Key, paste it below.</p>
+                <div>
+                    <label class="block text-slate-400 font-semibold mb-1">Your Gemini API Key:</label>
+                    <input type="password" id="customApiKeyInput" placeholder="AIzaSy..." class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500 font-mono">
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-2">
+                <button onclick="clearCustomApiKey()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white transition">Reset to Default</button>
+                <button onclick="saveCustomApiKey()" class="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30 transition">Save Key</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 glass-panel px-4 py-3 rounded-2xl border border-slate-700 flex items-center gap-3 shadow-2xl">
+        <i id="toastIcon" class="fa-solid fa-circle-info text-blue-400"></i>
+        <span id="toastMsg" class="text-xs font-semibold text-slate-200">Notification message</span>
+    </div>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800/80 mt-12 py-6 glass-panel">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p>Powered by <a href="https://open-meteo.com/" target="_blank" class="text-blue-400 hover:underline">Open-Meteo Weather API</a> & <a href="https://ai.google.dev/" target="_blank" class="text-indigo-400 hover:underline">Google Gemini AI</a></p>
+            <p>© 2026 Atmosphere AI. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Global Application State
+        const state = {
+            city: '',
+            latitude: null,
+            longitude: null,
+            currentWeather: null,
+            currentUtcOffset: 0,
+            forecastDaily: [],
+            selectedDayIndex: 0, // 0 = current day
+            customApiKey: localStorage.getItem('gemini_user_api_key') || '',
+            activeArtUrl: '',
+            activePrompt: '',
+            currentViewMode: 'table'
+        };
+
+        // WMO Weather Code Interpretations & FontAwesome Icons
+        const WMO_CODES = {
+            0: { label: 'Clear Sky', icon: 'fa-sun', textClass: 'text-amber-400', vibe: 'clear sky' },
+            1: { label: 'Mainly Clear', icon: 'fa-cloud-sun', textClass: 'text-amber-300', vibe: 'mainly clear' },
+            2: { label: 'Partly Cloudy', icon: 'fa-cloud-sun', textClass: 'text-slate-300', vibe: 'partly cloudy' },
+            3: { label: 'Overcast', icon: 'fa-cloud', textClass: 'text-slate-400', vibe: 'overcast' },
+            45: { label: 'Foggy', icon: 'fa-smog', textClass: 'text-slate-400', vibe: 'foggy' },
+            48: { label: 'Depositing Rime Fog', icon: 'fa-smog', textClass: 'text-slate-400', vibe: 'rime fog' },
+            51: { label: 'Light Drizzle', icon: 'fa-cloud-rain', textClass: 'text-cyan-400', vibe: 'light drizzle' },
+            53: { label: 'Moderate Drizzle', icon: 'fa-cloud-rain', textClass: 'text-cyan-400', vibe: 'moderate drizzle' },
+            55: { label: 'Dense Drizzle', icon: 'fa-cloud-showers-heavy', textClass: 'text-blue-400', vibe: 'dense drizzle' },
+            61: { label: 'Slight Rain', icon: 'fa-cloud-rain', textClass: 'text-blue-400', vibe: 'slight rain' },
+            63: { label: 'Moderate Rain', icon: 'fa-cloud-showers-heavy', textClass: 'text-blue-500', vibe: 'moderate rain' },
+            65: { label: 'Heavy Rain', icon: 'fa-cloud-showers-heavy', textClass: 'text-blue-600', vibe: 'heavy rain' },
+            71: { label: 'Slight Snow', icon: 'fa-snowflake', textClass: 'text-cyan-200', vibe: 'slight snow' },
+            73: { label: 'Moderate Snow', icon: 'fa-snowflake', textClass: 'text-cyan-100', vibe: 'moderate snow' },
+            75: { label: 'Heavy Snow', icon: 'fa-snowflake', textClass: 'text-white', vibe: 'heavy snow' },
+            80: { label: 'Rain Showers', icon: 'fa-cloud-sun-rain', textClass: 'text-blue-400', vibe: 'rain showers' },
+            85: { label: 'Snow Showers', icon: 'fa-snowflake', textClass: 'text-cyan-300', vibe: 'snow showers' },
+            95: { label: 'Thunderstorm', icon: 'fa-bolt-lightning', textClass: 'text-purple-400', vibe: 'thunderstorm' },
+            96: { label: 'Thunderstorm Hail', icon: 'fa-bolt', textClass: 'text-purple-500', vibe: 'thunderstorm with hail' }
+        };
+
+        function setArtStyle(styleText) {
+            document.getElementById('artStyleInput').value = styleText;
+            showToast('Art style updated');
+        }
+
+        // Initialize App on DOM Load without auto-fetching
+        window.addEventListener('DOMContentLoaded', () => {
+            updateApiKeyUI();
+            setupSearchAutocomplete();
+        });
+
+        // Helper to format ISO time (e.g., 2026-07-25T23:55) to 11:55PM
+        function formatFormattedLocalTime(isoStr) {
+            if (!isoStr) return '12:00PM';
+            const parts = isoStr.split('T');
+            if (parts.length < 2) return '12:00PM';
+            const timeParts = parts[1].split(':');
+            const hrs = parseInt(timeParts[0], 10);
+            const mins = timeParts[1];
+            const period = hrs >= 12 ? 'PM' : 'AM';
+            const h12 = hrs % 12 || 12;
+            return `${h12}:${mins}${period}`;
+        }
+
+        function updateApiKeyUI() {
+            const statusEl = document.getElementById('apiKeyStatus');
+            if (state.customApiKey) {
+                statusEl.innerHTML = `API Key: <span class="text-amber-400 font-mono">Custom</span>`;
+                document.getElementById('customApiKeyInput').value = state.customApiKey;
+            } else {
+                statusEl.innerHTML = `API Key: <span class="text-emerald-400">Default/Active</span>`;
+            }
+        }
+
+        function saveCustomApiKey() {
+            const key = document.getElementById('customApiKeyInput').value.trim();
+            state.customApiKey = key;
+            if (key) {
+                localStorage.setItem('gemini_user_api_key', key);
+                showToast('Custom Gemini API key saved!');
+            } else {
+                localStorage.removeItem('gemini_user_api_key');
+                showToast('Using default API key setup');
+            }
+            updateApiKeyUI();
+            toggleApiKeyModal();
+        }
+
+        function clearCustomApiKey() {
+            state.customApiKey = '';
+            localStorage.removeItem('gemini_user_api_key');
+            document.getElementById('customApiKeyInput').value = '';
+            updateApiKeyUI();
+            showToast('Reset to default Gemini key');
+            toggleApiKeyModal();
+        }
+
+        // City Auto-complete search using Open-Meteo Geocoding API
+        function setupSearchAutocomplete() {
+            const input = document.getElementById('cityInput');
+            const clearBtn = document.getElementById('clearSearchBtn');
+            const resultsDiv = document.getElementById('searchResults');
+            let debounceTimer;
+
+            input.addEventListener('input', (e) => {
+                const query = e.target.value.trim();
+                if (query.length > 0) {
+                    clearBtn.classList.remove('hidden');
+                } else {
+                    clearBtn.classList.add('hidden');
+                    resultsDiv.classList.add('hidden');
+                    return;
+                }
+
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(async () => {
+                    if (query.length < 2) return;
+                    try {
+                        const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=en&format=json`);
+                        const data = await res.json();
+                        
+                        if (data.results && data.results.length > 0) {
+                            resultsDiv.innerHTML = data.results.map(item => `
+                                <div onclick="selectCity('${item.name.replace(/'/g, "\\'")}', ${item.latitude}, ${item.longitude}, '${(item.country || '').replace(/'/g, "\\'")}')" 
+                                     class="p-3 hover:bg-slate-800/80 cursor-pointer flex items-center justify-between transition border-b border-slate-800/40 last:border-none">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fa-solid fa-location-dot text-blue-400 text-xs"></i>
+                                        <span class="text-xs font-semibold text-white">${item.name}</span>
+                                        <span class="text-[11px] text-slate-400">${item.admin1 ? item.admin1 + ', ' : ''}${item.country || ''}</span>
+                                    </div>
+                                    <span class="text-[10px] text-slate-500 font-mono">${item.latitude.toFixed(2)}°, ${item.longitude.toFixed(2)}°</span>
+                                </div>
+                            `).join('');
+                            resultsDiv.classList.remove('hidden');
+                        } else {
+                            resultsDiv.innerHTML = `<div class="p-3 text-xs text-slate-400 text-center">No matching cities found</div>`;
+                            resultsDiv.classList.remove('hidden');
+                        }
+                    } catch (err) {
+                        console.error('Geocoding search failed', err);
+                    }
+                }, 300);
+            });
+
+            // Close dropdown on outside click
+            document.addEventListener('click', (e) => {
+                if (!input.contains(e.target) && !resultsDiv.contains(e.target)) {
+                    resultsDiv.classList.add('hidden');
+                }
+            });
+        }
+
+        function clearCityInput() {
+            const input = document.getElementById('cityInput');
+            input.value = '';
+            document.getElementById('clearSearchBtn').classList.add('hidden');
+            document.getElementById('searchResults').classList.add('hidden');
+            input.focus();
+        }
+
+        function selectCity(name, lat, lon, country) {
+            const fullName = country ? `${name}, ${country}` : name;
+            document.getElementById('cityInput').value = fullName;
+            document.getElementById('searchResults').classList.add('hidden');
+            fetchWeatherForCoords(lat, lon, fullName);
+        }
+
+        function useGPSLocation() {
+            if (!navigator.geolocation) {
+                showToast('Geolocation is not supported by your browser', 'error');
+                return;
+            }
+
+            showToast('Accessing GPS location...');
+            navigator.geolocation.getCurrentPosition(
+                async (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lon = pos.coords.longitude;
+                    
+                    try {
+                        const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+                        const data = await res.json();
+                        const locationName = data.city || data.locality || data.principalSubdivision || `Location (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)`;
+                        selectCity(locationName, lat, lon, data.countryName || '');
+                    } catch {
+                        selectCity(`GPS (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)`, lat, lon, '');
+                    }
+                },
+                (err) => {
+                    showToast('GPS permission denied or unavailable: ' + err.message, 'error');
+                }
+            );
+        }
+
+        function fetchWeatherAndGenerate() {
+            const cityQuery = document.getElementById('cityInput').value.trim();
+            if (!cityQuery) {
+                useGPSLocation();
+                return;
+            }
+            // Trigger geocode search or refetch active coordinates
+            fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityQuery)}&count=1`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.results && data.results[0]) {
+                        const item = data.results[0];
+                        selectCity(item.name, item.latitude, item.longitude, item.country);
+                    } else {
+                        showToast('City not found. Try another search.', 'error');
+                    }
+                })
+                .catch(() => showToast('Failed to find city', 'error'));
+        }
+
+        async function fetchWeatherForCoords(lat, lon, cityName) {
+            state.latitude = lat;
+            state.longitude = lon;
+            state.city = cityName;
+
+            const btnSpinner = document.getElementById('searchBtnSpinner');
+            btnSpinner.classList.add('animate-spin');
+
+            try {
+                // Fetch current + 8-day forecast data from Open-Meteo
+                // Note: 'time' is automatically returned in the 'current' object by Open-Meteo, requesting it explicitly as a variable causes a 400 Bad Request error.
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,uv_index_max,wind_speed_10m_max&timezone=auto&forecast_days=8`;
+                
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`Weather service response status: ${res.status}`);
+                const data = await res.json();
+
+                state.currentWeather = data.current;
+                state.forecastDaily = parseDailyForecast(data.daily);
+
+                // Render UI with fetched weather
+                renderWeatherUI();
+
+                // Generate AI artwork for the requested city
+                generateWeatherArtworkForDay(0);
+
+            } catch (err) {
+                console.error('Error fetching weather:', err);
+                showToast('Failed to load weather data', 'error');
+            } finally {
+                btnSpinner.classList.remove('animate-spin');
+            }
+        }
+
+        function parseDailyForecast(daily) {
+            const result = [];
+            if (!daily || !daily.time) return result;
+
+            for (let i = 0; i < daily.time.length; i++) {
+                result.push({
+                    date: daily.time[i],
+                    weatherCode: daily.weather_code[i],
+                    tempMax: Math.round(daily.temperature_2m_max[i]),
+                    tempMin: Math.round(daily.temperature_2m_min[i]),
+                    precipSum: daily.precipitation_sum[i],
+                    uvIndexMax: daily.uv_index_max[i],
+                    windSpeedMax: Math.round(daily.wind_speed_10m_max[i])
+                });
+            }
+            return result;
+        }
+
+        function renderWeatherUI() {
+            const current = state.currentWeather;
+            const wmo = WMO_CODES[current.weather_code] || { label: 'Unknown', icon: 'fa-cloud', textClass: 'text-slate-300' };
+
+            document.getElementById('cityNameDisplay').innerText = state.city;
+            document.getElementById('currentTemp').innerText = `${Math.round(current.temperature_2m)}°C`;
+            document.getElementById('feelsLikeTemp').innerText = `${Math.round(current.apparent_temperature)}°C`;
+            
+            if (state.forecastDaily.length > 0) {
+                document.getElementById('todayMaxTemp').innerText = `${state.forecastDaily[0].tempMax}°C`;
+                document.getElementById('todayMinTemp').innerText = `${state.forecastDaily[0].tempMin}°C`;
+            }
+
+            document.getElementById('weatherConditionText').innerHTML = `
+                <i class="fa-solid ${wmo.icon} ${wmo.textClass} text-lg"></i>
+                <span>${wmo.label}</span>
+            `;
+
+            document.getElementById('humidityVal').innerText = `${current.relative_humidity_2m}%`;
+            document.getElementById('windVal').innerText = `${Math.round(current.wind_speed_10m)} km/h`;
+            document.getElementById('precipVal').innerText = `${current.precipitation} mm`;
+            
+            if (state.forecastDaily.length > 0) {
+                document.getElementById('uvVal').innerText = `${state.forecastDaily[0].uvIndexMax || 0}`;
+            }
+
+            // Day / Night Badge
+            const isDay = current.is_day === 1;
+            const dayNightBadge = document.getElementById('dayNightBadge');
+            if (isDay) {
+                dayNightBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30';
+                dayNightBadge.innerHTML = `<i class="fa-solid fa-sun mr-1"></i> Day`;
+            } else {
+                dayNightBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30';
+                dayNightBadge.innerHTML = `<i class="fa-solid fa-moon mr-1"></i> Night`;
+            }
+
+            // Format current date display
+            const now = new Date();
+            document.getElementById('currentDateStr').innerText = now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+            // Render 8-day Forecast Table and Cards
+            renderForecastTable();
+            renderForecastGrid();
+        }
+
+        function renderForecastTable() {
+            const tbody = document.getElementById('forecastTableBody');
+            if (!state.forecastDaily.length) return;
+
+            // Find global min and max temp for temperature bar calculation
+            let globalMin = Math.min(...state.forecastDaily.map(d => d.tempMin));
+            let globalMax = Math.max(...state.forecastDaily.map(d => d.tempMax));
+            if (globalMax === globalMin) globalMax += 1;
+
+            tbody.innerHTML = state.forecastDaily.map((day, idx) => {
+                const dateObj = new Date(day.date + 'T00:00:00');
+                const dayName = idx === 0 ? 'Today' : dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+                const dateNum = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const wmo = WMO_CODES[day.weatherCode] || { label: 'Clear', icon: 'fa-sun', textClass: 'text-amber-400' };
+
+                // Temperature bar percentages
+                const leftPercent = Math.max(0, ((day.tempMin - globalMin) / (globalMax - globalMin)) * 100);
+                const widthPercent = Math.min(100 - leftPercent, ((day.tempMax - day.tempMin) / (globalMax - globalMin)) * 100);
+
+                const isSelected = state.selectedDayIndex === idx;
+
+                return `
+                    <tr class="hover:bg-slate-800/50 transition cursor-pointer ${isSelected ? 'bg-blue-600/10 border-l-2 border-blue-500' : ''}" onclick="selectForecastDay(${idx})">
+                        <td class="py-3 px-4">
+                            <div class="font-bold text-slate-100">${dayName}</div>
+                            <div class="text-[10px] text-slate-400">${dateNum}</div>
+                        </td>
+                        <td class="py-3 px-4">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid ${wmo.icon} ${wmo.textClass} text-base"></i>
+                                <span class="text-xs text-slate-200 font-medium">${wmo.label}</span>
+                            </div>
+                        </td>
+                        <td class="py-3 px-4 text-center min-w-[120px]">
+                            <div class="w-full bg-slate-900 rounded-full h-2 relative overflow-hidden">
+                                <div class="absolute h-full rounded-full bg-gradient-to-r from-blue-400 via-emerald-400 to-amber-400"
+                                     style="left: ${leftPercent}%; width: ${Math.max(12, widthPercent)}%;"></div>
+                            </div>
+                        </td>
+                        <td class="py-3 px-4 text-right font-mono text-xs">
+                            <span class="text-slate-400">${day.tempMin}°</span> / 
+                            <span class="text-slate-100 font-bold">${day.tempMax}°C</span>
+                        </td>
+                        <td class="py-3 px-4 text-center text-xs">
+                            <span class="${day.precipSum > 0 ? 'text-blue-400 font-semibold' : 'text-slate-500'}">
+                                ${day.precipSum} mm
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-center text-xs text-slate-400 font-mono">
+                            ${day.windSpeedMax} km/h
+                        </td>
+                        <td class="py-3 px-4 text-right">
+                            <button onclick="event.stopPropagation(); generateWeatherArtworkForDay(${idx})" 
+                                    class="px-2.5 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 text-xs border border-blue-500/30 transition flex items-center gap-1.5 ml-auto">
+                                <i class="fa-solid fa-palette text-[10px]"></i>
+                                <span>Paint Art</span>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderForecastGrid() {
+            const grid = document.getElementById('forecastGridView');
+            if (!state.forecastDaily.length) return;
+
+            grid.innerHTML = state.forecastDaily.map((day, idx) => {
+                const dateObj = new Date(day.date + 'T00:00:00');
+                const dayName = idx === 0 ? 'Today' : dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+                const wmo = WMO_CODES[day.weatherCode] || { label: 'Clear', icon: 'fa-sun', textClass: 'text-amber-400' };
+                const isSelected = state.selectedDayIndex === idx;
+
+                return `
+                    <div onclick="selectForecastDay(${idx})" 
+                         class="glass-card p-3 rounded-2xl flex flex-col items-center justify-between text-center space-y-2 hover:border-blue-500/50 transition cursor-pointer ${isSelected ? 'ring-2 ring-blue-500 bg-blue-600/10' : ''}">
+                        <div class="text-xs font-bold text-slate-200">${dayName}</div>
+                        <i class="fa-solid ${wmo.icon} ${wmo.textClass} text-2xl my-1"></i>
+                        <div class="text-xs font-semibold text-slate-100">${day.tempMax}° <span class="text-[10px] text-slate-400 font-normal">${day.tempMin}°</span></div>
+                        <button onclick="event.stopPropagation(); generateWeatherArtworkForDay(${idx})" class="mt-1 px-2 py-0.5 rounded bg-slate-800 text-[10px] text-blue-400 hover:text-white transition w-full">Paint</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function switchForecastView(mode) {
+            state.currentViewMode = mode;
+            const tableEl = document.getElementById('forecastTableView');
+            const gridEl = document.getElementById('forecastGridView');
+            const tableBtn = document.getElementById('viewTableBtn');
+            const gridBtn = document.getElementById('viewGridBtn');
+
+            if (mode === 'table') {
+                tableEl.classList.remove('hidden');
+                gridEl.classList.add('hidden');
+                tableBtn.className = 'px-3 py-1 rounded-lg font-medium bg-blue-600 text-white transition';
+                gridBtn.className = 'px-3 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition';
+            } else {
+                tableEl.classList.add('hidden');
+                gridEl.classList.remove('hidden');
+                gridBtn.className = 'px-3 py-1 rounded-lg font-medium bg-blue-600 text-white transition';
+                tableBtn.className = 'px-3 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition';
+            }
+        }
+
+        function selectForecastDay(idx) {
+            state.selectedDayIndex = idx;
+            renderForecastTable();
+            renderForecastGrid();
+            generateWeatherArtworkForDay(idx);
+        }
+
+        async function generateWeatherArtworkForDay(dayIndex) {
+            if (!state.city || !state.currentWeather) return;
+
+            state.selectedDayIndex = dayIndex;
+            const isToday = dayIndex === 0;
+            const targetLabel = isToday ? 'Current Weather' : `Day +${dayIndex} Forecast (${state.forecastDaily[dayIndex].date})`;
+            document.getElementById('artTargetLabel').innerText = targetLabel;
+
+            // Gather parameters
+            const artStyle = document.getElementById('artStyleInput').value.trim() || 'Cinematic Photorealism, dramatic lighting';
+            const modelChoice = document.getElementById('aiModelSelect').value;
+            const includeLandmarks = document.getElementById('includeCityLandmarks').checked;
+
+            let conditionLabel = 'clear sky';
+            let tempVal = '20';
+            let humidityVal = '50';
+            let windVal = '10';
+            let precipVal = '0';
+            let uvVal = '5';
+            let timeStr = '12:00PM';
+
+            if (isToday && state.currentWeather) {
+                const wmo = WMO_CODES[state.currentWeather.weather_code] || {};
+                conditionLabel = (wmo.vibe || 'clear sky').toLowerCase();
+                tempVal = Math.round(state.currentWeather.temperature_2m);
+                humidityVal = state.currentWeather.relative_humidity_2m;
+                windVal = Math.round(state.currentWeather.wind_speed_10m);
+                precipVal = state.currentWeather.precipitation;
+                uvVal = state.forecastDaily[0] ? state.forecastDaily[0].uvIndexMax : 0;
+                timeStr = formatFormattedLocalTime(state.currentWeather.time);
+            } else if (state.forecastDaily[dayIndex]) {
+                const dayData = state.forecastDaily[dayIndex];
+                const wmo = WMO_CODES[dayData.weatherCode] || {};
+                conditionLabel = (wmo.vibe || 'clear sky').toLowerCase();
+                tempVal = dayData.tempMax;
+                humidityVal = state.currentWeather.relative_humidity_2m; // approximate
+                windVal = dayData.windSpeedMax;
+                precipVal = dayData.precipSum;
+                uvVal = dayData.uvIndexMax;
+                timeStr = '12:00PM';
+            }
+
+            // User requested exact prompt structure
+            let prompt = `Try to make an illustration of ${state.city} under these weather conditions: ${conditionLabel} ${tempVal} celsius, ${humidityVal}% humidity, ${windVal} km/h wind speed, ${precipVal}mm precipitation, ${uvVal} UV index, current time: ${timeStr}.`;
+            
+            if (includeLandmarks) {
+                prompt += ` Featuring iconic landmarks and local scenery of ${state.city}.`;
+            }
+            prompt += ` Art style: ${artStyle}.`;
+
+            state.activePrompt = prompt;
+            document.getElementById('imagePromptText').innerText = `Prompt: "${prompt}"`;
+
+            // Display tags
+            renderPromptTags(state.city, conditionLabel, artStyle);
+
+            // Trigger Gemini API Image Generation
+            await callGeminiImageAPI(prompt, modelChoice);
+        }
+
+        function regenerateArtwork() {
+            generateWeatherArtworkForDay(state.selectedDayIndex);
+        }
+
+        function renderPromptTags(city, vibe, style) {
+            const container = document.getElementById('promptTagContainer');
+            container.innerHTML = `
+                <span class="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-300"><i class="fa-solid fa-city mr-1 text-blue-400"></i> ${city}</span>
+                <span class="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-300"><i class="fa-solid fa-cloud-sun mr-1 text-amber-400"></i> ${vibe.split(' ')[0]}</span>
+                <span class="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-300 max-w-[220px] truncate"><i class="fa-solid fa-brush mr-1 text-indigo-400"></i> ${style}</span>
+            `;
+        }
+
+        // Gemini & Imagen 4 API Call Function
+        async function callGeminiImageAPI(prompt, modelName) {
+            const loader = document.getElementById('imageLoader');
+            const imgEl = document.getElementById('weatherArtImg');
+            const downloadBtn = document.getElementById('downloadBtn');
+
+            loader.classList.remove('hidden');
+            downloadBtn.disabled = true;
+
+            const apiKey = state.customApiKey || ""; // Runtime canvas key binding if empty
+
+            try {
+                let imageUrl = '';
+
+                if (modelName === 'imagen-4.0-generate-001') {
+                    // Call Imagen 4.0 predict endpoint
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`;
+                    const payload = {
+                        instances: [{ prompt: prompt }],
+                        parameters: { sampleCount: 1 }
+                    };
+
+                    const response = await fetchWithRetry(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const result = await response.json();
+                    if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
+                        imageUrl = `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+                    } else {
+                        throw new Error('Imagen response did not contain image data');
+                    }
+                } else {
+                    // Call Gemini 3.1 Flash Image generateContent endpoint
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${apiKey}`;
+                    const payload = {
+                        contents: [{
+                            role: 'user',
+                            parts: [{ text: prompt }]
+                        }],
+                        generationConfig: {
+                            responseModalities: ['IMAGE'],
+                            imageConfig: { aspectRatio: "16:9" }
+                        }
+                    };
+
+                    const response = await fetchWithRetry(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const result = await response.json();
+                    const part = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                    if (part && part.inlineData && part.inlineData.data) {
+                        imageUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+                    } else {
+                        throw new Error('Gemini Flash Image response did not contain image data');
+                    }
+                }
+
+                // Update Image Element
+                imgEl.src = imageUrl;
+                state.activeArtUrl = imageUrl;
+                downloadBtn.disabled = false;
+                showToast('Weather artwork generated successfully!');
+
+            } catch (err) {
+                console.error('Image Generation error:', err);
+                showToast('Failed to generate artwork. Trying fallback...', 'error');
+                
+                // Set fallback stylish unsplash image matching condition
+                imgEl.src = `https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80`;
+            } finally {
+                loader.classList.add('hidden');
+            }
+        }
+
+        // Retry helper with exponential backoff
+        async function fetchWithRetry(url, options, retries = 3, backoff = 1000) {
+            try {
+                const res = await fetch(url, options);
+                if (!res.ok && res.status === 429 && retries > 0) {
+                    await new Promise(r => setTimeout(r, backoff));
+                    return fetchWithRetry(url, options, retries - 1, backoff * 2);
+                }
+                return res;
+            } catch (e) {
+                if (retries > 0) {
+                    await new Promise(r => setTimeout(r, backoff));
+                    return fetchWithRetry(url, options, retries - 1, backoff * 2);
+                }
+                throw e;
+            }
+        }
+
+        // Download artwork logic
+        function downloadArtwork() {
+            if (!state.activeArtUrl) return;
+            const a = document.createElement('a');
+            a.href = state.activeArtUrl;
+            a.download = `WeatherArt_${state.city.replace(/[^a-zA-Z0-0]/g, '_')}_Day${state.selectedDayIndex}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showToast('Downloading weather artwork...');
+        }
+
+        // Toast message notification
+        function showToast(msg, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMsg.innerText = msg;
+            if (type === 'error') {
+                toastIcon.className = 'fa-solid fa-triangle-exclamation text-rose-400';
+            } else {
+                toastIcon.className = 'fa-solid fa-circle-check text-emerald-400';
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3500);
+        }
+    </script>
+</body>
+</html>
