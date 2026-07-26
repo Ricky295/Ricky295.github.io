@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Broken Calculator</title>
+<style>
+  :root{
+    --body-cream:#f2e9d8;
+    --body-cream-dark:#e3d5b8;
+    --lcd-bg:#c9d6b8;
+    --lcd-fg:#1f3a1f;
+    --btn-num:#7a93c9;
+    --btn-op:#e0a15c;
+    --btn-util:#c98d8d;
+    --ink:#3a2f1e;
+    --accent:#b8452f;
+    --good:#3a7a3a;
+    --bad:#a33;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Courier New',monospace;
+    background:#d8ccb0;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:24px;
+    min-height:100vh;
+  }
+  .console{
+    background:var(--body-cream);
+    border:3px solid var(--ink);
+    border-radius:18px;
+    padding:20px;
+    width:400px;
+    box-shadow:6px 6px 0 rgba(0,0,0,0.15);
+  }
+
+  /* ---------- Setup screen ---------- */
+  .setup h2{ text-align:center; margin:4px 0 16px; color:var(--ink); }
+  .setup-block{ margin-bottom:16px; }
+  .setup-block label{ display:block; font-weight:bold; color:var(--ink); font-size:13px; margin-bottom:6px; }
+  .tier-row{ display:flex; gap:6px; }
+  .tier-btn{
+    flex:1; padding:10px 0; text-align:center;
+    border:2px solid var(--ink); border-radius:6px;
+    background:var(--body-cream-dark); cursor:pointer; font-weight:bold; font-family:inherit;
+  }
+  .tier-btn.selected{ background:var(--btn-op); color:#fff; }
+  .time-row{ display:flex; gap:8px; align-items:center; }
+  .time-row input[type=range]{ flex:1; }
+  .time-row .time-val{ width:70px; text-align:right; font-weight:bold; }
+  .checkbox-row{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink); }
+  .start-btn{
+    width:100%; padding:14px; margin-top:6px;
+    background:var(--good); color:#fff; border:2px solid var(--ink); border-radius:8px;
+    font-weight:bold; font-size:16px; cursor:pointer; font-family:inherit;
+  }
+  .untimed-note{ font-size:11px; color:#8a7a5a; margin-top:4px; }
+
+  /* ---------- Game screen ---------- */
+  .game-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .clock{
+    background:var(--lcd-bg); border:2px solid var(--ink); border-radius:6px;
+    padding:4px 10px; font-weight:bold; font-size:16px; color:var(--lcd-fg); cursor:default;
+  }
+  .clock.low{ color:var(--bad); animation:pulse 1s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.5;} }
+  .score-badge{
+    background:var(--body-cream-dark); border:2px solid var(--ink); border-radius:6px;
+    padding:4px 10px; font-weight:bold; font-size:14px; color:var(--ink);
+  }
+  .target-banner{
+    text-align:center; background:var(--body-cream-dark); border:2px solid var(--ink);
+    border-radius:8px; padding:6px; margin-bottom:8px; font-size:13px; color:var(--ink);
+  }
+  .target-banner .big{ font-size:24px; font-weight:bold; color:var(--accent); }
+  .lcd-main{
+    background:var(--lcd-bg); border:3px solid var(--ink); border-radius:8px;
+    padding:10px 14px; min-height:34px; font-size:22px; letter-spacing:1px; color:var(--lcd-fg);
+    overflow-x:auto; white-space:nowrap; margin-bottom:4px;
+  }
+  .tile-hint{ font-size:11px; color:#6b5d3e; text-align:center; margin-bottom:10px; }
+  .msg-flash{ text-align:center; font-weight:bold; font-size:13px; height:16px; margin-bottom:6px; }
+  .msg-flash.good{ color:var(--good); }
+  .msg-flash.bad{ color:var(--bad); }
+
+  .calc-grid{ display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; }
+  .key{
+    aspect-ratio:1; border-radius:8px; border:2px solid rgba(0,0,0,0.25);
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px; font-weight:bold; color:#fff; cursor:pointer; user-select:none;
+    box-shadow:0 3px 0 rgba(0,0,0,0.25);
+    transition:transform 0.06s ease, box-shadow 0.06s ease;
+  }
+  .key:active:not(.disabled){ transform:translateY(3px); box-shadow:0 0 0 rgba(0,0,0,0.25); }
+  .key.num{ background:var(--btn-num); }
+  .key.op{ background:var(--btn-op); }
+  .key.util{ background:var(--btn-util); }
+  .key.wide{ grid-column:span 2; aspect-ratio:auto; }
+  .key.disabled{
+    background:#cfcac0 !important; color:#a8a196; cursor:default; box-shadow:none; border-color:rgba(0,0,0,0.1);
+  }
+
+  .action-row{ display:flex; gap:8px; margin-top:10px; }
+  .action-btn{
+    flex:1; padding:12px 0; border-radius:8px; border:2px solid var(--ink);
+    background:var(--btn-num); color:#fff; font-weight:bold; cursor:pointer; font-family:inherit;
+  }
+  .action-btn.check{ background:var(--good); }
+  .action-btn.clear{ background:var(--btn-util); }
+
+  .history-label{ margin-top:14px; font-weight:bold; color:var(--accent); font-size:12px; }
+  .history-box{
+    background:#f7f3ea; border:2px solid var(--accent); border-radius:8px; padding:8px;
+    height:80px; overflow-y:auto; font-size:12px; color:#444; margin-top:4px;
+  }
+  .history-box div{ margin-bottom:3px; }
+  .history-box .win{ color:var(--good); font-weight:bold; }
+
+  .risk-panel{ text-align:center; background:var(--body-cream-dark); border:3px solid var(--accent); border-radius:10px; padding:16px; }
+  .risk-panel h3{ margin:0 0 8px; color:var(--accent); }
+  .risk-panel p{ font-size:13px; color:var(--ink); margin:0 0 14px; }
+  .risk-btns{ display:flex; gap:10px; }
+  .risk-btns button{
+    flex:1; padding:12px 0; border-radius:8px; border:2px solid var(--ink);
+    font-weight:bold; cursor:pointer; font-family:inherit;
+  }
+  .risk-btns .risk-yes{ background:var(--accent); color:#fff; }
+  .risk-btns .risk-no{ background:var(--body-cream); color:var(--ink); }
+
+  .end-screen{ text-align:center; }
+  .end-screen h2{ color:var(--ink); margin-bottom:4px; }
+  .end-score{ font-size:42px; font-weight:bold; color:var(--accent); margin:10px 0; }
+  .end-stats{ font-size:13px; color:var(--ink); margin-bottom:18px; line-height:1.6; }
+  .end-stats b{ color:var(--good); }
+  .footer{ text-align:center; font-size:11px; color:#8a7a5a; margin-top:10px; }
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+<div class="console">
+
+  <!-- ============ SETUP SCREEN ============ -->
+  <div class="setup" id="setupScreen">
+    <h2>Broken Calculator</h2>
+
+    <div class="setup-block">
+      <label>Difficulty</label>
+      <div class="tier-row" id="tierRow"></div>
+    </div>
+
+    <div class="setup-block">
+      <label>Time bank</label>
+      <div class="time-row">
+        <input type="range" id="timeRange" min="0" max="20" value="5" step="1">
+        <div class="time-val" id="timeVal">5 min</div>
+      </div>
+      <div class="untimed-note">Drag to 0 for untimed play (tap the clock anytime to end).</div>
+    </div>
+
+    <div class="setup-block">
+      <div class="checkbox-row">
+        <input type="checkbox" id="bonusToggle">
+        <label style="margin:0;">Add time bonus per correct answer</label>
+      </div>
+      <div class="time-row hidden" id="bonusRow" style="margin-top:8px;">
+        <input type="range" id="bonusRange" min="1" max="30" value="5" step="1">
+        <div class="time-val" id="bonusVal">+5s</div>
+      </div>
+    </div>
+
+    <div class="setup-block">
+      <div class="checkbox-row">
+        <input type="checkbox" id="hintToggle">
+        <label style="margin:0;">Show optimal solution length</label>
+      </div>
+    </div>
+
+    <button class="start-btn" id="startBtn">Start</button>
+  </div>
+
+  <!-- ============ GAME SCREEN ============ -->
+  <div class="hidden" id="gameScreen">
+    <div class="game-header">
+      <div class="clock" id="clockDisplay">--:--</div>
+      <div class="score-badge" id="scoreBadge">Score: 0</div>
+    </div>
+
+    <div class="target-banner">
+      Reach: <span class="big" id="targetValue">-</span>
+      <span id="targetHint"></span>
+    </div>
+
+    <div class="msg-flash" id="msgFlash"></div>
+    <div class="lcd-main" id="exprDisplay">&nbsp;</div>
+    <div class="tile-hint" id="tileHint"></div>
+
+    <div class="calc-grid" id="calcGrid"></div>
+
+    <div class="action-row">
+      <button class="action-btn clear" id="clearBtn">C</button>
+      <button class="action-btn" id="backspaceBtn" style="background:#a68a5c;">⌫</button>
+      <button class="action-btn check" id="checkBtn">=</button>
+    </div>
+
+    <div class="history-label">History:</div>
+    <div class="history-box" id="historyBox"></div>
+  </div>
+
+  <!-- ============ RISK PROMPT ============ -->
+  <div class="hidden" id="riskScreen">
+    <div class="risk-panel">
+      <h3>Time's up!</h3>
+      <p id="riskText">Risk it? Solve this one target with unlimited time to double your score. Get it wrong and you lose it all.</p>
+      <div class="target-banner">
+        Reach: <span class="big" id="riskTargetValue">-</span>
+      </div>
+      <div class="msg-flash" id="riskMsgFlash"></div>
+      <div class="lcd-main" id="riskExprDisplay">&nbsp;</div>
+      <div class="calc-grid" id="riskCalcGrid" style="margin-bottom:10px;"></div>
+      <div class="action-row" style="margin-bottom:12px;">
+        <button class="action-btn clear" id="riskClearBtn">C</button>
+        <button class="action-btn" id="riskBackspaceBtn" style="background:#a68a5c;">⌫</button>
+        <button class="action-btn check" id="riskCheckBtn">=</button>
+      </div>
+      <div class="risk-btns" id="riskChoiceBtns">
+        <button class="risk-no" id="riskNoBtn">Take my score</button>
+        <button class="risk-yes" id="riskYesBtn">Risk it (×2)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ END SCREEN ============ -->
+  <div class="hidden end-screen" id="endScreen">
+    <h2>Game over</h2>
+    <div class="end-score" id="finalScore">0</div>
+    <div class="end-stats" id="endStats"></div>
+    <button class="start-btn" id="playAgainBtn">Play again</button>
+  </div>
+
+  <div class="footer">Broken Calculator — build the target from a scrambled set of digits and operators</div>
+</div>
+
+<script>
+/* ================= Expression evaluation ================= */
+function tokensToString(tokens){
+  return tokens.map(t=>{
+    if(t==='*') return '×';
+    if(t==='/') return '÷';
+    if(t==='sq') return '²';
+    return t;
+  }).join(' ').replace(/ \)/g,')').replace(/\( /g,'(').replace(/ ²/g,'²');
+}
+
+function evalExpr(tokens){
+  let pos = 0;
+  function peek(){ return tokens[pos]; }
+  function next(){ return tokens[pos++]; }
+  function parseExpr(){
+    let val = parseTerm();
+    while(peek()==='+'||peek()==='-'){
+      const op = next();
+      const rhs = parseTerm();
+      val = op==='+' ? val+rhs : val-rhs;
+    }
+    return val;
+  }
+  function parseTerm(){
+    let val = parseFactor();
+    while(peek()==='*'||peek()==='/'){
+      const op = next();
+      const rhs = parseFactor();
+      if(op==='*') val = val*rhs;
+      else {
+        if(rhs===0) throw new Error('div0');
+        val = val/rhs;
+      }
+    }
+    return val;
+  }
+  function parseFactor(){
+    let val = parseAtom();
+    while(peek()==='sq'){
+      next();
+      val = val*val;
+    }
+    return val;
+  }
+  function parseAtom(){
+    const t = next();
+    if(t==='('){
+      const val = parseExpr();
+      if(peek()!==')') throw new Error('unbalanced');
+      next();
+      return val;
+    }
+    if(t===undefined) throw new Error('empty');
+    const n = Number(t);
+    if(isNaN(n)) throw new Error('bad token '+t);
+    return n;
+  }
+  if(tokens.length===0) throw new Error('empty');
+  const result = parseExpr();
+  if(pos !== tokens.length) throw new Error('unbalanced/trailing');
+  return result;
+}
+
+function isBalanced(tokens){
+  let depth=0;
+  for(const t of tokens){
+    if(t==='(') depth++;
+    if(t===')') depth--;
+    if(depth<0) return false;
+  }
+  return depth===0;
+}
+
+/* ================= Solver ================= */
+function solveShortest(digits, ops, hasParens, hasSq, target, maxLen){
+  let best = null;
+  let bestExpr = null;
+  function isOperand(t){ return !isNaN(Number(t)); }
+
+  function dfs(tokens, depth, openParens){
+    if(best !== null && depth >= best) return;
+    if(depth > maxLen) return;
+
+    if(openParens===0 && tokens.length>0){
+      const last = tokens[tokens.length-1];
+      if(isOperand(last) || last===')' || last==='sq'){
+        try{
+          const val = evalExpr(tokens);
+          if(Math.abs(val - target) < 1e-9){
+            if(best===null || depth < best){
+              best = depth;
+              bestExpr = tokens.slice();
+            }
+          }
+        }catch(e){}
+      }
+    }
+    if(depth >= maxLen) return;
+
+    const last = tokens[tokens.length-1];
+    const lastIsOperand = last!==undefined && (isOperand(last) || last===')' || last==='sq');
+
+    if(!lastIsOperand){
+      for(const d of digits){
+        tokens.push(String(d));
+        dfs(tokens, depth+1, openParens);
+        tokens.pop();
+      }
+    }
+    if(hasSq && lastIsOperand && last!=='sq'){
+      tokens.push('sq');
+      dfs(tokens, depth+1, openParens);
+      tokens.pop();
+    }
+    if(lastIsOperand){
+      for(const op of ops){
+        tokens.push(op);
+        dfs(tokens, depth+1, openParens);
+        tokens.pop();
+      }
+    }
+    if(hasParens && !lastIsOperand){
+      tokens.push('(');
+      dfs(tokens, depth+1, openParens+1);
+      tokens.pop();
+    }
+    if(hasParens && openParens>0 && lastIsOperand){
+      tokens.push(')');
+      dfs(tokens, depth+1, openParens-1);
+      tokens.pop();
+    }
+  }
+  dfs([], 0, 0);
+  return {length: best, expr: bestExpr};
+}
+
+/* ================= Tile set + target generation per tier ================= */
+const DIGIT_POOLS = [ [2,4], [2,3,5], [3,4,7], [1,4,9], [2,6,8], [3,3,9], [4,4,2] ];
+// Every pool must include at least one of + or - so reachable targets aren't
+// restricted to a sparse multiplicative set (e.g. only powers of 2 with just *,/).
+const OP_POOLS = [ ['+','-'], ['+','*'], ['-','/'], ['+','*','/'], ['+','-','*'], ['+','-','/'], ['+','-','*','/'] ];
+const TIER_RANGE_MAX = {1:25, 2:50, 3:100, 4:200, 5:400};
+const TIER_MAXLEN = {1:5, 2:5, 3:6, 4:6, 5:7};
+const TIER_AVG_RANGE = { 1:[1,2.5], 2:[2.5,3.5], 3:[3.5,4.5], 4:[4.5,5.5], 5:[5.5,8] };
+
+function randChoice(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+// Quick reachability check: with a short search budget, how many distinct
+// small integers (1..20) can this tile set actually hit? Guards against
+// sparse combos like digits [4,2] + ops [*,/] which can only reach powers of 2.
+function reachabilityScore(tileSet){
+  let hits = 0;
+  for(let t=1; t<=20; t++){
+    const res = solveShortest(tileSet.digits, tileSet.ops, tileSet.hasParens, tileSet.hasSq, t, 5);
+    if(res.length !== null) hits++;
+  }
+  return hits;
+}
+
+function pickTileSetForTier(tier){
+  let best = null;
+  let bestScore = -1;
+  for(let attempt=0; attempt<8; attempt++){
+    const digits = randChoice(DIGIT_POOLS).slice();
+    const ops = randChoice(OP_POOLS).slice();
+    const hasParens = Math.random() < 0.6;
+    const hasSq = Math.random() < 0.4;
+    const candidate = {digits, ops, hasParens, hasSq};
+    const score = reachabilityScore(candidate);
+    if(score > bestScore){
+      bestScore = score;
+      best = candidate;
+    }
+    if(score >= 12) break; // good enough density, stop early
+  }
+  return best;
+}
+
+function verifyTarget(tileSet, targetObj){
+  if(!targetObj) return false;
+  const res = solveShortest(tileSet.digits, tileSet.ops, tileSet.hasParens, tileSet.hasSq, targetObj.value, targetObj.optimalLen);
+  if(res.length === null || res.expr === null) return false;
+  try{
+    const val = evalExpr(res.expr);
+    return Math.abs(val - targetObj.value) < 1e-9;
+  }catch(e){ return false; }
+}
+
+function generateNextTarget(tileSet, tier){
+  const maxLen = TIER_MAXLEN[tier];
+  const [lo, hi] = TIER_AVG_RANGE[tier];
+  const rangeMax = TIER_RANGE_MAX[tier];
+  let tries = 0;
+  let fallback = null;
+  while(tries < 60){
+    tries++;
+    const t = Math.floor(Math.random()*rangeMax) + 1;
+    const res = solveShortest(tileSet.digits, tileSet.ops, tileSet.hasParens, tileSet.hasSq, t, maxLen);
+    if(res.length === null) continue;
+    if(res.length >= lo && res.length <= hi){
+      const candidate = {value:t, optimalLen:res.length};
+      if(verifyTarget(tileSet, candidate)) return candidate;
+      continue;
+    }
+    if(!fallback || Math.abs(res.length-(lo+hi)/2) < Math.abs(fallback.optimalLen-(lo+hi)/2)){
+      fallback = {value:t, optimalLen:res.length};
+    }
+  }
+  if(fallback && verifyTarget(tileSet, fallback)) return fallback;
+  // Safety net: scan small integers upward until we find any verified solvable target.
+  for(let t=1; t<=rangeMax; t++){
+    const res = solveShortest(tileSet.digits, tileSet.ops, tileSet.hasParens, tileSet.hasSq, t, maxLen);
+    if(res.length !== null){
+      const candidate = {value:t, optimalLen:res.length};
+      if(verifyTarget(tileSet, candidate)) return candidate;
+    }
+  }
+  return {value:1, optimalLen:1}; // should be unreachable in practice
+}
+
+/* ================= Game state ================= */
+let game = {
+  tier: 1, tileSet: null, target: null, currentTokens: [],
+  score: 0, correctCount: 0, perfectCount: 0,
+  totalSeconds: 0, timeLeft: 0, timerHandle: null,
+  untimed: false, bonusEnabled: false, bonusSeconds: 5, inRiskMode: false,
+  showHint: false
+};
+
+/* ================= Setup screen wiring ================= */
+const tierRow = document.getElementById('tierRow');
+let selectedTier = 1;
+for(let i=1;i<=5;i++){
+  const btn = document.createElement('div');
+  btn.className = 'tier-btn' + (i===1?' selected':'');
+  btn.textContent = i;
+  btn.onclick = ()=>{
+    selectedTier = i;
+    [...tierRow.children].forEach(c=>c.classList.remove('selected'));
+    btn.classList.add('selected');
+  };
+  tierRow.appendChild(btn);
+}
+
+const timeRange = document.getElementById('timeRange');
+const timeVal = document.getElementById('timeVal');
+timeRange.oninput = ()=>{
+  timeVal.textContent = timeRange.value==='0' ? 'Untimed' : timeRange.value + ' min';
+};
+
+const bonusToggle = document.getElementById('bonusToggle');
+const bonusRow = document.getElementById('bonusRow');
+const bonusRange = document.getElementById('bonusRange');
+const bonusVal = document.getElementById('bonusVal');
+bonusToggle.onchange = ()=>{ bonusRow.classList.toggle('hidden', !bonusToggle.checked); };
+bonusRange.oninput = ()=>{ bonusVal.textContent = '+' + bonusRange.value + 's'; };
+
+document.getElementById('startBtn').onclick = ()=>{
+  game.tier = selectedTier;
+  const mins = parseInt(timeRange.value, 10);
+  game.untimed = mins === 0;
+  game.totalSeconds = mins*60;
+  game.timeLeft = game.totalSeconds;
+  game.bonusEnabled = bonusToggle.checked;
+  game.bonusSeconds = parseInt(bonusRange.value, 10);
+  game.showHint = document.getElementById('hintToggle').checked;
+  game.score = 0;
+  game.correctCount = 0;
+  game.perfectCount = 0;
+  game.tileSet = pickTileSetForTier(game.tier);
+
+  document.getElementById('setupScreen').classList.add('hidden');
+  document.getElementById('gameScreen').classList.remove('hidden');
+  document.getElementById('historyBox').innerHTML = '';
+
+  nextTarget();
+  renderTileHint();
+  renderCalcGrid('calcGrid', pressTile);
+  startClock();
+};
+
+/* ================= Game screen elements ================= */
+const clockDisplay = document.getElementById('clockDisplay');
+const scoreBadge = document.getElementById('scoreBadge');
+const targetValue = document.getElementById('targetValue');
+const exprDisplay = document.getElementById('exprDisplay');
+const tileHint = document.getElementById('tileHint');
+const msgFlash = document.getElementById('msgFlash');
+const historyBox = document.getElementById('historyBox');
+
+function renderTileHint(){
+  const ts = game.tileSet;
+  const parts = [];
+  parts.push('digits: ' + ts.digits.join(', '));
+  parts.push('ops: ' + ts.ops.map(o=>o==='*'?'×':o==='/'?'÷':o).join(' '));
+  if(ts.hasParens) parts.push('( )');
+  if(ts.hasSq) parts.push('x²');
+  tileHint.textContent = parts.join('   |   ');
+}
+
+function renderExpr(){
+  exprDisplay.textContent = game.currentTokens.length ? tokensToString(game.currentTokens) : '\u00A0';
+}
+function renderScore(){ scoreBadge.textContent = 'Score: ' + game.score; }
+function renderTarget(){
+  targetValue.textContent = game.target.value;
+  const hintEl = document.getElementById('targetHint');
+  hintEl.textContent = game.showHint ? (' (optimal: ' + game.target.optimalLen + ' tiles)') : '';
+}
+
+function renderCalcGrid(containerId, onPress){
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  const ts = game.tileSet;
+  const availDigits = new Set(ts.digits.map(String));
+  const digitLayout = [7,8,9,4,5,6,1,2,3,0];
+
+  digitLayout.forEach(d=>{
+    const key = document.createElement('div');
+    const available = availDigits.has(String(d));
+    key.className = 'key num' + (available ? '' : ' disabled');
+    key.textContent = d;
+    if(available) key.onclick = ()=>onPress(String(d));
+    container.appendChild(key);
+  });
+
+  const allOps = ['+','-','*','/'];
+  allOps.forEach(op=>{
+    const key = document.createElement('div');
+    const available = ts.ops.includes(op);
+    key.className = 'key op' + (available ? '' : ' disabled');
+    key.textContent = op==='*' ? '×' : op==='/' ? '÷' : op;
+    if(available) key.onclick = ()=>onPress(op);
+    container.appendChild(key);
+  });
+
+  const parenOpen = document.createElement('div');
+  parenOpen.className = 'key util' + (ts.hasParens ? '' : ' disabled');
+  parenOpen.textContent = '(';
+  if(ts.hasParens) parenOpen.onclick = ()=>onPress('(');
+  container.appendChild(parenOpen);
+
+  const parenClose = document.createElement('div');
+  parenClose.className = 'key util' + (ts.hasParens ? '' : ' disabled');
+  parenClose.textContent = ')';
+  if(ts.hasParens) parenClose.onclick = ()=>onPress(')');
+  container.appendChild(parenClose);
+
+  const sqKey = document.createElement('div');
+  sqKey.className = 'key util wide' + (ts.hasSq ? '' : ' disabled');
+  sqKey.textContent = 'x²';
+  if(ts.hasSq) sqKey.onclick = ()=>onPress('sq');
+  container.appendChild(sqKey);
+}
+
+function pressTile(t){
+  game.currentTokens.push(t);
+  renderExpr();
+}
+
+function flashMsg(el, text, good){
+  el.textContent = text;
+  el.className = 'msg-flash ' + (good ? 'good':'bad');
+  setTimeout(()=>{ el.textContent=''; el.className='msg-flash'; }, 1600);
+}
+
+function pushHistory(text, good){
+  const div = document.createElement('div');
+  div.className = good ? 'win' : '';
+  div.textContent = text;
+  historyBox.insertBefore(div, historyBox.firstChild);
+}
+
+function roundClean(v){ return Math.round(v*1000)/1000; }
+
+function nextTarget(){
+  game.target = generateNextTarget(game.tileSet, game.tier);
+  game.currentTokens = [];
+  renderTarget();
+  renderExpr();
+}
+
+document.getElementById('clearBtn').onclick = ()=>{ game.currentTokens = []; renderExpr(); };
+document.getElementById('backspaceBtn').onclick = ()=>{ game.currentTokens.pop(); renderExpr(); };
+document.getElementById('checkBtn').onclick = ()=>{ attemptSolve(); };
+
+function attemptSolve(){
+  const tokens = game.currentTokens;
+  if(tokens.length===0) return;
+  if(!isBalanced(tokens)){
+    flashMsg(msgFlash, 'Unbalanced parentheses', false);
+    return;
+  }
+  let val;
+  try{ val = evalExpr(tokens); }
+  catch(e){ flashMsg(msgFlash, 'Invalid expression', false); return; }
+
+  const exprStr = tokensToString(tokens);
+  if(Math.abs(val - game.target.value) < 1e-9){
+    const isPerfect = tokens.length === game.target.optimalLen;
+    const gained = isPerfect ? game.target.optimalLen : 1;
+    game.score += gained;
+    game.correctCount++;
+    if(isPerfect) game.perfectCount++;
+    pushHistory(exprStr + ' = ' + game.target.value + (isPerfect ? '  \u2605 perfect +' : '  \u2713 +') + gained, true);
+    flashMsg(msgFlash, isPerfect ? 'Perfect! +'+gained : 'Correct! +'+gained, true);
+    renderScore();
+    if(game.bonusEnabled && !game.untimed){
+      game.timeLeft += game.bonusSeconds;
+      updateClockDisplay();
+    }
+    nextTarget();
+  } else {
+    pushHistory(exprStr + ' = ' + roundClean(val) + '  (target ' + game.target.value + ')', false);
+    flashMsg(msgFlash, 'Not quite \u2014 got ' + roundClean(val), false);
+  }
+}
+
+/* ================= Clock ================= */
+function startClock(){
+  stopClock();
+  updateClockDisplay();
+  if(game.untimed) return;
+  game.timerHandle = setInterval(()=>{
+    game.timeLeft--;
+    updateClockDisplay();
+    if(game.timeLeft <= 0){
+      stopClock();
+      enterRiskMode();
+    }
+  }, 1000);
+}
+function stopClock(){
+  if(game.timerHandle){ clearInterval(game.timerHandle); game.timerHandle = null; }
+}
+function updateClockDisplay(){
+  if(game.untimed){
+    clockDisplay.textContent = '\u221e (tap to end)';
+    clockDisplay.classList.remove('low');
+    return;
+  }
+  const m = Math.floor(game.timeLeft/60);
+  const s = game.timeLeft%60;
+  clockDisplay.textContent = m + ':' + String(s).padStart(2,'0');
+  clockDisplay.classList.toggle('low', game.timeLeft <= 10);
+}
+
+clockDisplay.onclick = ()=>{
+  if(game.untimed){
+    if(confirm('End the game now and see your score?')) endGame();
+  }
+};
+
+/* ================= Risk mode ================= */
+const riskScreen = document.getElementById('riskScreen');
+const riskTargetValue = document.getElementById('riskTargetValue');
+const riskExprDisplay = document.getElementById('riskExprDisplay');
+const riskMsgFlash = document.getElementById('riskMsgFlash');
+const riskChoiceBtns = document.getElementById('riskChoiceBtns');
+let riskTokens = [];
+
+function enterRiskMode(){
+  game.inRiskMode = true;
+  document.getElementById('gameScreen').classList.add('hidden');
+  riskScreen.classList.remove('hidden');
+  riskTokens = [];
+  riskTargetValue.textContent = game.target.value;
+  riskExprDisplay.textContent = '\u00A0';
+  riskChoiceBtns.classList.remove('hidden');
+  renderCalcGrid('riskCalcGrid', (t)=>{
+    riskTokens.push(t);
+    riskExprDisplay.textContent = riskTokens.length ? tokensToString(riskTokens) : '\u00A0';
+  });
+}
+
+document.getElementById('riskClearBtn').onclick = ()=>{
+  riskTokens = [];
+  riskExprDisplay.textContent = '\u00A0';
+};
+document.getElementById('riskBackspaceBtn').onclick = ()=>{
+  riskTokens.pop();
+  riskExprDisplay.textContent = riskTokens.length ? tokensToString(riskTokens) : '\u00A0';
+};
+document.getElementById('riskNoBtn').onclick = ()=>{ endGame(); };
+document.getElementById('riskYesBtn').onclick = ()=>{
+  riskChoiceBtns.classList.add('hidden');
+  flashMsg(riskMsgFlash, 'Risking it \u2014 solve to double your score!', true);
+};
+document.getElementById('riskCheckBtn').onclick = ()=>{
+  if(!riskChoiceBtns.classList.contains('hidden')) return; // must commit to risk first
+  if(riskTokens.length===0) return;
+  if(!isBalanced(riskTokens)){
+    flashMsg(riskMsgFlash, 'Unbalanced parentheses', false);
+    return;
+  }
+  let val;
+  try{ val = evalExpr(riskTokens); }
+  catch(e){ flashMsg(riskMsgFlash, 'Invalid expression', false); return; }
+
+  if(Math.abs(val - game.target.value) < 1e-9){
+    game.score = game.score * 2;
+    flashMsg(riskMsgFlash, 'Doubled! Final score: ' + game.score, true);
+    setTimeout(endGame, 1400);
+  } else {
+    game.score = 0;
+    flashMsg(riskMsgFlash, 'Wrong \u2014 score lost.', false);
+    setTimeout(endGame, 1400);
+  }
+};
+
+/* ================= End screen ================= */
+function endGame(){
+  stopClock();
+  riskScreen.classList.add('hidden');
+  document.getElementById('gameScreen').classList.add('hidden');
+  document.getElementById('endScreen').classList.remove('hidden');
+  document.getElementById('finalScore').textContent = game.score;
+  document.getElementById('endStats').innerHTML =
+    'Correct answers: <b>' + game.correctCount + '</b><br>' +
+    'Perfect solves: <b>' + game.perfectCount + '</b><br>' +
+    'Difficulty: <b>' + game.tier + '</b>';
+}
+
+document.getElementById('playAgainBtn').onclick = ()=>{
+  document.getElementById('endScreen').classList.add('hidden');
+  document.getElementById('setupScreen').classList.remove('hidden');
+};
+</script>
+</body>
+</html>
