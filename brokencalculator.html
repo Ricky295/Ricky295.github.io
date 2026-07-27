@@ -174,7 +174,7 @@
     <div class="setup-block">
       <div class="checkbox-row">
         <input type="checkbox" id="hintToggle">
-        <label style="margin:0;">Show optimal solution length</label>
+        <label style="margin:0;">Show optimal solutions (length + reveal after correct answers)</label>
       </div>
     </div>
 
@@ -317,7 +317,74 @@ function isBalanced(tokens){
   return depth===0;
 }
 
-/* ================= Solver ================= */
+/* ================= Batch solver: compute min length for every reachable value in one pass ================= */
+// Much faster than calling solveShortest per candidate target, since it explores
+// the token-sequence space once and records the best (shortest) length for every
+// value it encounters along the way, rather than re-deriving from scratch each time.
+function computeReachableMap(digits, ops, hasParens, hasSq, maxLen, valueCap){
+  const bestFor = new Map(); // value (rounded key) -> shortest length
+  function isOperand(t){ return !isNaN(Number(t)); }
+  function key(v){ return Math.round(v*1e6)/1e6; }
+
+  function record(v, depth){
+    if(Math.abs(v) > valueCap) return; // ignore wildly large intermediate values, not useful as targets
+    const k = key(v);
+    const prev = bestFor.get(k);
+    if(prev === undefined || depth < prev) bestFor.set(k, depth);
+  }
+
+  function dfs(tokens, depth, openParens){
+    if(depth > maxLen) return;
+
+    if(openParens===0 && tokens.length>0){
+      const last = tokens[tokens.length-1];
+      if(isOperand(last) || last===')' || last==='sq'){
+        try{
+          const val = evalExpr(tokens);
+          record(val, depth);
+        }catch(e){}
+      }
+    }
+    if(depth >= maxLen) return;
+
+    const last = tokens[tokens.length-1];
+    const lastIsOperand = last!==undefined && (isOperand(last) || last===')' || last==='sq');
+
+    if(!lastIsOperand){
+      for(const d of digits){
+        tokens.push(String(d));
+        dfs(tokens, depth+1, openParens);
+        tokens.pop();
+      }
+    }
+    if(hasSq && lastIsOperand && last!=='sq'){
+      tokens.push('sq');
+      dfs(tokens, depth+1, openParens);
+      tokens.pop();
+    }
+    if(lastIsOperand){
+      for(const op of ops){
+        tokens.push(op);
+        dfs(tokens, depth+1, openParens);
+        tokens.pop();
+      }
+    }
+    if(hasParens && !lastIsOperand){
+      tokens.push('(');
+      dfs(tokens, depth+1, openParens+1);
+      tokens.pop();
+    }
+    if(hasParens && openParens>0 && lastIsOperand){
+      tokens.push(')');
+      dfs(tokens, depth+1, openParens-1);
+      tokens.pop();
+    }
+  }
+  dfs([], 0, 0);
+  return bestFor;
+}
+
+/* ================= Solver (single-target; used for verification / small checks) ================= */
 function solveShortest(digits, ops, hasParens, hasSq, target, maxLen){
   let best = null;
   let bestExpr = null;
@@ -386,20 +453,27 @@ const DIGIT_POOLS = [ [2,4], [2,3,5], [3,4,7], [1,4,9], [2,6,8], [3,3,9], [4,4,2
 // restricted to a sparse multiplicative set (e.g. only powers of 2 with just *,/).
 const OP_POOLS = [ ['+','-'], ['+','*'], ['-','/'], ['+','*','/'], ['+','-','*'], ['+','-','/'], ['+','-','*','/'] ];
 const TIER_RANGE_MAX = {1:25, 2:50, 3:100, 4:200, 5:400};
-const TIER_MAXLEN = {1:5, 2:5, 3:6, 4:6, 5:7};
-const TIER_AVG_RANGE = { 1:[1,2.5], 2:[2.5,3.5], 3:[3.5,4.5], 4:[4.5,5.5], 5:[5.5,8] };
+// Difficulty range per tier n: optimal solution length between n+2 and 2n+3,
+// clamped so the search stays fast (exhaustive DFS blows up past ~10 tiles).
+const SEARCH_DEPTH_CAP = 10;
+const TIER_AVG_RANGE = {};
+const TIER_MAXLEN = {};
+for(let n=1; n<=5; n++){
+  const loLen = n+2;
+  const hiLen = Math.min(2*n+3, SEARCH_DEPTH_CAP);
+  TIER_AVG_RANGE[n] = [loLen, hiLen];
+  TIER_MAXLEN[n] = hiLen;
+}
 
 function randChoice(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 
-// Quick reachability check: with a short search budget, how many distinct
-// small integers (1..20) can this tile set actually hit? Guards against
-// sparse combos like digits [4,2] + ops [*,/] which can only reach powers of 2.
+// Quick reachability check: how many distinct small integers (1..20) can this
+// tile set actually hit? Guards against sparse combos like digits [4,2] + ops
+// [*,/] which can only reach powers of 2. Uses the batch solver (one pass).
 function reachabilityScore(tileSet){
+  const map = computeReachableMap(tileSet.digits, tileSet.ops, tileSet.hasParens, tileSet.hasSq, 5, 1000);
   let hits = 0;
-  for(let t=1; t<=20; t++){
-    const res = solveShortest(tileSet.digits, tileSet.ops, tileSet.hasParens, tileSet.hasSq, t, 5);
-    if(res.length !== null) hits++;
-  }
+  for(let t=1; t<=20; t++) if(map.has(t)) hits++;
   return hits;
 }
 
@@ -419,6 +493,15 @@ function pickTileSetForTier(tier){
     }
     if(score >= 12) break; // good enough density, stop early
   }
+  // Compute the full reachable-value map once now, at the tier's max search depth,
+  // so generateNextTarget can just sample from it instead of re-searching every call.
+  // The parens+sq combo branches much faster than either alone, so trim the depth
+  // slightly in that case to keep this one-time computation fast.
+  const rangeMax = TIER_RANGE_MAX[tier];
+  let maxLen = TIER_MAXLEN[tier];
+  if(best.hasParens && best.hasSq && maxLen > 8) maxLen = maxLen - 1;
+  best.effectiveMaxLen = maxLen;
+  best.reachableMap = computeReachableMap(best.digits, best.ops, best.hasParens, best.hasSq, maxLen, rangeMax*4);
   return best;
 }
 
@@ -428,40 +511,47 @@ function verifyTarget(tileSet, targetObj){
   if(res.length === null || res.expr === null) return false;
   try{
     const val = evalExpr(res.expr);
-    return Math.abs(val - targetObj.value) < 1e-9;
+    if(Math.abs(val - targetObj.value) < 1e-9){
+      targetObj.optimalExprStr = tokensToString(res.expr);
+      return true;
+    }
+    return false;
   }catch(e){ return false; }
 }
 
-function generateNextTarget(tileSet, tier){
-  const maxLen = TIER_MAXLEN[tier];
+function generateNextTarget(tileSet, tier, usedValues){
   const [lo, hi] = TIER_AVG_RANGE[tier];
   const rangeMax = TIER_RANGE_MAX[tier];
-  let tries = 0;
-  let fallback = null;
-  while(tries < 60){
-    tries++;
-    const t = Math.floor(Math.random()*rangeMax) + 1;
-    const res = solveShortest(tileSet.digits, tileSet.ops, tileSet.hasParens, tileSet.hasSq, t, maxLen);
-    if(res.length === null) continue;
-    if(res.length >= lo && res.length <= hi){
-      const candidate = {value:t, optimalLen:res.length};
-      if(verifyTarget(tileSet, candidate)) return candidate;
-      continue;
-    }
-    if(!fallback || Math.abs(res.length-(lo+hi)/2) < Math.abs(fallback.optimalLen-(lo+hi)/2)){
-      fallback = {value:t, optimalLen:res.length};
-    }
+  const map = tileSet.reachableMap || computeReachableMap(tileSet.digits, tileSet.ops, tileSet.hasParens, tileSet.hasSq, tileSet.effectiveMaxLen || TIER_MAXLEN[tier], rangeMax*4);
+
+  // Collect all integer values within range whose optimal length falls in [lo,hi]
+  const inBand = [];
+  const allReachable = [];
+  for(const [val, len] of map.entries()){
+    if(!Number.isInteger(val) || val < 1 || val > rangeMax) continue;
+    if(usedValues && usedValues.has(val)) continue;
+    allReachable.push({value:val, optimalLen:len});
+    if(len >= lo && len <= hi) inBand.push({value:val, optimalLen:len});
   }
-  if(fallback && verifyTarget(tileSet, fallback)) return fallback;
-  // Safety net: scan small integers upward until we find any verified solvable target.
-  for(let t=1; t<=rangeMax; t++){
-    const res = solveShortest(tileSet.digits, tileSet.ops, tileSet.hasParens, tileSet.hasSq, t, maxLen);
-    if(res.length !== null){
-      const candidate = {value:t, optimalLen:res.length};
-      if(verifyTarget(tileSet, candidate)) return candidate;
-    }
+
+  let candidate;
+  if(inBand.length > 0){
+    candidate = randChoice(inBand);
+  } else if(allReachable.length > 0){
+    // fallback: closest optimal length to the band's midpoint
+    const mid = (lo+hi)/2;
+    allReachable.sort((a,b)=>Math.abs(a.optimalLen-mid)-Math.abs(b.optimalLen-mid));
+    candidate = allReachable[0];
+  } else {
+    candidate = {value:1, optimalLen:1}; // should be unreachable in practice
   }
-  return {value:1, optimalLen:1}; // should be unreachable in practice
+
+  if(verifyTarget(tileSet, candidate)) return candidate;
+  // extremely defensive fallback if verification somehow disagrees with the map
+  for(const r of allReachable){
+    if(verifyTarget(tileSet, r)) return r;
+  }
+  return {value:1, optimalLen:1};
 }
 
 /* ================= Game state ================= */
@@ -470,7 +560,7 @@ let game = {
   score: 0, correctCount: 0, perfectCount: 0,
   totalSeconds: 0, timeLeft: 0, timerHandle: null,
   untimed: false, bonusEnabled: false, bonusSeconds: 5, inRiskMode: false,
-  showHint: false
+  showHint: false, usedTargetValues: new Set()
 };
 
 /* ================= Setup screen wiring ================= */
@@ -502,27 +592,36 @@ bonusToggle.onchange = ()=>{ bonusRow.classList.toggle('hidden', !bonusToggle.ch
 bonusRange.oninput = ()=>{ bonusVal.textContent = '+' + bonusRange.value + 's'; };
 
 document.getElementById('startBtn').onclick = ()=>{
-  game.tier = selectedTier;
-  const mins = parseInt(timeRange.value, 10);
-  game.untimed = mins === 0;
-  game.totalSeconds = mins*60;
-  game.timeLeft = game.totalSeconds;
-  game.bonusEnabled = bonusToggle.checked;
-  game.bonusSeconds = parseInt(bonusRange.value, 10);
-  game.showHint = document.getElementById('hintToggle').checked;
-  game.score = 0;
-  game.correctCount = 0;
-  game.perfectCount = 0;
-  game.tileSet = pickTileSetForTier(game.tier);
+  const startBtn = document.getElementById('startBtn');
+  startBtn.textContent = 'Generating...';
+  startBtn.disabled = true;
+  setTimeout(()=>{
+    game.tier = selectedTier;
+    const mins = parseInt(timeRange.value, 10);
+    game.untimed = mins === 0;
+    game.totalSeconds = mins*60;
+    game.timeLeft = game.totalSeconds;
+    game.bonusEnabled = bonusToggle.checked;
+    game.bonusSeconds = parseInt(bonusRange.value, 10);
+    game.showHint = document.getElementById('hintToggle').checked;
+    game.score = 0;
+    game.correctCount = 0;
+    game.perfectCount = 0;
+    game.usedTargetValues = new Set();
+    game.tileSet = pickTileSetForTier(game.tier);
 
-  document.getElementById('setupScreen').classList.add('hidden');
-  document.getElementById('gameScreen').classList.remove('hidden');
-  document.getElementById('historyBox').innerHTML = '';
+    document.getElementById('setupScreen').classList.add('hidden');
+    document.getElementById('gameScreen').classList.remove('hidden');
+    document.getElementById('historyBox').innerHTML = '';
 
-  nextTarget();
-  renderTileHint();
-  renderCalcGrid('calcGrid', pressTile);
-  startClock();
+    nextTarget();
+    renderTileHint();
+    renderCalcGrid('calcGrid', pressTile);
+    startClock();
+
+    startBtn.textContent = 'Start';
+    startBtn.disabled = false;
+  }, 30);
 };
 
 /* ================= Game screen elements ================= */
@@ -620,7 +719,8 @@ function pushHistory(text, good){
 function roundClean(v){ return Math.round(v*1000)/1000; }
 
 function nextTarget(){
-  game.target = generateNextTarget(game.tileSet, game.tier);
+  game.target = generateNextTarget(game.tileSet, game.tier, game.usedTargetValues);
+  game.usedTargetValues.add(game.target.value);
   game.currentTokens = [];
   renderTarget();
   renderExpr();
@@ -649,7 +749,14 @@ function attemptSolve(){
     game.correctCount++;
     if(isPerfect) game.perfectCount++;
     pushHistory(exprStr + ' = ' + game.target.value + (isPerfect ? '  \u2605 perfect +' : '  \u2713 +') + gained, true);
-    flashMsg(msgFlash, isPerfect ? 'Perfect! +'+gained : 'Correct! +'+gained, true);
+    if(isPerfect){
+      flashMsg(msgFlash, 'Perfect! +'+gained, true);
+    } else {
+      flashMsg(msgFlash, 'Correct! +'+gained, true);
+      if(game.showHint && game.target.optimalExprStr){
+        pushHistory('   optimal: ' + game.target.optimalExprStr + ' = ' + game.target.value + ' (' + game.target.optimalLen + ' tiles)', false);
+      }
+    }
     renderScore();
     if(game.bonusEnabled && !game.untimed){
       game.timeLeft += game.bonusSeconds;
