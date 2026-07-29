@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sleep Recovery Calculator</title>
+<!-- Tailwind CSS CDN -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- html2canvas for capturing high-res image exports -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- Google Fonts: Plus Jakarta Sans -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+        },
+        colors: {
+          phys: {
+            DEFAULT: '#f97316',
+            light: '#fb923c',
+            dark: '#ea580c',
+            glow: 'rgba(249, 115, 22, 0.25)',
+          },
+          cog: {
+            DEFAULT: '#38bdf8',
+            light: '#60a5fa',
+            dark: '#0284c7',
+            glow: 'rgba(56, 189, 248, 0.25)',
+          },
+          lightSleep: '#a855f7',
+          awake: '#f43f5e',
+        }
+      }
+    }
+  }
+</script>
+<style>
+  body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background-color: #0b0f17;
+    color: #f1f5f9;
+  }
+  
+  .glass-card {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .glass-card-hover {
+    transition: all 0.3s ease;
+  }
+  .glass-card-hover:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+  }
+
+  input[type=number]::-webkit-inner-spin-button, 
+  input[type=number]::-webkit-outer-spin-button { 
+    -webkit-appearance: none; 
+    margin: 0; 
+  }
+  input[type=number] {
+    -moz-appearance: textfield;
+  }
+
+  .bg-glow-phys {
+    background: radial-gradient(circle, rgba(249, 115, 22, 0.12) 0%, rgba(0, 0, 0, 0) 70%);
+  }
+  .bg-glow-cog {
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.12) 0%, rgba(0, 0, 0, 0) 70%);
+  }
+
+  .mode-panel { display: none; }
+  .mode-panel.active { display: block; }
+
+  .progress-ring-circle {
+    transition: stroke-dashoffset 0.6s ease-in-out, stroke 0.3s ease;
+  }
+
+  .badge-rainbow {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(245, 158, 11, 0.25), rgba(16, 185, 129, 0.25), rgba(14, 165, 233, 0.25), rgba(168, 85, 247, 0.25));
+    border: 1px solid rgba(244, 114, 182, 0.5);
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.35);
+  }
+  .text-rainbow {
+    background: linear-gradient(90deg, #f87171, #fbbf24, #34d399, #38bdf8, #c084fc, #f87171);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: rainbowShift 3s linear infinite;
+  }
+  @keyframes rainbowShift {
+    0% { background-position: 0% center; }
+    100% { background-position: 200% center; }
+  }
+</style>
+</head>
+<body class="min-h-screen text-slate-200 antialiased relative overflow-x-hidden pb-16 pt-8 px-4 sm:px-6">
+
+<div class="fixed top-0 left-1/4 w-96 h-96 bg-glow-phys pointer-events-none rounded-full blur-3xl -z-10 transform -translate-y-1/2"></div>
+<div class="fixed top-1/3 right-1/4 w-96 h-96 bg-glow-cog pointer-events-none rounded-full blur-3xl -z-10"></div>
+
+<div class="max-w-4xl mx-auto space-y-6">
+
+  <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+    <div class="space-y-1.5">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-slate-800/80 text-sky-400 border border-slate-700/60 mb-1">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        For Apple Watch sleep data
+      </div>
+      <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white flex items-center gap-3">
+        The sleep score Apple should have shipped
+      </h1>
+      <p class="text-slate-400 text-sm leading-relaxed max-w-2xl">
+        Apple's sleep score gives duration 50 points, bedtime consistency 30 points, and interruptions 20 points — <strong class="text-slate-200">deep sleep gets zero</strong>. Paste in your Health app stage data below and see what your night actually scores when depth counts. Physical index prioritizes deep sleep, cognitive index prioritizes REM, blended <strong class="text-slate-200">2:1</strong>.
+      </p>
+    </div>
+
+    <!-- Export Button -->
+    <button id="btnExport" onclick="exportShareCard()" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-700/80 hover:border-slate-600 shadow-md transition-all active:scale-95 shrink-0">
+      <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+      <span id="btnExportText">Share Image</span>
+    </button>
+  </header>
+
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    
+    <!-- LEFT COLUMN: Input Panel & Mode Controls -->
+    <div class="lg:col-span-7 space-y-6">
+      
+      <!-- Input Card -->
+      <div class="glass-card rounded-2xl p-5 sm:p-6 shadow-xl">
+        
+        <div class="flex items-start gap-2 mb-5 p-3 rounded-xl bg-sky-500/5 border border-sky-500/20 text-xs text-slate-400 leading-relaxed">
+          <svg class="w-4 h-4 text-sky-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span>Find your stage minutes in the Health app: <strong class="text-slate-300">Health → Browse → Sleep → tap last night → Sleep stages.</strong> Apple shows Core (light), Deep, REM, and Awake minutes there — none of them feed into the score it shows you.</span>
+        </div>
+        
+        <!-- Toggle Tabs -->
+        <div class="flex p-1 bg-slate-900/90 rounded-xl border border-slate-800 mb-6">
+          <button id="btnMode1" class="flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 active text-sky-400 bg-slate-800 shadow-sm border border-slate-700/50">
+            Awake time + stage %
+          </button>
+          <button id="btnMode2" class="flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200">
+            Minutes per stage
+          </button>
+        </div>
+
+        <!-- Mode 1 Panel -->
+        <div class="mode-panel active space-y-5" id="mode1">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Total Time in Bed</label>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="relative rounded-xl shadow-sm">
+                <input type="number" id="totalHrs" value="8" min="0" max="24"
+                  class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl py-3 px-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500 font-semibold text-lg transition-all">
+                <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-500 text-xs">hrs</div>
+              </div>
+              <div class="relative rounded-xl shadow-sm">
+                <input type="number" id="totalMins" value="0" min="0" max="59"
+                  class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl py-3 px-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500 font-semibold text-lg transition-all">
+                <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-500 text-xs">min</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-3 sm:gap-4">
+            <div>
+              <label for="deepPct" class="block text-xs font-semibold text-orange-400 mb-2 flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-orange-500 inline-block"></span> Deep %
+              </label>
+              <input type="number" id="deepPct" value="15" min="0" max="100"
+                class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl py-2.5 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 font-semibold text-base transition-all text-center">
+              <div class="mt-2 text-[10px] text-slate-400 flex flex-col gap-0.5 px-0.5 pt-1 border-t border-slate-800/60">
+                <span class="flex justify-between"><span>Phys Eff:</span> <strong id="m1DeepPhysEff" class="text-orange-400 font-bold">0%</strong></span>
+                <span class="flex justify-between"><span>Cog Eff:</span> <strong id="m1DeepCogEff" class="text-sky-400 font-bold">0%</strong></span>
+              </div>
+            </div>
+            <div>
+              <label for="remPct" class="block text-xs font-semibold text-sky-400 mb-2 flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-sky-400 inline-block"></span> REM %
+              </label>
+              <input type="number" id="remPct" value="20" min="0" max="100"
+                class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl py-2.5 px-3 text-white focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500 font-semibold text-base transition-all text-center">
+              <div class="mt-2 text-[10px] text-slate-400 flex flex-col gap-0.5 px-0.5 pt-1 border-t border-slate-800/60">
+                <span class="flex justify-between"><span>Phys Eff:</span> <strong id="m1RemPhysEff" class="text-orange-400 font-bold">0%</strong></span>
+                <span class="flex justify-between"><span>Cog Eff:</span> <strong id="m1RemCogEff" class="text-sky-400 font-bold">0%</strong></span>
+              </div>
+            </div>
+            <div>
+              <label for="lightPct" class="block text-xs font-semibold text-purple-400 mb-2 flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-purple-400 inline-block"></span> Light %
+              </label>
+              <input type="number" id="lightPct" value="62" min="0" max="100"
+                class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl py-2.5 px-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 font-semibold text-base transition-all text-center">
+              <div class="mt-2 text-[10px] text-slate-400 flex flex-col gap-0.5 px-0.5 pt-1 border-t border-slate-800/60">
+                <span class="flex justify-between"><span>Phys Eff:</span> <strong id="m1LightPhysEff" class="text-orange-400 font-bold">0%</strong></span>
+                <span class="flex justify-between"><span>Cog Eff:</span> <strong id="m1LightCogEff" class="text-sky-400 font-bold">0%</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between text-xs text-slate-400">
+            <span class="flex items-center gap-1.5 font-medium text-rose-400">
+              <span class="w-2 h-2 rounded-full bg-rose-500"></span> Awake remainder
+            </span>
+            <span id="awakePctNote" class="font-bold text-slate-200 text-sm">3%</span>
+          </div>
+        </div>
+
+        <!-- Mode 2 Panel -->
+        <div class="mode-panel space-y-4" id="mode2">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            
+            <!-- Deep Stage -->
+            <div class="p-3 bg-slate-900/40 rounded-xl border border-slate-800/80">
+              <label class="block text-xs font-semibold text-orange-400 mb-2 flex items-center justify-between">
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-orange-500"></span> Deep Sleep</span>
+              </label>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="relative">
+                  <input type="number" id="deepHrs" value="1" min="0" max="24"
+                    class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl py-2 px-3 pr-7 text-white text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-orange-500">
+                  <span class="absolute right-2.5 top-2.5 text-[10px] text-slate-500 font-bold">h</span>
+                </div>
+                <div class="relative">
+                  <input type="number" id="deepMins" value="10" min="0" max="59"
+                    class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl py-2 px-3 pr-7 text-white text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-orange-500">
+                  <span class="absolute right-2.5 top-2.5 text-[10px] text-slate-500 font-bold">m</span>
+                </div>
+              </div>
+              <div class="mt-2 text-[10px] text-slate-400 flex justify-between px-1 pt-1.5 border-t border-slate-800/60">
+                <span>Phys Eff: <strong id="m2DeepPhysEff" class="text-orange-400 font-bold">0%</strong></span>
+                <span>Cog Eff: <strong id="m2DeepCogEff" class="text-sky-400 font-bold">0%</strong></span>
+              </div>
+            </div>
+
+            <!-- REM Stage -->
+            <div class="p-3 bg-slate-900/40 rounded-xl border border-slate-800/80">
+              <label class="block text-xs font-semibold text-sky-400 mb-2 flex items-center justify-between">
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-sky-400"></span> REM Sleep</span>
+              </label>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="relative">
+                  <input type="number" id="remHrs" value="1" min="0" max="24"
+                    class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl py-2 px-3 pr-7 text-white text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-sky-500">
+                  <span class="absolute right-2.5 top-2.5 text-[10px] text-slate-500 font-bold">h</span>
+                </div>
+                <div class="relative">
+                  <input type="number" id="remMins" value="35" min="0" max="59"
+                    class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl py-2 px-3 pr-7 text-white text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-sky-500">
+                  <span class="absolute right-2.5 top-2.5 text-[10px] text-slate-500 font-bold">m</span>
+                </div>
+              </div>
+              <div class="mt-2 text-[10px] text-slate-400 flex justify-between px-1 pt-1.5 border-t border-slate-800/60">
+                <span>Phys Eff: <strong id="m2RemPhysEff" class="text-orange-400 font-bold">0%</strong></span>
+                <span>Cog Eff: <strong id="m2RemCogEff" class="text-sky-400 font-bold">0%</strong></span>
+              </div>
+            </div>
+
+            <!-- Light Stage -->
+            <div class="p-3 bg-slate-900/40 rounded-xl border border-slate-800/80">
+              <label class="block text-xs font-semibold text-purple-400 mb-2 flex items-center justify-between">
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-purple-400"></span> Light Sleep</span>
+              </label>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="relative">
+                  <input type="number" id="lightHrs" value="3" min="0" max="24"
+                    class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl py-2 px-3 pr-7 text-white text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-purple-500">
+                  <span class="absolute right-2.5 top-2.5 text-[10px] text-slate-500 font-bold">h</span>
+                </div>
+                <div class="relative">
+                  <input type="number" id="lightMins" value="30" min="0" max="59"
+                    class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl py-2 px-3 pr-7 text-white text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-purple-500">
+                  <span class="absolute right-2.5 top-2.5 text-[10px] text-slate-500 font-bold">m</span>
+                </div>
+              </div>
+              <div class="mt-2 text-[10px] text-slate-400 flex justify-between px-1 pt-1.5 border-t border-slate-800/60">
+                <span>Phys Eff: <strong id="m2LightPhysEff" class="text-orange-400 font-bold">0%</strong></span>
+                <span>Cog Eff: <strong id="m2LightCogEff" class="text-sky-400 font-bold">0%</strong></span>
+              </div>
+            </div>
+
+            <!-- Awake Stage -->
+            <div class="p-3 bg-slate-900/40 rounded-xl border border-slate-800/80">
+              <label class="block text-xs font-semibold text-rose-400 mb-2 flex items-center justify-between">
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-500"></span> Awake Time</span>
+              </label>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="relative">
+                  <input type="number" id="awakeHrs" value="0" min="0" max="24"
+                    class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl py-2 px-3 pr-7 text-white text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-rose-500">
+                  <span class="absolute right-2.5 top-2.5 text-[10px] text-slate-500 font-bold">h</span>
+                </div>
+                <div class="relative">
+                  <input type="number" id="awakeMins" value="15" min="0" max="59"
+                    class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl py-2 px-3 pr-7 text-white text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-rose-500">
+                  <span class="absolute right-2.5 top-2.5 text-[10px] text-slate-500 font-bold">m</span>
+                </div>
+              </div>
+              <div class="mt-2 text-[10px] text-slate-400 flex justify-between px-1 pt-1.5 border-t border-slate-800/60">
+                <span>Phys Eff: <strong class="text-slate-500 font-bold">0%</strong></span>
+                <span>Cog Eff: <strong class="text-slate-500 font-bold">0%</strong></span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="mt-6 pt-5 border-t border-slate-800/80 space-y-2">
+          <div class="flex justify-between items-center text-xs font-semibold text-slate-400">
+            <span>Stage Proportion Breakdown</span>
+            <span id="totalSleepDurationLabel" class="text-slate-300">8h 00m total</span>
+          </div>
+          <!-- Stacked Progress Bar -->
+          <div class="h-3 w-full bg-slate-900 rounded-full overflow-hidden flex p-0.5 border border-slate-800">
+            <div id="barDeep" class="h-full bg-orange-500 rounded-l-full transition-all duration-300" style="width: 15%"></div>
+            <div id="barRem" class="h-full bg-sky-400 transition-all duration-300" style="width: 20%"></div>
+            <div id="barLight" class="h-full bg-purple-500 transition-all duration-300" style="width: 62%"></div>
+            <div id="barAwake" class="h-full bg-rose-500 rounded-r-full transition-all duration-300" style="width: 3%"></div>
+          </div>
+          <!-- Legend -->
+          <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 px-1">
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-orange-500"></span>Deep</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-sky-400"></span>REM</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-purple-500"></span>Light</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-500"></span>Awake</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: Score Visualizer (Capturable area) -->
+    <div class="lg:col-span-5 space-y-6">
+      
+      <div id="scoreCardToExport" class="glass-card rounded-2xl p-6 shadow-xl relative overflow-hidden text-center space-y-6">
+        
+        <!-- Score Circle Visual -->
+        <div class="relative w-44 h-44 mx-auto flex items-center justify-center">
+          <svg class="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="50" stroke="#1e293b" stroke-width="10" fill="transparent" />
+            <circle id="scoreRing" cx="60" cy="60" r="50" stroke="url(#scoreGradient)" stroke-width="10" 
+              fill="transparent" stroke-dasharray="314.159" stroke-dashoffset="100" stroke-linecap="round" class="progress-ring-circle" />
+            
+            <defs>
+              <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#38bdf8" />
+                <stop offset="100%" stop-color="#818cf8" />
+              </linearGradient>
+            </defs>
+          </svg>
+
+          <!-- Radial Center Content -->
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <span id="finalNum" class="text-5xl font-black tracking-tight text-white">--</span>
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-0.5">Score</span>
+          </div>
+        </div>
+
+        <div>
+          <div id="finalLabel" class="inline-block px-4 py-1.5 rounded-full bg-slate-800/90 border border-slate-700/80 text-sm font-bold text-sky-400 shadow-inner">
+            Blended Recovery Score
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 pt-3 border-t border-slate-800">
+          
+          <!-- Physical Index Box -->
+          <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 text-center">
+            <div id="physNum" class="text-2xl font-black text-orange-400">--</div>
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mt-1 flex items-center justify-center gap-1">
+              <svg class="w-3.5 h-3.5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              Physical
+            </div>
+            <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+              <div id="physBar" class="bg-orange-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- Cognitive Index Box -->
+          <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 text-center">
+            <div id="cogNum" class="text-2xl font-black text-sky-400">--</div>
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mt-1 flex items-center justify-center gap-1">
+              <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+              Cognitive
+            </div>
+            <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+              <div id="cogBar" class="bg-sky-400 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- BOTTOM SECTION: Target Sleep Tiers Table -->
+  <div class="glass-card rounded-2xl p-6 shadow-xl">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-white flex items-center gap-2">
+        <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Target Sleep Duration for Next Tiers
+      </h3>
+      <span class="text-xs text-slate-400 hidden sm:inline-block">Maintains current stage proportions</span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm" id="tierTable">
+        <thead>
+          <tr class="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
+            <th class="pb-3 font-semibold">Tier Goal</th>
+            <th class="pb-3 font-semibold">Target Score</th>
+            <th class="pb-3 font-semibold text-right">Time in Bed Needed</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/60 font-medium">
+        </tbody>
+      </table>
+    </div>
+
+    <p class="text-xs text-slate-500 mt-4 leading-relaxed border-t border-slate-800/50 pt-3" id="tierFootnote">
+      Based on your current stage ratio, holding those proportions fixed while scaling total time in bed.
+    </p>
+  </div>
+
+</div>
+
+<!-- Offscreen template for clean image exports -->
+<div id="exportCardContainer" class="fixed -left-[9999px] top-0 w-[520px] bg-slate-950 text-white p-8 rounded-3xl border border-slate-800 shadow-2xl font-sans">
+  <div class="flex items-center justify-between border-b border-slate-800/80 pb-4 mb-5">
+    <div class="flex items-center gap-2">
+      <div class="p-2 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      </div>
+      <div>
+        <div class="text-sm font-extrabold tracking-tight text-white leading-tight">Bio-Recovery Summary</div>
+        <div class="text-[11px] text-slate-400 leading-tight" id="expDate">--</div>
+      </div>
+    </div>
+    <div class="text-xs font-bold text-slate-400 tracking-wider uppercase">Sleep Index</div>
+  </div>
+
+  <div class="text-center mb-5" style="margin-top: -10px;">
+    <div class="relative w-36 h-36 mx-auto flex items-center justify-center">
+      <svg class="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r="50" stroke="#1e293b" stroke-width="10" fill="transparent" />
+        <circle id="expScoreRing" cx="60" cy="60" r="50" stroke="#38bdf8" stroke-width="10" 
+          fill="transparent" stroke-dasharray="314.159" stroke-dashoffset="100" stroke-linecap="round" />
+      </svg>
+      <div class="absolute inset-0 flex flex-col items-center justify-center">
+        <span id="expFinalNum" class="text-4xl font-black text-white leading-none">--</span>
+        <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mt-1">Score</span>
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <div id="expFinalLabel" class="inline-block px-4 py-1.5 rounded-full text-xs font-bold bg-slate-900 border border-slate-700 text-sky-400">
+        --
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-3 mb-5">
+    <div class="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-center flex flex-col items-center justify-center">
+      <div id="expPhysNum" class="text-xl font-black text-orange-400 leading-none">--</div>
+      <div class="text-[10px] font-bold uppercase text-slate-400 mt-1 leading-tight">Physical Index</div>
+    </div>
+    <div class="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-center flex flex-col items-center justify-center">
+      <div id="expCogNum" class="text-xl font-black text-sky-400 leading-none">--</div>
+      <div class="text-[10px] font-bold uppercase text-slate-400 mt-1 leading-tight">Cognitive Index</div>
+    </div>
+  </div>
+
+  <div class="pt-4 border-t border-slate-800/80">
+    <div class="flex justify-between items-baseline text-xs font-semibold text-slate-400 mb-2 leading-none">
+      <span>Sleep Stages</span>
+      <span id="expDurationLabel" class="text-slate-300 font-bold">8h 00m</span>
+    </div>
+    <div class="h-2.5 w-full bg-slate-900 rounded-full overflow-hidden flex p-0.5 border border-slate-800">
+      <div id="expBarDeep" class="h-full bg-orange-500 rounded-l-full" style="width: 15%"></div>
+      <div id="expBarRem" class="h-full bg-sky-400" style="width: 20%"></div>
+      <div id="expBarLight" class="h-full bg-purple-500" style="width: 62%"></div>
+      <div id="expBarAwake" class="h-full bg-rose-500 rounded-r-full" style="width: 3%"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PD = 2.0, PR = 0.2, PL = 0.4;
+const CD = 0.3, CR = 2.0, CL = 0.6;
+const PHYS_REF = 90 * PD + 120 * PR + 240 * PL;
+const COG_REF = 90 * CD + 120 * CR + 240 * CL;
+const PHYS_SHARE = 2 / 3;
+
+function updateStageEfficiencies(deep, rem, light) {
+  const deepPhysEff = Math.round((deep * PD / PHYS_REF) * 100);
+  const deepCogEff = Math.round((deep * CD / COG_REF) * 100);
+  
+  const remPhysEff = Math.round((rem * PR / PHYS_REF) * 100);
+  const remCogEff = Math.round((rem * CR / COG_REF) * 100);
+  
+  const lightPhysEff = Math.round((light * PL / PHYS_REF) * 100);
+  const lightCogEff = Math.round((light * CL / COG_REF) * 100);
+
+  // Update Mode 1 stage efficiencies
+  const m1Dp = document.getElementById('m1DeepPhysEff');
+  if (m1Dp) {
+    m1Dp.textContent = `${deepPhysEff}%`;
+    document.getElementById('m1DeepCogEff').textContent = `${deepCogEff}%`;
+    document.getElementById('m1RemPhysEff').textContent = `${remPhysEff}%`;
+    document.getElementById('m1RemCogEff').textContent = `${remCogEff}%`;
+    document.getElementById('m1LightPhysEff').textContent = `${lightPhysEff}%`;
+    document.getElementById('m1LightCogEff').textContent = `${lightCogEff}%`;
+  }
+
+  // Update Mode 2 stage efficiencies
+  const m2Dp = document.getElementById('m2DeepPhysEff');
+  if (m2Dp) {
+    m2Dp.textContent = `${deepPhysEff}%`;
+    document.getElementById('m2DeepCogEff').textContent = `${deepCogEff}%`;
+    document.getElementById('m2RemPhysEff').textContent = `${remPhysEff}%`;
+    document.getElementById('m2RemCogEff').textContent = `${remCogEff}%`;
+    document.getElementById('m2LightPhysEff').textContent = `${lightPhysEff}%`;
+    document.getElementById('m2LightCogEff').textContent = `${lightCogEff}%`;
+  }
+}
+
+function scoreFrom(deep, rem, light) {
+  deep = Math.max(0, deep); 
+  rem = Math.max(0, rem); 
+  light = Math.max(0, light);
+  
+  const physRaw = deep * PD + rem * PR + light * PL;
+  const cogRaw = deep * CD + rem * CR + light * CL;
+  const physIdx = Math.round(Math.max(0, Math.min(100, physRaw / PHYS_REF * 100)));
+  const cogIdx = Math.round(Math.max(0, Math.min(100, cogRaw / COG_REF * 100)));
+  const final = Math.round(PHYS_SHARE * physIdx + (1 - PHYS_SHARE) * cogIdx);
+  return { physIdx, cogIdx, final };
+}
+
+const TIERS = [
+  { name: 'Low', min: 35, badgeBg: 'bg-orange-500/15 text-orange-400 border-orange-500/40', strokeColor: '#f97316', isRainbow: false },
+  { name: 'Sufficient', min: 50, badgeBg: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/40', strokeColor: '#facc15', isRainbow: false },
+  { name: 'OK', min: 65, badgeBg: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40', strokeColor: '#34d399', isRainbow: false },
+  { name: 'High', min: 82, badgeBg: 'bg-sky-500/15 text-sky-300 border-sky-400/40', strokeColor: '#38bdf8', isRainbow: false },
+  { name: 'Very high', min: 96, badgeBg: 'bg-blue-950/80 text-blue-300 border-blue-600/60', strokeColor: '#60a5fa', isRainbow: false },
+  { name: 'Perfect', min: 100, badgeBg: 'badge-rainbow', strokeColor: '#a855f7', isRainbow: true }
+];
+
+const VERY_LOW_TIER = { name: 'Very low', min: 0, badgeBg: 'bg-rose-500/15 text-rose-400 border-rose-500/40', strokeColor: '#f43f5e', isRainbow: false };
+
+function getTierObj(score) {
+  if (score < 35) return VERY_LOW_TIER;
+  for (let i = TIERS.length - 1; i >= 0; i--) { 
+    if (score >= TIERS[i].min) return TIERS[i]; 
+  }
+  return VERY_LOW_TIER;
+}
+
+function scoreForSleepMin(sleepMin, dPct, rPct, lPct) {
+  const pctSum = dPct + rPct + lPct || 1;
+  const d = sleepMin * dPct / pctSum;
+  const r = sleepMin * rPct / pctSum;
+  const l = sleepMin * lPct / pctSum;
+  return scoreFrom(d, r, l).final;
+}
+
+function minutesNeededFor(targetScore, dPct, rPct, lPct, awakePct) {
+  let lo = 0, hi = 1200;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (scoreForSleepMin(mid, dPct, rPct, lPct) < targetScore) lo = mid; else hi = mid;
+  }
+  const sleepMin = hi;
+  const sleepShare = Math.max(1, 100 - awakePct) / 100;
+  return Math.round(sleepMin / sleepShare);
+}
+
+function updateTierTable(currentScore, dPct, rPct, lPct, awakePct) {
+  const table = document.getElementById('tierTable');
+  const tbody = table.querySelector('tbody');
+  tbody.innerHTML = '';
+
+  const currentTierObj = getTierObj(currentScore);
+  let startIdx = 0;
+  
+  if (currentTierObj.name !== 'Very low') {
+    const currentTierIdx = TIERS.findIndex(t => t.name === currentTierObj.name);
+    startIdx = currentTierIdx < 0 ? 0 : currentTierIdx + 1;
+  }
+
+  if (startIdx >= TIERS.length) {
+    const row = document.createElement('tr');
+    row.innerHTML = `<td colspan="3" class="py-4 text-center text-slate-400 text-xs italic">
+      🎉 Outstanding! You have reached maximum recovery level for your current ratio.
+    </td>`;
+    tbody.appendChild(row);
+  } else {
+    for (let i = startIdx; i < TIERS.length; i++) {
+      const mins = minutesNeededFor(TIERS[i].min, dPct, rPct, lPct, awakePct);
+      const h = Math.floor(mins / 60), m = mins % 60;
+      const row = document.createElement('tr');
+      row.className = 'hover:bg-slate-800/40 transition-colors';
+      
+      const badgeContent = TIERS[i].isRainbow 
+        ? `<span class="text-rainbow font-black">${TIERS[i].name}</span>`
+        : TIERS[i].name;
+
+      row.innerHTML = `
+        <td class="py-3">
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold border ${TIERS[i].badgeBg}">
+            ${badgeContent}
+          </span>
+        </td>
+        <td class="py-3 text-slate-300 font-semibold">${TIERS[i].min}+ pts</td>
+        <td class="py-3 text-right text-white font-bold">${h}h ${m}m</td>
+      `;
+      tbody.appendChild(row);
+    }
+  }
+
+  document.getElementById('tierFootnote').textContent = 
+    `Based on your current stage ratio (${Math.round(dPct)}% deep, ${Math.round(rPct)}% REM, ${Math.round(lPct)}% light, ${Math.round(awakePct)}% awake), holding those proportions fixed while scaling total time in bed.`;
+}
+
+function updateVisualBars(dPct, rPct, lPct, awakePct, totalMin) {
+  const deepBar = document.getElementById('barDeep');
+  const remBar = document.getElementById('barRem');
+  const lightBar = document.getElementById('barLight');
+  const awakeBar = document.getElementById('barAwake');
+
+  const total = dPct + rPct + lPct + awakePct || 100;
+  
+  deepBar.style.width = Math.max(0, (dPct / total * 100)) + '%';
+  remBar.style.width = Math.max(0, (rPct / total * 100)) + '%';
+  lightBar.style.width = Math.max(0, (lPct / total * 100)) + '%';
+  awakeBar.style.width = Math.max(0, (awakePct / total * 100)) + '%';
+
+  const hrs = Math.floor(totalMin / 60);
+  const mins = Math.round(totalMin % 60);
+  document.getElementById('totalSleepDurationLabel').textContent = `${hrs}h ${mins < 10 ? '0' : ''}${mins}m total`;
+
+  // Sync export card values as well
+  document.getElementById('expBarDeep').style.width = deepBar.style.width;
+  document.getElementById('expBarRem').style.width = remBar.style.width;
+  document.getElementById('expBarLight').style.width = lightBar.style.width;
+  document.getElementById('expBarAwake').style.width = awakeBar.style.width;
+  document.getElementById('expDurationLabel').textContent = `${hrs}h ${mins < 10 ? '0' : ''}${mins}m total`;
+}
+
+function render(r, dPct, rPct, lPct, awakePct, totalMin) {
+  document.getElementById('physNum').textContent = r.physIdx;
+  document.getElementById('cogNum').textContent = r.cogIdx;
+  document.getElementById('finalNum').textContent = r.final;
+  
+  const tierObj = getTierObj(r.final);
+  const finalLabelEl = document.getElementById('finalLabel');
+  
+  if (tierObj.isRainbow) {
+    finalLabelEl.className = `inline-block px-4 py-1.5 rounded-full text-sm font-bold border ${tierObj.badgeBg}`;
+    finalLabelEl.innerHTML = `<span class="text-rainbow">${tierObj.name} — Blended Score</span>`;
+  } else {
+    finalLabelEl.className = `inline-block px-4 py-1.5 rounded-full text-sm font-bold border transition-colors duration-300 ${tierObj.badgeBg}`;
+    finalLabelEl.textContent = `${tierObj.name} — Blended Score`;
+  }
+
+  document.getElementById('physBar').style.width = `${Math.min(100, r.physIdx)}%`;
+  document.getElementById('cogBar').style.width = `${Math.min(100, r.cogIdx)}%`;
+
+  const ring = document.getElementById('scoreRing');
+  const circumference = 2 * Math.PI * 50;
+  const offset = circumference - (r.final / 100) * circumference;
+  ring.style.strokeDashoffset = Math.max(0, offset);
+
+  // Sync state to Export Card Template
+  document.getElementById('expFinalNum').textContent = r.final;
+  document.getElementById('expPhysNum').textContent = r.physIdx;
+  document.getElementById('expCogNum').textContent = r.cogIdx;
+  document.getElementById('expFinalLabel').textContent = `${tierObj.name} — ${r.final} pts`;
+  document.getElementById('expDate').textContent = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  
+  const expRing = document.getElementById('expScoreRing');
+  expRing.style.strokeDashoffset = Math.max(0, offset);
+  expRing.style.stroke = tierObj.strokeColor;
+
+  updateVisualBars(dPct, rPct, lPct, awakePct, totalMin);
+  updateTierTable(r.final, dPct, rPct, lPct, awakePct);
+}
+
+function calc() {
+  const mode1active = document.getElementById('mode1').classList.contains('active');
+  let deep, rem, light, dPct, rPct, lPct, awakePct, totalMin;
+
+  if (mode1active) {
+    const totalHrs = Number(document.getElementById('totalHrs').value) || 0;
+    const totalMins = Number(document.getElementById('totalMins').value) || 0;
+    totalMin = (totalHrs * 60) + totalMins;
+
+    let deepPct = Math.max(0, Number(document.getElementById('deepPct').value) || 0);
+    let remPct = Math.max(0, Number(document.getElementById('remPct').value) || 0);
+    let lightPct = Math.max(0, Number(document.getElementById('lightPct').value) || 0);
+    
+    awakePct = Math.max(0, 100 - deepPct - remPct - lightPct);
+    document.getElementById('awakePctNote').textContent = Math.round(awakePct) + '%';
+    
+    deep = totalMin * deepPct / 100;
+    rem = totalMin * remPct / 100;
+    light = totalMin * lightPct / 100;
+    dPct = deepPct; rPct = remPct; lPct = lightPct;
+  } else {
+    const dHrs = Number(document.getElementById('deepHrs').value) || 0;
+    const dMins = Number(document.getElementById('deepMins').value) || 0;
+    deep = (dHrs * 60) + dMins;
+
+    const rHrs = Number(document.getElementById('remHrs').value) || 0;
+    const rMins = Number(document.getElementById('remMins').value) || 0;
+    rem = (rHrs * 60) + rMins;
+
+    const lHrs = Number(document.getElementById('lightHrs').value) || 0;
+    const lMins = Number(document.getElementById('lightMins').value) || 0;
+    light = (lHrs * 60) + lMins;
+
+    const aHrs = Number(document.getElementById('awakeHrs').value) || 0;
+    const aMins = Number(document.getElementById('awakeMins').value) || 0;
+    const awakeMin = (aHrs * 60) + aMins;
+    
+    totalMin = deep + rem + light + awakeMin || 1;
+    dPct = deep / totalMin * 100; 
+    rPct = rem / totalMin * 100; 
+    lPct = light / totalMin * 100;
+    awakePct = awakeMin / totalMin * 100;
+  }
+
+  updateStageEfficiencies(deep, rem, light);
+  render(scoreFrom(deep, rem, light), dPct, rPct, lPct, awakePct, totalMin);
+}
+
+function exportShareCard() {
+  const btnText = document.getElementById('btnExportText');
+  const originalText = btnText.textContent;
+  btnText.textContent = 'Generating Image...';
+
+  document.fonts.load('900 68px "Plus Jakarta Sans"').then(() => document.fonts.ready).then(() => {
+  drawExportCanvas();
+  });
+
+  function drawExportCanvas() {
+  const W = 1040, H = 980;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  ctx.fillStyle = '#020617';
+  roundRect(0,0,W,H,32); ctx.fill();
+  ctx.strokeStyle = 'rgba(148,163,184,0.15)';
+  ctx.lineWidth = 2;
+  roundRect(1,1,W-2,H-2,32); ctx.stroke();
+
+  const pad = 64;
+
+  ctx.fillStyle = 'rgba(56,189,248,0.1)';
+  roundRect(pad, 64, 56, 56, 16); ctx.fill();
+  ctx.strokeStyle = 'rgba(56,189,248,0.2)'; ctx.lineWidth = 1;
+  roundRect(pad, 64, 56, 56, 16); ctx.stroke();
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = '700 28px "Plus Jakarta Sans", sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'center';
+  ctx.fillText('⚡', pad+28, 64+30);
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '800 26px "Plus Jakarta Sans", sans-serif';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('Bio-Recovery Summary', pad+72, 92);
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '500 16px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText(document.getElementById('expDate').textContent, pad+72, 116);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '700 15px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText('SLEEP INDEX', W-pad, 100);
+
+  ctx.strokeStyle = 'rgba(148,163,184,0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad, 156); ctx.lineTo(W-pad, 156); ctx.stroke();
+
+  const cx = W/2, cy = 340, r = 130;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI*2);
+  ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 22;
+  ctx.stroke();
+
+  const finalScore = Number(document.getElementById('finalNum').textContent) || 0;
+  const tierObj = getTierObj(finalScore);
+  const startAngle = -Math.PI/2;
+  const endAngle = startAngle + (finalScore/100) * Math.PI*2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, startAngle, endAngle);
+  ctx.strokeStyle = tierObj.strokeColor; ctx.lineWidth = 22;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 68px "Plus Jakarta Sans", sans-serif';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(String(finalScore), cx, cy+18);
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '700 16px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText('SCORE', cx, cy+48);
+
+  const badgeText = `${tierObj.name} — ${finalScore} pts`;
+  ctx.font = '700 22px "Plus Jakarta Sans", sans-serif';
+  const badgeW = ctx.measureText(badgeText).width + 56;
+  const badgeH = 52, badgeY = cy + r + 46;
+  ctx.fillStyle = '#0f172a';
+  roundRect(cx-badgeW/2, badgeY, badgeW, badgeH, badgeH/2); ctx.fill();
+  ctx.strokeStyle = 'rgba(148,163,184,0.25)'; ctx.lineWidth = 1;
+  roundRect(cx-badgeW/2, badgeY, badgeW, badgeH, badgeH/2); ctx.stroke();
+  ctx.fillStyle = tierObj.strokeColor;
+  ctx.fillText(badgeText, cx, badgeY+34);
+
+  const boxY = badgeY + badgeH + 44, boxH = 130;
+  const boxW = (W - pad*2 - 24)/2;
+  const physIdx = document.getElementById('physNum').textContent;
+  const cogIdx = document.getElementById('cogNum').textContent;
+
+  ctx.fillStyle = 'rgba(15,23,42,0.9)';
+  roundRect(pad, boxY, boxW, boxH, 18); ctx.fill();
+  ctx.strokeStyle = 'rgba(148,163,184,0.15)'; ctx.lineWidth = 1;
+  roundRect(pad, boxY, boxW, boxH, 18); ctx.stroke();
+  ctx.fillStyle = '#fb923c';
+  ctx.font = '900 40px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText(physIdx, pad+boxW/2, boxY+58);
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '700 15px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText('PHYSICAL INDEX', pad+boxW/2, boxY+92);
+
+  const box2X = pad+boxW+24;
+  ctx.fillStyle = 'rgba(15,23,42,0.9)';
+  roundRect(box2X, boxY, boxW, boxH, 18); ctx.fill();
+  ctx.strokeStyle = 'rgba(148,163,184,0.15)'; ctx.lineWidth = 1;
+  roundRect(box2X, boxY, boxW, boxH, 18); ctx.stroke();
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = '900 40px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText(cogIdx, box2X+boxW/2, boxY+58);
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '700 15px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText('COGNITIVE INDEX', box2X+boxW/2, boxY+92);
+
+  const divY = boxY + boxH + 40;
+  ctx.strokeStyle = 'rgba(148,163,184,0.15)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pad, divY); ctx.lineTo(W-pad, divY); ctx.stroke();
+
+  const stagesY = divY + 44;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#cbd5e1';
+  ctx.font = '600 20px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText('Sleep Stages', pad, stagesY);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#e2e8f0';
+  ctx.font = '700 18px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText(document.getElementById('totalSleepDurationLabel').textContent, W-pad, stagesY);
+
+  const barY = stagesY + 24, barH = 18, barW = W - pad*2;
+  const dPct = parseFloat(document.getElementById('barDeep').style.width)||0;
+  const rPct = parseFloat(document.getElementById('barRem').style.width)||0;
+  const lPct = parseFloat(document.getElementById('barLight').style.width)||0;
+  const aPct = parseFloat(document.getElementById('barAwake').style.width)||0;
+  const total = dPct+rPct+lPct+aPct || 100;
+
+  ctx.save();
+  roundRect(pad, barY, barW, barH, barH/2); ctx.clip();
+  ctx.fillStyle = '#1e293b'; ctx.fillRect(pad, barY, barW, barH);
+  let bx = pad;
+  const segs = [[dPct,'#f97316'],[rPct,'#38bdf8'],[lPct,'#a855f7'],[aPct,'#f43f5e']];
+  segs.forEach(([pct,color])=>{
+    const w = barW*pct/total;
+    ctx.fillStyle = color;
+    ctx.fillRect(bx, barY, w, barH);
+    bx += w;
+  });
+  ctx.restore();
+
+  btnText.textContent = 'Downloaded!';
+  const link = document.createElement('a');
+  link.download = `Sleep_Recovery_Score_${new Date().toISOString().slice(0, 10)}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  setTimeout(() => { btnText.textContent = originalText; }, 2000);
+  }
+}
+
+// Mode switching event handlers
+const btnMode1 = document.getElementById('btnMode1');
+const btnMode2 = document.getElementById('btnMode2');
+const mode1 = document.getElementById('mode1');
+const mode2 = document.getElementById('mode2');
+
+btnMode1.addEventListener('click', () => {
+  btnMode1.className = 'flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 active text-sky-400 bg-slate-800 shadow-sm border border-slate-700/50';
+  btnMode2.className = 'flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200';
+  mode1.classList.add('active');
+  mode2.classList.remove('active');
+  calc();
+});
+
+btnMode2.addEventListener('click', () => {
+  btnMode2.className = 'flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 active text-sky-400 bg-slate-800 shadow-sm border border-slate-700/50';
+  btnMode1.className = 'flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200';
+  mode2.classList.add('active');
+  mode1.classList.remove('active');
+  calc();
+});
+
+document.querySelectorAll('input').forEach(el => el.addEventListener('input', calc));
+
+window.onload = function() {
+  calc();
+};
+</script>
+</body>
+</html>
