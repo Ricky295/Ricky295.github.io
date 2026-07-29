@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>weather on a screen</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #ffffff;
+    --fg: #c7c7c7;
+    --fg-strong: #bcbcbc;
+    --fg-dim: #d6d6d6;
+    --circle: #c9c9c9;
+  }
+
+  html.dark {
+    --bg: #000000;
+    --fg: #2b2b2b;
+    --fg-strong: #333333;
+    --fg-dim: #232323;
+    --circle: #2e2e2e;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Quicksand', 'Segoe UI', sans-serif;
+    font-weight: 500;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    transition: background 0.4s ease, color 0.4s ease;
+  }
+
+  .page {
+    width: 100%;
+    max-width: 900px;
+    padding: 40px 30px 60px;
+    position: relative;
+  }
+
+  /* ---- top bar ---- */
+  .topbar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-start;
+    gap: 18px;
+    margin-bottom: 10px;
+  }
+
+  .settings-hint {
+    text-align: right;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--fg-dim);
+    padding-top: 4px;
+  }
+
+  .toggle-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--circle);
+    padding: 0;
+    width: 46px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.5s ease, color 0.4s ease;
+  }
+  .toggle-btn:hover { transform: rotate(20deg); }
+  .toggle-btn svg { width: 100%; height: 100%; }
+
+  /* ---- date/time ---- */
+  .datetime {
+    font-size: clamp(1.6rem, 4.4vw, 2.7rem);
+    color: var(--fg);
+    margin: 10px 0 30px;
+    font-weight: 400;
+  }
+
+  /* ---- main circle ---- */
+  .main-weather {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .big-circle {
+    width: min(48vw, 340px);
+    height: min(48vw, 340px);
+    border-radius: 50%;
+    background: var(--circle);
+    margin-bottom: 30px;
+    transition: background 0.4s ease;
+  }
+
+  .condition {
+    font-size: clamp(1.8rem, 5vw, 2.6rem);
+    letter-spacing: 1px;
+    color: var(--fg);
+  }
+
+  .temp {
+    font-size: clamp(2.4rem, 7vw, 3.4rem);
+    color: var(--fg);
+    margin-bottom: 20px;
+  }
+
+  .details {
+    font-size: clamp(1rem, 2.4vw, 1.3rem);
+    line-height: 1.9;
+    color: var(--fg);
+  }
+
+  /* ---- bottom row ---- */
+  .bottom-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: 60px;
+    gap: 20px;
+  }
+
+  .side-block {
+    text-align: center;
+    flex: 1;
+    max-width: 220px;
+  }
+
+  .side-label {
+    font-size: clamp(0.95rem, 2.2vw, 1.2rem);
+    margin-bottom: 14px;
+    color: var(--fg);
+  }
+
+  .small-circle {
+    width: min(20vw, 110px);
+    height: min(20vw, 110px);
+    border-radius: 50%;
+    background: var(--circle);
+    margin: 0 auto 14px;
+    transition: background 0.4s ease;
+  }
+
+  .side-cond {
+    font-size: clamp(0.9rem, 2vw, 1.15rem);
+    color: var(--fg);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .side-hum {
+    font-size: clamp(0.65rem, 1.5vw, 0.85rem);
+    color: var(--fg-dim);
+  }
+
+  /* ---- settings panel ---- */
+  .settings-panel {
+    position: absolute;
+    top: 90px;
+    right: 30px;
+    background: var(--bg);
+    border: 1px solid var(--fg);
+    border-radius: 14px;
+    padding: 22px 26px;
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+    z-index: 10;
+    min-width: 240px;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.05);
+  }
+  .settings-panel.open { display: flex; }
+
+  .settings-panel label {
+    font-size: 0.95rem;
+    color: var(--fg);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .settings-panel input,
+  .settings-panel select {
+    font-family: inherit;
+    background: var(--bg);
+    color: var(--fg-strong);
+    border: 1px solid var(--fg);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.95rem;
+  }
+
+  .settings-panel button.apply {
+    font-family: inherit;
+    background: none;
+    border: 1px solid var(--fg);
+    color: var(--fg);
+    border-radius: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: background 0.2s ease;
+  }
+  .settings-panel button.apply:hover {
+    background: var(--fg-dim);
+  }
+
+  .status-msg {
+    text-align: center;
+    font-size: 1.1rem;
+    color: var(--fg-dim);
+    margin-top: 80px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .toggle-btn { transition: none; }
+    .toggle-btn:hover { transform: none; }
+  }
+
+  @media (max-width: 520px) {
+    .bottom-row { flex-direction: row; }
+    .settings-hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="topbar">
+    <div class="settings-hint">Settings &#8594;<br>(city, light/dark mode,<br>refresh interval)</div>
+    <button class="toggle-btn" id="modeToggle" aria-label="Open settings" title="Settings">
+      <svg id="modeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <circle cx="12" cy="12" r="4.6"></circle>
+        <line x1="12" y1="1.6" x2="12" y2="4.4"></line>
+        <line x1="12" y1="19.6" x2="12" y2="22.4"></line>
+        <line x1="1.6" y1="12" x2="4.4" y2="12"></line>
+        <line x1="19.6" y1="12" x2="22.4" y2="12"></line>
+        <line x1="4.4" y1="4.4" x2="6.3" y2="6.3"></line>
+        <line x1="17.7" y1="17.7" x2="19.6" y2="19.6"></line>
+        <line x1="4.4" y1="19.6" x2="6.3" y2="17.7"></line>
+        <line x1="17.7" y1="6.3" x2="19.6" y2="4.4"></line>
+      </svg>
+    </button>
+  </div>
+
+  <div class="settings-panel" id="settingsPanel">
+    <label>City name
+      <input type="text" id="cityInput" placeholder="e.g. Milan, Italy">
+    </label>
+    <label>Appearance
+      <select id="modeSelect">
+        <option value="auto">Follow time of day</option>
+        <option value="light">Always light</option>
+        <option value="dark">Always dark</option>
+      </select>
+    </label>
+    <label>Refresh interval
+      <select id="refreshSelect">
+        <option value="0">Manual only</option>
+        <option value="5">Every 5 minutes</option>
+        <option value="15">Every 15 minutes</option>
+        <option value="30">Every 30 minutes</option>
+        <option value="60">Every hour</option>
+      </select>
+    </label>
+    <button class="apply" id="applySettings">Apply</button>
+  </div>
+
+  <div class="datetime" id="datetime">Loading&hellip;</div>
+
+  <div class="main-weather">
+    <div class="big-circle" id="bigCircle"></div>
+    <div class="condition" id="mainCondition">&mdash;</div>
+    <div class="temp" id="mainTemp">&mdash;</div>
+    <div class="details" id="mainDetails"></div>
+  </div>
+
+  <div class="bottom-row">
+    <div class="side-block">
+      <div class="side-label">Next 3 hours</div>
+      <div class="small-circle" id="hourCircle"></div>
+      <div class="side-cond" id="hourCond">&mdash;</div>
+      <div class="side-hum" id="hourHum"></div>
+    </div>
+    <div class="side-block">
+      <div class="side-label">Tomorrow</div>
+      <div class="small-circle" id="tomorrowCircle"></div>
+      <div class="side-cond" id="tomorrowCond">&mdash;</div>
+      <div class="side-hum" id="tomorrowHum"></div>
+    </div>
+  </div>
+
+  <div class="status-msg" id="statusMsg"></div>
+
+</div>
+
+<script>
+(function() {
+  const html = document.documentElement;
+  const modeToggle = document.getElementById('modeToggle');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const cityInput = document.getElementById('cityInput');
+  const modeSelect = document.getElementById('modeSelect');
+  const refreshSelect = document.getElementById('refreshSelect');
+  const applyBtn = document.getElementById('applySettings');
+  const statusMsg = document.getElementById('statusMsg');
+
+  let refreshTimer = null;
+
+  const STORE = {
+    get(k, d) { try { return JSON.parse(localStorage.getItem('waos_' + k)) ?? d; } catch(e){ return d; } },
+    set(k, v) { try { localStorage.setItem('waos_' + k, JSON.stringify(v)); } catch(e){} }
+  };
+
+  // ---- appearance ----
+  function applyAppearance(mode) {
+    if (mode === 'dark') { html.classList.add('dark'); }
+    else if (mode === 'light') { html.classList.remove('dark'); }
+    else {
+      const h = new Date().getHours();
+      const isNight = h >= 20 || h < 7;
+      html.classList.toggle('dark', isNight);
+    }
+  }
+
+  let appearanceMode = STORE.get('mode', 'auto');
+  modeSelect.value = appearanceMode;
+  applyAppearance(appearanceMode);
+
+  // ---- settings panel open/close ----
+  modeToggle.addEventListener('click', () => {
+    settingsPanel.classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if (!settingsPanel.contains(e.target) && e.target !== modeToggle && !modeToggle.contains(e.target)) {
+      settingsPanel.classList.remove('open');
+    }
+  });
+
+  // ---- datetime ----
+  function updateClock() {
+    const now = new Date();
+    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const day = now.getDate();
+    const suffix = (d) => {
+      if (d > 3 && d < 21) return 'th';
+      switch (d % 10) { case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th'; }
+    };
+    const hh = String(now.getHours()).padStart(2,'0');
+    const mm = String(now.getMinutes()).padStart(2,'0');
+    document.getElementById('datetime').textContent =
+      `${days[now.getDay()]}, ${months[now.getMonth()]} ${day}${suffix(day)} ${now.getFullYear()}, ${hh}:${mm}`;
+    if (appearanceMode === 'auto') applyAppearance('auto');
+  }
+  updateClock();
+  setInterval(updateClock, 30000);
+
+  // ---- weather code mapping (Open-Meteo WMO codes) ----
+  function describeCode(code) {
+    const map = {
+      0: 'Sunny', 1: 'Mostly Clear', 2: 'Partly Cloudy', 3: 'Cloudy',
+      45: 'Fog', 48: 'Fog',
+      51: 'Light Drizzle', 53: 'Drizzle', 55: 'Heavy Drizzle',
+      61: 'Light Rain', 63: 'Rain', 65: 'Heavy Rain',
+      71: 'Light Snow', 73: 'Snow', 75: 'Heavy Snow',
+      80: 'Rain Showers', 81: 'Rain Showers', 82: 'Storm Showers',
+      95: 'Thunderstorm', 96: 'Thunderstorm', 99: 'Thunderstorm'
+    };
+    return map[code] || 'Clear';
+  }
+  function nightVariant(code, text) {
+    if (code === 0) return 'Clear';
+    if (code === 1) return 'Mostly Clear';
+    return text;
+  }
+
+  // ---- geocoding ----
+  async function geocodeCity(name) {
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=en&format=json`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.results || !data.results.length) throw new Error('City not found');
+    const r = data.results[0];
+    return { lat: r.latitude, lon: r.longitude, label: [r.name, r.admin1, r.country].filter(Boolean).join(', ') };
+  }
+
+  async function reverseGeocode(lat, lon) {
+    try {
+      const url = `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lon}&language=en&format=json`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.results && data.results.length) {
+        const r = data.results[0];
+        return [r.name, r.admin1, r.country].filter(Boolean).join(', ');
+      }
+    } catch(e) {}
+    return 'Your location';
+  }
+
+  // ---- weather fetch ----
+  async function fetchWeather(lat, lon) {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,is_day,uv_index` +
+      `&hourly=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m` +
+      `&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,sunset,relative_humidity_2m_mean,wind_speed_10m_max` +
+      `&timezone=auto`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Weather fetch failed');
+    return res.json();
+  }
+
+  function fmtTime(iso) {
+    const d = new Date(iso);
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+
+  function render(data, cityLabel) {
+    const cur = data.current;
+    const isDay = cur.is_day === 1;
+    let condText = describeCode(cur.weather_code);
+    if (!isDay) condText = nightVariant(cur.weather_code, condText);
+
+    document.getElementById('mainCondition').textContent = condText.toUpperCase();
+    document.getElementById('mainTemp').textContent = Math.round(cur.temperature_2m) + '\u00B0C';
+
+    // find today's daily index
+    const todayIdx = 0;
+    const sunsetTime = data.daily.sunset ? fmtTime(data.daily.sunset[todayIdx]) : '--:--';
+    const uvNow = cur.uv_index != null ? Math.round(cur.uv_index) : '-';
+    const uvMax = data.daily.uv_index_max ? Math.round(data.daily.uv_index_max[todayIdx]) : '-';
+
+    document.getElementById('mainDetails').innerHTML =
+      `Humidity &ndash; ${cur.relative_humidity_2m}%<br>` +
+      `Sunset: ${sunsetTime}<br>` +
+      `UV: ${uvNow} (max: ${uvMax})<br>` +
+      `Wind: ${Math.round(cur.wind_speed_10m)} m/s`;
+
+    // next 3 hours: find hourly index closest to now + 3
+    const nowMs = Date.now();
+    let idx3 = 0;
+    for (let i = 0; i < data.hourly.time.length; i++) {
+      if (new Date(data.hourly.time[i]).getTime() >= nowMs + 3*3600*1000) { idx3 = i; break; }
+    }
+    const h3cond = describeCode(data.hourly.weather_code[idx3]);
+    document.getElementById('hourCond').textContent = h3cond.toUpperCase() + ' \u2013 ' + Math.round(data.hourly.temperature_2m[idx3]) + '\u00B0c';
+    document.getElementById('hourHum').textContent = `HUM: ${data.hourly.relative_humidity_2m[idx3]}% \u2013 wind: ${Math.round(data.hourly.wind_speed_10m[idx3])} m/s`;
+
+    // tomorrow
+    const tIdx = 1;
+    const tCond = describeCode(data.daily.weather_code[tIdx]);
+    document.getElementById('tomorrowCond').textContent =
+      `${tCond.toUpperCase()} \u2013 ${Math.round(data.daily.temperature_2m_max[tIdx])}/${Math.round(data.daily.temperature_2m_min[tIdx])}\u00B0C`;
+    document.getElementById('tomorrowHum').textContent =
+      `HUM: ${Math.round(data.daily.relative_humidity_2m_mean[tIdx])}% \u2013 wind: ${Math.round(data.daily.wind_speed_10m_max[tIdx])} m/s`;
+
+    statusMsg.textContent = cityLabel ? cityLabel : '';
+  }
+
+  async function loadWeather(cityName) {
+    statusMsg.textContent = 'Loading weather\u2026';
+    try {
+      let lat, lon, label;
+      if (cityName) {
+        const g = await geocodeCity(cityName);
+        lat = g.lat; lon = g.lon; label = g.label;
+        STORE.set('city', cityName);
+      } else {
+        const stored = STORE.get('city', null);
+        if (stored) {
+          const g = await geocodeCity(stored);
+          lat = g.lat; lon = g.lon; label = g.label;
+          cityInput.value = stored;
+        } else {
+          const pos = await new Promise((resolve, reject) => {
+            if (!navigator.geolocation) return reject(new Error('no geo'));
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 });
+          });
+          lat = pos.coords.latitude; lon = pos.coords.longitude;
+          label = await reverseGeocode(lat, lon);
+        }
+      }
+      const data = await fetchWeather(lat, lon);
+      render(data, label);
+    } catch (err) {
+      statusMsg.textContent = 'Could not load weather. Try setting a city in Settings.';
+    }
+  }
+
+  // ---- refresh interval ----
+  function setupRefresh(minutes) {
+    if (refreshTimer) clearInterval(refreshTimer);
+    STORE.set('refresh', minutes);
+    if (minutes > 0) {
+      refreshTimer = setInterval(() => loadWeather(), minutes * 60000);
+    }
+  }
+
+  // ---- init from storage ----
+  const storedCity = STORE.get('city', '');
+  if (storedCity) cityInput.value = storedCity;
+  const storedRefresh = STORE.get('refresh', 0);
+  refreshSelect.value = String(storedRefresh);
+  setupRefresh(storedRefresh);
+
+  applyBtn.addEventListener('click', () => {
+    appearanceMode = modeSelect.value;
+    STORE.set('mode', appearanceMode);
+    applyAppearance(appearanceMode);
+    setupRefresh(Number(refreshSelect.value));
+    const city = cityInput.value.trim();
+    loadWeather(city || null);
+    settingsPanel.classList.remove('open');
+  });
+
+  loadWeather(storedCity || null);
+})();
+</script>
+</body>
+</html>
