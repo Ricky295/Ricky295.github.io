@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LIFX Control Board</title>
+<style>
+  :root {
+    --bg: #191714;
+    --panel: #232019;
+    --panel-raised: #2b271f;
+    --groove: #121110;
+    --copper: #c8763a;
+    --copper-bright: #e8934f;
+    --filament: #ffb066;
+    --text: #e8ddc9;
+    --text-dim: #8c8375;
+    --border: #3a352a;
+    --green: #7a9a6b;
+    --red: #a5504a;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse at top, rgba(200,118,58,0.05), transparent 60%),
+      repeating-linear-gradient(0deg, rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 1px, transparent 1px, transparent 3px);
+    color: var(--text);
+    font-family: 'Courier New', ui-monospace, monospace;
+    min-height: 100vh;
+    padding: 24px 16px 60px;
+  }
+
+  .board { max-width: 960px; margin: 0 auto; }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 14px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .header h1 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 26px;
+    letter-spacing: 2px;
+    margin: 0;
+    color: var(--filament);
+    text-shadow: 0 0 12px rgba(255,176,102,0.25);
+  }
+
+  .header .sub {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .status-lamp {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--red);
+    margin-right: 6px;
+    box-shadow: 0 0 6px currentColor;
+  }
+  .status-lamp.on { background: var(--green); color: var(--green); }
+  .status-lamp.off { color: var(--red); }
+
+  .key-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  label.field-label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  input[type="text"], input[type="password"], input[type="number"], select {
+    background: var(--groove);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 13px;
+  }
+  input:focus, select:focus {
+    outline: 2px solid var(--copper);
+    outline-offset: 1px;
+  }
+
+  #tokenInput { flex: 1; min-width: 220px; }
+
+  button {
+    background: linear-gradient(180deg, var(--panel-raised), var(--panel));
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 16px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.12s ease;
+  }
+  button:hover { border-color: var(--copper); color: var(--copper-bright); }
+  button:active { transform: translateY(1px); }
+  button.primary {
+    background: linear-gradient(180deg, var(--copper-bright), var(--copper));
+    color: #241a10;
+    border-color: var(--copper);
+    font-weight: bold;
+  }
+  button.primary:hover { color: #1a1208; filter: brightness(1.08); }
+  button.danger:hover { border-color: var(--red); color: var(--red); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.small { padding: 6px 10px; font-size: 10px; }
+
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .transition-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .transition-control input[type="number"] {
+    width: 56px;
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    padding: 8px 14px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    background: none;
+    border-top: none; border-left: none; border-right: none;
+  }
+  .tab.active { color: var(--filament); border-bottom-color: var(--copper); }
+  .tab:hover { color: var(--copper-bright); }
+
+  .msg {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    min-height: 14px;
+    letter-spacing: 0.5px;
+  }
+  .msg.error { color: var(--red); }
+  .msg.ok { color: var(--green); }
+
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .filter-chip {
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text-dim);
+    cursor: pointer;
+    background: var(--panel);
+  }
+  .filter-chip.active {
+    border-color: var(--copper);
+    color: var(--copper-bright);
+    background: rgba(200,118,58,0.12);
+  }
+
+  .lights-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    gap: 14px;
+  }
+
+  .light-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .light-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--card-glow, transparent);
+  }
+
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .card-name {
+    font-size: 14px;
+    color: var(--filament);
+    font-weight: bold;
+    letter-spacing: 0.5px;
+  }
+  .card-group {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .card-meta {
+    font-size: 9px;
+    color: var(--text-dim);
+    opacity: 0.7;
+    margin-top: 2px;
+  }
+
+  .toggle-switch {
+    width: 42px; height: 22px;
+    background: var(--groove);
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    position: relative;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .toggle-switch .knob {
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: all 0.15s ease;
+  }
+  .toggle-switch.on { background: rgba(122,154,107,0.2); border-color: var(--green); }
+  .toggle-switch.on .knob { left: 22px; background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 11px;
+  }
+  .row .row-label {
+    width: 60px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--groove);
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--copper-bright);
+    border: 1px solid var(--copper);
+    cursor: pointer;
+    box-shadow: 0 0 4px rgba(0,0,0,0.5);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--copper-bright);
+    border: 1px solid var(--copper);
+    cursor: pointer;
+  }
+
+  .val-readout {
+    width: 38px;
+    text-align: right;
+    color: var(--text-dim);
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  input[type="color"] {
+    width: 34px; height: 24px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .swatches { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; }
+  .swatch {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.15);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .swatch:hover { transform: scale(1.15); }
+
+  .effects-row { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  .effects-row button { padding: 6px 10px; font-size: 10px; flex: 1; min-width: 60px; }
+
+  .zone-strip {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 10px;
+    height: 28px;
+  }
+  .zone {
+    flex: 1;
+    border-radius: 2px;
+    cursor: pointer;
+    border: 1px solid rgba(0,0,0,0.3);
+    min-width: 4px;
+  }
+  .zone.selected { outline: 2px solid var(--copper-bright); outline-offset: 1px; }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-dim);
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+  .empty-state .big { font-size: 40px; margin-bottom: 12px; opacity: 0.3; }
+
+  .scene-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+  }
+  .scene-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px;
+  }
+  .scene-name { font-size: 13px; color: var(--filament); font-weight: bold; margin-bottom: 4px; }
+  .scene-count { font-size: 10px; color: var(--text-dim); margin-bottom: 10px; }
+  .scene-actions { display: flex; gap: 6px; }
+  .scene-actions button { flex: 1; padding: 7px; font-size: 10px; }
+
+  .group-section { margin-bottom: 22px; }
+  .group-title {
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--copper-bright);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .group-title .count { color: var(--text-dim); font-weight: normal; }
+  .group-bulk { display: flex; gap: 6px; margin-left: auto; }
+  .group-bulk button { padding: 5px 10px; font-size: 9px; }
+
+  ::selection { background: var(--copper); color: #1a1208; }
+  a { color: var(--copper-bright); }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="board">
+  <div class="header">
+    <div>
+      <h1>LIFX CONTROL BOARD</h1>
+      <div class="sub">local mains &middot; cloud relay</div>
+    </div>
+    <div>
+      <span class="status-lamp off" id="statusLamp"></span><span id="statusText" style="font-size:10px;letter-spacing:2px;color:var(--text-dim);">DISCONNECTED</span>
+    </div>
+  </div>
+
+  <div class="key-panel">
+    <div style="flex:1;min-width:220px;">
+      <label class="field-label">Access Token &middot; <a href="https://cloud.lifx.com/settings" target="_blank" rel="noopener">get a token &rarr;</a></label>
+      <input type="password" id="tokenInput" placeholder="paste your LIFX personal access token">
+    </div>
+    <div>
+      <label class="field-label">&nbsp;</label>
+      <button class="primary" id="connectBtn">Connect</button>
+    </div>
+    <div>
+      <label class="field-label">&nbsp;</label>
+      <button id="showTokenBtn" title="toggle visibility">Show</button>
+    </div>
+  </div>
+
+  <div class="msg" id="msg">Token is only used in this page, sent directly to api.lifx.com, never stored or transmitted anywhere else.</div>
+
+  <div class="toolbar" id="globalToolbar" style="display:none;">
+    <button id="refreshBtn">Refresh</button>
+    <button id="allOnBtn">All On</button>
+    <button id="allOffBtn">All Off</button>
+    <button id="allBreatheBtn">Breathe All</button>
+    <div class="transition-control">
+      <span>Transition</span>
+      <input type="number" id="globalDuration" min="0" max="60" step="0.1" value="0.5">
+      <span>sec</span>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs" style="display:none;">
+    <button class="tab active" data-tab="lights">Lights</button>
+    <button class="tab" data-tab="groups">Groups</button>
+    <button class="tab" data-tab="scenes">Scenes</button>
+  </div>
+
+  <div id="filterBar" class="filter-bar" style="display:none;"></div>
+
+  <div id="tabLights">
+    <div class="lights-grid" id="lightsGrid">
+      <div class="empty-state">
+        <div class="big">&#9679;</div>
+        Enter your access token above and press Connect to bring the board online.
+      </div>
+    </div>
+  </div>
+
+  <div id="tabGroups" style="display:none;"></div>
+
+  <div id="tabScenes" style="display:none;">
+    <div class="toolbar">
+      <button class="primary" id="refreshScenesBtn">Refresh Scenes</button>
+    </div>
+    <div class="scene-grid" id="sceneGrid"></div>
+  </div>
+</div>
+
+<script>
+const API = 'https://api.lifx.com/v1';
+let TOKEN = '';
+let lights = [];
+let scenes = [];
+let activeFilter = null; // group name or null for all
+let selectedZones = {}; // lightId -> Set of zone indices
+
+const $ = id => document.getElementById(id);
+const msgEl = $('msg');
+const statusLamp = $('statusLamp');
+const statusText = $('statusText');
+const lightsGrid = $('lightsGrid');
+const globalToolbar = $('globalToolbar');
+const tokenInput = $('tokenInput');
+const tabsEl = $('tabs');
+const filterBar = $('filterBar');
+const globalDurationInput = $('globalDuration');
+
+const PRESET_COLORS = [
+  { name: 'Red', hex: '#ff2b2b' },
+  { name: 'Orange', hex: '#ff8a1e' },
+  { name: 'Yellow', hex: '#ffd21e' },
+  { name: 'Green', hex: '#3ecf5c' },
+  { name: 'Cyan', hex: '#1ed2c9' },
+  { name: 'Blue', hex: '#2b6bff' },
+  { name: 'Purple', hex: '#9a3cff' },
+  { name: 'Pink', hex: '#ff4fa3' },
+  { name: 'White', hex: '#ffffff' },
+];
+
+function getDuration() {
+  const v = parseFloat(globalDurationInput.value);
+  return isNaN(v) || v < 0 ? 0 : v;
+}
+
+function setMsg(text, type) {
+  msgEl.textContent = text;
+  msgEl.className = 'msg' + (type ? ' ' + type : '');
+}
+
+function setConnected(isConnected) {
+  statusLamp.classList.toggle('on', isConnected);
+  statusLamp.classList.toggle('off', !isConnected);
+  statusText.textContent = isConnected ? 'ONLINE' : 'DISCONNECTED';
+  globalToolbar.style.display = isConnected ? 'flex' : 'none';
+  tabsEl.style.display = isConnected ? 'flex' : 'none';
+}
+
+$('showTokenBtn').addEventListener('click', () => {
+  const isPwd = tokenInput.type === 'password';
+  tokenInput.type = isPwd ? 'text' : 'password';
+  $('showTokenBtn').textContent = isPwd ? 'Hide' : 'Show';
+});
+
+async function lifxFetch(path, options = {}) {
+  const res = await fetch(API + path, {
+    ...options,
+    headers: {
+      'Authorization': 'Bearer ' + TOKEN,
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    }
+  });
+  if (res.status === 401) throw new Error('Unauthorized — check your access token');
+  if (res.status === 404) throw new Error('Nothing matched that selector');
+  if (!res.ok && res.status !== 207) {
+    const body = await res.text().catch(() => '');
+    throw new Error('LIFX error ' + res.status + ' ' + body.slice(0, 150));
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+// ---------- Tabs ----------
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const which = tab.dataset.tab;
+    $('tabLights').style.display = which === 'lights' ? 'block' : 'none';
+    $('tabGroups').style.display = which === 'groups' ? 'block' : 'none';
+    $('tabScenes').style.display = which === 'scenes' ? 'block' : 'none';
+    filterBar.style.display = which === 'lights' ? 'flex' : 'none';
+    if (which === 'groups') renderGroups();
+    if (which === 'scenes') loadScenes();
+  });
+});
+
+// ---------- Connect / Load ----------
+async function connect() {
+  TOKEN = tokenInput.value.trim();
+  if (!TOKEN) { setMsg('Enter a token first.', 'error'); return; }
+  setMsg('Connecting…');
+  $('connectBtn').disabled = true;
+  try {
+    await loadLights();
+    setConnected(true);
+    setMsg('Connected. ' + lights.length + ' light(s) found.', 'ok');
+  } catch (err) {
+    setConnected(false);
+    setMsg(err.message || 'Connection failed', 'error');
+  } finally {
+    $('connectBtn').disabled = false;
+  }
+}
+
+async function loadLights() {
+  lights = await lifxFetch('/lights/all');
+  renderFilterBar();
+  renderLights();
+}
+
+async function loadScenes() {
+  const sceneGrid = $('sceneGrid');
+  sceneGrid.innerHTML = '<div class="empty-state">Loading scenes…</div>';
+  try {
+    scenes = await lifxFetch('/scenes');
+    if (!scenes.length) {
+      sceneGrid.innerHTML = '<div class="empty-state">No scenes saved yet. Scenes are created in the LIFX app, then appear here to recall.</div>';
+      return;
+    }
+    sceneGrid.innerHTML = scenes.map(scene => `
+      <div class="scene-card">
+        <div class="scene-name">${escapeHtml(scene.name)}</div>
+        <div class="scene-count">${scene.states.length} light state(s)</div>
+        <div class="scene-actions">
+          <button class="primary" data-action="activate-scene" data-uuid="${scene.uuid}">Activate</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    sceneGrid.innerHTML = `<div class="empty-state">Failed to load scenes: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+$('sceneGrid').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="activate-scene"]');
+  if (!btn) return;
+  const uuid = btn.dataset.uuid;
+  try {
+    await lifxFetch('/scenes/scene_id:' + uuid + '/activate', {
+      method: 'PUT',
+      body: JSON.stringify({ duration: getDuration() })
+    });
+    setMsg('Scene activated', 'ok');
+    await loadLights();
+  } catch (err) {
+    setMsg(err.message, 'error');
+  }
+});
+
+$('refreshScenesBtn').addEventListener('click', loadScenes);
+
+// ---------- Color math ----------
+function kelvinToHex(k) {
+  const t = Math.max(1500, Math.min(9000, k));
+  const ratio = (t - 1500) / (9000 - 1500);
+  const r = 255;
+  const g = Math.round(180 + ratio * 60);
+  const b = Math.round(120 + ratio * 135);
+  return `rgb(${r},${g},${b})`;
+}
+
+function hsbToHex(h, s, b) {
+  h = h / 360;
+  let r, g, bl;
+  const i = Math.floor(h * 6);
+  const f = h * 6 - i;
+  const p = b * (1 - s);
+  const q = b * (1 - f * s);
+  const t = b * (1 - (1 - f) * s);
+  switch (i % 6) {
+    case 0: r=b; g=t; bl=p; break;
+    case 1: r=q; g=b; bl=p; break;
+    case 2: r=p; g=b; bl=t; break;
+    case 3: r=p; g=q; bl=b; break;
+    case 4: r=t; g=p; bl=b; break;
+    case 5: r=b; g=p; bl=q; break;
+  }
+  const toHex = v => Math.round(v * 255).toString(16).padStart(2, '0');
+  return '#' + toHex(r) + toHex(g) + toHex(bl);
+}
+
+function hexToHsb(hex) {
+  const r = parseInt(hex.slice(1,3),16)/255;
+  const g = parseInt(hex.slice(3,5),16)/255;
+  const b = parseInt(hex.slice(5,7),16)/255;
+  const max = Math.max(r,g,b), min = Math.min(r,g,b);
+  const d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = ((g-b)/d) % 6;
+    else if (max === g) h = (b-r)/d + 2;
+    else h = (r-g)/d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  const s = max === 0 ? 0 : d / max;
+  return { h, s, v: max };
+}
+
+function cardGlowColor(light) {
+  if (!light.power || light.power === 'off') return 'transparent';
+  const c = light.color;
+  if (c && c.saturation > 0.15) return hsbToHex(c.hue, c.saturation, 1);
+  if (c) return kelvinToHex(c.kelvin);
+  return 'var(--copper)';
+}
+
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- Filter bar (by group) ----------
+function renderFilterBar() {
+  const groupNames = [...new Set(lights.map(l => l.group && l.group.name).filter(Boolean))];
+  if (groupNames.length <= 1) { filterBar.style.display = 'none'; filterBar.innerHTML = ''; return; }
+  filterBar.style.display = 'flex';
+  filterBar.innerHTML = `<div class="filter-chip ${activeFilter === null ? 'active' : ''}" data-group="">All</div>` +
+    groupNames.map(g => `<div class="filter-chip ${activeFilter === g ? 'active' : ''}" data-group="${escapeHtml(g)}">${escapeHtml(g)}</div>`).join('');
+}
+
+filterBar.addEventListener('click', (e) => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+  activeFilter = chip.dataset.group || null;
+  renderFilterBar();
+  renderLights();
+});
+
+// ---------- Light cards ----------
+function renderLights() {
+  const visibleLights = activeFilter ? lights.filter(l => l.group && l.group.name === activeFilter) : lights;
+
+  if (!visibleLights.length) {
+    lightsGrid.innerHTML = `<div class="empty-state"><div class="big">&#9679;</div>No lights match this filter.</div>`;
+    return;
+  }
+
+  lightsGrid.innerHTML = visibleLights.map((light) => {
+    const idx = lights.indexOf(light);
+    const isOn = light.power === 'on';
+    const brightnessPct = Math.round((light.brightness || 0) * 100);
+    const glow = cardGlowColor(light);
+    const hex = light.color && light.color.saturation > 0.15
+      ? hsbToHex(light.color.hue, light.color.saturation, 1)
+      : '#ffe0b0';
+
+    const caps = (light.product && light.product.capabilities) || {};
+    const hasColor = !!caps.has_color;
+    const hasVariableTemp = caps.has_variable_color_temp !== false;
+    const minK = caps.min_kelvin || 1500;
+    const maxK = caps.max_kelvin || 9000;
+    const currentK = light.color ? light.color.kelvin : Math.round((minK + maxK) / 2);
+    const hasMultizone = !!caps.has_multizone;
+    const hasChain = !!caps.has_chain;
+    const zoneCount = light.zones && light.zones.count ? light.zones.count : (hasMultizone ? 8 : 0);
+
+    const colorRow = hasColor ? `
+      <div class="row">
+        <span class="row-label">Color</span>
+        <div class="swatches">
+          ${PRESET_COLORS.map(p => `<div class="swatch" style="background:${p.hex}" title="${p.name}" data-action="preset" data-color="${p.hex}" data-idx="${idx}"></div>`).join('')}
+        </div>
+        <input type="color" value="${hex}" data-action="picker" data-idx="${idx}" title="custom color">
+      </div>` : '';
+
+    const kelvinRow = hasVariableTemp ? `
+      <div class="row">
+        <span class="row-label">Kelvin</span>
+        <input type="range" min="${minK}" max="${maxK}" step="100" value="${currentK}" data-action="kelvin" data-idx="${idx}">
+        <span class="val-readout" data-readout="kelvin">${currentK}K</span>
+      </div>` : '';
+
+    const zoneRow = hasMultizone ? `
+      <div class="row" style="align-items:flex-start;">
+        <span class="row-label" style="margin-top:6px;">Zones</span>
+        <div style="flex:1;">
+          <div class="zone-strip" data-idx="${idx}">
+            ${Array.from({length: zoneCount}).map((_, z) => `<div class="zone" style="background:${glow !== 'transparent' ? glow : '#444'}" data-zone="${z}" data-idx="${idx}" title="zone ${z}"></div>`).join('')}
+          </div>
+          <div style="display:flex;gap:6px;">
+            <input type="color" data-action="zone-color" data-idx="${idx}" title="apply to selected zones" value="${hex}">
+            <button class="small" data-action="zone-select-all" data-idx="${idx}">All</button>
+            <button class="small" data-action="zone-select-none" data-idx="${idx}">None</button>
+          </div>
+        </div>
+      </div>` : '';
+
+    const badges = [];
+    if (!hasColor) badges.push('white only');
+    if (hasMultizone) badges.push('multizone &middot; ' + zoneCount + ' zones');
+    if (hasChain) badges.push('chain');
+    const badgeHtml = badges.length
+      ? `<div class="card-group" style="margin-top:2px;">${badges.join(' &middot; ')}</div>` : '';
+
+    const metaBits = [];
+    if (light.product && light.product.name) metaBits.push(light.product.name);
+    if (typeof light.connected === 'boolean') metaBits.push(light.connected ? 'connected' : 'unreachable');
+    const metaHtml = metaBits.length ? `<div class="card-meta">${escapeHtml(metaBits.join(' &middot; '))}</div>` : '';
+
+    return `
+    <div class="light-card" style="--card-glow:${glow}" data-idx="${idx}">
+      <div class="card-top">
+        <div>
+          <div class="card-name">${escapeHtml(light.label)}</div>
+          <div class="card-group">${escapeHtml(light.group && light.group.name || 'ungrouped')} &middot; ${escapeHtml(light.location && light.location.name || '')}</div>
+          ${badgeHtml}
+          ${metaHtml}
+        </div>
+        <div class="toggle-switch ${isOn ? 'on' : ''}" data-action="toggle" data-idx="${idx}">
+          <div class="knob"></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <span class="row-label">Bright</span>
+        <input type="range" min="0" max="100" value="${brightnessPct}" data-action="brightness" data-idx="${idx}">
+        <span class="val-readout">${brightnessPct}%</span>
+      </div>
+
+      ${colorRow}
+      ${kelvinRow}
+      ${zoneRow}
+
+      <div class="effects-row">
+        <button data-action="pulse" data-idx="${idx}">Pulse</button>
+        ${hasColor ? `<button data-action="breathe" data-idx="${idx}">Breathe</button>` : ''}
+        ${hasMultizone ? `<button data-action="move" data-idx="${idx}">Move</button>` : ''}
+        <button data-action="cycle" data-idx="${idx}">Cycle</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function setLightState(selector, body) {
+  return lifxFetch('/lights/' + encodeURIComponent(selector) + '/state', {
+    method: 'PUT',
+    body: JSON.stringify(body)
+  });
+}
+
+lightsGrid.addEventListener('click', async (e) => {
+  // zone click (toggle selection)
+  const zoneEl = e.target.closest('.zone');
+  if (zoneEl) {
+    const idx = zoneEl.dataset.idx;
+    const z = parseInt(zoneEl.dataset.zone, 10);
+    const light = lights[idx];
+    if (!selectedZones[light.id]) selectedZones[light.id] = new Set();
+    if (selectedZones[light.id].has(z)) selectedZones[light.id].delete(z);
+    else selectedZones[light.id].add(z);
+    zoneEl.classList.toggle('selected');
+    return;
+  }
+
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const action = el.dataset.action;
+  const idx = el.dataset.idx;
+  if (idx === undefined) return;
+  const light = lights[idx];
+  const selector = 'id:' + light.id;
+  const duration = getDuration();
+
+  try {
+    if (action === 'toggle') {
+      const newPower = light.power === 'on' ? 'off' : 'on';
+      el.classList.toggle('on');
+      await setLightState(selector, { power: newPower, duration });
+      light.power = newPower;
+      setMsg(light.label + ' turned ' + newPower, 'ok');
+      renderLights();
+    } else if (action === 'preset') {
+      const color = el.dataset.color;
+      await setLightState(selector, { power: 'on', color: color, duration });
+      setMsg(light.label + ' set to ' + color, 'ok');
+      await loadLights();
+    } else if (action === 'pulse') {
+      await lifxFetch('/lights/' + encodeURIComponent(selector) + '/effects/pulse', {
+        method: 'POST',
+        body: JSON.stringify({ color: 'white', cycles: 3, period: 0.8 })
+      });
+      setMsg('Pulsing ' + light.label, 'ok');
+    } else if (action === 'breathe') {
+      const caps = (light.product && light.product.capabilities) || {};
+      if (!caps.has_color) { setMsg(light.label + ' has no color support', 'error'); return; }
+      await lifxFetch('/lights/' + encodeURIComponent(selector) + '/effects/breathe', {
+        method: 'POST',
+        body: JSON.stringify({ color: 'blue', from_color: 'red', period: 2, cycles: 4 })
+      });
+      setMsg('Breathing ' + light.label, 'ok');
+    } else if (action === 'move') {
+      await lifxFetch('/lights/' + encodeURIComponent(selector) + '/effects/move', {
+        method: 'POST',
+        body: JSON.stringify({ direction: 'forward', period: 3, cycles: 5, power_on: true })
+      });
+      setMsg('Move effect started on ' + light.label, 'ok');
+    } else if (action === 'cycle') {
+      await lifxFetch('/lights/' + encodeURIComponent(selector) + '/cycle', {
+        method: 'POST',
+        body: JSON.stringify({ states: [{ brightness: 1 }, { brightness: 0.3 }] })
+      });
+      setMsg('Cycling ' + light.label, 'ok');
+    } else if (action === 'zone-select-all') {
+      const caps = (light.product && light.product.capabilities) || {};
+      const zoneCount = light.zones && light.zones.count ? light.zones.count : 8;
+      selectedZones[light.id] = new Set(Array.from({length: zoneCount}, (_, i) => i));
+      renderLights();
+    } else if (action === 'zone-select-none') {
+      selectedZones[light.id] = new Set();
+      renderLights();
+    }
+  } catch (err) {
+    setMsg(err.message, 'error');
+  }
+});
+
+lightsGrid.addEventListener('input', (e) => {
+  const el = e.target;
+  const action = el.dataset.action;
+  if (!action) return;
+  const card = el.closest('.light-card');
+  if (action === 'brightness') card.querySelector('.val-readout').textContent = el.value + '%';
+  if (action === 'kelvin') card.querySelector('[data-readout="kelvin"]').textContent = el.value + 'K';
+});
+
+lightsGrid.addEventListener('change', async (e) => {
+  const el = e.target;
+  const action = el.dataset.action;
+  if (!action) return;
+  const idx = el.dataset.idx;
+  const light = lights[idx];
+  const selector = 'id:' + light.id;
+  const duration = getDuration();
+
+  try {
+    if (action === 'brightness') {
+      const val = parseInt(el.value, 10) / 100;
+      await setLightState(selector, { brightness: val, power: 'on', duration });
+      light.brightness = val;
+      setMsg(light.label + ' brightness set to ' + el.value + '%', 'ok');
+    } else if (action === 'kelvin') {
+      await setLightState(selector, { color: 'kelvin:' + el.value, power: 'on', duration });
+      setMsg(light.label + ' set to ' + el.value + 'K', 'ok');
+    } else if (action === 'picker') {
+      const hex = el.value;
+      const { h, s, v } = hexToHsb(hex);
+      await setLightState(selector, {
+        color: `hue:${h.toFixed(1)} saturation:${s.toFixed(2)} brightness:${v.toFixed(2)}`,
+        power: 'on',
+        duration
+      });
+      setMsg(light.label + ' set to custom color', 'ok');
+    } else if (action === 'zone-color') {
+      const zones = selectedZones[light.id];
+      if (!zones || zones.size === 0) { setMsg('Select at least one zone first', 'error'); return; }
+      const hex = el.value;
+      const { h, s, v } = hexToHsb(hex);
+      const colorStr = `hue:${h.toFixed(1)} saturation:${s.toFixed(2)} brightness:${v.toFixed(2)}`;
+      const sortedZones = [...zones].sort((a,b) => a-b);
+      // group contiguous ranges to minimize calls
+      const ranges = [];
+      let start = sortedZones[0], prev = sortedZones[0];
+      for (let i = 1; i <= sortedZones.length; i++) {
+        if (i < sortedZones.length && sortedZones[i] === prev + 1) { prev = sortedZones[i]; continue; }
+        ranges.push([start, prev]);
+        if (i < sortedZones.length) { start = sortedZones[i]; prev = sortedZones[i]; }
+      }
+      for (const [s0, e0] of ranges) {
+        await lifxFetch('/lights/' + encodeURIComponent(selector) + '/state', {
+          method: 'PUT',
+          body: JSON.stringify({ color: colorStr, power: 'on', duration })
+        }).catch(async () => {
+          // fallback: some accounts need the dedicated multizone endpoint shape
+          await lifxFetch('/lights/' + encodeURIComponent(selector) + '/state', {
+            method: 'PUT',
+            body: JSON.stringify({ color: colorStr, power: 'on', duration, start: s0, end: e0 })
+          });
+        });
+      }
+      setMsg('Zones updated on ' + light.label, 'ok');
+    }
+  } catch (err) {
+    setMsg(err.message, 'error');
+  }
+});
+
+// ---------- Groups tab ----------
+function renderGroups() {
+  const container = $('tabGroups');
+  const groupMap = {};
+  lights.forEach(l => {
+    const gname = (l.group && l.group.name) || 'Ungrouped';
+    if (!groupMap[gname]) groupMap[gname] = [];
+    groupMap[gname].push(l);
+  });
+
+  container.innerHTML = Object.entries(groupMap).map(([gname, groupLights]) => {
+    const onCount = groupLights.filter(l => l.power === 'on').length;
+    return `
+    <div class="group-section">
+      <div class="group-title">
+        ${escapeHtml(gname)} <span class="count">(${onCount}/${groupLights.length} on)</span>
+        <div class="group-bulk">
+          <button class="small" data-group-action="on" data-group="${escapeHtml(gname)}">On</button>
+          <button class="small" data-group-action="off" data-group="${escapeHtml(gname)}">Off</button>
+          <button class="small" data-group-action="breathe" data-group="${escapeHtml(gname)}">Breathe</button>
+        </div>
+      </div>
+      <div class="lights-grid">
+        ${groupLights.map(l => `
+          <div class="light-card" style="--card-glow:${cardGlowColor(l)}">
+            <div class="card-top">
+              <div>
+                <div class="card-name">${escapeHtml(l.label)}</div>
+                <div class="card-group">${l.power === 'on' ? 'on' : 'off'} &middot; ${Math.round((l.brightness||0)*100)}%</div>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+$('tabGroups').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-group-action]');
+  if (!btn) return;
+  const groupAction = btn.dataset.groupAction;
+  const groupName = btn.dataset.group;
+  const selector = 'group:' + groupName;
+  const duration = getDuration();
+  try {
+    if (groupAction === 'on') {
+      await setLightState(selector, { power: 'on', duration });
+      setMsg(groupName + ' turned on', 'ok');
+    } else if (groupAction === 'off') {
+      await setLightState(selector, { power: 'off', duration });
+      setMsg(groupName + ' turned off', 'ok');
+    } else if (groupAction === 'breathe') {
+      await lifxFetch('/lights/' + encodeURIComponent(selector) + '/effects/breathe', {
+        method: 'POST',
+        body: JSON.stringify({ color: 'blue', from_color: 'green', period: 2, cycles: 4 })
+      });
+      setMsg(groupName + ' breathing', 'ok');
+    }
+    await loadLights();
+    renderGroups();
+  } catch (err) {
+    setMsg(err.message, 'error');
+  }
+});
+
+// ---------- Global toolbar ----------
+$('connectBtn').addEventListener('click', connect);
+tokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') connect(); });
+
+$('refreshBtn').addEventListener('click', async () => {
+  setMsg('Refreshing…');
+  try { await loadLights(); setMsg('Refreshed. ' + lights.length + ' light(s).', 'ok'); }
+  catch (err) { setMsg(err.message, 'error'); }
+});
+
+$('allOnBtn').addEventListener('click', async () => {
+  try { await setLightState('all', { power: 'on', duration: getDuration() }); setMsg('All lights on', 'ok'); await loadLights(); }
+  catch (err) { setMsg(err.message, 'error'); }
+});
+
+$('allOffBtn').addEventListener('click', async () => {
+  try { await setLightState('all', { power: 'off', duration: getDuration() }); setMsg('All lights off', 'ok'); await loadLights(); }
+  catch (err) { setMsg(err.message, 'error'); }
+});
+
+$('allBreatheBtn').addEventListener('click', async () => {
+  try {
+    await lifxFetch('/lights/all/effects/breathe', {
+      method: 'POST',
+      body: JSON.stringify({ color: 'blue', from_color: 'green', period: 2, cycles: 5 })
+    });
+    setMsg('All lights breathing', 'ok');
+  } catch (err) { setMsg(err.message, 'error'); }
+});
+</script>
+</body>
+</html>
