@@ -458,18 +458,26 @@ function solveWithSingles(sudoku, returnDifficulty = false) {
 
 // --- Sudoku Generation ---
 
-function generateSudoku(minDifficulty, maxDifficulty, targetClues = 25, maxAttempts = 100) {
+function generateSudoku(minDifficulty, maxDifficulty, targetClues = 25) {
     /**
      * Generates a Sudoku puzzle with difficulty in [minDifficulty, maxDifficulty].
-     * Uses truly random solution generation and attempts indefinitely until
-     * a puzzle matching the difficulty criteria is found.
-     * maxAttempts is useless, keeping the argument for legacy support.
+     * Uses truly random solution generation, and for each attempt digs the
+     * puzzle down as far as singles-solvability allows (not just down to
+     * targetClues) so we always find that puzzle's true minimum clue count.
+     *
+     * Rather than looping forever hoping to land exactly inside both the
+     * clue target AND the difficulty band at once (which for very sparse
+     * targets like hard mode's 17 clues may never happen with a singles-only
+     * solver), we track the best candidate seen so far and stop once we go
+     * a while without improving on it. Each individual dig pass is itself
+     * bounded (at most 81 cell removals), so there's no unbounded inner loop.
      */
-    let attempt = 0;
-    
-    while (true) {
-        attempt++;
-        
+    let bestPuzzle = null;
+    let bestScore = -Infinity;
+    let attemptsSinceImprovement = 0;
+    const maxAttemptsSinceImprovement = 40;
+
+    while (attemptsSinceImprovement < maxAttemptsSinceImprovement) {
         // Generate a random complete solution
         const solution = generateSolutionRandom();
         const puzzle = deepCopyBoard(solution);
@@ -483,16 +491,16 @@ function generateSudoku(minDifficulty, maxDifficulty, targetClues = 25, maxAttem
         }
         shuffle(positions);
         
-        // Remove cells while maintaining solvability
+        // Dig as many cells as possible while staying singles-solvable —
+        // don't stop early just because we've hit targetClues, since a lower
+        // clue count is always better if it's still achievable.
         let cluesRemaining = 81;
+        let lastDifficulty = 0.0;
         
         for (const [r, c] of positions) {
-            if (cluesRemaining <= targetClues) break;
-            
             const originalValue = puzzle[r][c];
             puzzle[r][c] = 0;
             
-            // Check if still solvable with singles
             const difficulty = solveWithSingles(puzzle, true);
             
             if (difficulty < 0) {
@@ -500,24 +508,36 @@ function generateSudoku(minDifficulty, maxDifficulty, targetClues = 25, maxAttem
                 puzzle[r][c] = originalValue;
             } else {
                 cluesRemaining--;
-                
-                // Check if we've reached desired difficulty range
-                if (cluesRemaining <= targetClues && 
-                    difficulty >= minDifficulty && 
-                    difficulty <= maxDifficulty) {
-                    return puzzle;
-                }
+                lastDifficulty = difficulty;
             }
         }
         
-        // Check final difficulty
-        const finalDifficulty = solveWithSingles(puzzle, true);
-        if (finalDifficulty >= minDifficulty && 
-            finalDifficulty <= maxDifficulty && 
-            cluesRemaining <= targetClues + 5) {
+        // If this attempt lands inside both the clue target and difficulty
+        // band, it's an immediate win — return right away.
+        if (cluesRemaining <= targetClues && 
+            lastDifficulty >= minDifficulty && 
+            lastDifficulty <= maxDifficulty) {
             return puzzle;
         }
+        
+        // Otherwise, score this candidate: fewer clues is the priority,
+        // then how close the difficulty is to the requested band.
+        const diffPenalty = lastDifficulty < minDifficulty ? (minDifficulty - lastDifficulty)
+                            : lastDifficulty > maxDifficulty ? (lastDifficulty - maxDifficulty)
+                            : 0;
+        const score = (81 - cluesRemaining) * 10 - diffPenalty;
+        
+        if (score > bestScore) {
+            bestScore = score;
+            bestPuzzle = puzzle;
+            attemptsSinceImprovement = 0;
+        } else {
+            attemptsSinceImprovement++;
+        }
     }
+
+    // Return the sparsest/closest-to-band puzzle found across all attempts.
+    return bestPuzzle;
 }
 
 function generateDailySudoku(date) {
@@ -1113,11 +1133,11 @@ if (typeof module !== 'undefined' && module.exports) {
 
         #sudoku-grid {
             border-collapse: collapse;
-            table-layout: fixed;
             background-color: var(--border-color);
             border: 3px solid var(--text-main);
             width: 100%;
             max-width: 360px;
+            aspect-ratio: 1;
             margin-bottom: 15px;
             border-radius: 8px;
             overflow: hidden;
@@ -1128,7 +1148,7 @@ if (typeof module !== 'undefined' && module.exports) {
             background-color: #1e1e2d;
             color: var(--text-main);
             width: 11.11%;
-            height: var(--sudoku-cell-h, 40px);
+            height: 11.11%;
             padding: 0;
             text-align: center;
             font-size: 1.4rem;
@@ -1706,9 +1726,9 @@ if (typeof module !== 'undefined' && module.exports) {
         // only the per-technique "thinking" times stay buffed, so CPUs solve
         // digits faster once they have them, without wandering the maze faster.
         const CPU_PROFILES = {
-            easy:   { mps: 1.5, boxHS: 18, lineHS: 28, nakedSingle: 36, switchTime: 26 },
-            medium: { mps: 3.5, boxHS: 10, lineHS: 16, nakedSingle: 22, switchTime: 15 },
-            hard:   { mps: 6,   boxHS: 5,  lineHS: 9,  nakedSingle: 12, switchTime: 9  }
+            easy:   { mps: 2,  boxHS: 12, lineHS: 20, nakedSingle: 28, switchTime: 20 },
+            medium: { mps: 5,  boxHS: 6,  lineHS: 10, nakedSingle: 15, switchTime: 10 },
+            hard:   { mps: 10, boxHS: 2,  lineHS: 4,  nakedSingle: 6,  switchTime: 5  }
         };
 
         // --- Move / Moves-per-second Stat Tracking (Labyrinth) ---
@@ -2327,14 +2347,6 @@ if (typeof module !== 'undefined' && module.exports) {
         }
 
         // --- Sudoku Grid Actions (Using Elegant Table Elements) ---
-        function squareUpSudokuCells() {
-            const grid = document.getElementById('sudoku-grid');
-            if (!grid || grid.clientWidth === 0) return;
-            const colWidth = grid.clientWidth / 9;
-            grid.style.setProperty('--sudoku-cell-h', colWidth + 'px');
-        }
-        window.addEventListener('resize', squareUpSudokuCells);
-
         function renderSudokuBoard() {
             const grid = document.getElementById('sudoku-grid');
             grid.innerHTML = '';
@@ -2376,7 +2388,6 @@ if (typeof module !== 'undefined' && module.exports) {
                 }
                 grid.appendChild(tr);
             }
-            squareUpSudokuCells();
         }
 
         function tryPlaceInSudoku() {
