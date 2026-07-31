@@ -30,12 +30,13 @@
         .board-container{display:flex;justify-content:center;gap:15px;flex-wrap:wrap;margin-bottom:25px}
         .layer{background:rgba(0,0,0,0.4);border:2px solid rgba(255,255,255,0.1);border-radius:12px;padding:15px;backdrop-filter:blur(10px)}
         .layer-title{text-align:center;margin-bottom:10px;color:#fbbf24;font-weight:600;font-size:14px}
-        .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;border-radius:8px;overflow:hidden}
+        .grid{display:inline-grid;grid-template-columns:repeat(5,35px);gap:1px;border-radius:8px;overflow:hidden}
         .cell{width:35px;height:35px;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;font-weight:600;transition:all 0.2s;border:1px solid rgba(255,255,255,0.1);position:relative}
         .cell:hover{background:rgba(255,255,255,0.15);transform:scale(1.05)}
         .cell.selected{background:rgba(59,130,246,0.6)!important;box-shadow:0 0 15px rgba(59,130,246,0.5);border-color:#3b82f6}
         .cell.given{background:rgba(251,191,36,0.2);color:#fbbf24}
         .cell.error{background:rgba(239,68,68,0.6)!important;animation:shake 0.3s}
+        .cell.mistake-flag{background:rgba(239,68,68,0.85)!important;box-shadow:0 0 15px rgba(239,68,68,0.7);animation:shake 0.4s}
         .cell.completed{background:rgba(16,185,129,0.3)!important;color:#10b981}
         .cell.candidate-mode{background:rgba(139,92,246,0.4)!important}
         .cell.related{background:rgba(255,255,255,0.1)!important}
@@ -62,12 +63,39 @@
         .modal h2{color:#10b981;margin-bottom:15px}
         .modal p{margin-bottom:10px;color:#e2e8f0}
         @keyframes shake{0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
+        .layer-nav{display:none;justify-content:center;align-items:center;gap:14px;margin-bottom:12px}
+        .layer-nav.nav-visible{display:flex}
+        .layer-nav .nav-btn{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:8px;padding:8px 14px;font-size:16px;cursor:pointer}
+        .layer-nav .nav-btn:active{transform:scale(0.95)}
+        .layer-dots{display:flex;gap:6px}
+        .layer-dots .dot{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,0.25);cursor:pointer;border:none;padding:0}
+        .layer-dots .dot.active{background:#fbbf24}
+        .print-only{display:none}
+        .board-container.paged-view{flex-wrap:nowrap;overflow:visible;justify-content:center}
+        .board-container.paged-view .layer{display:none;width:auto;max-width:none}
+        .board-container.paged-view .layer.active-layer{display:block}
         @media (max-width:768px){
             .header h1{font-size:2rem}
             .cell{width:40px;height:40px;font-size:16px}
+            .grid{grid-template-columns:repeat(5,40px)}
             .num-btn{width:50px;height:50px;font-size:18px}
             .board-container{gap:10px}
             .layer{padding:10px}
+        }
+        @media print{
+            body{background:#fff!important;color:#000!important}
+            body::before{display:none}
+            .controls,.mode-indicator,.hint-display,.keypad,.stats,.timer,.layer-nav,.modal{display:none!important}
+            .container{max-width:100%;padding:0}
+            .header h1{-webkit-text-fill-color:#000;background:none;font-size:1.6rem;margin-bottom:4px}
+            .board-container{display:flex!important;gap:8px;flex-wrap:wrap!important;justify-content:center}
+            .board-container .layer{display:block!important;background:none;border:1px solid #000;padding:6px;backdrop-filter:none;break-inside:avoid}
+            .layer-title{color:#000}
+            .cell{background:none!important;border:1px solid #999;color:#000!important;width:26px;height:26px;font-size:11px;box-shadow:none!important;transform:none!important}
+            .grid{grid-template-columns:repeat(5,26px)}
+            .cell.given{background:none!important;color:#000!important;font-weight:800}
+            .candidates{display:none}
+            .print-only{display:block;text-align:center;color:#000;font-size:12px;margin-bottom:10px}
         }
     </style>
 </head>
@@ -81,7 +109,10 @@
             <button class="btn primary" onclick="newGame()">New Game</button>
             <button class="btn secondary active" id="candidateBtn" onclick="toggleCandidateMode()">Candidate Mode</button>
             <button class="btn success" onclick="smartHint()">💡 Hint</button>
+            <button class="btn warning" onclick="checkMistakes()">🔍 Check</button>
             <button class="btn danger" onclick="resetGame()">Reset</button>
+            <button class="btn secondary" onclick="printPuzzle()">🖨️ Print</button>
+            <button class="btn secondary active" id="layerViewBtn" onclick="toggleLayerView()">📄 Paged View</button>
             <div class="difficulty">
                 <label><span id="difficulty">Medium</span> <span id="clues-value">25</span></label>
                 <input type="range" id="clues" min="10" max="50" value="25" class="slider">
@@ -89,6 +120,12 @@
         </div>
         <div class="mode-indicator" id="modeIndicator">🎯 Mode: Candidate Entry</div>
         <div class="hint-display" id="hintDisplay"></div>
+        <div class="print-only" id="printOnlyLabel"></div>
+        <div class="layer-nav" id="layerNav">
+            <button class="nav-btn" onclick="changeMobileLayer(-1)">◀</button>
+            <div class="layer-dots" id="layerDots"></div>
+            <button class="nav-btn" onclick="changeMobileLayer(1)">▶</button>
+        </div>
         <div class="board-container" id="board-container"></div>
         <div class="keypad" id="floatingKeypad">
             <div class="keypad-header" id="keypadHeader">
@@ -120,6 +157,7 @@
     <script>
         const S=5,V=[1,2,3,4,5];
         let b=[],sol=[],cand={},sel=null,start=null,timer=null,candMode=true,hints=0,won=false,keyMin=false,drag=false,dragOff={x:0,y:0};
+        let mobileLayer=0,pagedView=true;
         function makeBoard(){return Array(S).fill().map(()=>Array(S).fill().map(()=>Array(S).fill(0)))}
         function copyBoard(board){return board.map(l=>l.map(r=>[...r]))}
         function getRelated(x,y,z){
@@ -363,39 +401,453 @@
             });
             return V.filter(v=>!used.has(v));
         }
+        // ---------- Shared solving infrastructure ----------
+        // Every cell has exactly 3 lines through it (fixed two coords, varying the third).
+        // A technique instance is tagged 3D if the cells it uses span more than one z-layer,
+        // 2D if they all lie within a single z-layer.
+        function allLines(){
+            const lines=[];
+            for(let y=0;y<S;y++)for(let z=0;z<S;z++)lines.push({axis:'x',cells:V.map((_,x)=>({x,y,z}))});
+            for(let x=0;x<S;x++)for(let z=0;z<S;z++)lines.push({axis:'y',cells:V.map((_,y)=>({x,y,z}))});
+            for(let x=0;x<S;x++)for(let y=0;y<S;y++)lines.push({axis:'z',cells:V.map((_,z)=>({x,y,z}))});
+            return lines;
+        }
+        function is3D(cells){
+            const zs=new Set(cells.map(c=>c.z));
+            return zs.size>1;
+        }
+        function candGrid(){
+            // full candidate array per empty cell, using current board state
+            const g=Array(S).fill().map(()=>Array(S).fill().map(()=>Array(S).fill(null)));
+            for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++){
+                if(b[z][y][x]===0)g[z][y][x]=getPossible(x,y,z);
+            }
+            return g;
+        }
+        function cellKey(c){return`${c.x},${c.y},${c.z}`}
+        function sameCell(a,c){return a.x===c.x&&a.y===c.y&&a.z===c.z}
+
         function findNaked(){
             const singles=[];
             for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++){
                 if(b[z][y][x]===0){
                     const pos=getPossible(x,y,z);
-                    if(pos.length===1)singles.push({x,y,z,value:pos[0]});
+                    if(pos.length===1)singles.push({x,y,z,value:pos[0],cells:[{x,y,z}],dim:'2D'});
                 }
             }
             return singles;
         }
+
+        // Hidden single: within one line, a value has only one legal empty cell.
+        function findHiddenSingle(){
+            for(const line of allLines()){
+                for(const val of V){
+                    let spot=null,count=0;
+                    for(const c of line.cells){
+                        if(b[c.z][c.y][c.x]!==0)continue;
+                        if(getPossible(c.x,c.y,c.z).includes(val)){count++;spot=c;}
+                    }
+                    if(count===1){
+                        return{...spot,value:val,cells:[spot],dim:is3D(line.cells)?'3D':'2D'};
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Naked pair: two cells in the same line share exactly the same 2 candidates.
+        // Eliminates those 2 values from every other cell in that line.
+        function findNakedPair(){
+            const g=candGrid();
+            for(const line of allLines()){
+                const empties=line.cells.filter(c=>g[c.z][c.y][c.x]&&g[c.z][c.y][c.x].length===2);
+                for(let i=0;i<empties.length;i++)for(let j=i+1;j<empties.length;j++){
+                    const a=empties[i],bC=empties[j];
+                    const ca=g[a.z][a.y][a.x],cb=g[bC.z][bC.y][bC.x];
+                    if(ca[0]===cb[0]&&ca[1]===cb[1]){
+                        // find eliminations
+                        const elims=[];
+                        for(const c of line.cells){
+                            if(sameCell(a,c)||sameCell(bC,c))continue;
+                            const pos=g[c.z][c.y][c.x];
+                            if(pos&&(pos.includes(ca[0])||pos.includes(ca[1]))){
+                                elims.push({cell:c,values:pos.filter(v=>v===ca[0]||v===ca[1])});
+                            }
+                        }
+                        if(elims.length>0){
+                            return{cells:[a,bC],values:ca,elims,dim:is3D(line.cells)?'3D':'2D'};
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Hidden pair: two values confined to the same two cells within a line
+        // (those cells may carry other candidates too, which then get stripped down to the pair).
+        function findHiddenPair(){
+            const g=candGrid();
+            for(const line of allLines()){
+                const empties=line.cells.filter(c=>g[c.z][c.y][c.x]);
+                for(let i=0;i<V.length;i++)for(let j=i+1;j<V.length;j++){
+                    const v1=V[i],v2=V[j];
+                    const spots=empties.filter(c=>{
+                        const pos=g[c.z][c.y][c.x];
+                        return pos.includes(v1)||pos.includes(v2);
+                    });
+                    if(spots.length===2){
+                        const bothOnlyPair=spots.every(c=>{
+                            const pos=g[c.z][c.y][c.x];
+                            return pos.includes(v1)&&pos.includes(v2);
+                        });
+                        // must actually confine v1 AND v2 to exactly these 2 cells
+                        const v1Spots=empties.filter(c=>g[c.z][c.y][c.x].includes(v1));
+                        const v2Spots=empties.filter(c=>g[c.z][c.y][c.x].includes(v2));
+                        if(v1Spots.length===2&&v2Spots.length===2&&
+                           v1Spots.every(c=>spots.some(s=>sameCell(s,c)))&&
+                           v2Spots.every(c=>spots.some(s=>sameCell(s,c)))){
+                            // eliminations: any OTHER candidate in these two cells
+                            const elims=[];
+                            for(const c of spots){
+                                const pos=g[c.z][c.y][c.x];
+                                const extra=pos.filter(v=>v!==v1&&v!==v2);
+                                if(extra.length>0)elims.push({cell:c,values:extra});
+                            }
+                            if(elims.length>0){
+                                return{cells:spots,values:[v1,v2],elims,dim:is3D(line.cells)?'3D':'2D'};
+                            }
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        // X-Wing: a value appears in exactly 2 cells in each of 2 parallel lines,
+        // and those cells line up on the cross-axis -> eliminate that value from the
+        // connecting lines elsewhere. Checked across all 3 axis-pair combinations,
+        // so it naturally covers both same-layer (2D) and cross-layer (3D) cases.
+        function findXWing(){
+            const g=candGrid();
+            // Consider lines grouped by axis; compare pairs of parallel lines that
+            // share the same "varying" axis, indexed by the other two fixed coords.
+            const axisGroups={
+                x:{fixed:['y','z'],vary:'x'},
+                y:{fixed:['x','z'],vary:'y'},
+                z:{fixed:['x','y'],vary:'z'}
+            };
+            for(const axis of['x','y','z']){
+                const lines=allLines().filter(l=>l.axis===axis);
+                for(const val of V){
+                    // for each line, find which positions along "vary" axis contain val as candidate
+                    const lineInfo=lines.map(line=>{
+                        const spots=line.cells.filter(c=>{
+                            const pos=g[c.z][c.y][c.x];
+                            return pos&&pos.includes(val);
+                        });
+                        return{line,spots};
+                    }).filter(li=>li.spots.length===2);
+                    for(let i=0;i<lineInfo.length;i++)for(let j=i+1;j<lineInfo.length;j++){
+                        const A=lineInfo[i],B=lineInfo[j];
+                        // check the two spots' "vary" coordinate match between the two lines
+                        const varyCoord=c=>axis==='x'?c.x:axis==='y'?c.y:c.z;
+                        const aCoords=A.spots.map(varyCoord).sort().join(',');
+                        const bCoords=B.spots.map(varyCoord).sort().join(',');
+                        if(aCoords!==bCoords)continue;
+                        // Build eliminations: other cells along the "vary" axis lines through
+                        // these coordinates, excluding the 4 defining cells.
+                        const defCells=[...A.spots,...B.spots];
+                        const elims=[];
+                        for(const coordVal of A.spots.map(varyCoord)){
+                            // the perpendicular line: fix the vary-coordinate, vary along one of the two fixed axes
+                            // that matches how A/B differ (the axis that differs between A.line and B.line's fixed coords)
+                            const fixedAxis1=axisGroups[axis].fixed[0],fixedAxis2=axisGroups[axis].fixed[1];
+                            // find the coordinate of A.line and B.line for fixedAxis1/2
+                            const getFixed=(line,ax)=>ax==='x'?line.cells[0].x:ax==='y'?line.cells[0].y:line.cells[0].z;
+                            // perpendicular line varies along fixedAxis1 or fixedAxis2 depending which one changed
+                            for(const ax of[fixedAxis1,fixedAxis2]){
+                                const cellsOnLine=[];
+                                for(let k=0;k<S;k++){
+                                    const c={x:axis==='x'?coordVal:(ax==='x'?k:getFixed(A.line,'x')),
+                                              y:axis==='y'?coordVal:(ax==='y'?k:getFixed(A.line,'y')),
+                                              z:axis==='z'?coordVal:(ax==='z'?k:getFixed(A.line,'z'))};
+                                    cellsOnLine.push(c);
+                                }
+                                for(const c of cellsOnLine){
+                                    if(defCells.some(d=>sameCell(d,c)))continue;
+                                    const pos=g[c.z][c.y][c.x];
+                                    if(pos&&pos.includes(val))elims.push({cell:c,values:[val]});
+                                }
+                            }
+                        }
+                        const uniqueElims=[];
+                        const seen=new Set();
+                        for(const e of elims){const k=cellKey(e.cell);if(!seen.has(k)){seen.add(k);uniqueElims.push(e);}}
+                        if(uniqueElims.length>0){
+                            const allCells=[...A.spots,...B.spots];
+                            return{cells:allCells,values:[val],elims:uniqueElims,dim:is3D(allCells)?'3D':'2D',
+                                   axis,lineA:A.spots,lineB:B.spots};
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Simple coloring (single-digit chains of strong links): build a graph of
+        // "strong link" cell-pairs for one value (the only 2 candidates for that value
+        // in a line), 2-color the chain, and if two same-colored cells see each other,
+        // that color is false -> eliminate the value from all cells of that color.
+        // This subsumes many X-chain cases for a single value on this board.
+        function findColoring(){
+            const g=candGrid();
+            for(const val of V){
+                // collect strong links: pairs of cells that are the ONLY 2 candidates
+                // for val within some line
+                const linksMap=new Map(); // key -> Set of neighbor keys
+                const allCandCells=[];
+                for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++){
+                    if(g[z][y][x]&&g[z][y][x].includes(val))allCandCells.push({x,y,z});
+                }
+                if(allCandCells.length<4)continue; // too small to matter
+                for(const line of allLines()){
+                    const spots=line.cells.filter(c=>g[c.z][c.y][c.x]&&g[c.z][c.y][c.x].includes(val));
+                    if(spots.length===2){
+                        const[k1,k2]=[cellKey(spots[0]),cellKey(spots[1])];
+                        if(!linksMap.has(k1))linksMap.set(k1,new Set());
+                        if(!linksMap.has(k2))linksMap.set(k2,new Set());
+                        linksMap.get(k1).add(k2);linksMap.get(k2).add(k1);
+                    }
+                }
+                if(linksMap.size===0)continue;
+                const cellByKey=new Map(allCandCells.map(c=>[cellKey(c),c]));
+                const colorOf=new Map();
+                const visited=new Set();
+                for(const startKey of linksMap.keys()){
+                    if(visited.has(startKey))continue;
+                    // BFS 2-coloring of this connected component
+                    const queue=[[startKey,0]];
+                    visited.add(startKey);colorOf.set(startKey,0);
+                    const component=[startKey];
+                    while(queue.length){
+                        const[curr,col]=queue.shift();
+                        for(const nb of linksMap.get(curr)||[]){
+                            if(!visited.has(nb)){
+                                visited.add(nb);colorOf.set(nb,1-col);
+                                queue.push([nb,1-col]);component.push(nb);
+                            }
+                        }
+                    }
+                    if(component.length<4)continue;
+                    // Check: do two same-colored cells "see" each other (share a line)?
+                    for(let c0=0;c0<2;c0++){
+                        const groupKeys=component.filter(k=>colorOf.get(k)===c0);
+                        if(groupKeys.length<2)continue;
+                        const groupCells=groupKeys.map(k=>cellByKey.get(k));
+                        for(let i=0;i<groupCells.length;i++)for(let j=i+1;j<groupCells.length;j++){
+                            const A=groupCells[i],Bc=groupCells[j];
+                            const related=getRelated(A.x,A.y,A.z).some(([rx,ry,rz])=>rx===Bc.x&&ry===Bc.y&&rz===Bc.z);
+                            if(related){
+                                // this color is contradictory -> eliminate val from every cell of this color
+                                const elims=groupCells.map(c=>({cell:c,values:[val]}));
+                                return{cells:groupCells,values:[val],elims,dim:is3D(groupCells)?'3D':'2D',contradiction:[A,Bc]};
+                            }
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        function findLeastCandidateCell(){
+            let best=null,minLen=S+1;
+            for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++){
+                if(b[z][y][x]===0){
+                    const pos=getPossible(x,y,z);
+                    if(pos.length>0&&pos.length<minLen){minLen=pos.length;best={x,y,z};}
+                }
+            }
+            return best;
+        }
+
+        function applyElims(elims){
+            let changed=false;
+            elims.forEach(({cell:c,values})=>{
+                values.forEach(v=>{
+                    const k=candKey(c.x,c.y,c.z);
+                    if(cand[k]&&cand[k].has(v)){
+                        cand[k].delete(v);changed=true;
+                        if(cand[k].size===0)delete cand[k];
+                    }
+                });
+            });
+            return changed;
+        }
+
         function smartHint(){
             if(won)return;
             const hintDisp=document.getElementById('hintDisplay');
+
+            // 1. Naked single
             const naked=findNaked();
             if(naked.length>0){
                 const hint=naked[0];
-                hintDisp.textContent=`💡 Cell (${hint.x+1},${hint.y+1},${hint.z+1}) can only be ${hint.value}`;
-                highlight([hint]);
+                hintDisp.textContent=`💡 Naked single (${hint.dim}): cell (${hint.x+1},${hint.y+1},${hint.z+1}) can only be ${hint.value}`;
+                highlight(hint.cells);
                 return;
             }
-            if(sel){
-                const{x,y,z}=sel;
-                if(b[z][y][x]===0){
-                    b[z][y][x]=sol[z][y][x];
-                    clearCand(x,y,z);
-                    autoRemove(x,y,z,sol[z][y][x]);
-                    hints++;
-                    hintDisp.textContent=`💡 Placed ${sol[z][y][x]} in selected cell`;
-                    updateBoard();
-                    return;
+
+            // 2. Hidden single
+            const hidden=findHiddenSingle();
+            if(hidden){
+                hintDisp.textContent=`💡 Hidden single (${hidden.dim}): ${hidden.value} can only go in cell (${hidden.x+1},${hidden.y+1},${hidden.z+1})`;
+                highlight(hidden.cells);
+                return;
+            }
+
+            // 3. Naked pair — reveals eliminations but doesn't place a value
+            const nPair=findNakedPair();
+            if(nPair){
+                const changed=applyElims(nPair.elims);
+                const coords=nPair.cells.map(c=>`(${c.x+1},${c.y+1},${c.z+1})`).join(' & ');
+                const elimCoords=[...new Set(nPair.elims.map(e=>`(${e.cell.x+1},${e.cell.y+1},${e.cell.z+1})`))].join(', ');
+                hintDisp.textContent=changed
+                    ? `💡 Naked pair (${nPair.dim}): {${nPair.values.join(',')}} locked in ${coords} — removed from ${elimCoords}`
+                    : `💡 Naked pair (${nPair.dim}): {${nPair.values.join(',')}} locked in ${coords} — neither value can appear at ${elimCoords}`;
+                highlight(nPair.cells);
+                updateBoard();
+                return;
+            }
+
+            // 4. Hidden pair
+            const hPair=findHiddenPair();
+            if(hPair){
+                const changed=applyElims(hPair.elims);
+                const coords=hPair.cells.map(c=>`(${c.x+1},${c.y+1},${c.z+1})`).join(' & ');
+                hintDisp.textContent=changed
+                    ? `💡 Hidden pair (${hPair.dim}): {${hPair.values.join(',')}} confined to ${coords} — every other candidate removed from those cells`
+                    : `💡 Hidden pair (${hPair.dim}): {${hPair.values.join(',')}} confined to ${coords} — these cells must be {${hPair.values.join(',')}} in some order`;
+                highlight(hPair.cells);
+                updateBoard();
+                return;
+            }
+
+            // 5. X-Wing
+            const xwing=findXWing();
+            if(xwing){
+                const changed=applyElims(xwing.elims);
+                const axisName={x:'x-axis',y:'y-axis',z:'layer (z-axis)'}[xwing.axis];
+                const corners=[...xwing.lineA,...xwing.lineB].map(c=>`(${c.x+1},${c.y+1},${c.z+1})`).join(', ');
+                const elimCoords=xwing.elims.map(e=>`(${e.cell.x+1},${e.cell.y+1},${e.cell.z+1})`).join(', ');
+                hintDisp.textContent=changed
+                    ? `💡 X-Wing (${xwing.dim}): ${xwing.values[0]} forms a rectangle at ${corners} (varying along ${axisName}) — removed ${xwing.values[0]} from ${elimCoords}`
+                    : `💡 X-Wing (${xwing.dim}): ${xwing.values[0]} forms a rectangle at ${corners} (varying along ${axisName}) — it can be eliminated from ${elimCoords}`;
+                highlight([...xwing.cells,...xwing.elims.map(e=>e.cell)]);
+                updateBoard();
+                return;
+            }
+
+            // 6. Simple coloring (covers many single-digit chain/X-chain cases)
+            const coloring=findColoring();
+            if(coloring){
+                const changed=applyElims(coloring.elims);
+                const contradictionCoords=coloring.contradiction.map(c=>`(${c.x+1},${c.y+1},${c.z+1})`).join(' & ');
+                const elimCoords=coloring.elims.map(e=>`(${e.cell.x+1},${e.cell.y+1},${e.cell.z+1})`).join(', ');
+                hintDisp.textContent=changed
+                    ? `💡 Coloring (${coloring.dim}): ${coloring.values[0]}'s chain contradicts itself at ${contradictionCoords} — removed ${coloring.values[0]} from ${elimCoords}`
+                    : `💡 Coloring (${coloring.dim}): ${coloring.values[0]}'s chain contradicts itself at ${contradictionCoords} — so ${coloring.values[0]} can't be in ${elimCoords}`;
+                highlight(coloring.cells);
+                updateBoard();
+                return;
+            }
+
+            // 7. Nudge toward the most constrained cell (lowest candidate count) without solving it
+            const constrained=findLeastCandidateCell();
+            if(constrained){
+                const pos=getPossible(constrained.x,constrained.y,constrained.z);
+                hintDisp.textContent=`💡 Try cell (${constrained.x+1},${constrained.y+1},${constrained.z+1}) — only ${pos.length} candidates left: ${pos.join(', ')}`;
+                highlight([constrained]);
+                return;
+            }
+
+            // 8. Last resort: reveal the selected empty cell, or any empty cell
+            let target=null;
+            if(sel&&b[sel.z][sel.y][sel.x]===0)target=sel;
+            else{
+                outer:
+                for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++){
+                    if(b[z][y][x]===0){target={x,y,z};break outer;}
                 }
             }
-            hintDisp.textContent='🤔 Try analyzing the grid more carefully!';
+            if(target){
+                const{x,y,z}=target;
+                b[z][y][x]=sol[z][y][x];
+                clearCand(x,y,z);
+                autoRemove(x,y,z,sol[z][y][x]);
+                hints++;
+                sel=target;
+                hintDisp.textContent=`💡 Placed ${sol[z][y][x]} at (${x+1},${y+1},${z+1})`;
+                updateBoard();
+                return;
+            }
+            hintDisp.textContent='🎉 Nothing left to hint — the puzzle is complete!';
+        }
+        function checkMistakes(){
+            if(won)return;
+            const hintDisp=document.getElementById('hintDisplay');
+            document.querySelectorAll('.cell').forEach(c=>c.classList.remove('mistake-flag'));
+            const mistakes=[];
+            for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++){
+                if(b[z][y][x]!==0&&b[z][y][x]!==sol[z][y][x]){
+                    mistakes.push({x,y,z});
+                }
+            }
+            if(mistakes.length===0){
+                hintDisp.textContent='✅ No mistakes so far!';
+                return;
+            }
+            hintDisp.textContent=`⚠️ Found ${mistakes.length} mistake${mistakes.length>1?'s':''}`;
+            mistakes.forEach(({x,y,z})=>{
+                const cell=document.querySelector(`[data-x="${x}"][data-y="${y}"][data-z="${z}"]`);
+                if(cell)cell.classList.add('mistake-flag');
+            });
+            setTimeout(()=>document.querySelectorAll('.cell').forEach(c=>c.classList.remove('mistake-flag')),2500);
+        }
+        function printPuzzle(){
+            document.getElementById('printOnlyLabel').textContent=
+                `Difficulty: ${document.getElementById('difficulty').textContent} • Clues: ${document.getElementById('clues-value').textContent}`;
+            const wasPaged=document.getElementById('board-container').classList.contains('paged-view');
+            if(wasPaged)document.getElementById('board-container').classList.remove('paged-view');
+            window.print();
+            if(wasPaged)document.getElementById('board-container').classList.add('paged-view');
+        }
+        function changeMobileLayer(delta){
+            mobileLayer=(mobileLayer+delta+S)%S;
+            renderMobileLayer();
+        }
+        function goToMobileLayer(idx){
+            mobileLayer=idx;
+            renderMobileLayer();
+        }
+        function renderMobileLayer(){
+            const layers=document.querySelectorAll('#board-container .layer');
+            layers.forEach((layer,i)=>layer.classList.toggle('active-layer',i===mobileLayer));
+            const dots=document.querySelectorAll('#layerDots .dot');
+            dots.forEach((dot,i)=>dot.classList.toggle('active',i===mobileLayer));
+        }
+        function toggleLayerView(){
+            pagedView=!pagedView;
+            const container=document.getElementById('board-container');
+            const nav=document.getElementById('layerNav');
+            const btn=document.getElementById('layerViewBtn');
+            container.classList.toggle('paged-view',pagedView);
+            nav.classList.toggle('nav-visible',pagedView);
+            if(pagedView){
+                btn.textContent='📄 Paged View';btn.classList.add('active');
+                renderMobileLayer();
+            }else{
+                btn.textContent='🗂️ All Layers';btn.classList.remove('active');
+            }
         }
         function highlight(cells){
             document.querySelectorAll('.cell').forEach(c=>c.classList.remove('conflict'));
@@ -423,6 +875,22 @@
                 }
                 layer.appendChild(grid);cont.appendChild(layer);
             }
+            const dotsWrap=document.getElementById('layerDots');
+            dotsWrap.innerHTML='';
+            for(let z=0;z<S;z++){
+                const dot=document.createElement('button');
+                dot.className='dot';
+                dot.onclick=()=>goToMobileLayer(z);
+                dotsWrap.appendChild(dot);
+            }
+            cont.classList.toggle('paged-view',pagedView);
+            document.getElementById('layerNav').classList.toggle('nav-visible',pagedView);
+            const lvBtn=document.getElementById('layerViewBtn');
+            if(lvBtn){
+                lvBtn.textContent=pagedView?'📄 Paged View':'🗂️ All Layers';
+                lvBtn.classList.toggle('active',pagedView);
+            }
+            if(pagedView)renderMobileLayer();
         }
         function updateBoard(){
             // Clear previous highlights and related highlights
@@ -439,7 +907,7 @@
                 cell.innerHTML='';
                 if(val!==0){
                     cell.textContent=val;
-                    cell.classList.add(sol[z][y][x]===val?'completed':'error');
+                    if(sol[z][y][x]===val)cell.classList.add('completed');
                 }else{
                     const userCand=getCand(x,y,z);
                     if(userCand.length>0)cell.innerHTML=`<div class="candidates">${userCand.join('')}</div>`;
@@ -615,6 +1083,21 @@
         window.addEventListener('load',()=>{
             createBoard();initDrag();newGame();
         });
+        // Not wired to any button — console-only easter egg.
+        window.summonBananaWizard=function(){
+            if(won)return'Puzzle already solved, wizard is on vacation.';
+            let filled=0;
+            for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++){
+                if(b[z][y][x]===0){
+                    const pos=getPossible(x,y,z);
+                    const k=candKey(x,y,z);
+                    cand[k]=new Set(pos);
+                    filled++;
+                }
+            }
+            updateBoard();
+            return`🍌🧙 The banana wizard penciled in ${filled} cells.`;
+        };
     </script>
 </body>
 </html>
