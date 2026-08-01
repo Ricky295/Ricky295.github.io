@@ -206,7 +206,7 @@
     <main class="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
         <!-- Search & Quick Location Controls -->
-        <section class="glass-panel p-3.5 sm:p-4 rounded-2xl space-y-3">
+        <section class="relative z-40 glass-panel p-3.5 sm:p-4 rounded-2xl space-y-3">
             <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
                 <!-- City Search Bar -->
                 <div class="relative md:col-span-6">
@@ -218,8 +218,8 @@
                     <button id="clearSearchBtn" onclick="clearCityInput()" class="hidden absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
-                    <!-- Search Results Dropdown -->
-                    <div id="searchResults" class="hidden absolute left-0 right-0 top-full mt-2 glass-panel border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 max-h-60 overflow-y-auto">
+                    <!-- Search Results Dropdown with elevated z-index and expanded max height -->
+                    <div id="searchResults" class="hidden absolute left-0 right-0 top-full mt-2 glass-panel border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 max-h-72 overflow-y-auto">
                     </div>
                 </div>
 
@@ -462,6 +462,10 @@
 
             <div class="space-y-3 text-xs text-slate-300">
                 <p>This web application uses standard Gemini runtime credentials by default. To use your own personal API key from Google AI Studio, paste it below.</p>
+                <div class="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-info text-amber-400 text-sm"></i>
+                    <span>If your key ran out or you need key info, <a href="https://share.gemini.google/KceOsUgV9OF4" target="_blank" rel="noopener noreferrer" class="underline font-bold hover:text-amber-200">click here for key resources</a>.</span>
+                </div>
                 <div>
                     <label class="block text-slate-400 font-semibold mb-1">Your Gemini API Key:</label>
                     <input type="password" id="customApiKeyInput" placeholder="AIzaSy..." class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500 font-mono">
@@ -648,11 +652,6 @@
             modal.classList.toggle('hidden');
         }
 
-        function setArtStyle(styleText) {
-            document.getElementById('artStyleInput').value = styleText;
-            showToast('Art style preset applied');
-        }
-
         function toggleTemperatureUnit() {
             state.unit = state.unit === 'C' ? 'F' : 'C';
             if (state.currentWeather) {
@@ -722,12 +721,13 @@
                 debounceTimer = setTimeout(async () => {
                     if (query.length < 2) return;
                     try {
-                        const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=6&language=en&format=json`);
+                        // Increased result count to 10 so multiple regions (e.g., Bobbio, Emilia-Romagna vs Piedmont) are included
+                        const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=10&language=en&format=json`);
                         const data = await res.json();
                         
                         if (data.results && data.results.length > 0) {
                             resultsDiv.innerHTML = data.results.map(item => `
-                                <div onclick="selectCity('${item.name.replace(/'/g, "\\'")}', ${item.latitude}, ${item.longitude}, '${(item.country || '').replace(/'/g, "\\'")}')" 
+                                <div onclick="selectCity('${item.name.replace(/'/g, "\\'")}', ${item.latitude}, ${item.longitude}, '${((item.admin1 ? item.admin1 + ', ' : '') + (item.country || '')).replace(/'/g, "\\'")}')" 
                                      class="p-3 hover:bg-slate-800/80 cursor-pointer flex items-center justify-between transition border-b border-slate-800/40 last:border-none">
                                     <div class="flex items-center gap-2">
                                         <i class="fa-solid fa-location-dot text-blue-400 text-xs"></i>
@@ -1248,8 +1248,13 @@
 
             } catch (err) {
                 console.error('Backdrop generation error:', err);
-                statusText.innerText = 'Fallback Backdrop Active';
-                showToast('Could not load AI backdrop. Using high-res fallback scenery.', 'error');
+                statusText.innerHTML = `<span class="text-amber-400">Key Limit / Fallback</span>`;
+                showToast('Could not generate backdrop. Key quota may be exceeded.', 'error');
+                
+                const promptEl = document.getElementById('promptDisplayText');
+                if (promptEl) {
+                    promptEl.innerHTML = `<span class="text-rose-400">API Key Limit Exceeded or Error.</span> If your Gemini key ran out, <a href="https://share.gemini.google/KceOsUgV9OF4" target="_blank" rel="noopener noreferrer" class="underline font-semibold text-indigo-300 hover:text-indigo-100">click here to access the Gemini link</a>.`;
+                }
             } finally {
                 spinner.classList.add('hidden');
             }
@@ -1358,11 +1363,11 @@
             // Header
             const dateStr = document.getElementById('currentDateStr').innerText;
             ctx.fillStyle = '#60a5fa';
-            ctx.font = `700 ${Math.round(w * 0.015)}px "Plus Jakarta Sans", sans-serif`;
-            ctx.fillText(dateStr.toUpperCase(), w * 0.04, h * 0.09);
+            ctx.font = `700 ${Math.round(w * 0.022)}px "Plus Jakarta Sans", sans-serif`;
+            ctx.fillText(dateStr.toUpperCase(), w * 0.04, h * 0.08);
 
             ctx.fillStyle = '#ffffff';
-            ctx.font = `bold ${Math.round(w * 0.042)}px "Space Grotesk", sans-serif`;
+            ctx.font = `bold ${Math.round(w * 0.052)}px "Space Grotesk", sans-serif`;
             ctx.fillText(state.city, w * 0.04, h * 0.15);
 
             // Left side: Temp & condition
@@ -1370,26 +1375,26 @@
             const condText = document.getElementById('weatherConditionText').innerText.trim();
 
             ctx.fillStyle = '#ffffff';
-            ctx.font = `900 ${Math.round(w * 0.075)}px "Space Grotesk", sans-serif`;
-            ctx.fillText(curTemp, w * 0.04, h * 0.82);
+            ctx.font = `900 ${Math.round(w * 0.11)}px "Space Grotesk", sans-serif`;
+            ctx.fillText(curTemp, w * 0.04, h * 0.78);
 
             ctx.fillStyle = '#cbd5e1';
-            ctx.font = `600 ${Math.round(w * 0.02)}px "Plus Jakarta Sans", sans-serif`;
-            ctx.fillText(condText, w * 0.04, h * 0.87);
+            ctx.font = `600 ${Math.round(w * 0.028)}px "Plus Jakarta Sans", sans-serif`;
+            ctx.fillText(condText, w * 0.04, h * 0.86);
 
             // Right side: Metrics card
-            const cardWidth = w * 0.42;
-            const cardHeight = h * 0.22;
-            const cardX = w * 0.54;
-            const cardY = h * 0.69;
+            const cardWidth = w * 0.44;
+            const cardHeight = h * 0.24;
+            const cardX = w * 0.52;
+            const cardY = h * 0.67;
 
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
             ctx.beginPath();
             if (ctx.roundRect) ctx.roundRect(cardX, cardY, cardWidth, cardHeight, 20);
             else ctx.rect(cardX, cardY, cardWidth, cardHeight);
             ctx.fill();
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-            ctx.lineWidth = Math.round(w * 0.0015);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+            ctx.lineWidth = Math.round(w * 0.002);
             ctx.stroke();
 
             const hum = document.getElementById('humidityVal').innerText;
@@ -1398,39 +1403,45 @@
             const press = document.getElementById('pressureVal').innerText;
 
             ctx.fillStyle = '#94a3b8';
-            ctx.font = `600 ${Math.round(w * 0.012)}px "Plus Jakarta Sans", sans-serif`;
+            ctx.font = `700 ${Math.round(w * 0.015)}px "Plus Jakarta Sans", sans-serif`;
             ctx.fillText('HUMIDITY', cardX + cardWidth * 0.08, cardY + cardHeight * 0.28);
             ctx.fillText('WIND SPEED', cardX + cardWidth * 0.55, cardY + cardHeight * 0.28);
 
             ctx.fillStyle = '#ffffff';
-            ctx.font = `bold ${Math.round(w * 0.021)}px "Space Grotesk", sans-serif`;
+            ctx.font = `bold ${Math.round(w * 0.026)}px "Space Grotesk", sans-serif`;
             ctx.fillText(hum, cardX + cardWidth * 0.08, cardY + cardHeight * 0.48);
             ctx.fillText(wind, cardX + cardWidth * 0.55, cardY + cardHeight * 0.48);
 
             ctx.fillStyle = '#94a3b8';
-            ctx.font = `600 ${Math.round(w * 0.012)}px "Plus Jakarta Sans", sans-serif`;
+            ctx.font = `700 ${Math.round(w * 0.015)}px "Plus Jakarta Sans", sans-serif`;
             ctx.fillText('PRECIPITATION', cardX + cardWidth * 0.08, cardY + cardHeight * 0.70);
             ctx.fillText('PRESSURE', cardX + cardWidth * 0.55, cardY + cardHeight * 0.70);
 
             ctx.fillStyle = '#ffffff';
-            ctx.font = `bold ${Math.round(w * 0.021)}px "Space Grotesk", sans-serif`;
+            ctx.font = `bold ${Math.round(w * 0.026)}px "Space Grotesk", sans-serif`;
             ctx.fillText(precip, cardX + cardWidth * 0.08, cardY + cardHeight * 0.88);
             ctx.fillText(press, cardX + cardWidth * 0.55, cardY + cardHeight * 0.88);
 
             // Watermark
-            ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
-            ctx.font = `500 ${Math.round(w * 0.011)}px "Plus Jakarta Sans", sans-serif`;
+            ctx.fillStyle = 'rgba(226, 232, 240, 0.8)';
+            ctx.font = `600 ${Math.round(w * 0.016)}px "Plus Jakarta Sans", sans-serif`;
             ctx.fillText('Atmosphere AI Weather Generator', w * 0.04, h * 0.95);
         }
 
         function drawForecastOverlay(ctx, w, h, daysCount) {
             // Header
             ctx.fillStyle = '#60a5fa';
-            ctx.font = `700 ${Math.round(w * 0.014)}px "Plus Jakarta Sans", sans-serif`;
-            ctx.fillText(`${daysCount}-DAY WEATHER FORECAST`, w * 0.04, h * 0.09);
+            ctx.font = `700 ${Math.round(w * 0.022)}px "Plus Jakarta Sans", sans-serif`;
+            ctx.fillText(`${daysCount}-DAY WEATHER FORECAST`, w * 0.04, h * 0.08);
 
             ctx.fillStyle = '#ffffff';
-            ctx.font = `bold ${Math.round(w * 0.04)}px "Space Grotesk", sans-serif`;
+            let cityFontSize = Math.round(w * 0.048);
+            ctx.font = `bold ${cityFontSize}px "Space Grotesk", sans-serif`;
+            const maxCityWidth = w * 0.92;
+            while (ctx.measureText(state.city).width > maxCityWidth && cityFontSize > 14) {
+                cityFontSize -= 2;
+                ctx.font = `bold ${cityFontSize}px "Space Grotesk", sans-serif`;
+            }
             ctx.fillText(state.city, w * 0.04, h * 0.15);
 
             const days = state.forecastDaily.slice(0, daysCount);
@@ -1445,15 +1456,15 @@
 
                 days.forEach((day, idx) => {
                     const x = startX + idx * (cardWidth + (w * 0.01));
-                    
+
                     // Glass Card
-                    ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+                    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
                     ctx.beginPath();
                     if (ctx.roundRect) ctx.roundRect(x, startY, cardWidth, cardHeight, 16);
                     else ctx.rect(x, startY, cardWidth, cardHeight);
                     ctx.fill();
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-                    ctx.lineWidth = Math.round(w * 0.001);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+                    ctx.lineWidth = Math.round(w * 0.0015);
                     ctx.stroke();
 
                     const dObj = new Date(day.date + 'T00:00:00');
@@ -1463,33 +1474,33 @@
 
                     // Day Name
                     ctx.fillStyle = '#ffffff';
-                    ctx.font = `bold ${Math.round(w * 0.014)}px "Space Grotesk", sans-serif`;
+                    ctx.font = `bold ${Math.round(w * 0.022)}px "Space Grotesk", sans-serif`;
                     ctx.textAlign = 'center';
                     ctx.fillText(dayLabel, x + cardWidth / 2, startY + cardHeight * 0.12);
 
-                    ctx.fillStyle = '#94a3b8';
-                    ctx.font = `500 ${Math.round(w * 0.010)}px "Plus Jakarta Sans", sans-serif`;
-                    ctx.fillText(dateStr, x + cardWidth / 2, startY + cardHeight * 0.18);
+                    ctx.fillStyle = '#cbd5e1';
+                    ctx.font = `600 ${Math.round(w * 0.016)}px "Plus Jakarta Sans", sans-serif`;
+                    ctx.fillText(dateStr, x + cardWidth / 2, startY + cardHeight * 0.19);
 
                     // Weather Label
                     ctx.fillStyle = '#38bdf8';
-                    ctx.font = `600 ${Math.round(w * 0.011)}px "Plus Jakarta Sans", sans-serif`;
-                    ctx.fillText(wmo.label, x + cardWidth / 2, startY + cardHeight * 0.35);
+                    ctx.font = `700 ${Math.round(w * 0.017)}px "Plus Jakarta Sans", sans-serif`;
+                    ctx.fillText(wmo.label, x + cardWidth / 2, startY + cardHeight * 0.37);
 
                     // Temps
                     ctx.fillStyle = '#ffffff';
-                    ctx.font = `bold ${Math.round(w * 0.02)}px "Space Grotesk", sans-serif`;
-                    ctx.fillText(formatTemp(day.tempMax), x + cardWidth / 2, startY + cardHeight * 0.55);
+                    ctx.font = `bold ${Math.round(w * 0.032)}px "Space Grotesk", sans-serif`;
+                    ctx.fillText(formatTemp(day.tempMax), x + cardWidth / 2, startY + cardHeight * 0.58);
 
                     ctx.fillStyle = '#94a3b8';
-                    ctx.font = `600 ${Math.round(w * 0.013)}px "Plus Jakarta Sans", sans-serif`;
-                    ctx.fillText(`Low: ${formatTemp(day.tempMin)}`, x + cardWidth / 2, startY + cardHeight * 0.65);
+                    ctx.font = `600 ${Math.round(w * 0.018)}px "Plus Jakarta Sans", sans-serif`;
+                    ctx.fillText(`Low: ${formatTemp(day.tempMin)}`, x + cardWidth / 2, startY + cardHeight * 0.69);
 
                     // Precip & Wind
-                    ctx.fillStyle = '#cbd5e1';
-                    ctx.font = `500 ${Math.round(w * 0.010)}px "Plus Jakarta Sans", sans-serif`;
-                    ctx.fillText(`🌧️ ${day.precipSum}mm (${day.precipProbMax}%)`, x + cardWidth / 2, startY + cardHeight * 0.80);
-                    ctx.fillText(`💨 ${day.windSpeedMax} km/h`, x + cardWidth / 2, startY + cardHeight * 0.90);
+                    ctx.fillStyle = '#e2e8f0';
+                    ctx.font = `600 ${Math.round(w * 0.015)}px "Plus Jakarta Sans", sans-serif`;
+                    ctx.fillText(`🌧️ ${day.precipSum}mm (${day.precipProbMax}%)`, x + cardWidth / 2, startY + cardHeight * 0.83);
+                    ctx.fillText(`💨 ${day.windSpeedMax} km/h`, x + cardWidth / 2, startY + cardHeight * 0.93);
                 });
                 ctx.textAlign = 'left';
 
@@ -1510,44 +1521,54 @@
                     const x = startX + c * (cardWidth + (w * 0.01));
                     const y = startY + r * (cardHeight + (h * 0.015));
 
-                    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+                    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
                     ctx.beginPath();
-                    if (ctx.roundRect) ctx.roundRect(x, y, cardWidth, cardHeight, 12);
+                    if (ctx.roundRect) ctx.roundRect(x, y, cardWidth, cardHeight, 14);
                     else ctx.rect(x, y, cardWidth, cardHeight);
                     ctx.fill();
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
-                    ctx.lineWidth = Math.round(w * 0.001);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+                    ctx.lineWidth = Math.round(w * 0.0012);
                     ctx.stroke();
 
                     const dObj = new Date(day.date + 'T00:00:00');
                     const dayLabel = idx === 0 ? 'Today' : dObj.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
                     const wmo = WMO_CODES[day.weatherCode] || { label: 'Clear' };
 
-                    // Title
+                    // Row 1: Day name (left) + Max temp (right)
                     ctx.fillStyle = '#ffffff';
-                    ctx.font = `bold ${Math.round(w * 0.011)}px "Space Grotesk", sans-serif`;
-                    ctx.fillText(dayLabel, x + cardWidth * 0.06, y + cardHeight * 0.35);
+                    ctx.font = `bold ${Math.round(w * 0.0195)}px "Space Grotesk", sans-serif`;
+                    ctx.textAlign = 'left';
+                    ctx.fillText(dayLabel, x + cardWidth * 0.06, y + cardHeight * 0.20);
 
-                    ctx.fillStyle = '#38bdf8';
-                    ctx.font = `500 ${Math.round(w * 0.009)}px "Plus Jakarta Sans", sans-serif`;
-                    ctx.fillText(wmo.label, x + cardWidth * 0.06, y + cardHeight * 0.72);
-
-                    // Temps
                     ctx.fillStyle = '#ffffff';
-                    ctx.font = `bold ${Math.round(w * 0.014)}px "Space Grotesk", sans-serif`;
+                    ctx.font = `bold ${Math.round(w * 0.036)}px "Space Grotesk", sans-serif`;
                     ctx.textAlign = 'right';
-                    ctx.fillText(formatTemp(day.tempMax), x + cardWidth * 0.94, y + cardHeight * 0.40);
+                    ctx.fillText(formatTemp(day.tempMax), x + cardWidth * 0.94, y + cardHeight * 0.24);
+
+                    // Row 2: Weather condition label (own line, full width, left-aligned)
+                    ctx.fillStyle = '#38bdf8';
+                    ctx.font = `600 ${Math.round(w * 0.019)}px "Plus Jakarta Sans", sans-serif`;
+                    ctx.textAlign = 'left';
+                    ctx.fillText(wmo.label, x + cardWidth * 0.06, y + cardHeight * 0.54);
+
+                    // Row 3: Low temp + precipitation combined on one row, left/right split.
+                    // Freeing the old separate precip row gives rows 1 & 2 room to grow.
+                    ctx.fillStyle = '#cbd5e1';
+                    ctx.font = `600 ${Math.round(w * 0.017)}px "Plus Jakarta Sans", sans-serif`;
+                    ctx.textAlign = 'left';
+                    ctx.fillText(`Low ${formatTemp(day.tempMin)}`, x + cardWidth * 0.06, y + cardHeight * 0.86);
 
                     ctx.fillStyle = '#94a3b8';
-                    ctx.font = `500 ${Math.round(w * 0.009)}px "Plus Jakarta Sans", sans-serif`;
-                    ctx.fillText(`Low ${formatTemp(day.tempMin)} • 🌧️ ${day.precipSum}mm`, x + cardWidth * 0.94, y + cardHeight * 0.72);
-                    ctx.textAlign = 'left';
+                    ctx.font = `600 ${Math.round(w * 0.016)}px "Plus Jakarta Sans", sans-serif`;
+                    ctx.textAlign = 'right';
+                    ctx.fillText(`🌧️ ${day.precipSum}mm`, x + cardWidth * 0.94, y + cardHeight * 0.86);
                 });
             }
 
             // Watermark
-            ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
-            ctx.font = `500 ${Math.round(w * 0.011)}px "Plus Jakarta Sans", sans-serif`;
+            ctx.fillStyle = 'rgba(226, 232, 240, 0.8)';
+            ctx.font = `600 ${Math.round(w * 0.016)}px "Plus Jakarta Sans", sans-serif`;
+            ctx.textAlign = 'left';
             ctx.fillText('Atmosphere AI Weather Generator', w * 0.04, h * 0.96);
         }
 
