@@ -22,11 +22,15 @@
         .btn.warning{background:linear-gradient(135deg,#f59e0b,#d97706)}
         .btn.danger{background:linear-gradient(135deg,#ef4444,#dc2626)}
         .btn.active{background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 0 20px rgba(16,185,129,0.4)}
+        .btn:disabled{opacity:0.4;cursor:not-allowed;transform:none!important;box-shadow:none!important}
         .difficulty{display:flex;align-items:center;gap:8px;color:#fbbf24;font-weight:600}
         .slider{width:100px;height:4px;border-radius:2px;background:rgba(255,255,255,0.2);outline:none;cursor:pointer}
         .slider::-webkit-slider-thumb{appearance:none;width:16px;height:16px;border-radius:50%;background:#3b82f6;cursor:pointer}
         .mode-indicator{text-align:center;margin-bottom:15px;font-size:14px;color:#fbbf24;font-weight:600}
-        .hint-display{text-align:center;margin-bottom:20px;font-size:14px;color:#10b981;min-height:18px;font-weight:500}
+        .hint-display{text-align:center;margin-bottom:8px;font-size:14px;color:#10b981;min-height:18px;font-weight:500}
+        .hint-apply-wrap{display:flex;justify-content:center;margin-bottom:20px}
+        .hint-apply-wrap .btn{display:none}
+        .hint-apply-wrap .btn.show{display:inline-block}
         .board-container{display:flex;justify-content:center;gap:15px;flex-wrap:wrap;margin-bottom:25px}
         .layer{background:rgba(0,0,0,0.4);border:2px solid rgba(255,255,255,0.1);border-radius:12px;padding:15px;backdrop-filter:blur(10px)}
         .layer-title{text-align:center;margin-bottom:10px;color:#fbbf24;font-weight:600;font-size:14px}
@@ -41,6 +45,8 @@
         .cell.candidate-mode{background:rgba(139,92,246,0.4)!important}
         .cell.related{background:rgba(255,255,255,0.1)!important}
         .cell.conflict{background:rgba(239,68,68,0.8)!important}
+        .cell.hint-target{background:rgba(16,185,129,0.55)!important;box-shadow:0 0 15px rgba(16,185,129,0.6);border-color:#10b981}
+        .cell.hint-elim{background:rgba(245,158,11,0.55)!important;box-shadow:0 0 15px rgba(245,158,11,0.5);border-color:#f59e0b}
         .cell.highlighted-value { background: rgba(96, 165, 250, 0.4) !important; color: #bfdbfe; font-weight: bold; }
         .candidates{font-size:8px;position:absolute;top:2px;left:2px;color:#fbbf24;line-height:1}
         .keypad{position:fixed;bottom:20px;right:20px;background:rgba(0,0,0,0.8);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:12px;backdrop-filter:blur(20px);z-index:1000}
@@ -85,7 +91,7 @@
         @media print{
             body{background:#fff!important;color:#000!important}
             body::before{display:none}
-            .controls,.mode-indicator,.hint-display,.keypad,.stats,.timer,.layer-nav,.modal{display:none!important}
+            .controls,.mode-indicator,.hint-display,.hint-apply-wrap,.keypad,.stats,.timer,.layer-nav,.modal{display:none!important}
             .container{max-width:100%;padding:0}
             .header h1{-webkit-text-fill-color:#000;background:none;font-size:1.6rem;margin-bottom:4px}
             .board-container{display:flex!important;gap:8px;flex-wrap:wrap!important;justify-content:center}
@@ -120,6 +126,7 @@
         </div>
         <div class="mode-indicator" id="modeIndicator">🎯 Mode: Candidate Entry</div>
         <div class="hint-display" id="hintDisplay"></div>
+        <div class="hint-apply-wrap"><button class="btn success" id="applyHintBtn" onclick="applyPendingHint()">✅ Apply this step for you</button></div>
         <div class="print-only" id="printOnlyLabel"></div>
         <div class="layer-nav" id="layerNav">
             <button class="nav-btn" onclick="changeMobileLayer(-1)">◀</button>
@@ -158,6 +165,7 @@
         const S=5,V=[1,2,3,4,5];
         let b=[],sol=[],cand={},sel=null,start=null,timer=null,candMode=true,hints=0,won=false,keyMin=false,drag=false,dragOff={x:0,y:0};
         let mobileLayer=0,pagedView=true;
+        let pendingHint=null; // {type, place:{x,y,z,value} | null, elims:[{cell,values}] | null, cells:[...]}
         function makeBoard(){return Array(S).fill().map(()=>Array(S).fill().map(()=>Array(S).fill(0)))}
         function copyBoard(board){return board.map(l=>l.map(r=>[...r]))}
         function getRelated(x,y,z){
@@ -172,7 +180,7 @@
             return !getRelated(x,y,z).some(([rx,ry,rz])=>board[rz][ry][rx]===val);
         }
         // Advanced solving with constraint propagation
-        function solve(board, countSolutions = false, maxSolutions = 2) {
+        function solve(board, countSolutions = false, maxSolutions = 2, randomize = false) {
             function buildCandidateBoard(b) {
                 const candBoard = Array(S).fill().map(() => 
                     Array(S).fill().map(() => 
@@ -215,20 +223,27 @@
             
             function findBestCell(candBoard) {
                 let minLen = S + 1;
-                let best = null;
+                let bests = [];
                 
                 for (let z = 0; z < S; z++) {
                     for (let y = 0; y < S; y++) {
                         for (let x = 0; x < S; x++) {
                             const cell = candBoard[z][y][x];
-                            if (Array.isArray(cell) && cell.length < minLen) {
-                                minLen = cell.length;
-                                best = { x, y, z };
+                            if (Array.isArray(cell)) {
+                                if (cell.length < minLen) {
+                                    minLen = cell.length;
+                                    bests = [{ x, y, z }];
+                                } else if (cell.length === minLen) {
+                                    bests.push({ x, y, z });
+                                }
                             }
                         }
                     }
                 }
-                return best;
+                if (bests.length === 0) return null;
+                // When randomizing, pick randomly among tied cells so generation
+                // doesn't always branch from the same starting cell.
+                return randomize ? bests[Math.floor(Math.random() * bests.length)] : bests[0];
             }
             
             function isSolved(candBoard) {
@@ -248,7 +263,6 @@
                 if (solutions.length >= maxSolutions) return;
                 
                 if (isSolved(candBoard)) {
-                    // Convert candidate board back to regular board
                     const solution = Array(S).fill().map(() => 
                         Array(S).fill().map(() => Array(S).fill(0))
                     );
@@ -268,9 +282,9 @@
                 
                 const { x, y, z } = coord;
                 const options = [...candBoard[z][y][x]];
+                if (randomize) shuffle(options);
                 
                 for (const val of options) {
-                    // Deep copy the candidate board
                     const newCandBoard = candBoard.map(layer => 
                         layer.map(row => 
                             row.map(cell => Array.isArray(cell) ? [...cell] : cell)
@@ -283,10 +297,8 @@
                 }
             }
             
-            // Build initial candidate board
             const candBoard = buildCandidateBoard(board);
             
-            // Apply constraint propagation for fixed clues
             for (let z = 0; z < S; z++) {
                 for (let y = 0; y < S; y++) {
                     for (let x = 0; x < S; x++) {
@@ -314,14 +326,13 @@
         }
         function genSol() {
             const board = makeBoard();
-            const solution = solve(board, false, 1);
+            const solution = solve(board, false, 1, true);
             return solution || board;
         }
         function genPuzzle(targetClues) {
             const solution = genSol();
             const puzzle = copyBoard(solution);
             
-            // Generate all coordinates and randomize order
             const allCoords = [];
             for (let z = 0; z < S; z++) {
                 for (let y = 0; y < S; y++) {
@@ -342,7 +353,7 @@
                 const [x, y, z] = allCoords.pop();
                 attempts++;
                 
-                if (puzzle[z][y][x] === 0) continue; // Already removed
+                if (puzzle[z][y][x] === 0) continue;
                 
                 const backup = puzzle[z][y][x];
                 puzzle[z][y][x] = 0;
@@ -356,10 +367,9 @@
                         console.log(`Current clues: ${currentClues}/${targetClues}, Remaining cells: ${allCoords.length}`);
                     }
                 } else {
-                    puzzle[z][y][x] = backup; // Restore if not unique
+                    puzzle[z][y][x] = backup;
                 }
                 
-                // Break early if we've reached our target
                 if (currentClues <= targetClues) {
                     break;
                 }
@@ -401,10 +411,6 @@
             });
             return V.filter(v=>!used.has(v));
         }
-        // ---------- Shared solving infrastructure ----------
-        // Every cell has exactly 3 lines through it (fixed two coords, varying the third).
-        // A technique instance is tagged 3D if the cells it uses span more than one z-layer,
-        // 2D if they all lie within a single z-layer.
         function allLines(){
             const lines=[];
             for(let y=0;y<S;y++)for(let z=0;z<S;z++)lines.push({axis:'x',cells:V.map((_,x)=>({x,y,z}))});
@@ -417,7 +423,6 @@
             return zs.size>1;
         }
         function candGrid(){
-            // full candidate array per empty cell, using current board state
             const g=Array(S).fill().map(()=>Array(S).fill().map(()=>Array(S).fill(null)));
             for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++){
                 if(b[z][y][x]===0)g[z][y][x]=getPossible(x,y,z);
@@ -438,7 +443,6 @@
             return singles;
         }
 
-        // Hidden single: within one line, a value has only one legal empty cell.
         function findHiddenSingle(){
             for(const line of allLines()){
                 for(const val of V){
@@ -455,8 +459,6 @@
             return null;
         }
 
-        // Naked pair: two cells in the same line share exactly the same 2 candidates.
-        // Eliminates those 2 values from every other cell in that line.
         function findNakedPair(){
             const g=candGrid();
             for(const line of allLines()){
@@ -465,13 +467,14 @@
                     const a=empties[i],bC=empties[j];
                     const ca=g[a.z][a.y][a.x],cb=g[bC.z][bC.y][bC.x];
                     if(ca[0]===cb[0]&&ca[1]===cb[1]){
-                        // find eliminations
                         const elims=[];
                         for(const c of line.cells){
                             if(sameCell(a,c)||sameCell(bC,c))continue;
-                            const pos=g[c.z][c.y][c.x];
-                            if(pos&&(pos.includes(ca[0])||pos.includes(ca[1]))){
-                                elims.push({cell:c,values:pos.filter(v=>v===ca[0]||v===ca[1])});
+                            if(b[c.z][c.y][c.x]!==0)continue;
+                            const marked=getCand(c.x,c.y,c.z); // player's actual pencil marks
+                            const hit=marked.filter(v=>v===ca[0]||v===ca[1]);
+                            if(hit.length>0){
+                                elims.push({cell:c,values:hit});
                             }
                         }
                         if(elims.length>0){
@@ -483,8 +486,6 @@
             return null;
         }
 
-        // Hidden pair: two values confined to the same two cells within a line
-        // (those cells may carry other candidates too, which then get stripped down to the pair).
         function findHiddenPair(){
             const g=candGrid();
             for(const line of allLines()){
@@ -496,21 +497,15 @@
                         return pos.includes(v1)||pos.includes(v2);
                     });
                     if(spots.length===2){
-                        const bothOnlyPair=spots.every(c=>{
-                            const pos=g[c.z][c.y][c.x];
-                            return pos.includes(v1)&&pos.includes(v2);
-                        });
-                        // must actually confine v1 AND v2 to exactly these 2 cells
                         const v1Spots=empties.filter(c=>g[c.z][c.y][c.x].includes(v1));
                         const v2Spots=empties.filter(c=>g[c.z][c.y][c.x].includes(v2));
                         if(v1Spots.length===2&&v2Spots.length===2&&
                            v1Spots.every(c=>spots.some(s=>sameCell(s,c)))&&
                            v2Spots.every(c=>spots.some(s=>sameCell(s,c)))){
-                            // eliminations: any OTHER candidate in these two cells
                             const elims=[];
                             for(const c of spots){
-                                const pos=g[c.z][c.y][c.x];
-                                const extra=pos.filter(v=>v!==v1&&v!==v2);
+                                const marked=getCand(c.x,c.y,c.z);
+                                const extra=marked.filter(v=>v!==v1&&v!==v2);
                                 if(extra.length>0)elims.push({cell:c,values:extra});
                             }
                             if(elims.length>0){
@@ -523,61 +518,67 @@
             return null;
         }
 
-        // X-Wing: a value appears in exactly 2 cells in each of 2 parallel lines,
-        // and those cells line up on the cross-axis -> eliminate that value from the
-        // connecting lines elsewhere. Checked across all 3 axis-pair combinations,
-        // so it naturally covers both same-layer (2D) and cross-layer (3D) cases.
+        // Valid X-Wing: an actual rectangle. Two axes are held fixed at two values each
+        // (that's the "rows" in classic 2D X-Wing terms — here generalized to any pair of
+        // the 3 axes), and the candidate value sits at exactly those 2x2 = 4 cells within
+        // the two lines that vary along the third axis. Eliminations happen only along the
+        // other cells of those same 2 fixed-axis lines (the classic X-Wing elimination),
+        // not across any other coordinate.
         function findXWing(){
             const g=candGrid();
-            // Consider lines grouped by axis; compare pairs of parallel lines that
-            // share the same "varying" axis, indexed by the other two fixed coords.
-            const axisGroups={
-                x:{fixed:['y','z'],vary:'x'},
-                y:{fixed:['x','z'],vary:'y'},
-                z:{fixed:['x','y'],vary:'z'}
-            };
-            for(const axis of['x','y','z']){
-                const lines=allLines().filter(l=>l.axis===axis);
+            const axes=['x','y','z'];
+            const coordOf=(c,ax)=>ax==='x'?c.x:ax==='y'?c.y:c.z;
+            for(const varyAxis of axes){
+                const otherAxes=axes.filter(a=>a!==varyAxis);
+                const [fixedAxis1,fixedAxis2]=otherAxes;
+                const lines=allLines().filter(l=>l.axis===varyAxis);
                 for(const val of V){
-                    // for each line, find which positions along "vary" axis contain val as candidate
                     const lineInfo=lines.map(line=>{
                         const spots=line.cells.filter(c=>{
                             const pos=g[c.z][c.y][c.x];
                             return pos&&pos.includes(val);
                         });
-                        return{line,spots};
+                        return{line,spots,
+                               f1:coordOf(line.cells[0],fixedAxis1),
+                               f2:coordOf(line.cells[0],fixedAxis2)};
                     }).filter(li=>li.spots.length===2);
+
                     for(let i=0;i<lineInfo.length;i++)for(let j=i+1;j<lineInfo.length;j++){
                         const A=lineInfo[i],B=lineInfo[j];
-                        // check the two spots' "vary" coordinate match between the two lines
-                        const varyCoord=c=>axis==='x'?c.x:axis==='y'?c.y:c.z;
+                        // Must differ on exactly one fixed axis (that's the "second row" of
+                        // the rectangle) and match on the other (both lines sit in the same
+                        // 2D slice). If both match, it's the same line; if both differ, the
+                        // 4 cells don't form a planar rectangle.
+                        const sameF1=A.f1===B.f1, sameF2=A.f2===B.f2;
+                        if(sameF1===sameF2)continue;
+                        const sliceAxis=sameF1?fixedAxis1:fixedAxis2;   // constant across all 4 cells
+                        const rowAxis=sameF1?fixedAxis2:fixedAxis1;     // the 2 differing "row" positions
+
+                        // varying-axis candidate positions must match between the two lines
+                        const varyCoord=c=>coordOf(c,varyAxis);
                         const aCoords=A.spots.map(varyCoord).sort().join(',');
                         const bCoords=B.spots.map(varyCoord).sort().join(',');
                         if(aCoords!==bCoords)continue;
-                        // Build eliminations: other cells along the "vary" axis lines through
-                        // these coordinates, excluding the 4 defining cells.
+
                         const defCells=[...A.spots,...B.spots];
+                        const sliceVal=sameF1?A.f1:A.f2;
+                        const rowVals=[sameF1?A.f2:A.f1, sameF1?B.f2:B.f1];
+
+                        // Classic X-Wing elimination: within the fixed 2D slice, for each of
+                        // the 2 varying-axis positions, remove val from every other rowAxis
+                        // position (excluding the 2 defining rows themselves).
                         const elims=[];
-                        for(const coordVal of A.spots.map(varyCoord)){
-                            // the perpendicular line: fix the vary-coordinate, vary along one of the two fixed axes
-                            // that matches how A/B differ (the axis that differs between A.line and B.line's fixed coords)
-                            const fixedAxis1=axisGroups[axis].fixed[0],fixedAxis2=axisGroups[axis].fixed[1];
-                            // find the coordinate of A.line and B.line for fixedAxis1/2
-                            const getFixed=(line,ax)=>ax==='x'?line.cells[0].x:ax==='y'?line.cells[0].y:line.cells[0].z;
-                            // perpendicular line varies along fixedAxis1 or fixedAxis2 depending which one changed
-                            for(const ax of[fixedAxis1,fixedAxis2]){
-                                const cellsOnLine=[];
-                                for(let k=0;k<S;k++){
-                                    const c={x:axis==='x'?coordVal:(ax==='x'?k:getFixed(A.line,'x')),
-                                              y:axis==='y'?coordVal:(ax==='y'?k:getFixed(A.line,'y')),
-                                              z:axis==='z'?coordVal:(ax==='z'?k:getFixed(A.line,'z'))};
-                                    cellsOnLine.push(c);
-                                }
-                                for(const c of cellsOnLine){
-                                    if(defCells.some(d=>sameCell(d,c)))continue;
-                                    const pos=g[c.z][c.y][c.x];
-                                    if(pos&&pos.includes(val))elims.push({cell:c,values:[val]});
-                                }
+                        for(const varyVal of A.spots.map(varyCoord)){
+                            for(let rv=0;rv<S;rv++){
+                                if(rowVals.includes(rv))continue;
+                                const coords={};
+                                coords[varyAxis]=varyVal;
+                                coords[sliceAxis]=sliceVal;
+                                coords[rowAxis]=rv;
+                                const c={x:coords.x,y:coords.y,z:coords.z};
+                                if(b[c.z][c.y][c.x]!==0)continue;
+                                const marked=getCand(c.x,c.y,c.z);
+                                if(marked.includes(val))elims.push({cell:c,values:[val]});
                             }
                         }
                         const uniqueElims=[];
@@ -586,7 +587,7 @@
                         if(uniqueElims.length>0){
                             const allCells=[...A.spots,...B.spots];
                             return{cells:allCells,values:[val],elims:uniqueElims,dim:is3D(allCells)?'3D':'2D',
-                                   axis,lineA:A.spots,lineB:B.spots};
+                                   axis:varyAxis,lineA:A.spots,lineB:B.spots};
                         }
                     }
                 }
@@ -594,22 +595,15 @@
             return null;
         }
 
-        // Simple coloring (single-digit chains of strong links): build a graph of
-        // "strong link" cell-pairs for one value (the only 2 candidates for that value
-        // in a line), 2-color the chain, and if two same-colored cells see each other,
-        // that color is false -> eliminate the value from all cells of that color.
-        // This subsumes many X-chain cases for a single value on this board.
         function findColoring(){
             const g=candGrid();
             for(const val of V){
-                // collect strong links: pairs of cells that are the ONLY 2 candidates
-                // for val within some line
-                const linksMap=new Map(); // key -> Set of neighbor keys
+                const linksMap=new Map();
                 const allCandCells=[];
                 for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++){
                     if(g[z][y][x]&&g[z][y][x].includes(val))allCandCells.push({x,y,z});
                 }
-                if(allCandCells.length<4)continue; // too small to matter
+                if(allCandCells.length<4)continue;
                 for(const line of allLines()){
                     const spots=line.cells.filter(c=>g[c.z][c.y][c.x]&&g[c.z][c.y][c.x].includes(val));
                     if(spots.length===2){
@@ -625,7 +619,6 @@
                 const visited=new Set();
                 for(const startKey of linksMap.keys()){
                     if(visited.has(startKey))continue;
-                    // BFS 2-coloring of this connected component
                     const queue=[[startKey,0]];
                     visited.add(startKey);colorOf.set(startKey,0);
                     const component=[startKey];
@@ -639,7 +632,6 @@
                         }
                     }
                     if(component.length<4)continue;
-                    // Check: do two same-colored cells "see" each other (share a line)?
                     for(let c0=0;c0<2;c0++){
                         const groupKeys=component.filter(k=>colorOf.get(k)===c0);
                         if(groupKeys.length<2)continue;
@@ -648,9 +640,12 @@
                             const A=groupCells[i],Bc=groupCells[j];
                             const related=getRelated(A.x,A.y,A.z).some(([rx,ry,rz])=>rx===Bc.x&&ry===Bc.y&&rz===Bc.z);
                             if(related){
-                                // this color is contradictory -> eliminate val from every cell of this color
-                                const elims=groupCells.map(c=>({cell:c,values:[val]}));
-                                return{cells:groupCells,values:[val],elims,dim:is3D(groupCells)?'3D':'2D',contradiction:[A,Bc]};
+                                const elims=groupCells
+                                    .filter(c=>getCand(c.x,c.y,c.z).includes(val))
+                                    .map(c=>({cell:c,values:[val]}));
+                                if(elims.length>0){
+                                    return{cells:groupCells,values:[val],elims,dim:is3D(groupCells)?'3D':'2D',contradiction:[A,Bc]};
+                                }
                             }
                         }
                     }
@@ -684,16 +679,47 @@
             return changed;
         }
 
+        function showApplyButton(show){
+            const btn=document.getElementById('applyHintBtn');
+            btn.classList.toggle('show',!!show);
+        }
+
+        function applyPendingHint(){
+            if(!pendingHint||won)return;
+            const hintDisp=document.getElementById('hintDisplay');
+            if(pendingHint.place){
+                const{x,y,z,value}=pendingHint.place;
+                b[z][y][x]=value;
+                clearCand(x,y,z);
+                autoRemove(x,y,z,value);
+                hints++;
+                sel={x,y,z};
+                hintDisp.textContent=`✅ Placed ${value} at (${x+1},${y+1},${z+1})`;
+            }else if(pendingHint.elims){
+                applyElims(pendingHint.elims);
+                hints++;
+                const elimCoords=pendingHint.elims.map(e=>`(${e.cell.x+1},${e.cell.y+1},${e.cell.z+1})`).join(', ');
+                hintDisp.textContent=`✅ Removed candidate${pendingHint.elims.length>1?'s':''} from ${elimCoords}`;
+            }
+            pendingHint=null;
+            showApplyButton(false);
+            updateBoard();
+        }
+
         function smartHint(){
             if(won)return;
             const hintDisp=document.getElementById('hintDisplay');
+            pendingHint=null;
+            showApplyButton(false);
 
             // 1. Naked single
             const naked=findNaked();
             if(naked.length>0){
                 const hint=naked[0];
                 hintDisp.textContent=`💡 Naked single (${hint.dim}): cell (${hint.x+1},${hint.y+1},${hint.z+1}) can only be ${hint.value}`;
-                highlight(hint.cells);
+                highlightHint({place:hint.cells,elimCells:[]});
+                pendingHint={place:{x:hint.x,y:hint.y,z:hint.z,value:hint.value}};
+                showApplyButton(true);
                 return;
             }
 
@@ -701,79 +727,71 @@
             const hidden=findHiddenSingle();
             if(hidden){
                 hintDisp.textContent=`💡 Hidden single (${hidden.dim}): ${hidden.value} can only go in cell (${hidden.x+1},${hidden.y+1},${hidden.z+1})`;
-                highlight(hidden.cells);
+                highlightHint({place:hidden.cells,elimCells:[]});
+                pendingHint={place:{x:hidden.x,y:hidden.y,z:hidden.z,value:hidden.value}};
+                showApplyButton(true);
                 return;
             }
 
-            // 3. Naked pair — reveals eliminations but doesn't place a value
+            // 3. Naked pair
             const nPair=findNakedPair();
             if(nPair){
-                const changed=applyElims(nPair.elims);
                 const coords=nPair.cells.map(c=>`(${c.x+1},${c.y+1},${c.z+1})`).join(' & ');
                 const elimCoords=[...new Set(nPair.elims.map(e=>`(${e.cell.x+1},${e.cell.y+1},${e.cell.z+1})`))].join(', ');
-                hintDisp.textContent=changed
-                    ? `💡 Naked pair (${nPair.dim}): {${nPair.values.join(',')}} locked in ${coords} — removed from ${elimCoords}`
-                    : `💡 Naked pair (${nPair.dim}): {${nPair.values.join(',')}} locked in ${coords} — neither value can appear at ${elimCoords}`;
-                highlight(nPair.cells);
-                updateBoard();
+                hintDisp.textContent=`💡 Naked pair (${nPair.dim}): {${nPair.values.join(',')}} locked in ${coords} — can be removed from ${elimCoords}`;
+                highlightHint({place:nPair.cells,elimCells:nPair.elims.map(e=>e.cell)});
+                pendingHint={elims:nPair.elims};
+                showApplyButton(true);
                 return;
             }
 
             // 4. Hidden pair
             const hPair=findHiddenPair();
             if(hPair){
-                const changed=applyElims(hPair.elims);
                 const coords=hPair.cells.map(c=>`(${c.x+1},${c.y+1},${c.z+1})`).join(' & ');
-                hintDisp.textContent=changed
-                    ? `💡 Hidden pair (${hPair.dim}): {${hPair.values.join(',')}} confined to ${coords} — every other candidate removed from those cells`
-                    : `💡 Hidden pair (${hPair.dim}): {${hPair.values.join(',')}} confined to ${coords} — these cells must be {${hPair.values.join(',')}} in some order`;
-                highlight(hPair.cells);
-                updateBoard();
+                hintDisp.textContent=`💡 Hidden pair (${hPair.dim}): {${hPair.values.join(',')}} confined to ${coords} — other candidates can be cleared there`;
+                highlightHint({place:hPair.cells,elimCells:hPair.elims.map(e=>e.cell)});
+                pendingHint={elims:hPair.elims};
+                showApplyButton(true);
                 return;
             }
 
             // 5. X-Wing
             const xwing=findXWing();
             if(xwing){
-                const changed=applyElims(xwing.elims);
                 const axisName={x:'x-axis',y:'y-axis',z:'layer (z-axis)'}[xwing.axis];
                 const corners=[...xwing.lineA,...xwing.lineB].map(c=>`(${c.x+1},${c.y+1},${c.z+1})`).join(', ');
                 const elimCoords=xwing.elims.map(e=>`(${e.cell.x+1},${e.cell.y+1},${e.cell.z+1})`).join(', ');
-                hintDisp.textContent=changed
-                    ? `💡 X-Wing (${xwing.dim}): ${xwing.values[0]} forms a rectangle at ${corners} (varying along ${axisName}) — removed ${xwing.values[0]} from ${elimCoords}`
-                    : `💡 X-Wing (${xwing.dim}): ${xwing.values[0]} forms a rectangle at ${corners} (varying along ${axisName}) — it can be eliminated from ${elimCoords}`;
-                highlight([...xwing.cells,...xwing.elims.map(e=>e.cell)]);
-                updateBoard();
+                hintDisp.textContent=`💡 X-Wing (${xwing.dim}): ${xwing.values[0]} forms a rectangle at ${corners} (along ${axisName}) — can be removed from ${elimCoords}`;
+                highlightHint({place:xwing.cells,elimCells:xwing.elims.map(e=>e.cell)});
+                pendingHint={elims:xwing.elims};
+                showApplyButton(true);
                 return;
             }
 
-            // 6. Simple coloring (covers many single-digit chain/X-chain cases)
+            // 6. Simple coloring
             const coloring=findColoring();
             if(coloring){
-                const changed=applyElims(coloring.elims);
                 const contradictionCoords=coloring.contradiction.map(c=>`(${c.x+1},${c.y+1},${c.z+1})`).join(' & ');
                 const elimCoords=coloring.elims.map(e=>`(${e.cell.x+1},${e.cell.y+1},${e.cell.z+1})`).join(', ');
-                hintDisp.textContent=changed
-                    ? `💡 Coloring (${coloring.dim}): ${coloring.values[0]}'s chain contradicts itself at ${contradictionCoords} — removed ${coloring.values[0]} from ${elimCoords}`
-                    : `💡 Coloring (${coloring.dim}): ${coloring.values[0]}'s chain contradicts itself at ${contradictionCoords} — so ${coloring.values[0]} can't be in ${elimCoords}`;
-                highlight(coloring.cells);
-                updateBoard();
+                hintDisp.textContent=`💡 Coloring (${coloring.dim}): ${coloring.values[0]}'s chain contradicts itself at ${contradictionCoords} — can be removed from ${elimCoords}`;
+                highlightHint({place:coloring.cells,elimCells:coloring.elims.map(e=>e.cell)});
+                pendingHint={elims:coloring.elims};
+                showApplyButton(true);
                 return;
             }
 
-            // 7. Nudge toward the most constrained cell (lowest candidate count) without solving it
+            // 7. No logical technique found anything further. Rather than just pointing
+            // at a cell and leaving the player stuck, offer to reveal the most-constrained
+            // empty cell (fewest candidates = the safest, least "spoiler-y" reveal) so they
+            // can keep going. This is the "last resort" branch — filling one cell in.
             const constrained=findLeastCandidateCell();
-            if(constrained){
-                const pos=getPossible(constrained.x,constrained.y,constrained.z);
-                hintDisp.textContent=`💡 Try cell (${constrained.x+1},${constrained.y+1},${constrained.z+1}) — only ${pos.length} candidates left: ${pos.join(', ')}`;
-                highlight([constrained]);
-                return;
-            }
-
-            // 8. Last resort: reveal the selected empty cell, or any empty cell
             let target=null;
-            if(sel&&b[sel.z][sel.y][sel.x]===0)target=sel;
-            else{
+            if(constrained){
+                target=constrained;
+            }else if(sel&&b[sel.z][sel.y][sel.x]===0){
+                target=sel;
+            }else{
                 outer:
                 for(let z=0;z<S;z++)for(let y=0;y<S;y++)for(let x=0;x<S;x++){
                     if(b[z][y][x]===0){target={x,y,z};break outer;}
@@ -781,16 +799,25 @@
             }
             if(target){
                 const{x,y,z}=target;
-                b[z][y][x]=sol[z][y][x];
-                clearCand(x,y,z);
-                autoRemove(x,y,z,sol[z][y][x]);
-                hints++;
-                sel=target;
-                hintDisp.textContent=`💡 Placed ${sol[z][y][x]} at (${x+1},${y+1},${z+1})`;
-                updateBoard();
+                const pos=getPossible(x,y,z);
+                hintDisp.textContent=`💡 No pure-logic step found — cell (${x+1},${y+1},${z+1}) is the most constrained (${pos.length} candidate${pos.length===1?'':'s'}: ${pos.join(', ')}). I can fill it in for you:`;
+                highlightHint({place:[target],elimCells:[]});
+                pendingHint={place:{x,y,z,value:sol[z][y][x]}};
+                showApplyButton(true);
                 return;
             }
             hintDisp.textContent='🎉 Nothing left to hint — the puzzle is complete!';
+        }
+        function highlightHint({place,elimCells}){
+            document.querySelectorAll('.cell').forEach(c=>c.classList.remove('conflict','hint-target','hint-elim'));
+            (place||[]).forEach(({x,y,z})=>{
+                const cell=document.querySelector(`[data-x="${x}"][data-y="${y}"][data-z="${z}"]`);
+                if(cell)cell.classList.add('hint-target');
+            });
+            (elimCells||[]).forEach(({x,y,z})=>{
+                const cell=document.querySelector(`[data-x="${x}"][data-y="${y}"][data-z="${z}"]`);
+                if(cell)cell.classList.add('hint-elim');
+            });
         }
         function checkMistakes(){
             if(won)return;
@@ -849,14 +876,6 @@
                 btn.textContent='🗂️ All Layers';btn.classList.remove('active');
             }
         }
-        function highlight(cells){
-            document.querySelectorAll('.cell').forEach(c=>c.classList.remove('conflict'));
-            cells.forEach(({x,y,z})=>{
-                const cell=document.querySelector(`[data-x="${x}"][data-y="${y}"][data-z="${z}"]`);
-                if(cell)cell.classList.add('conflict');
-            });
-            setTimeout(()=>document.querySelectorAll('.cell').forEach(c=>c.classList.remove('conflict')),2000);
-        }
         function createBoard(){
             const cont=document.getElementById('board-container');
             cont.innerHTML='';
@@ -893,16 +912,13 @@
             if(pagedView)renderMobileLayer();
         }
         function updateBoard(){
-            // Clear previous highlights and related highlights
             document.querySelectorAll('.cell').forEach(c => {
                 c.classList.remove('related', 'highlighted-value');
             });
 
-            // Update cell content and base states
             const cells=document.querySelectorAll('.cell');
             cells.forEach(cell=>{
                 const x=+cell.dataset.x,y=+cell.dataset.y,z=+cell.dataset.z,val=b[z][y][x];
-                // Reset class and content
                 cell.className='cell';
                 cell.innerHTML='';
                 if(val!==0){
@@ -914,13 +930,11 @@
                 }
             });
 
-            // Apply selection-based states (related, selected, candidate-mode)
             if(sel){
                 const{x,y,z}=sel;
-                const selectedVal = b[z][y][x]; // Get the value of the selected cell
+                const selectedVal = b[z][y][x];
                 const selectedCell = document.querySelector(`[data-x="${x}"][data-y="${y}"][data-z="${z}"]`);
 
-                // Highlight cells with the same value as the selected cell
                 if(selectedVal !== 0) {
                     document.querySelectorAll('.cell').forEach(cell => {
                         const cx = +cell.dataset.x, cy = +cell.dataset.y, cz = +cell.dataset.z;
@@ -930,16 +944,13 @@
                     });
                 }
 
-                // Apply selected/candidate-mode classes to the selected cell itself
                 if(selectedCell) {
                      selectedCell.classList.add(candMode && selectedVal === 0 ? 'candidate-mode' : 'selected');
                 }
 
-                // Highlight related cells if in number mode or selected cell is empty
                  if(!candMode || selectedVal === 0){
                     getRelated(x,y,z).forEach(([rx,ry,rz])=>{
                         const rc=document.querySelector(`[data-x="${rx}"][data-y="${ry}"][data-z="${rz}"]`);
-                        // Only add 'related' if it's not already highlighted by value
                         if(rc && !rc.classList.contains('highlighted-value')) {
                              rc.classList.add('related');
                         }
@@ -952,6 +963,8 @@
         function selectCell(x,y,z){
             sel={x,y,z};
             document.getElementById('hintDisplay').textContent='';
+            pendingHint=null;
+            showApplyButton(false);
             updateBoard();
         }
         function toggleCandidateMode(){
@@ -970,6 +983,8 @@
             if(!sel||won)return;
             const{x,y,z}=sel;
             document.getElementById('hintDisplay').textContent='';
+            pendingHint=null;
+            showApplyButton(false);
             if(num===0){
                 b[z][y][x]=0;clearCand(x,y,z);
             }else if(candMode){
@@ -986,7 +1001,9 @@
             const clues=+document.getElementById('clues').value;
             const{puzzle,solution}=genPuzzle(clues);
             b=puzzle;sol=solution;cand={};sel=null;hints=0;won=false;
+            pendingHint=null;
             document.getElementById('hintDisplay').textContent='';
+            showApplyButton(false);
             startTimer();updateBoard();
         }
         function resetGame(){
@@ -995,7 +1012,9 @@
                     b[z][y][x]=0;clearCand(x,y,z);
                 }
             }
-            sel=null;document.getElementById('hintDisplay').textContent='';updateBoard();
+            sel=null;document.getElementById('hintDisplay').textContent='';
+            pendingHint=null;showApplyButton(false);
+            updateBoard();
         }
         function startTimer(){
             start=Date.now();clearInterval(timer);
@@ -1069,6 +1088,7 @@
             else if(e.key==='Delete'||e.key==='Backspace')selectNumber(0);
             else if(e.key===' '){e.preventDefault();toggleCandidateMode();}
             else if(e.key.toLowerCase()==='h')smartHint();
+            else if(e.key.toLowerCase()==='a')applyPendingHint();
         });
         document.getElementById('clues').addEventListener('input',function(){
             document.getElementById('clues-value').textContent=this.value;
@@ -1083,7 +1103,6 @@
         window.addEventListener('load',()=>{
             createBoard();initDrag();newGame();
         });
-        // Not wired to any button — console-only easter egg.
         window.summonBananaWizard=function(){
             if(won)return'Puzzle already solved, wizard is on vacation.';
             let filled=0;
