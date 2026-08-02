@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Calendar</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  #cal-root {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .cal-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    flex: 0 0 auto;
+    padding: 4px 0;
+  }
+  .cal-grid {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: auto repeat(6, 1fr);
+    gap: 1px;
+  }
+  .cal-dow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    opacity: 0.7;
+  }
+  .cal-day {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 3px 5px;
+    box-sizing: border-box;
+    border-radius: 3px;
+  }
+  .cal-day.empty { visibility: hidden; }
+  .cal-day.today {
+    font-weight: 700;
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+  }
+  .cal-day.weekend { opacity: 0.6; }
+</style>
+</head>
+<body>
+<div id="cal-root"></div>
+<script>
+function qp(name, def) {
+  const v = new URLSearchParams(window.location.search).get(name);
+  return v === null ? def : v;
+}
+
+const now = new Date();
+const year = parseInt(qp('y', now.getFullYear()), 10);
+const month = parseInt(qp('m', now.getMonth() + 1), 10) - 1; // 1-indexed input
+const width = qp('w', null);
+const height = qp('h', null);
+
+const bg = '#' + qp('bg', 'ffffff').replace('#','');
+const fg = '#' + qp('fg', '222222').replace('#','');
+const accent = '#' + qp('accent', '3b82f6').replace('#','');
+const fontSize = qp('fs', null); // optional font-size override, e.g. 14px
+const showHeader = qp('header', '1') !== '0';
+const startMonday = qp('mon', '0') === '1'; // week starts Monday if =1
+const locale = qp('locale', 'en-US');
+
+if (width) {
+  document.body.style.width = /\d$/.test(width) ? width + 'px' : width;
+}
+if (height) {
+  document.body.style.height = /\d$/.test(height) ? height + 'px' : height;
+}
+
+document.body.style.background = bg;
+document.body.style.color = fg;
+if (fontSize) document.body.style.fontSize = /\d$/.test(fontSize) ? fontSize + 'px' : fontSize;
+
+const root = document.getElementById('cal-root');
+
+const monthNames = [];
+for (let i = 0; i < 12; i++) {
+  monthNames.push(new Date(2000, i, 1).toLocaleString(locale, { month: 'long' }));
+}
+
+let dowNames = [];
+for (let i = 0; i < 7; i++) {
+  dowNames.push(new Date(2000, 0, i + 2).toLocaleString(locale, { weekday: 'short' })); // Jan 2 2000 = Sunday
+}
+if (startMonday) {
+  dowNames = dowNames.slice(1).concat(dowNames[0]);
+}
+
+function build() {
+  root.innerHTML = '';
+
+  if (showHeader) {
+    const header = document.createElement('div');
+    header.className = 'cal-header';
+    header.textContent = monthNames[month] + ' ' + year;
+    root.appendChild(header);
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'cal-grid';
+
+  dowNames.forEach(function(d) {
+    const el = document.createElement('div');
+    el.className = 'cal-dow';
+    el.textContent = d;
+    grid.appendChild(el);
+  });
+
+  const firstOfMonth = new Date(year, month, 1);
+  let firstDow = firstOfMonth.getDay(); // 0=Sun
+  if (startMonday) {
+    firstDow = (firstDow + 6) % 7;
+  }
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  for (let i = 0; i < firstDow; i++) {
+    const el = document.createElement('div');
+    el.className = 'cal-day empty';
+    grid.appendChild(el);
+  }
+
+  const today = new Date();
+  for (let day = 1; day <= daysInMonth; day++) {
+    const el = document.createElement('div');
+    const dow = new Date(year, month, day).getDay();
+    const isWeekend = (dow === 0 || dow === 6);
+    el.className = 'cal-day' + (isWeekend ? ' weekend' : '');
+    if (year === today.getFullYear() && month === today.getMonth() && day === today.getDate()) {
+      el.classList.add('today');
+      el.style.color = accent;
+    }
+    el.textContent = day;
+    grid.appendChild(el);
+  }
+
+  const totalCells = firstDow + daysInMonth;
+  const remaining = (7 - (totalCells % 7)) % 7;
+  for (let i = 0; i < remaining; i++) {
+    const el = document.createElement('div');
+    el.className = 'cal-day empty';
+    grid.appendChild(el);
+  }
+
+  root.appendChild(grid);
+}
+
+build();
+</script>
+</body>
+</html>
