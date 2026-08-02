@@ -3263,30 +3263,170 @@
                 return null;
             },
 
-            // Finds one safe cell to reveal as a hint, given the player's current
-            // revealed/flagged state. Runs the same verified trivial+group-brute-
-            // force logic on a *copy* of the state so it never mutates the real
-            // board; if nothing is currently forceable, returns null (a genuinely
-            // ambiguous position shouldn't happen on a no-guess board unless the
-            // player has flagged something incorrectly).
+            // Finds ONE forced move and explains the reasoning behind it, given the
+            // player's current revealed/flagged state. Unlike running solve() to
+            // completion and diffing the result (which can silently chain several
+            // deductions together before reporting anything), this stops at the
+            // FIRST single deduction it finds and returns which numbered cell(s)
+            // justify it — so the hint teaches the technique, not just the answer.
+            // Tries techniques in order of simplicity: a trivial deduction from one
+            // numbered cell first, then group brute-force over a frontier cluster
+            // only if no trivial move exists. Operates on copies; never mutates the
+            // real board.
             findHint(grid, rows, cols, revealedSet, flaggedSet) {
                 const revealed = new Set(revealedSet);
                 const knownMines = new Set(flaggedSet);
-                const beforeRevealed = new Set(revealed);
-                this.solve(grid, rows, cols, revealed, knownMines, this.MAX_GROUP_SIZE);
 
-                for (const key of revealed) {
-                    if (!beforeRevealed.has(key)) {
-                        const [r, c] = key.split(',').map(Number);
-                        return { type: 'reveal', r, c };
+                // --- 1. Trivial deduction: scan revealed numbered cells for one
+                // whose count is fully satisfied (rest are safe) or fully exhausted
+                // (rest are mines). Return on the FIRST one found, with that single
+                // clue cell as the explanation.
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const key = r + ',' + c;
+                        if (!revealed.has(key)) continue;
+                        const val = grid[r][c];
+                        if (val <= 0) continue;
+
+                        const nbrs = this.neighbors(r, c, rows, cols);
+                        const unknownNbrs = [];
+                        let flaggedCount = 0;
+                        for (const [nr, nc] of nbrs) {
+                            const nk = nr + ',' + nc;
+                            if (knownMines.has(nk)) flaggedCount++;
+                            else if (!revealed.has(nk)) unknownNbrs.push([nr, nc]);
+                        }
+                        if (unknownNbrs.length === 0) continue;
+
+                        if (flaggedCount === val) {
+                            const [tr, tc] = unknownNbrs[0];
+                            return {
+                                type: 'reveal', r: tr, c: tc,
+                                technique: 'trivial-satisfied',
+                                clueCells: [[r, c]],
+                                explanation: `The ${val} at (row ${r + 1}, col ${c + 1}) already has all ${val} of its mines accounted for by flagged neighbors, so every other unrevealed neighbor is safe.`
+                            };
+                        }
+                        if (flaggedCount + unknownNbrs.length === val) {
+                            const [tr, tc] = unknownNbrs[0];
+                            return {
+                                type: 'flag', r: tr, c: tc,
+                                technique: 'trivial-exhausted',
+                                clueCells: [[r, c]],
+                                explanation: `The ${val} at (row ${r + 1}, col ${c + 1}) has exactly ${val - flaggedCount} unrevealed neighbor(s) left and still needs ${val - flaggedCount} more mine(s) — so all of them must be mines.`
+                            };
+                        }
                     }
                 }
-                for (const key of knownMines) {
-                    if (!flaggedSet.has(key)) {
-                        const [r, c] = key.split(',').map(Number);
-                        return { type: 'flag', r, c };
+
+                // --- 2. Group brute-force: same frontier-component logic as solve(),
+                // but stop and report as soon as one component yields a forced cell,
+                // and remember which constraint cells (numbered clues) bordered that
+                // component so the explanation can point at them.
+                const frontierSet = new Set();
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const key = r + ',' + c;
+                        if (!revealed.has(key) || grid[r][c] <= 0) continue;
+                        for (const [nr, nc] of this.neighbors(r, c, rows, cols)) {
+                            const nk = nr + ',' + nc;
+                            if (!revealed.has(nk) && !knownMines.has(nk)) frontierSet.add(nk);
+                        }
                     }
                 }
+                if (frontierSet.size === 0) return null;
+
+                const frontierCells = Array.from(frontierSet).map(k => k.split(',').map(Number));
+                const cellIndex = new Map();
+                frontierCells.forEach((cell, i) => cellIndex.set(cell[0] + ',' + cell[1], i));
+
+                const adj = frontierCells.map(() => new Set());
+                const constraints = []; // { members, required, sourceR, sourceC }
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const key = r + ',' + c;
+                        if (!revealed.has(key) || grid[r][c] <= 0) continue;
+                        const val = grid[r][c];
+                        let flaggedCount = 0;
+                        const memberIdx = [];
+                        for (const [nr, nc] of this.neighbors(r, c, rows, cols)) {
+                            const nk = nr + ',' + nc;
+                            if (knownMines.has(nk)) flaggedCount++;
+                            else if (cellIndex.has(nk)) memberIdx.push(cellIndex.get(nk));
+                        }
+                        if (memberIdx.length === 0) continue;
+                        constraints.push({ members: memberIdx, required: val - flaggedCount, sourceR: r, sourceC: c });
+                        for (let i = 0; i < memberIdx.length; i++) {
+                            for (let j = i + 1; j < memberIdx.length; j++) {
+                                adj[memberIdx[i]].add(memberIdx[j]);
+                                adj[memberIdx[j]].add(memberIdx[i]);
+                            }
+                        }
+                    }
+                }
+
+                const visited = new Array(frontierCells.length).fill(false);
+                const components = [];
+                for (let i = 0; i < frontierCells.length; i++) {
+                    if (visited[i]) continue;
+                    const comp = [];
+                    const stack = [i];
+                    visited[i] = true;
+                    while (stack.length) {
+                        const cur = stack.pop();
+                        comp.push(cur);
+                        for (const nb of adj[cur]) if (!visited[nb]) { visited[nb] = true; stack.push(nb); }
+                    }
+                    components.push(comp);
+                }
+
+                for (const comp of components) {
+                    if (comp.length > this.MAX_GROUP_SIZE) continue;
+                    const relevantConstraints = constraints.filter(cst => cst.members.some(m => comp.includes(m)));
+                    const n = comp.length;
+                    const totalAssignments = 1 << n;
+                    let anyValid = false;
+                    const cellIsMineInAllValid = new Array(n).fill(true);
+                    const cellIsSafeInAllValid = new Array(n).fill(true);
+
+                    for (let mask = 0; mask < totalAssignments; mask++) {
+                        let valid = true;
+                        for (const cst of relevantConstraints) {
+                            let sum = 0, unaccounted = 0;
+                            for (const m of cst.members) {
+                                const localIdx = comp.indexOf(m);
+                                if (localIdx === -1) { unaccounted++; continue; }
+                                if (mask & (1 << localIdx)) sum++;
+                            }
+                            if (unaccounted === 0 && sum !== cst.required) { valid = false; break; }
+                            if (unaccounted > 0 && sum > cst.required) { valid = false; break; }
+                        }
+                        if (!valid) continue;
+                        anyValid = true;
+                        for (let i = 0; i < n; i++) {
+                            const isMine = !!(mask & (1 << i));
+                            if (isMine) cellIsSafeInAllValid[i] = false;
+                            else cellIsMineInAllValid[i] = false;
+                        }
+                    }
+                    if (!anyValid) continue;
+
+                    for (let i = 0; i < n; i++) {
+                        if (cellIsSafeInAllValid[i] || cellIsMineInAllValid[i]) {
+                            const [tr, tc] = frontierCells[comp[i]];
+                            const clueCells = relevantConstraints.map(cst => [cst.sourceR, cst.sourceC]);
+                            const clueList = clueCells.map(([cr, cc]) => `(row ${cr + 1}, col ${cc + 1})`).join(', ');
+                            return {
+                                type: cellIsSafeInAllValid[i] ? 'reveal' : 'flag',
+                                r: tr, c: tc,
+                                technique: 'group-deduction',
+                                clueCells,
+                                explanation: `Checking every possible mine arrangement consistent with the numbers at ${clueList}, this cell is ${cellIsSafeInAllValid[i] ? 'safe' : 'a mine'} in every valid arrangement — no single clue alone proves it, but the combination does.`
+                            };
+                        }
+                    }
+                }
+
                 return null;
             }
         };
@@ -3310,6 +3450,7 @@
                 this.revealed = new Set();
                 this.flagged = new Set();
                 this.mineSet = new Set();
+                this.hintHighlight = null;
                 this.grid = [];
                 const params = MinesweeperSolver.DIFFICULTY_PARAMS[difficulty] || MinesweeperSolver.DIFFICULTY_PARAMS.medium;
                 this.rows = params.rows;
@@ -3394,6 +3535,8 @@
                 this.renderGrid();
             },
 
+            hintHighlight: null, // { targetKey, clueKeys: Set, type: 'reveal'|'flag' }
+
             renderGrid() {
                 const gridEl = document.getElementById('minesweeper-grid');
                 if (!gridEl) return;
@@ -3413,7 +3556,7 @@
                         const val = this.grid[r][c];
 
                         let content = '';
-                        let cls = 'flex items-center justify-center select-none font-bold rounded-[3px] transition-colors ';
+                        let cls = 'flex items-center justify-center select-none font-bold rounded-[3px] transition-colors relative ';
                         if (isRevealed) {
                             cls += 'bg-slate-900/80 ';
                             if (val === -1) {
@@ -3428,6 +3571,16 @@
                             cls += 'bg-slate-700 hover:bg-slate-600 cursor-pointer ';
                         } else {
                             cls += 'bg-slate-700 hover:bg-slate-600 active:bg-slate-500 cursor-pointer ';
+                        }
+
+                        if (this.hintHighlight) {
+                            if (key === this.hintHighlight.targetKey) {
+                                cls += this.hintHighlight.type === 'reveal'
+                                    ? 'ring-2 ring-emerald-400 ring-offset-1 ring-offset-slate-900 z-10 '
+                                    : 'ring-2 ring-red-400 ring-offset-1 ring-offset-slate-900 z-10 ';
+                            } else if (this.hintHighlight.clueKeys.has(key)) {
+                                cls += 'ring-2 ring-amber-400 ring-offset-1 ring-offset-slate-900 z-10 ';
+                            }
                         }
 
                         html += `<div
@@ -3499,8 +3652,6 @@
             onCellClick(event, r, c) {
                 if (this.gameOver) return;
                 if (this._longPressFired) {
-                    // Guard against the synthetic click some browsers still fire
-                    // after preventDefault on touchend.
                     this._longPressFired = false;
                     return;
                 }
@@ -3517,6 +3668,7 @@
             toggleFlag(r, c) {
                 const key = r + ',' + c;
                 if (this.revealed.has(key)) return;
+                this.hintHighlight = null;
                 AudioEngine.playClick();
                 if (this.flagged.has(key)) this.flagged.delete(key);
                 else this.flagged.add(key);
@@ -3524,6 +3676,7 @@
             },
 
             reveal(r, c) {
+                this.hintHighlight = null;
                 const key = r + ',' + c;
                 if (this.revealed.has(key) || this.flagged.has(key)) return;
 
@@ -3570,6 +3723,7 @@
                 const panel = document.getElementById('minesweeper-hint-panel');
                 const textEl = document.getElementById('minesweeper-hint-text');
                 if (!hint) {
+                    this.hintHighlight = null;
                     if (panel && textEl) {
                         textEl.innerText = "No forced move found right now — every remaining cell may need a flag double-check, or you're at the edge of what's currently deducible.";
                         panel.classList.remove('hidden');
@@ -3580,18 +3734,28 @@
                 const hintsEl = document.getElementById('minesweeper-hints-count');
                 if (hintsEl) hintsEl.innerText = App.hintsUsed;
 
+                const targetKey = hint.r + ',' + hint.c;
+                const clueKeys = new Set(hint.clueCells.map(([cr, cc]) => cr + ',' + cc));
+                this.hintHighlight = { targetKey, clueKeys, type: hint.type };
+
                 if (hint.type === 'reveal') {
                     MinesweeperSolver.floodReveal(this.grid, this.rows, this.cols, hint.r, hint.c, this.revealed);
-                    if (textEl) textEl.innerText = `Cell (row ${hint.r + 1}, col ${hint.c + 1}) is forced safe — revealed it for you.`;
                 } else {
-                    this.flagged.add(hint.r + ',' + hint.c);
-                    if (textEl) textEl.innerText = `Cell (row ${hint.r + 1}, col ${hint.c + 1}) is forced to be a mine — flagged it for you.`;
+                    this.flagged.add(targetKey);
+                }
+
+                if (textEl) {
+                    const techniqueLabel = hint.technique === 'trivial-satisfied' ? 'Satisfied count'
+                        : hint.technique === 'trivial-exhausted' ? 'Exhausted count'
+                        : 'Combined constraints';
+                    textEl.innerHTML = `<span class="font-bold text-amber-300">${techniqueLabel}:</span> ${hint.explanation}<br><span class="text-amber-400/70 text-[10px]">Amber ring = the clue(s) used · ${hint.type === 'reveal' ? 'green' : 'red'} ring = the cell it solved.</span>`;
                 }
                 if (panel) panel.classList.remove('hidden');
                 this.renderGrid();
                 this.checkWin();
             }
         };
+
 
 
         const MathdokuEngine = {
