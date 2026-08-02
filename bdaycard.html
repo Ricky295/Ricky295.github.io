@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bdaycard</title>
+<style>
+  @font-face {
+    font-family: 'Spectral';
+    src: local('Georgia');
+  }
+
+  :root {
+    --bg: #0b0e1a;
+    --bg-deep: #060811;
+    --text: #f0ede4;
+    --text-dim: #9098af;
+    --text-faint: #4a5068;
+    --accent: #e8b84b;
+    --accent-dim: #6b5a2c;
+    --line: #1e2338;
+    --line-bright: #2e3554;
+    --panel: #10142450;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+    overflow-x: hidden;
+  }
+
+  body {
+    background-image:
+      radial-gradient(1px 1px at 10% 20%, #ffffff30, transparent),
+      radial-gradient(1px 1px at 80% 10%, #ffffff20, transparent),
+      radial-gradient(2px 2px at 60% 70%, #ffffff25, transparent),
+      radial-gradient(1px 1px at 30% 80%, #ffffff20, transparent),
+      radial-gradient(1px 1px at 90% 60%, #ffffff15, transparent),
+      radial-gradient(1px 1px at 45% 40%, #ffffff20, transparent),
+      radial-gradient(1px 1px at 15% 55%, #ffffff15, transparent);
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+  }
+
+  .wrap {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8vh 5vw;
+    position: relative;
+  }
+
+  /* --- ORBIT / HERO --- */
+  .stage {
+    position: relative;
+    width: min(88vw, 560px);
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4rem;
+  }
+
+  .orbit-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+  }
+
+  .progress-ring {
+    position: absolute;
+    inset: 0;
+    transform: rotate(-90deg);
+  }
+  .progress-ring circle {
+    fill: none;
+    stroke-width: 1.5;
+  }
+  .progress-ring .track {
+    stroke: var(--line);
+  }
+  .progress-ring .fill {
+    stroke: var(--accent);
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.3s linear;
+    filter: drop-shadow(0 0 6px var(--accent-dim));
+  }
+
+  .core {
+    position: relative;
+    text-align: center;
+    z-index: 2;
+  }
+
+  .planet-label {
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    margin-bottom: 0.9rem;
+  }
+
+  .age-number {
+    font-family: 'Courier New', monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(2.6rem, 11vw, 4.6rem);
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .age-number .int {
+    color: var(--text);
+  }
+  .age-number .dot {
+    color: var(--text-faint);
+    margin: 0 0.02em;
+  }
+  .age-number .dec {
+    color: var(--accent);
+  }
+  .age-number .dec span.new {
+    display: inline-block;
+    animation: reveal 0.4s ease;
+  }
+  @keyframes reveal {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .years-caption {
+    margin-top: 1rem;
+    font-family: Georgia, serif;
+    font-style: italic;
+    color: var(--text-dim);
+    font-size: 0.95rem;
+  }
+
+  /* --- CONTROLS --- */
+  .panel {
+    width: min(92vw, 640px);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 2rem clamp(1.2rem, 4vw, 2.4rem);
+    backdrop-filter: blur(6px);
+  }
+
+  .panel h2 {
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-bottom: 1.4rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+  }
+  .panel h2::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+
+  .field {
+    margin-bottom: 1.4rem;
+  }
+  .field label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 0.5rem;
+    font-family: Georgia, serif;
+  }
+
+  .bday-grid {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr 1fr 1fr 1fr;
+    gap: 0.5rem;
+  }
+  .bday-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .bday-cell span {
+    font-size: 0.65rem;
+    color: var(--text-faint);
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  input[type="number"] {
+    width: 100%;
+    background: var(--bg-deep);
+    border: 1px solid var(--line-bright);
+    color: var(--text);
+    padding: 0.6rem 0.4rem;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.95rem;
+    text-align: center;
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"]:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .digit-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.8rem;
+  }
+  .digit-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-width: 110px;
+  }
+  .digit-cell span {
+    font-size: 0.65rem;
+    color: var(--text-faint);
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .digit-sep {
+    color: var(--text-faint);
+    padding-bottom: 0.6rem;
+    font-family: 'Courier New', monospace;
+  }
+
+  .planet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: 0.5rem;
+  }
+  .planet-btn {
+    background: var(--bg-deep);
+    border: 1px solid var(--line-bright);
+    color: var(--text-dim);
+    padding: 0.6rem 0.4rem;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: center;
+  }
+  .planet-btn:hover {
+    border-color: var(--accent-dim);
+    color: var(--text);
+  }
+  .planet-btn.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--bg-deep);
+    color: var(--accent);
+    background: #e8b84b1a;
+  }
+
+  .share-row {
+    display: flex;
+    gap: 0.6rem;
+    margin-top: 1.6rem;
+  }
+  .share-input {
+    flex: 1;
+    background: var(--bg-deep);
+    border: 1px solid var(--line-bright);
+    color: var(--text-faint);
+    padding: 0.6rem 0.8rem;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .copy-btn {
+    background: var(--accent);
+    color: var(--bg-deep);
+    border: none;
+    padding: 0.6rem 1.1rem;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    font-weight: bold;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: opacity 0.15s ease;
+  }
+  .copy-btn:hover { opacity: 0.85; }
+  .copy-btn:active { transform: translateY(1px); }
+
+  .foot {
+    margin-top: 2.4rem;
+    font-size: 0.72rem;
+    color: var(--text-faint);
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.08em;
+    text-align: center;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .age-number .dec span { animation: none; }
+    .progress-ring .fill { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="stage">
+    <svg class="progress-ring" viewBox="0 0 200 200">
+      <circle class="track" cx="100" cy="100" r="94"></circle>
+      <circle class="fill" id="progressFill" cx="100" cy="100" r="94" stroke-dasharray="591" stroke-dashoffset="591"></circle>
+    </svg>
+    <div class="orbit-ring"></div>
+    <div class="core">
+      <div class="planet-label" id="planetLabel">EARTH YEARS SINCE BIRTH</div>
+      <div class="age-number" id="ageNumber">0.00</div>
+      <div class="years-caption" id="caption">set your birthday below</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Origin</h2>
+    <div class="field">
+      <label>Your birthday</label>
+      <div class="bday-grid">
+        <div class="bday-cell"><input type="number" id="bYear" placeholder="YYYY" min="1900" max="2100" step="1"><span>year</span></div>
+        <div class="bday-cell"><input type="number" id="bMonth" placeholder="MM" min="1" max="12" step="1"><span>month</span></div>
+        <div class="bday-cell"><input type="number" id="bDay" placeholder="DD" min="1" max="31" step="1"><span>day</span></div>
+        <div class="bday-cell"><input type="number" id="bHour" placeholder="HH" min="0" max="23" step="1"><span>hour</span></div>
+        <div class="bday-cell"><input type="number" id="bMinute" placeholder="MM" min="0" max="59" step="1"><span>minute</span></div>
+      </div>
+    </div>
+
+    <h2>Orbit</h2>
+    <div class="field">
+      <div class="planet-grid" id="planetGrid"></div>
+    </div>
+
+    <h2>Precision</h2>
+    <div class="field">
+      <div class="digit-row">
+        <div class="digit-cell"><input type="number" id="digitMin" min="1" max="9" value="2" step="1"><span>min digits</span></div>
+        <div class="digit-sep">–</div>
+        <div class="digit-cell"><input type="number" id="digitMax" min="1" max="9" value="5" step="1"><span>max digits</span></div>
+      </div>
+    </div>
+
+    <h2>Share</h2>
+    <div class="field" style="margin-bottom:0;">
+      <div class="share-row">
+        <div class="share-input" id="shareUrl">—</div>
+        <button class="copy-btn" id="copyBtn">Copy</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">bdaycard — every second is a little older</div>
+
+</div>
+
+<script>
+  // Orbital periods in Earth days
+  const BODIES = {
+    mercury: { label: "Mercury", days: 87.9691 },
+    venus:   { label: "Venus",   days: 224.701 },
+    earth:   { label: "Earth",   days: 365.25636 },
+    moon:    { label: "Moon (synodic)", days: 29.53059 },
+    mars:    { label: "Mars",    days: 686.980 },
+    jupiter: { label: "Jupiter", days: 4332.589 },
+    saturn:  { label: "Saturn",  days: 10759.22 },
+    uranus:  { label: "Uranus",  days: 30688.5 },
+    neptune: { label: "Neptune", days: 60195.0 },
+    pluto:   { label: "Pluto",   days: 90560.0 }
+  };
+
+  const params = new URLSearchParams(window.location.search);
+  const grid = document.getElementById('planetGrid');
+  const bYear = document.getElementById('bYear');
+  const bMonth = document.getElementById('bMonth');
+  const bDay = document.getElementById('bDay');
+  const bHour = document.getElementById('bHour');
+  const bMinute = document.getElementById('bMinute');
+  const digitMin = document.getElementById('digitMin');
+  const digitMax = document.getElementById('digitMax');
+  const ageNumber = document.getElementById('ageNumber');
+  const planetLabel = document.getElementById('planetLabel');
+  const caption = document.getElementById('caption');
+  const shareUrl = document.getElementById('shareUrl');
+  const copyBtn = document.getElementById('copyBtn');
+  const progressFill = document.getElementById('progressFill');
+  const CIRC = 2 * Math.PI * 94;
+  let lastShowDigits = -1;
+
+  let state = {
+    bday: null,
+    planet: 'earth',
+    digitsMin: 2,
+    digitsMax: 5
+  };
+
+  // --- init from URL ---
+  const urlBday = params.get('bday');
+  const urlPlanet = params.get('planet');
+  const urlDigits = params.get('digits');
+
+  if (urlBday) {
+    const d = new Date(urlBday);
+    if (!isNaN(d)) state.bday = d;
+  }
+  if (urlPlanet && BODIES[urlPlanet.toLowerCase()]) {
+    state.planet = urlPlanet.toLowerCase();
+  }
+  if (urlDigits) {
+    const parts = urlDigits.split('..').map(n => parseInt(n, 10));
+    if (parts.length === 2 && parts.every(n => n >= 1 && n <= 9)) {
+      state.digitsMin = Math.min(...parts);
+      state.digitsMax = Math.max(...parts);
+    } else if (parts.length === 1 && !isNaN(parts[0])) {
+      state.digitsMin = state.digitsMax = parts[0];
+    }
+  }
+
+  if (state.bday) {
+    const d = state.bday;
+    bYear.value = d.getFullYear();
+    bMonth.value = d.getMonth() + 1;
+    bDay.value = d.getDate();
+    bHour.value = d.getHours();
+    bMinute.value = d.getMinutes();
+  }
+
+  digitMin.value = state.digitsMin;
+  digitMax.value = state.digitsMax;
+
+  // build planet buttons
+  Object.entries(BODIES).forEach(([key, body]) => {
+    const btn = document.createElement('button');
+    btn.className = 'planet-btn' + (key === state.planet ? ' active' : '');
+    btn.textContent = body.label.split(' ')[0];
+    btn.dataset.key = key;
+    btn.addEventListener('click', () => {
+      state.planet = key;
+      document.querySelectorAll('.planet-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      lastShowDigits = -1;
+      updateShareUrl();
+    });
+    grid.appendChild(btn);
+  });
+
+  function readBdayInputs() {
+    const y = parseInt(bYear.value, 10);
+    const mo = parseInt(bMonth.value, 10);
+    const da = parseInt(bDay.value, 10);
+    const h = parseInt(bHour.value, 10) || 0;
+    const mi = parseInt(bMinute.value, 10) || 0;
+    if (!y || !mo || !da) {
+      state.bday = null;
+      return;
+    }
+    const d = new Date(y, mo - 1, da, h, mi, 0, 0);
+    state.bday = isNaN(d) ? null : d;
+  }
+
+  [bYear, bMonth, bDay, bHour, bMinute].forEach(el => {
+    el.addEventListener('input', () => {
+      readBdayInputs();
+      updateShareUrl();
+    });
+  });
+
+  function readDigitInputs() {
+    let mn = parseInt(digitMin.value, 10);
+    let mx = parseInt(digitMax.value, 10);
+    if (isNaN(mn)) mn = 2;
+    if (isNaN(mx)) mx = 5;
+    mn = Math.max(1, Math.min(9, mn));
+    mx = Math.max(1, Math.min(9, mx));
+    if (mx < mn) mx = mn;
+    state.digitsMin = mn;
+    state.digitsMax = mx;
+  }
+
+  [digitMin, digitMax].forEach(el => {
+    el.addEventListener('input', () => {
+      readDigitInputs();
+      lastShowDigits = -1;
+      updateShareUrl();
+    });
+  });
+
+  function updateShareUrl() {
+    const p = new URLSearchParams();
+    if (state.bday && !isNaN(state.bday)) p.set('bday', state.bday.toISOString());
+    p.set('planet', state.planet);
+    p.set('digits', `${state.digitsMin}..${state.digitsMax}`);
+    const url = `${window.location.origin}${window.location.pathname}?${p.toString()}`;
+    shareUrl.textContent = url;
+    shareUrl.dataset.full = url;
+  }
+
+  copyBtn.addEventListener('click', async () => {
+    const url = shareUrl.dataset.full;
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      copyBtn.textContent = 'Copied';
+      setTimeout(() => copyBtn.textContent = 'Copy', 1400);
+    } catch (e) {
+      // fallback
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      copyBtn.textContent = 'Copied';
+      setTimeout(() => copyBtn.textContent = 'Copy', 1400);
+    }
+  });
+
+  // --- digit-reveal formatting ---
+  // Work entirely off a fixed-precision decimal STRING (computed once
+  // at max precision) rather than re-deriving digit counts from a
+  // float each frame — this is what was causing the flicker, since
+  // frac.toFixed(n) rounds differently at different n as the value
+  // crawls past a boundary (e.g. .8999999 vs .9000001 round very
+  // differently at 2 vs 3 digits). We truncate (never round) a single
+  // high-precision string and slice it, so growing/shrinking the
+  // digit count never changes already-shown digits.
+  //
+  // Rule: start at digitsMin digits shown. As the value's fractional
+  // part crosses .9, reveal one more digit (up to digitsMax); crossing
+  // .99 reveals one more still, .999 another, etc. Extra digits beyond
+  // digitsMin are capped by digitsMax.
+  function digitsToShow(frac, minDigits, maxDigits) {
+    let extra = 0;
+    let threshold = 0.9;
+    for (let i = 1; i <= maxDigits - minDigits; i++) {
+      if (frac >= threshold) {
+        extra = i;
+        threshold = threshold + (1 - threshold) * 0.9;
+      } else {
+        break;
+      }
+    }
+    return Math.min(minDigits + extra, maxDigits);
+  }
+
+  function planetAge(ms) {
+    const body = BODIES[state.planet] || BODIES.earth;
+    const msPerYear = body.days * 24 * 60 * 60 * 1000;
+    return ms / msPerYear;
+  }
+
+  function render() {
+    if (!state.bday || isNaN(state.bday)) {
+      ageNumber.innerHTML = '<span class="int">0</span><span class="dot">.</span><span class="dec"><span>00</span></span>';
+      caption.textContent = 'set your birthday above';
+      planetLabel.textContent = (BODIES[state.planet]?.label.toUpperCase() || 'EARTH') + ' YEARS SINCE BIRTH';
+      progressFill.style.strokeDashoffset = CIRC;
+      return;
+    }
+
+    const now = new Date();
+    const ms = now - state.bday;
+    const age = Math.max(0, planetAge(ms));
+
+    const intPart = Math.floor(age);
+    const frac = age - intPart;
+
+    const minDigits = state.digitsMin;
+    const maxDigits = state.digitsMax;
+    const showDigits = digitsToShow(frac, minDigits, maxDigits);
+
+    // Truncate (don't round) at max precision, then slice down —
+    // this keeps digits stable as showDigits changes frame to frame.
+    const fullPrecisionStr = Math.floor(frac * Math.pow(10, maxDigits))
+      .toString()
+      .padStart(maxDigits, '0');
+    const fracStr = fullPrecisionStr.slice(0, showDigits);
+
+    if (showDigits !== lastShowDigits) {
+      // digit count changed — rebuild, animating only the newly added tail
+      const html = fracStr.split('').map((c, i) =>
+        i >= lastShowDigits ? `<span class="new">${c}</span>` : `<span>${c}</span>`
+      ).join('');
+      ageNumber.innerHTML =
+        `<span class="int">${intPart}</span><span class="dot">.</span><span class="dec">${html}</span>`;
+      lastShowDigits = showDigits;
+    } else {
+      // same digit count — just update text content in place, no re-animation
+      const intEl = ageNumber.querySelector('.int');
+      const decEl = ageNumber.querySelector('.dec');
+      if (intEl) intEl.textContent = intPart;
+      if (decEl) {
+        const spans = decEl.querySelectorAll('span');
+        fracStr.split('').forEach((c, i) => {
+          if (spans[i] && spans[i].textContent !== c) spans[i].textContent = c;
+        });
+      }
+    }
+
+    planetLabel.textContent = (BODIES[state.planet]?.label.toUpperCase() || 'EARTH') + ' YEARS SINCE BIRTH';
+    caption.textContent = `${showDigits} digit${showDigits > 1 ? 's' : ''} of precision · ${BODIES[state.planet]?.label || 'Earth'} orbit`;
+
+    const progress = frac; // fraction of current year completed
+    progressFill.style.strokeDashoffset = CIRC * (1 - progress);
+  }
+
+  updateShareUrl();
+  render();
+  setInterval(render, 50);
+</script>
+
+</body>
+</html>
