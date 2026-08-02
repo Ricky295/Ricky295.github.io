@@ -3432,10 +3432,13 @@
 
                         html += `<div
                             class="${cls}"
-                            style="width:${cellSize};height:${cellSize};font-size:${fontSize};"
+                            style="width:${cellSize};height:${cellSize};font-size:${fontSize};touch-action:manipulation;"
                             data-r="${r}" data-c="${c}"
-                            onclick="MinesweeperEngine.onCellClick(${r},${c})"
+                            onclick="MinesweeperEngine.onCellClick(event,${r},${c})"
                             oncontextmenu="MinesweeperEngine.onCellRightClick(event,${r},${c})"
+                            ontouchstart="MinesweeperEngine.onTouchStart(event,${r},${c})"
+                            ontouchend="MinesweeperEngine.onTouchEnd(event,${r},${c})"
+                            ontouchmove="MinesweeperEngine.onTouchMove(event)"
                         >${content}</div>`;
                     }
                 }
@@ -3455,8 +3458,52 @@
                 AudioEngine.playClick();
             },
 
-            onCellClick(r, c) {
+            // Long-press handling for touch devices. A touch fires touchstart ->
+            // (held 450ms) -> we flag and mark this touch as "consumed" so the
+            // synthetic click Android/iOS fire after touchend doesn't ALSO reveal
+            // the same cell. A short tap (released before the timer) clears the
+            // timer and falls through to the normal onclick reveal, same as a
+            // mouse click. touchmove cancels the long-press so a scroll/drag
+            // doesn't accidentally flag a cell.
+            _longPressTimer: null,
+            _longPressFired: false,
+            _longPressMoved: false,
+
+            onTouchStart(event, r, c) {
                 if (this.gameOver) return;
+                this._longPressFired = false;
+                this._longPressMoved = false;
+                clearTimeout(this._longPressTimer);
+                this._longPressTimer = setTimeout(() => {
+                    if (this._longPressMoved) return;
+                    this._longPressFired = true;
+                    if (navigator.vibrate) navigator.vibrate(15);
+                    this.toggleFlag(r, c);
+                }, 450);
+            },
+
+            onTouchMove(event) {
+                this._longPressMoved = true;
+                clearTimeout(this._longPressTimer);
+            },
+
+            onTouchEnd(event, r, c) {
+                clearTimeout(this._longPressTimer);
+                if (this._longPressFired) {
+                    // Long-press already handled the flag — swallow the trailing
+                    // synthetic click so it doesn't also reveal this cell.
+                    event.preventDefault();
+                }
+            },
+
+            onCellClick(event, r, c) {
+                if (this.gameOver) return;
+                if (this._longPressFired) {
+                    // Guard against the synthetic click some browsers still fire
+                    // after preventDefault on touchend.
+                    this._longPressFired = false;
+                    return;
+                }
                 if (this.flagMode) { this.toggleFlag(r, c); return; }
                 this.reveal(r, c);
             },
