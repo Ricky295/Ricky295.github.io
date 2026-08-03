@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-900 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitHub File Line Monitor - puzzleverse.html</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    code, pre, .font-mono { font-family: 'JetBrains Mono', monospace; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    .line-number { user-select: none; }
+  </style>
+</head>
+<body class="min-h-full flex flex-col bg-slate-950 text-slate-100 selection:bg-blue-500 selection:text-white">
+
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="p-2.5 bg-blue-600/20 text-blue-400 rounded-xl border border-blue-500/30">
+          <i class="fa-brands fa-github text-xl"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-white leading-tight flex items-center gap-2">
+            GitHub File Line Monitor
+            <span id="liveBadge" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span> Live API
+            </span>
+          </h1>
+          <p class="text-xs text-slate-400 truncate max-w-xs sm:max-w-md">Ricky295 / Ricky295.github.io / puzzleverse.html</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <button id="soundToggle" title="Toggle audio alert on line change" class="p-2.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-400 hover:text-amber-400 hover:border-slate-600 transition">
+          <i id="soundIcon" class="fa-solid fa-bell-slash"></i>
+        </button>
+
+        <div class="relative">
+          <select id="pollSelect" class="bg-slate-800 text-xs sm:text-sm border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-blue-500 appearance-none pr-8 cursor-pointer">
+            <option value="0">Auto-refresh: Off</option>
+            <option value="10000">Poll: 10 sec</option>
+            <option value="30000" selected>Poll: 30 sec</option>
+            <option value="60000">Poll: 1 min</option>
+          </select>
+          <i class="fa-solid fa-chevron-down absolute right-2.5 top-3 text-xs text-slate-400 pointer-events-none"></i>
+        </div>
+
+        <button id="refreshBtn" class="flex items-center space-x-2 bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs sm:text-sm px-4 py-2 rounded-lg transition shadow-lg shadow-blue-600/20 active:scale-95">
+          <i id="refreshSpinner" class="fa-solid fa-arrows-rotate"></i>
+          <span class="hidden sm:inline">Fetch Now</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="flex-1 w-full">
+        <label for="apiUrlInput" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Target Endpoint</label>
+        <div class="flex items-center gap-2">
+          <div class="relative flex-1">
+            <input type="text" id="apiUrlInput" value="https://api.github.com/repos/Ricky295/Ricky295.github.io/contents/puzzleverse.html" class="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-xs sm:text-sm font-mono text-slate-300 focus:outline-none focus:border-blue-500">
+          </div>
+          <button id="loadCustomUrlBtn" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-200 transition">
+            Load URL
+          </button>
+        </div>
+      </div>
+      <div class="flex items-center gap-4 text-xs text-slate-400 border-t md:border-t-0 border-slate-800 pt-3 md:pt-0 w-full md:w-auto justify-between md:justify-end">
+        <div><span class="text-slate-500">Last Fetch:</span> <span id="lastUpdatedTime" class="font-medium text-slate-300">Never</span></div>
+        <div><span class="text-slate-500">API Rate Limit:</span> <span id="rateLimitBadge" class="font-medium text-emerald-400">Checking...</span></div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <!-- Total Lines -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 relative overflow-hidden group hover:border-blue-500/50 transition duration-300">
+        <div class="absolute -right-4 -bottom-4 text-slate-800/40 text-7xl font-bold group-hover:text-blue-500/10 transition">#</div>
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Lines</span>
+          <span class="p-2 bg-blue-500/10 text-blue-400 rounded-lg"><i class="fa-solid fa-list-ol"></i></span>
+        </div>
+        <div class="flex items-baseline gap-2">
+          <span id="statLineCount" class="text-3xl sm:text-4xl font-extrabold text-white font-mono">--</span>
+          <span id="statLineDelta" class="text-xs font-semibold px-2 py-0.5 rounded-full hidden"></span>
+        </div>
+        <p class="text-xs text-slate-500 mt-2 flex items-center gap-1"><i class="fa-solid fa-code text-blue-400/70"></i> Full file length</p>
+      </div>
+
+      <!-- File Size -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 relative overflow-hidden group hover:border-emerald-500/50 transition duration-300">
+        <div class="absolute -right-4 -bottom-4 text-slate-800/40 text-7xl font-bold group-hover:text-emerald-500/10 transition">KB</div>
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">File Size</span>
+          <span class="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg"><i class="fa-solid fa-hard-drive"></i></span>
+        </div>
+        <div class="flex items-baseline gap-2">
+          <span id="statFileSize" class="text-3xl sm:text-4xl font-extrabold text-white font-mono">--</span>
+          <span class="text-sm font-normal text-slate-400">KB</span>
+        </div>
+        <p id="statCharCount" class="text-xs text-slate-500 mt-2">-- characters</p>
+      </div>
+
+      <!-- Active Code -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 relative overflow-hidden group hover:border-purple-500/50 transition duration-300">
+        <div class="absolute -right-4 -bottom-4 text-slate-800/40 text-7xl font-bold group-hover:text-purple-500/10 transition">&lt;&gt;</div>
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Code vs Blanks</span>
+          <span class="p-2 bg-purple-500/10 text-purple-400 rounded-lg"><i class="fa-solid fa-file-code"></i></span>
+        </div>
+        <div class="flex items-baseline gap-2">
+          <span id="statCodeLines" class="text-3xl sm:text-4xl font-extrabold text-white font-mono">--</span>
+          <span class="text-xs text-slate-400">code lines</span>
+        </div>
+        <p id="statBlankLines" class="text-xs text-slate-500 mt-2">-- blank / comment lines</p>
+      </div>
+
+      <!-- SHA -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 relative overflow-hidden group hover:border-amber-500/50 transition duration-300">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Git Commit SHA</span>
+          <span class="p-2 bg-amber-500/10 text-amber-400 rounded-lg"><i class="fa-solid fa-code-commit"></i></span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="statSha" class="text-lg font-bold font-mono text-amber-400 truncate">--</span>
+          <button id="copyShaBtn" title="Copy SHA" class="text-slate-500 hover:text-slate-300 text-xs p-1"><i class="fa-regular fa-copy"></i></button>
+        </div>
+        <p id="statShaStatus" class="text-xs text-slate-500 mt-3 flex items-center gap-1">
+          <i class="fa-solid fa-shield-halved text-emerald-400"></i> Synced with main branch
+        </p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-base font-bold text-white flex items-center gap-2"><i class="fa-solid fa-chart-line text-blue-400"></i> Line Count History</h2>
+            <p class="text-xs text-slate-400">Tracks line count over polling sessions and commit timeline</p>
+          </div>
+          <button id="resetHistoryBtn" class="text-xs text-slate-400 hover:text-rose-400 transition flex items-center gap-1">
+            <i class="fa-solid fa-trash-can"></i> Clear History
+          </button>
+        </div>
+        <div class="h-64 relative w-full"><canvas id="lineHistoryChart"></canvas></div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+        <div class="mb-4">
+          <h2 class="text-base font-bold text-white flex items-center gap-2"><i class="fa-solid fa-chart-pie text-purple-400"></i> Code Composition</h2>
+          <p class="text-xs text-slate-400">Breakdown of tags, scripts, styles & blanks</p>
+        </div>
+        <div class="h-56 relative flex items-center justify-center"><canvas id="compositionChart"></canvas></div>
+        <div id="compositionLegend" class="grid grid-cols-2 gap-2 pt-3 border-t border-slate-800/80 text-xs text-slate-300"></div>
+      </div>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+      <div class="px-5 py-4 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900/90">
+        <div class="flex items-center space-x-3">
+          <i class="fa-solid fa-file-code text-blue-400 text-lg"></i>
+          <div>
+            <h3 class="font-bold text-slate-200 text-sm">Source Code Line Inspector</h3>
+            <p class="text-xs text-slate-400">Inspect lines in real time from GitHub raw content</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <div class="relative flex-1 sm:w-64">
+            <input type="text" id="lineSearchInput" placeholder="Filter lines or keywords..." class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-blue-500">
+            <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2 text-xs text-slate-500"></i>
+          </div>
+          <button id="copyCodeBtn" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-lg border border-slate-700 transition flex items-center gap-1.5">
+            <i class="fa-regular fa-copy"></i> <span>Copy All</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="relative bg-slate-950 max-h-[480px] overflow-auto border-t border-slate-950 font-mono text-xs leading-relaxed">
+        <div id="codeLoadingOverlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center z-10">
+          <div class="text-center">
+            <i class="fa-solid fa-circle-notch fa-spin text-3xl text-blue-500 mb-3"></i>
+            <p class="text-slate-400 text-xs">Fetching puzzleverse.html from GitHub...</p>
+          </div>
+        </div>
+        <table class="w-full border-collapse">
+          <tbody id="codeTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-clock-rotate-left text-amber-400"></i> GitHub Commit History
+          </h3>
+          <p class="text-xs text-slate-400">Recent commits affecting <code class="text-slate-300">puzzleverse.html</code></p>
+        </div>
+        <a id="githubBlobLink" href="https://github.com/Ricky295/Ricky295.github.io/blob/master/puzzleverse.html" target="_blank" class="text-xs text-blue-400 hover:underline flex items-center gap-1">
+          Open on GitHub <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+        </a>
+      </div>
+      <div id="commitsContainer" class="space-y-3">
+        <div class="text-center py-6 text-slate-500 text-xs">Loading commit timeline...</div>
+      </div>
+    </div>
+
+  </main>
+
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <script>
+    const state = {
+      apiUrl: "https://api.github.com/repos/Ricky295/Ricky295.github.io/contents/puzzleverse.html",
+      commitsUrl: "https://api.github.com/repos/Ricky295/Ricky295.github.io/commits?path=puzzleverse.html",
+      rawUrl: "https://raw.githubusercontent.com/Ricky295/Ricky295.github.io/master/puzzleverse.html",
+      lineHistory: (() => {
+        try { 
+          return JSON.parse(localStorage.getItem('pv_line_history')) || []; 
+        } catch(e) { 
+          console.warn("Cleared corrupted local storage history");
+          return []; 
+        }
+      })(),
+      lastLineCount: null,
+      currentRawContent: '',
+      linesList: [],
+      pollTimer: null,
+      soundEnabled: localStorage.getItem('pv_sound') === 'true',
+      historyChart: null,
+      compositionChart: null
+    };
+
+    const elements = {
+      apiUrlInput: document.getElementById('apiUrlInput'),
+      loadCustomUrlBtn: document.getElementById('loadCustomUrlBtn'),
+      refreshBtn: document.getElementById('refreshBtn'),
+      refreshSpinner: document.getElementById('refreshSpinner'),
+      pollSelect: document.getElementById('pollSelect'),
+      soundToggle: document.getElementById('soundToggle'),
+      soundIcon: document.getElementById('soundIcon'),
+      statLineCount: document.getElementById('statLineCount'),
+      statLineDelta: document.getElementById('statLineDelta'),
+      statFileSize: document.getElementById('statFileSize'),
+      statCharCount: document.getElementById('statCharCount'),
+      statCodeLines: document.getElementById('statCodeLines'),
+      statBlankLines: document.getElementById('statBlankLines'),
+      statSha: document.getElementById('statSha'),
+      statShaStatus: document.getElementById('statShaStatus'),
+      lastUpdatedTime: document.getElementById('lastUpdatedTime'),
+      rateLimitBadge: document.getElementById('rateLimitBadge'),
+      codeTableBody: document.getElementById('codeTableBody'),
+      codeLoadingOverlay: document.getElementById('codeLoadingOverlay'),
+      lineSearchInput: document.getElementById('lineSearchInput'),
+      copyCodeBtn: document.getElementById('copyCodeBtn'),
+      copyShaBtn: document.getElementById('copyShaBtn'),
+      resetHistoryBtn: document.getElementById('resetHistoryBtn'),
+      commitsContainer: document.getElementById('commitsContainer'),
+      compositionLegend: document.getElementById('compositionLegend'),
+      toastContainer: document.getElementById('toastContainer')
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initAudioVisualState();
+      initCharts();
+      fetchFileMetrics();
+      fetchCommitsHistory();
+      setupEventListeners();
+      setupPolling();
+    });
+
+    function initAudioVisualState() {
+      if (state.soundEnabled) {
+        elements.soundIcon.className = 'fa-solid fa-bell text-amber-400';
+      } else {
+        elements.soundIcon.className = 'fa-solid fa-bell-slash';
+      }
+    }
+
+    function playNotificationSound(type = 'update') {
+      if (!state.soundEnabled) return;
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sine';
+        if (type === 'increase') {
+          osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.15);
+        } else if (type === 'decrease') {
+          osc.frequency.setValueAtTime(659.25, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.15);
+        } else {
+          osc.frequency.setValueAtTime(440, ctx.currentTime);
+        }
+
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+      } catch(e) {
+        console.warn('Audio playback not permitted yet:', e);
+      }
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      const bgColors = {
+        success: 'bg-emerald-950 border-emerald-500/50 text-emerald-200',
+        info: 'bg-blue-950 border-blue-500/50 text-blue-200',
+        warning: 'bg-amber-950 border-amber-500/50 text-amber-200',
+        error: 'bg-rose-950 border-rose-500/50 text-rose-200'
+      };
+      
+      toast.className = `px-4 py-3 rounded-xl border ${bgColors[type] || bgColors.info} text-xs shadow-2xl flex items-center space-x-2 transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto`;
+      toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-circle-check' : 'fa-circle-info'}"></i> <span>${message}</span>`;
+      
+      elements.toastContainer.appendChild(toast);
+      
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function decodeBase64Utf8(b64) {
+      try {
+        const cleanB64 = b64.replace(/\s/g, '');
+        const binaryString = atob(cleanB64);
+        const bytes = Uint8Array.from(binaryString, char => char.charCodeAt(0));
+        return new TextDecoder('utf-8').decode(bytes);
+      } catch (e) {
+        console.error('Base64 decode failed, fallback to raw string', e);
+        return atob(b64.replace(/\s/g, ''));
+      }
+    }
+
+    async function fetchFileMetrics() {
+      elements.refreshSpinner.classList.add('fa-spin');
+      elements.codeLoadingOverlay.classList.remove('hidden');
+
+      const url = elements.apiUrlInput.value.trim();
+
+      try {
+        const response = await fetch(url);
+        
+        const rateRemaining = response.headers.get('x-ratelimit-remaining');
+        const rateLimit = response.headers.get('x-ratelimit-limit');
+        if (rateRemaining !== null) {
+          elements.rateLimitBadge.textContent = `${rateRemaining} / ${rateLimit}`;
+        } else {
+          elements.rateLimitBadge.textContent = 'Active';
+        }
+
+        if (!response.ok) {
+          throw new Error(`GitHub API returned HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        let contentText = '';
+
+        if (data.content) {
+          contentText = decodeBase64Utf8(data.content);
+        } else if (data.download_url) {
+          const rawRes = await fetch(data.download_url);
+          contentText = await rawRes.text();
+        } else {
+          throw new Error('No content or download URL available in payload');
+        }
+
+        state.currentRawContent = contentText;
+        processContent(contentText, data);
+
+        elements.lastUpdatedTime.textContent = new Date().toLocaleTimeString();
+
+      } catch (err) {
+        console.error('Fetch error:', err);
+        showToast(`Failed to fetch file: ${err.message}`, 'error');
+        elements.statLineCount.textContent = 'Err';
+      } finally {
+        elements.refreshSpinner.classList.remove('fa-spin');
+        elements.codeLoadingOverlay.classList.add('hidden');
+      }
+    }
+
+    function processContent(text, metaData) {
+      const normalizedText = text.replace(/\r\n/g, '\n');
+      const lines = normalizedText.split('\n');
+      state.linesList = lines;
+
+      const totalLines = lines.length;
+      const charCount = normalizedText.length;
+      const fileSizeKb = (metaData.size ? metaData.size / 1024 : charCount / 1024).toFixed(2);
+      const sha = metaData.sha ? metaData.sha.substring(0, 7) : 'N/A';
+
+      let codeLines = 0;
+      let blankLines = 0;
+      let scriptLines = 0;
+      let styleLines = 0;
+      let commentLines = 0;
+      let htmlLines = 0;
+
+      let inScript = false;
+      let inStyle = false;
+
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        if (trimmed === '') {
+          blankLines++;
+          return;
+        }
+
+        if (trimmed.toLowerCase().includes('<' + 'script')) inScript = true;
+        if (trimmed.toLowerCase().includes('<' + 'style')) inStyle = true;
+
+        if (trimmed.startsWith('<!--') || trimmed.startsWith('//') || trimmed.startsWith('/*')) {
+          commentLines++;
+        } else if (inScript) {
+          scriptLines++;
+        } else if (inStyle) {
+          styleLines++;
+        } else {
+          htmlLines++;
+          codeLines++;
+        }
+
+        if (trimmed.toLowerCase().includes('</' + 'script>')) inScript = false;
+        if (trimmed.toLowerCase().includes('</' + 'style>')) inStyle = false;
+      });
+
+      elements.statLineCount.textContent = totalLines.toLocaleString();
+      elements.statFileSize.textContent = fileSizeKb;
+      elements.statCharCount.textContent = `${charCount.toLocaleString()} characters`;
+      elements.statCodeLines.textContent = (totalLines - blankLines).toLocaleString();
+      elements.statBlankLines.textContent = `${blankLines.toLocaleString()} blank / ${commentLines} comments`;
+      elements.statSha.textContent = sha;
+
+      if (state.lastLineCount !== null) {
+        const delta = totalLines - state.lastLineCount;
+        if (delta !== 0) {
+          elements.statLineDelta.classList.remove('hidden');
+          if (delta > 0) {
+            elements.statLineDelta.textContent = `+${delta}`;
+            elements.statLineDelta.className = 'text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+            playNotificationSound('increase');
+            showToast(`Line count increased by ${delta} (Total: ${totalLines})`, 'success');
+          } else {
+            elements.statLineDelta.textContent = `${delta}`;
+            elements.statLineDelta.className = 'text-xs font-semibold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30';
+            playNotificationSound('decrease');
+            showToast(`Line count decreased by ${Math.abs(delta)} (Total: ${totalLines})`, 'warning');
+          }
+        }
+      }
+      state.lastLineCount = totalLines;
+
+      recordHistoryEntry(totalLines);
+      renderCodeInspector(lines);
+      updateCompositionChart(htmlLines, scriptLines, styleLines, blankLines, commentLines);
+    }
+
+    function recordHistoryEntry(totalLines) {
+      const now = new Date();
+      const timeLabel = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      
+      const lastEntry = state.lineHistory[state.lineHistory.length - 1];
+      if (!lastEntry || lastEntry.count !== totalLines || (now.getTime() - new Date(lastEntry.timestamp).getTime()) > 30000) {
+        state.lineHistory.push({
+          time: timeLabel,
+          timestamp: now.toISOString(),
+          count: totalLines
+        });
+
+        if (state.lineHistory.length > 25) {
+          state.lineHistory.shift();
+        }
+
+        localStorage.setItem('pv_line_history', JSON.stringify(state.lineHistory));
+        updateHistoryChart();
+      }
+    }
+
+    function initCharts() {
+      const ctxHistory = document.getElementById('lineHistoryChart').getContext('2d');
+      state.historyChart = new Chart(ctxHistory, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Line Count',
+            data: [],
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.12)',
+            borderWidth: 3,
+            fill: true,
+            tension: 0.35,
+            pointBackgroundColor: '#60a5fa',
+            pointRadius: 4,
+            pointHoverRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: '#0f172a', titleColor: '#cbd5e1', bodyColor: '#60a5fa', borderColor: '#334155', borderWidth: 1 } },
+          scales: {
+            x: { grid: { color: 'rgba(51, 65, 85, 0.3)' }, ticks: { color: '#64748b', font: { size: 10 } } },
+            y: { grid: { color: 'rgba(51, 65, 85, 0.3)' }, ticks: { color: '#64748b', font: { size: 10 } } }
+          }
+        }
+      });
+
+      const ctxComp = document.getElementById('compositionChart').getContext('2d');
+      state.compositionChart = new Chart(ctxComp, {
+        type: 'doughnut',
+        data: {
+          labels: ['HTML Markup', 'JavaScript', 'CSS Styles', 'Blank Lines', 'Comments'],
+          datasets: [{
+            data: [0, 0, 0, 0, 0],
+            backgroundColor: ['#3b82f6', '#f59e0b', '#ec4899', '#475569', '#10b981'],
+            borderWidth: 0,
+            hoverOffset: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '70%',
+          plugins: { legend: { display: false } }
+        }
+      });
+
+      updateHistoryChart();
+    }
+
+    function updateHistoryChart() {
+      if (!state.historyChart) return;
+      state.historyChart.data.labels = state.lineHistory.map(h => h.time);
+      state.historyChart.data.datasets[0].data = state.lineHistory.map(h => h.count);
+      state.historyChart.update();
+    }
+
+    function updateCompositionChart(html, script, style, blank, comments) {
+      if (!state.compositionChart) return;
+      state.compositionChart.data.datasets[0].data = [html, script, style, blank, comments];
+      state.compositionChart.update();
+
+      const total = html + script + style + blank + comments || 1;
+      const getPct = val => Math.round((val / total) * 100);
+
+      elements.compositionLegend.innerHTML = `
+        <div class="flex items-center space-x-2"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span><span>HTML (${getPct(html)}%)</span></div>
+        <div class="flex items-center space-x-2"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span><span>JS Script (${getPct(script)}%)</span></div>
+        <div class="flex items-center space-x-2"><span class="w-2.5 h-2.5 rounded-full bg-pink-500"></span><span>CSS Styles (${getPct(style)}%)</span></div>
+        <div class="flex items-center space-x-2"><span class="w-2.5 h-2.5 rounded-full bg-slate-600"></span><span>Blanks (${getPct(blank)}%)</span></div>
+      `;
+    }
+
+    function renderCodeInspector(lines, filterTerm = '') {
+      const fragment = document.createDocumentFragment();
+      const term = filterTerm.toLowerCase();
+
+      lines.forEach((lineText, idx) => {
+        const lineNum = idx + 1;
+        if (term && !lineText.toLowerCase().includes(term)) return;
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-900/60 transition group';
+
+        const tdNum = document.createElement('td');
+        tdNum.className = 'line-number py-0.5 px-3 text-right text-slate-600 select-none w-12 border-r border-slate-800/60 font-mono text-[11px] group-hover:text-slate-400';
+        tdNum.textContent = lineNum;
+
+        const tdCode = document.createElement('td');
+        tdCode.className = 'py-0.5 px-4 text-slate-300 font-mono text-[11px] whitespace-pre-wrap break-all';
+        
+        const safeText = lineText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        tdCode.innerHTML = safeText || '&nbsp;';
+
+        tr.appendChild(tdNum);
+        tr.appendChild(tdCode);
+        fragment.appendChild(tr);
+      });
+
+      elements.codeTableBody.innerHTML = '';
+      if (fragment.children.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="2" class="py-8 text-center text-slate-500 text-xs">No matching lines found</td>`;
+        elements.codeTableBody.appendChild(tr);
+      } else {
+        elements.codeTableBody.appendChild(fragment);
+      }
+    }
+
+    async function fetchCommitsHistory() {
+      try {
+        const response = await fetch(state.commitsUrl);
+        if (!response.ok) return;
+        const commits = await response.json();
+
+        if (Array.isArray(commits) && commits.length > 0) {
+          elements.commitsContainer.innerHTML = commits.slice(0, 5).map(item => {
+            const dateStr = new Date(item.commit.author.date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+            const author = item.commit.author.name;
+            const message = item.commit.message;
+            const shaShort = item.sha.substring(0, 7);
+            const htmlUrl = item.html_url;
+
+            return `
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl hover:border-slate-700 transition gap-2">
+                <div class="flex items-start space-x-3 overflow-hidden">
+                  <div class="p-2 bg-blue-500/10 text-blue-400 rounded-lg mt-0.5 sm:mt-0">
+                    <i class="fa-solid fa-code-commit"></i>
+                  </div>
+                  <div class="overflow-hidden">
+                    <p class="text-xs font-medium text-slate-200 truncate">${escapeHtml(message)}</p>
+                    <p class="text-[11px] text-slate-400 mt-0.5">By <span class="text-slate-300 font-medium">${escapeHtml(author)}</span> on ${dateStr}</p>
+                  </div>
+                </div>
+                <a href="${htmlUrl}" target="_blank" class="self-start sm:self-center font-mono text-[11px] text-blue-400 hover:text-blue-300 bg-blue-950/40 px-2 py-1 rounded border border-blue-800/40 shrink-0">
+                  ${shaShort} <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                </a>
+              </div>
+            `;
+          }).join('');
+        }
+      } catch (err) {
+        console.warn('Could not load commit history:', err);
+        elements.commitsContainer.innerHTML = `<div class="text-xs text-slate-500 text-center py-2">Commit history unavailable</div>`;
+      }
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    function setupPolling() {
+      if (state.pollTimer) clearInterval(state.pollTimer);
+
+      const interval = parseInt(elements.pollSelect.value, 10);
+      if (interval > 0) {
+        state.pollTimer = setInterval(() => {
+          fetchFileMetrics();
+        }, interval);
+      }
+    }
+
+    function setupEventListeners() {
+      elements.refreshBtn.addEventListener('click', () => {
+        fetchFileMetrics();
+        fetchCommitsHistory();
+        showToast('Refreshing file metrics...', 'info');
+      });
+
+      elements.loadCustomUrlBtn.addEventListener('click', () => {
+        const val = elements.apiUrlInput.value.trim();
+        if (val) {
+          state.apiUrl = val;
+          if (val.includes('/contents/')) {
+            const parts = val.split('/contents/');
+            state.commitsUrl = `${parts[0]}/commits?path=${parts[1]}`;
+          }
+          fetchFileMetrics();
+          fetchCommitsHistory();
+        }
+      });
+
+      elements.pollSelect.addEventListener('change', () => {
+        setupPolling();
+        const sec = parseInt(elements.pollSelect.value, 10) / 1000;
+        showToast(sec > 0 ? `Auto-polling set to every ${sec}s` : 'Auto-polling disabled', 'info');
+      });
+
+      elements.soundToggle.addEventListener('click', () => {
+        state.soundEnabled = !state.soundEnabled;
+        localStorage.setItem('pv_sound', state.soundEnabled);
+        initAudioVisualState();
+        if (state.soundEnabled) playNotificationSound('update');
+        showToast(state.soundEnabled ? 'Audio alerts enabled' : 'Audio alerts muted', 'info');
+      });
+
+      elements.lineSearchInput.addEventListener('input', (e) => {
+        renderCodeInspector(state.linesList, e.target.value);
+      });
+
+      elements.copyCodeBtn.addEventListener('click', () => {
+        if (!state.currentRawContent) return;
+        copyToClipboard(state.currentRawContent);
+        showToast('Full file content copied to clipboard!', 'success');
+      });
+
+      elements.copyShaBtn.addEventListener('click', () => {
+        const shaText = elements.statSha.textContent;
+        if (shaText && shaText !== '--') {
+          copyToClipboard(shaText);
+          showToast(`SHA ${shaText} copied`, 'success');
+        }
+      });
+
+      elements.resetHistoryBtn.addEventListener('click', () => {
+        state.lineHistory = [];
+        localStorage.removeItem('pv_line_history');
+        updateHistoryChart();
+        showToast('Line history log cleared', 'info');
+      });
+    }
+
+    function copyToClipboard(text) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+  </script>
+</body>
+</html>
