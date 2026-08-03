@@ -323,6 +323,68 @@
     text-align: center;
   }
 
+  body.view-mode .panel,
+  body.view-mode .foot {
+    display: none;
+  }
+  body.view-mode .stage {
+    margin-bottom: 0;
+  }
+  body.view-mode .wrap {
+    justify-content: center;
+  }
+  .edit-link {
+    margin-top: 2rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--text-faint);
+    padding-bottom: 2px;
+  }
+  .edit-link:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  body:not(.view-mode) .edit-link {
+    display: none;
+  }
+
+  /* --- WIDGET MODE (w=/h= params, sized for iframes) --- */
+  body.widget-mode {
+    overflow: hidden;
+  }
+  body.widget-mode .wrap {
+    min-height: 0;
+    height: 100vh;
+    width: 100vw;
+    padding: 4%;
+    justify-content: center;
+  }
+  body.widget-mode .stage {
+    width: min(92%, 92vh);
+    max-width: 340px;
+    margin-bottom: 0;
+  }
+  body.widget-mode .planet-label {
+    font-size: 0.55rem;
+    letter-spacing: 0.25em;
+    margin-bottom: 0.5rem;
+  }
+  body.widget-mode .age-number {
+    font-size: clamp(1.4rem, 13vw, 2.6rem);
+  }
+  body.widget-mode .years-caption {
+    font-size: 0.7rem;
+    margin-top: 0.5rem;
+  }
+  body.widget-mode .panel,
+  body.widget-mode .foot,
+  body.widget-mode .edit-link {
+    display: none;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .age-number .dec span { animation: none; }
     .progress-ring .fill { transition: none; }
@@ -374,15 +436,24 @@
     </div>
 
     <h2>Share</h2>
-    <div class="field" style="margin-bottom:0;">
+    <div class="field">
       <div class="share-row">
         <div class="share-input" id="shareUrl">—</div>
         <button class="copy-btn" id="copyBtn">Copy</button>
       </div>
     </div>
+
+    <h2>Embed</h2>
+    <div class="field" style="margin-bottom:0;">
+      <div class="share-row">
+        <div class="share-input" id="embedSnippet">—</div>
+        <button class="copy-btn" id="copyEmbedBtn">Copy</button>
+      </div>
+    </div>
   </div>
 
   <div class="foot">bdaycard — every second is a little older</div>
+  <a class="edit-link" id="editLink" href="#">customize your own →</a>
 
 </div>
 
@@ -402,6 +473,20 @@
   };
 
   const params = new URLSearchParams(window.location.search);
+  const isViewMode = params.get('view') === '1';
+  if (isViewMode) document.body.classList.add('view-mode');
+
+  const widgetW = parseInt(params.get('w'), 10);
+  const widgetH = parseInt(params.get('h'), 10);
+  const isWidgetMode = !isNaN(widgetW) && !isNaN(widgetH) && widgetW > 0 && widgetH > 0;
+  if (isWidgetMode) {
+    document.body.classList.add('widget-mode');
+    document.documentElement.style.width = widgetW + 'px';
+    document.documentElement.style.height = widgetH + 'px';
+    document.body.style.width = widgetW + 'px';
+    document.body.style.height = widgetH + 'px';
+  }
+
   const grid = document.getElementById('planetGrid');
   const bYear = document.getElementById('bYear');
   const bMonth = document.getElementById('bMonth');
@@ -518,13 +603,36 @@
   });
 
   function updateShareUrl() {
-    const p = new URLSearchParams();
-    if (state.bday && !isNaN(state.bday)) p.set('bday', state.bday.toISOString());
-    p.set('planet', state.planet);
-    p.set('digits', `${state.digitsMin}..${state.digitsMax}`);
-    const url = `${window.location.origin}${window.location.pathname}?${p.toString()}`;
+    const shareParams = new URLSearchParams();
+    if (state.bday && !isNaN(state.bday)) shareParams.set('bday', state.bday.toISOString());
+    shareParams.set('view', '1');
+    const url = `${window.location.origin}${window.location.pathname}?${shareParams.toString()}`;
     shareUrl.textContent = url;
     shareUrl.dataset.full = url;
+
+    // full editable link (used by the "customize your own" link in view mode)
+    const editParams = new URLSearchParams();
+    if (state.bday && !isNaN(state.bday)) editParams.set('bday', state.bday.toISOString());
+    editParams.set('planet', state.planet);
+    editParams.set('digits', `${state.digitsMin}..${state.digitsMax}`);
+    const editUrl = `${window.location.origin}${window.location.pathname}?${editParams.toString()}`;
+    const editLink = document.getElementById('editLink');
+    if (editLink) editLink.href = editUrl;
+
+    // embed snippet: bday + planet + digits + fixed w/h, widget mode
+    const embedParams = new URLSearchParams();
+    if (state.bday && !isNaN(state.bday)) embedParams.set('bday', state.bday.toISOString());
+    embedParams.set('planet', state.planet);
+    embedParams.set('digits', `${state.digitsMin}..${state.digitsMax}`);
+    embedParams.set('w', '360');
+    embedParams.set('h', '240');
+    const embedUrl = `${window.location.origin}${window.location.pathname}?${embedParams.toString()}`;
+    const snippet = `<iframe src="${embedUrl}" width="360" height="240" style="border:none;"></iframe>`;
+    const embedSnippet = document.getElementById('embedSnippet');
+    if (embedSnippet) {
+      embedSnippet.textContent = snippet;
+      embedSnippet.dataset.full = snippet;
+    }
   }
 
   copyBtn.addEventListener('click', async () => {
@@ -546,6 +654,29 @@
       setTimeout(() => copyBtn.textContent = 'Copy', 1400);
     }
   });
+
+  const copyEmbedBtn = document.getElementById('copyEmbedBtn');
+  if (copyEmbedBtn) {
+    copyEmbedBtn.addEventListener('click', async () => {
+      const embedSnippet = document.getElementById('embedSnippet');
+      const snippet = embedSnippet?.dataset.full;
+      if (!snippet) return;
+      try {
+        await navigator.clipboard.writeText(snippet);
+        copyEmbedBtn.textContent = 'Copied';
+        setTimeout(() => copyEmbedBtn.textContent = 'Copy', 1400);
+      } catch (e) {
+        const ta = document.createElement('textarea');
+        ta.value = snippet;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        copyEmbedBtn.textContent = 'Copied';
+        setTimeout(() => copyEmbedBtn.textContent = 'Copy', 1400);
+      }
+    });
+  }
 
   // --- digit-reveal formatting ---
   // Work entirely off a fixed-precision decimal STRING (computed once
