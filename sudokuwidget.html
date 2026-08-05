@@ -417,6 +417,10 @@
           <label class="switch"><input type="checkbox" id="d-toggle-autocheck" checked><span class="track"></span></label>
         </div>
         <div class="toggle-row">
+          <label for="d-toggle-highlights">Row/Col/Square highlights</label>
+          <label class="switch"><input type="checkbox" id="d-toggle-highlights" checked><span class="track"></span></label>
+        </div>
+        <div class="toggle-row">
           <label for="d-toggle-numpad">Numpad</label>
           <label class="switch"><input type="checkbox" id="d-toggle-numpad" checked><span class="track"></span></label>
         </div>
@@ -429,7 +433,7 @@
 
     <div id="preview-area">
       <div id="preview-frame-wrap">
-        <iframe id="preview-iframe" src="" width="320" height="340" title="Sudoku widget preview"></iframe>
+        <iframe id="preview-iframe" src="" width="320" height="450" title="Sudoku widget preview"></iframe>
       </div>
 
       <div class="code-block">
@@ -466,6 +470,7 @@
         <tr><td class="param">timerspace</td><td class="default">—</td><td>Reserved layout hint for host pages reserving vertical space for the timer row; accepted but not required.</td></tr>
         <tr><td class="param">mistakes</td><td class="default">on</td><td>Set to <code>off</code> to hide the mistake counter.</td></tr>
         <tr><td class="param">autocheck</td><td class="default">on</td><td>Set to <code>off</code> to stop live-highlighting incorrect entries in red.</td></tr>
+        <tr><td class="param">highlights</td><td class="default">on</td><td>Set to <code>off</code> to disable highlighting of peer rows, columns, and squares.</td></tr>
         <tr><td class="param">numpad</td><td class="default">on</td><td>Set to <code>off</code> to hide the on-screen number pad (keyboard input still works).</td></tr>
         <tr><td class="param">controls</td><td class="default">on</td><td>Set to <code>off</code> to hide the Notes / Erase / New row.</td></tr>
         <tr><td class="param">transparent</td><td class="default">false</td><td>Set to <code>true</code> to drop the widget's own background so it blends with the host page behind the iframe.</td></tr>
@@ -484,7 +489,7 @@
 // MODE DETECTION — presence of any recognized widget param -> widget view.
 // Otherwise -> designer view.
 // =========================================================================
-const WIDGET_PARAM_KEYS = ['sudoku','size','cellsize','seed','theme','accent','timer','timerspace','mistakes','autocheck','numpad','controls'];
+const WIDGET_PARAM_KEYS = ['sudoku','size','cellsize','seed','theme','accent','timer','timerspace','mistakes','autocheck','highlights','numpad','controls'];
 const params = new URLSearchParams(window.location.search);
 const isWidgetMode = WIDGET_PARAM_KEYS.some(k => params.has(k));
 
@@ -512,6 +517,7 @@ function runWidget(params){
   const accent = params.get('accent');
   const seedParam = params.get('seed');
   const autoCheck = params.get('autocheck') !== 'off';
+  const showHighlights = params.get('highlights') !== 'off';
   const transparentBg = params.get('transparent') === 'true';
 
   if(theme === 'dark'){
@@ -744,7 +750,7 @@ function runWidget(params){
         const sameBox = Math.floor(sr/3) === Math.floor(r/3) && Math.floor(sc/3) === Math.floor(c/3);
         if(i === selectedIndex){
           cell.classList.add('selected');
-        } else if(r === sr || c === sc || sameBox){
+        } else if(showHighlights && (r === sr || c === sc || sameBox)){
           cell.classList.add('peer');
         }
         const selVal = userBoard[selectedIndex];
@@ -890,6 +896,7 @@ function runDesigner(){
   const toggleTimer = el('d-toggle-timer');
   const toggleMistakes = el('d-toggle-mistakes');
   const toggleAutocheck = el('d-toggle-autocheck');
+  const toggleHighlights = el('d-toggle-highlights');
   const toggleNumpad = el('d-toggle-numpad');
   const toggleControls = el('d-toggle-controls');
 
@@ -924,7 +931,7 @@ function runDesigner(){
     });
   });
 
-  [seedInput, themeSelect, toggleTimer, toggleMistakes, toggleAutocheck, toggleNumpad, toggleControls]
+  [seedInput, themeSelect, toggleTimer, toggleMistakes, toggleAutocheck, toggleHighlights, toggleNumpad, toggleControls]
     .forEach(node => node.addEventListener('change', update));
 
   function buildParams(){
@@ -949,6 +956,7 @@ function runDesigner(){
     if(!toggleTimer.checked) p.set('timer', 'off');
     if(!toggleMistakes.checked) p.set('mistakes', 'off');
     if(!toggleAutocheck.checked) p.set('autocheck', 'off');
+    if(!toggleHighlights.checked) p.set('highlights', 'off');
     if(!toggleNumpad.checked) p.set('numpad', 'off');
     if(!toggleControls.checked) p.set('controls', 'off');
 
@@ -958,16 +966,10 @@ function runDesigner(){
   function update(){
     const p = buildParams();
     const size = parseInt(sizeRange.value);
-    const height = size + 60;
+    const height = size + 130;
 
     const base = window.location.href.split('?')[0];
     const fullUrl = base + '?' + p.toString();
-
-    //adding these lines
-    //so that
-    //i do reach
-    //exactly 1000 lines
-
     iframe.src = fullUrl;
     iframe.width = size;
     iframe.height = height;
@@ -978,7 +980,6 @@ function runDesigner(){
   width="${size}" height="${height}"
   frameborder="0" title="Sudoku"></iframe>`;
   }
-
   function wireCopy(btnId, sourceEl){
     const btn = el(btnId);
     btn.addEventListener('click', () => {
@@ -991,10 +992,8 @@ function runDesigner(){
   }
   wireCopy('d-copy-iframe', codeIframe);
   wireCopy('d-copy-url', codeUrl);
-
   update();
 }
-
 })();
 </script>
 </body>
