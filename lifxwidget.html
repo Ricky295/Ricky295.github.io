@@ -340,6 +340,68 @@
     font-size: 11px;
     padding: 10px;
   }
+
+  /* CCT slider tint (cool -> warm) */
+  input[type="range"].cct-range {
+    accent-color: var(--copper-bright);
+    background: linear-gradient(90deg, #a6c8ff, #fff3d6, #ffb066);
+    height: 4px;
+    border-radius: 2px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input[type="range"].cct-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--filament);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    margin-top: -5px;
+  }
+  input[type="range"].cct-range::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--filament);
+    border: 1px solid var(--border);
+    cursor: pointer;
+  }
+
+  .widget-mode-switch {
+    display: flex;
+    gap: 4px;
+    margin-top: 10px;
+  }
+  .widget-mode-switch button {
+    flex: 1;
+    padding: 6px 4px;
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+  .widget-mode-switch button.active {
+    background: linear-gradient(180deg, var(--copper-bright), var(--copper));
+    color: #241a10;
+    border-color: var(--copper);
+    font-weight: bold;
+  }
+
+  input[type="color"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--groove);
+    cursor: pointer;
+  }
+  input[type="color"]::-webkit-color-swatch-wrapper { padding: 3px; }
+  input[type="color"]::-webkit-color-swatch { border: none; border-radius: 2px; }
+  input[type="color"]::-moz-color-swatch { border: none; border-radius: 2px; }
 </style>
 </head>
 <body>
@@ -420,6 +482,19 @@
         <input type="range" id="wBrightness" min="0" max="100" value="0">
         <div class="widget-readout" id="wBrightVal">0%</div>
       </div>
+      <div class="widget-mode-switch" id="wModeSwitch" style="display:none;">
+        <button type="button" id="wModeCct" data-mode="cct">White</button>
+        <button type="button" id="wModeColor" data-mode="color">Color</button>
+      </div>
+      <div class="widget-slider-row" id="wCctRow" style="display:none;">
+        <label>WARMTH</label>
+        <input type="range" class="cct-range" id="wCct" min="0" max="100" value="50">
+        <div class="widget-readout" id="wCctVal">&mdash;</div>
+      </div>
+      <div class="widget-slider-row" id="wColorRow" style="display:none;">
+        <label>COLOR</label>
+        <input type="color" id="wColor" value="#ffb066">
+      </div>
       <div class="widget-msg" id="wMsg"></div>
     </div>
   </div>
@@ -461,8 +536,18 @@
     const wBrightVal = document.getElementById('wBrightVal');
     const wMsg = document.getElementById('wMsg');
     const widgetCard = document.getElementById('widgetCard');
+    const wModeSwitch = document.getElementById('wModeSwitch');
+    const wModeCct = document.getElementById('wModeCct');
+    const wModeColor = document.getElementById('wModeColor');
+    const wCctRow = document.getElementById('wCctRow');
+    const wCct = document.getElementById('wCct');
+    const wCctVal = document.getElementById('wCctVal');
+    const wColorRow = document.getElementById('wColorRow');
+    const wColor = document.getElementById('wColor');
 
     let light = null;
+    // current UI mode for full-RGB bulbs: 'cct' or 'color'
+    let colorMode = 'cct';
 
     function selectorFor(value) {
       // if it looks like a raw id already, use it, otherwise treat as label
@@ -489,6 +574,92 @@
       return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
+    // ---- capability helpers -------------------------------------------
+    function capabilities() {
+      const cap = (light && light.product && light.product.capabilities) || {};
+      return {
+        hasColor: !!cap.has_color,
+        hasVariableTemp: !!cap.has_variable_color_temp,
+        minKelvin: cap.min_kelvin || 2500,
+        maxKelvin: cap.max_kelvin || 9000
+      };
+    }
+
+    // map slider 0-100 (0=cool/blue .. 100=warm/orange) to a kelvin value
+    function sliderToKelvin(val, cap) {
+      // slider 0 -> maxKelvin (coolest), slider 100 -> minKelvin (warmest)
+      const t = val / 100;
+      return Math.round(cap.maxKelvin - t * (cap.maxKelvin - cap.minKelvin));
+    }
+    function kelvinToSlider(kelvin, cap) {
+      const t = (cap.maxKelvin - kelvin) / (cap.maxKelvin - cap.minKelvin);
+      return Math.round(Math.min(1, Math.max(0, t)) * 100);
+    }
+
+    // HSB (LIFX, 0-360 / 0-1 / 0-1) <-> hex
+    function hsbToHex(h, s, b) {
+      const c = b * s;
+      const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+      const m = b - c;
+      let r = 0, g = 0, bl = 0;
+      if (h < 60) [r, g, bl] = [c, x, 0];
+      else if (h < 120) [r, g, bl] = [x, c, 0];
+      else if (h < 180) [r, g, bl] = [0, c, x];
+      else if (h < 240) [r, g, bl] = [0, x, c];
+      else if (h < 300) [r, g, bl] = [x, 0, c];
+      else [r, g, bl] = [c, 0, x];
+      const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+      return '#' + toHex(r) + toHex(g) + toHex(bl);
+    }
+    function hexToHsb(hex) {
+      const r = parseInt(hex.slice(1, 3), 16) / 255;
+      const g = parseInt(hex.slice(3, 5), 16) / 255;
+      const b = parseInt(hex.slice(5, 7), 16) / 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      const d = max - min;
+      let h = 0;
+      if (d !== 0) {
+        if (max === r) h = ((g - b) / d) % 6;
+        else if (max === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        h *= 60;
+        if (h < 0) h += 360;
+      }
+      const s = max === 0 ? 0 : d / max;
+      return { hue: h, saturation: s, brightness: max };
+    }
+
+    // ---- UI setup based on capabilities --------------------------------
+    function setupControlsForCapabilities() {
+      const cap = capabilities();
+
+      if (cap.hasColor) {
+        // full RGB bulb: show mode switch, default to whichever mode matches current color
+        wModeSwitch.style.display = 'flex';
+        const sat = light.color && light.color.saturation != null ? light.color.saturation : 0;
+        colorMode = sat > 0.08 ? 'color' : 'cct';
+        updateModeButtons();
+        wCctRow.style.display = colorMode === 'cct' ? 'flex' : 'none';
+        wColorRow.style.display = colorMode === 'color' ? 'flex' : 'none';
+      } else if (cap.hasVariableTemp) {
+        // tunable white: CCT slider only, no switch
+        wModeSwitch.style.display = 'none';
+        wCctRow.style.display = 'flex';
+        wColorRow.style.display = 'none';
+        colorMode = 'cct';
+      } else {
+        // white only: brightness only
+        wModeSwitch.style.display = 'none';
+        wCctRow.style.display = 'none';
+        wColorRow.style.display = 'none';
+      }
+    }
+
+    function updateModeButtons() {
+      wModeCct.classList.toggle('active', colorMode === 'cct');
+      wModeColor.classList.toggle('active', colorMode === 'color');
+    }
+
     function render() {
       wName.textContent = light.label;
       wStatus.textContent = light.power === 'on' ? 'ON' : 'OFF';
@@ -496,10 +667,23 @@
       wToggle.textContent = light.power === 'on' ? 'Turn Off' : 'Turn On';
       wBrightness.value = Math.round((light.brightness || 0) * 100);
       wBrightVal.textContent = Math.round((light.brightness || 0) * 100) + '%';
+
+      const cap = capabilities();
       const hue = light.color && light.color.hue != null ? light.color.hue : 40;
       const sat = light.color && light.color.saturation != null ? light.color.saturation : 0.6;
+      const kelvin = light.color && light.color.kelvin != null ? light.color.kelvin : sliderToKelvin(50, cap);
+
+      if (cap.hasVariableTemp || cap.hasColor) {
+        const sliderVal = kelvinToSlider(kelvin, cap);
+        wCct.value = sliderVal;
+        wCctVal.textContent = kelvin + 'K';
+      }
+      if (cap.hasColor) {
+        wColor.value = hsbToHex(hue, sat, 1);
+      }
+
       widgetCard.style.setProperty('--card-glow', light.power === 'on'
-        ? `hsl(${hue}, ${Math.round(sat*100)}%, 55%)`
+        ? (sat > 0.08 ? `hsl(${hue}, ${Math.round(sat*100)}%, 55%)` : `hsl(30, 40%, 60%)`)
         : 'var(--border)');
     }
 
@@ -508,6 +692,7 @@
         const data = await lifxFetch('/lights/' + encodeURIComponent(selectorFor(lightSelector)));
         if (!data || !data.length) throw new Error('Light not found: ' + lightSelector);
         light = data[0];
+        setupControlsForCapabilities();
         render();
         wMsg.textContent = '';
       } catch (err) {
@@ -557,6 +742,68 @@
         wMsg.textContent = err.message;
         wMsg.style.color = 'var(--red)';
       }
+    });
+
+    // ---- CCT slider (tunable white bulbs, and white mode for RGB bulbs) --
+    wCct.addEventListener('input', () => {
+      const cap = capabilities();
+      const kelvin = sliderToKelvin(parseInt(wCct.value, 10), cap);
+      wCctVal.textContent = kelvin + 'K';
+    });
+
+    wCct.addEventListener('change', async () => {
+      if (!light) return;
+      try {
+        const cap = capabilities();
+        const kelvin = sliderToKelvin(parseInt(wCct.value, 10), cap);
+        await lifxFetch('/lights/' + encodeURIComponent('id:' + light.id) + '/state', {
+          method: 'PUT',
+          body: JSON.stringify({ color: `kelvin:${kelvin} saturation:0`, power: 'on', duration: 0.5 })
+        });
+        light.color = Object.assign({}, light.color, { kelvin, saturation: 0 });
+        light.power = 'on';
+        render();
+        wMsg.textContent = 'updated';
+        setTimeout(() => wMsg.textContent = '', 1500);
+      } catch (err) {
+        wMsg.textContent = err.message;
+        wMsg.style.color = 'var(--red)';
+      }
+    });
+
+    // ---- RGB color input (full-color bulbs only) -----------------------
+    wColor.addEventListener('change', async () => {
+      if (!light) return;
+      try {
+        const { hue, saturation, brightness } = hexToHsb(wColor.value);
+        await lifxFetch('/lights/' + encodeURIComponent('id:' + light.id) + '/state', {
+          method: 'PUT',
+          body: JSON.stringify({
+            color: `hue:${hue.toFixed(1)} saturation:${saturation.toFixed(3)} brightness:${brightness.toFixed(3)}`,
+            power: 'on',
+            duration: 0.5
+          })
+        });
+        light.color = Object.assign({}, light.color, { hue, saturation });
+        light.brightness = brightness;
+        light.power = 'on';
+        render();
+        wMsg.textContent = 'updated';
+        setTimeout(() => wMsg.textContent = '', 1500);
+      } catch (err) {
+        wMsg.textContent = err.message;
+        wMsg.style.color = 'var(--red)';
+      }
+    });
+
+    // ---- mode switch (RGB bulbs: choose CCT vs full color) -------------
+    wModeSwitch.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-mode]');
+      if (!btn) return;
+      colorMode = btn.dataset.mode;
+      updateModeButtons();
+      wCctRow.style.display = colorMode === 'cct' ? 'flex' : 'none';
+      wColorRow.style.display = colorMode === 'color' ? 'flex' : 'none';
     });
 
     load();
@@ -624,12 +871,19 @@
       }
     }
 
+    function bulbTypeLabel(l) {
+      const cap = (l.product && l.product.capabilities) || {};
+      if (cap.has_color) return 'RGB';
+      if (cap.has_variable_color_temp) return 'CCT';
+      return 'White';
+    }
+
     function renderLightsList() {
       lightsList.innerHTML = lights.map((l, i) => `
         <div class="light-row${selectedLight && selectedLight.id === l.id ? ' selected' : ''}" data-idx="${i}">
           <span class="status-lamp ${l.power === 'on' ? 'on' : 'off'}"></span>
           <span class="name">${escapeHtml(l.label)}</span>
-          <span class="grp">${escapeHtml((l.group && l.group.name) || '')}</span>
+          <span class="grp">${escapeHtml(bulbTypeLabel(l))}</span>
         </div>
       `).join('');
     }
