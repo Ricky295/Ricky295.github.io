@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Timer Widget</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+
+  /* ---------- Widget mode ---------- */
+  #widget {
+    display: none;
+    height: 100vh; width: 100vw;
+    align-items: center; justify-content: center;
+    flex-direction: column;
+    gap: 0.5em;
+    overflow: hidden;
+    cursor: pointer;
+    user-select: none;
+  }
+  #widget .name {
+    font-size: clamp(12px, 4vw, 20px);
+    opacity: 0.75;
+    letter-spacing: 0.02em;
+  }
+  #widget .time {
+    font-size: clamp(28px, 16vw, 96px);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  #widget .hint {
+    font-size: clamp(9px, 2.5vw, 12px);
+    opacity: 0.5;
+  }
+  #widget.done .time { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  /* ---------- Designer mode ---------- */
+  #designer {
+    display: none;
+    min-height: 100vh;
+    background: #f4f5f7;
+    padding: 24px;
+  }
+  #designer .wrap {
+    max-width: 920px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  @media (max-width: 720px) {
+    #designer .wrap { grid-template-columns: 1fr; }
+  }
+  .card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 20px 22px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .card h1 {
+    font-size: 18px;
+    margin: 0 0 16px;
+  }
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 5px;
+  }
+  .field input[type="text"],
+  .field input[type="number"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d9dce1;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  .row { display: flex; gap: 10px; }
+  .row .field { flex: 1; }
+  .colorrow { display: flex; align-items: center; gap: 8px; }
+  .colorrow input[type="color"] {
+    width: 40px; height: 34px; border: none; border-radius: 6px; padding: 0; cursor: pointer;
+  }
+  .colorrow input[type="text"] { flex: 1; }
+  .toggle-group { display: flex; gap: 8px; }
+  .toggle-group button {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid #d9dce1;
+    background: #fff;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .toggle-group button.active {
+    background: #2563eb;
+    color: #fff;
+    border-color: #2563eb;
+  }
+  #preview-frame-wrap {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #e2e4e8;
+    height: 220px;
+    margin-bottom: 16px;
+  }
+  #preview-frame { width: 100%; height: 100%; border: 0; }
+  .urlbox {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    background: #f1f2f5;
+    border-radius: 8px;
+    padding: 10px 12px;
+    word-break: break-all;
+    max-height: 140px;
+    overflow: auto;
+  }
+  .copybtn {
+    margin-top: 10px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 8px;
+    background: #111827;
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .copybtn:active { transform: translateY(1px); }
+  .iframebox {
+    margin-top: 14px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= WIDGET MODE ================= -->
+<div id="widget">
+  <div class="name" id="w-name"></div>
+  <div class="time" id="w-time">00:00</div>
+  <div class="hint" id="w-hint">tap to start</div>
+</div>
+
+<!-- ================= DESIGNER MODE ================= -->
+<div id="designer">
+  <div class="wrap">
+    <div class="card">
+      <h1>Timer Widget Designer</h1>
+
+      <div class="field">
+        <label>Name</label>
+        <input type="text" id="d-name" placeholder="e.g. Pasta">
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Duration (hh:mm:ss)</label>
+          <input type="text" id="d-duration" placeholder="00:05:00" value="00:05:00">
+        </div>
+        <div class="field">
+          <label>Direction</label>
+          <div class="toggle-group">
+            <button id="d-countdown-btn" class="active" type="button">Count down</button>
+            <button id="d-countup-btn" type="button">Count up</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Background color</label>
+          <div class="colorrow">
+            <input type="color" id="d-bgcolor-picker" value="#111827">
+            <input type="text" id="d-bgcolor" value="#111827">
+          </div>
+        </div>
+        <div class="field">
+          <label>Text color</label>
+          <div class="colorrow">
+            <input type="color" id="d-textcolor-picker" value="#ffffff">
+            <input type="text" id="d-textcolor" value="#ffffff">
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Autostart</label>
+        <div class="toggle-group">
+          <button id="d-autostart-off" class="active" type="button">Off</button>
+          <button id="d-autostart-on" type="button">On</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h1>Preview</h1>
+      <div id="preview-frame-wrap">
+        <iframe id="preview-frame"></iframe>
+      </div>
+      <label style="font-size:12px;font-weight:600;color:#555;">Embed / Share URL</label>
+      <div class="urlbox" id="url-output"></div>
+      <div class="iframebox">
+        <label style="font-size:12px;font-weight:600;color:#555;">Iframe snippet</label>
+        <div class="urlbox" id="iframe-output"></div>
+      </div>
+      <button class="copybtn" id="copy-url-btn">Copy URL</button>
+      <button class="copybtn" id="copy-iframe-btn" style="margin-left:8px;background:#374151;">Copy Iframe</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const hasParams = [...params.keys()].length > 0;
+
+  if (hasParams) {
+    runWidget(params);
+  } else {
+    runDesigner();
+  }
+
+  // ============================================================
+  // WIDGET MODE
+  // ============================================================
+  function runWidget(params) {
+    document.getElementById('widget').style.display = 'flex';
+
+    const DEFAULT_DURATION = 2147483647;
+    let duration = parseInt(params.get('duration'), 10);
+    if (isNaN(duration) || duration < 0) duration = DEFAULT_DURATION;
+
+    const countup = params.get('countup') === '1';
+    const bgcolor = params.get('bgcolor') || (countup ? '#111827' : '#111827');
+    const textcolor = params.get('textcolor') || '#ffffff';
+    const autostart = params.get('autostart') === '1';
+    const name = params.get('name') || (formatHMS(duration) + ' timer');
+
+    document.body.style.background = safeColor(bgcolor);
+    document.body.style.color = safeColor(textcolor);
+
+    const nameEl = document.getElementById('w-name');
+    const timeEl = document.getElementById('w-time');
+    const hintEl = document.getElementById('w-hint');
+    const widgetEl = document.getElementById('widget');
+
+    nameEl.textContent = name;
+
+    let remaining = countup ? 0 : duration;
+    let elapsed = 0;
+    let running = false;
+    let intervalId = null;
+    let finished = false;
+
+    render();
+
+    function render() {
+      const displayVal = countup ? elapsed : remaining;
+      timeEl.textContent = formatHMS(displayVal);
+      if (finished) {
+        hintEl.textContent = 'done — tap to reset';
+        widgetEl.classList.add('done');
+      } else {
+        widgetEl.classList.remove('done');
+        hintEl.textContent = running ? 'tap to pause' : (elapsed > 0 || remaining !== duration ? 'tap to resume' : 'tap to start');
+      }
+    }
+
+    function tick() {
+      if (countup) {
+        elapsed++;
+      } else {
+        remaining--;
+        if (remaining <= 0) {
+          remaining = 0;
+          finish();
+        }
+      }
+      render();
+    }
+
+    function start() {
+      if (finished) { reset(); return; }
+      if (running) return;
+      running = true;
+      intervalId = setInterval(tick, 1000);
+      render();
+    }
+
+    function pause() {
+      running = false;
+      clearInterval(intervalId);
+      render();
+    }
+
+    function finish() {
+      running = false;
+      finished = true;
+      clearInterval(intervalId);
+      render();
+    }
+
+    function reset() {
+      finished = false;
+      running = false;
+      clearInterval(intervalId);
+      elapsed = 0;
+      remaining = duration;
+      render();
+    }
+
+    widgetEl.addEventListener('click', function() {
+      if (finished) { reset(); return; }
+      if (running) { pause(); } else { start(); }
+    });
+
+    if (autostart) start();
+  }
+
+  function formatHMS(totalSeconds) {
+    totalSeconds = Math.max(0, Math.floor(totalSeconds));
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    const pad = n => String(n).padStart(2, '0');
+    if (h > 0) return pad(h) + ':' + pad(m) + ':' + pad(s);
+    return pad(m) + ':' + pad(s);
+  }
+
+  function safeColor(c) {
+    // allow named colors or hex; browsers will just ignore invalid values
+    return c;
+  }
+
+  // ============================================================
+  // DESIGNER MODE
+  // ============================================================
+  function runDesigner() {
+    document.getElementById('designer').style.display = 'block';
+
+    const nameInput = document.getElementById('d-name');
+    const durationInput = document.getElementById('d-duration');
+    const countdownBtn = document.getElementById('d-countdown-btn');
+    const countupBtn = document.getElementById('d-countup-btn');
+    const bgPicker = document.getElementById('d-bgcolor-picker');
+    const bgText = document.getElementById('d-bgcolor');
+    const textPicker = document.getElementById('d-textcolor-picker');
+    const textText = document.getElementById('d-textcolor');
+    const autostartOff = document.getElementById('d-autostart-off');
+    const autostartOn = document.getElementById('d-autostart-on');
+    const previewFrame = document.getElementById('preview-frame');
+    const urlOutput = document.getElementById('url-output');
+    const iframeOutput = document.getElementById('iframe-output');
+    const copyUrlBtn = document.getElementById('copy-url-btn');
+    const copyIframeBtn = document.getElementById('copy-iframe-btn');
+
+    let isCountup = false;
+    let isAutostart = false;
+
+    function setToggle(activeBtn, inactiveBtn) {
+      activeBtn.classList.add('active');
+      inactiveBtn.classList.remove('active');
+    }
+
+    countdownBtn.addEventListener('click', () => { isCountup = false; setToggle(countdownBtn, countupBtn); update(); });
+    countupBtn.addEventListener('click', () => { isCountup = true; setToggle(countupBtn, countdownBtn); update(); });
+    autostartOff.addEventListener('click', () => { isAutostart = false; setToggle(autostartOff, autostartOn); update(); });
+    autostartOn.addEventListener('click', () => { isAutostart = true; setToggle(autostartOn, autostartOff); update(); });
+
+    bgPicker.addEventListener('input', () => { bgText.value = bgPicker.value; update(); });
+    bgText.addEventListener('input', () => { if (/^#[0-9a-fA-F]{6}$/.test(bgText.value)) bgPicker.value = bgText.value; update(); });
+    textPicker.addEventListener('input', () => { textText.value = textPicker.value; update(); });
+    textText.addEventListener('input', () => { if (/^#[0-9a-fA-F]{6}$/.test(textText.value)) textPicker.value = textText.value; update(); });
+
+    nameInput.addEventListener('input', update);
+    durationInput.addEventListener('input', update);
+
+    function parseDurationInput(str) {
+      // accepts hh:mm:ss, mm:ss, or plain seconds
+      str = str.trim();
+      if (!str) return 300;
+      const parts = str.split(':').map(p => parseInt(p, 10));
+      if (parts.some(isNaN)) return 300;
+      if (parts.length === 3) return parts[0]*3600 + parts[1]*60 + parts[2];
+      if (parts.length === 2) return parts[0]*60 + parts[1];
+      return parts[0];
+    }
+
+    function buildParams() {
+      const duration = parseDurationInput(durationInput.value);
+      const p = new URLSearchParams();
+      p.set('duration', duration);
+      p.set('countup', isCountup ? '1' : '0');
+      p.set('bgcolor', bgText.value);
+      p.set('textcolor', textText.value);
+      p.set('autostart', isAutostart ? '1' : '0');
+      if (nameInput.value.trim()) p.set('name', nameInput.value.trim());
+      return p;
+    }
+
+    function update() {
+      const p = buildParams();
+      const base = window.location.origin + window.location.pathname;
+      const url = base + '?' + p.toString();
+      previewFrame.src = url;
+      urlOutput.textContent = url;
+      iframeOutput.textContent = '<iframe src="' + url + '" width="500" height="250" frameborder="0"></iframe>';
+    }
+
+    copyUrlBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(urlOutput.textContent).then(() => flash(copyUrlBtn, 'Copied!'));
+    });
+    copyIframeBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(iframeOutput.textContent).then(() => flash(copyIframeBtn, 'Copied!'));
+    });
+
+    function flash(btn, msg) {
+      const old = btn.textContent;
+      btn.textContent = msg;
+      setTimeout(() => btn.textContent = old, 1200);
+    }
+
+    update();
+  }
+})();
+</script>
+</body>
+</html>
