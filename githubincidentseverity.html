@@ -1,0 +1,547 @@
+
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Incident Severity Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 h-full flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+
+    <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight text-white">GitHub Incident Severity Calculator</h1>
+                    <p class="text-xs text-slate-400">Log-Normal Severity Benchmarking based on P50 & P95</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mr-1.5"></span>
+                    Live UTC Engine
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-y-auto">
+        
+        <!-- Left Panel: Controls & Inputs -->
+        <section class="lg:col-span-5 bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between backdrop-blur">
+            <div class="space-y-6">
+                <div>
+                    <h2 class="text-base font-semibold text-slate-200 mb-1">Incident Parameters</h2>
+                    <p class="text-xs text-slate-400">Configure benchmark values and incident timeframe in UTC.</p>
+                </div>
+
+                <!-- Benchmarks info box -->
+                <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-3">
+                    <div class="flex justify-between items-center text-xs font-medium text-slate-400 uppercase tracking-wider">
+                        <span>Baseline Benchmarks</span>
+                        <span class="text-indigo-400 font-mono">Log-Normal Model</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-slate-900 p-3 rounded-lg border border-slate-800">
+                            <div class="text-slate-400 text-xs">P50 (Median)</div>
+                            <div class="text-lg font-bold text-slate-100">83 min</div>
+                            <div class="text-[10px] text-slate-500">1h 23m</div>
+                        </div>
+                        <div class="bg-slate-900 p-3 rounded-lg border border-slate-800">
+                            <div class="text-slate-400 text-xs">P95 (Tail)</div>
+                            <div class="text-lg font-bold text-slate-100">390 min</div>
+                            <div class="text-[10px] text-slate-500">6h 30m</div>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">
+                        Note: With P50 and P95, we can completely determine the unique Log-Normal distribution parameters ($\mu$ and $\sigma$) without needing extra points.
+                    </p>
+                </div>
+
+                <!-- Form Controls -->
+                <div class="space-y-4">
+                    <!-- Timezone Toggle -->
+                    <div class="flex items-center justify-between p-3.5 bg-slate-950/40 border border-slate-800/80 rounded-xl">
+                        <div>
+                            <div class="text-sm font-medium text-slate-200">Input Timezone</div>
+                            <div class="text-[11px] text-slate-500">How to interpret the times you type below</div>
+                        </div>
+                        <div class="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs font-mono">
+                            <button type="button" id="tzUtcBtn" onclick="setTimezoneMode('utc')" class="px-3 py-1.5 rounded-md transition-colors">UTC</button>
+                            <button type="button" id="tzLocalBtn" onclick="setTimezoneMode('local')" class="px-3 py-1.5 rounded-md transition-colors">Local</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Start Time (<span id="startTimeTzLabel">UTC</span>)</label>
+                        <input type="datetime-local" id="startTime" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono">
+                    </div>
+
+                    <div id="endTimeContainer" class="transition-all duration-300">
+                        <label class="block text-xs font-medium text-slate-300 mb-1">End Time (<span id="endTimeTzLabel">UTC</span>)</label>
+                        <input type="datetime-local" id="endTime" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono">
+                    </div>
+
+                    <!-- Ongoing Checkbox -->
+                    <div class="flex items-center justify-between p-3.5 bg-slate-950/40 border border-slate-800/80 rounded-xl">
+                        <div class="flex items-center space-x-3">
+                            <input type="checkbox" id="isOngoing" class="w-4 h-4 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 bg-slate-900 cursor-pointer">
+                            <label for="isOngoing" class="text-sm font-medium text-slate-200 cursor-pointer select-none">Incident is still ongoing</label>
+                        </div>
+                        <span class="relative flex h-2 w-2">
+                            <span id="ongoingPulse" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75 hidden"></span>
+                            <span id="ongoingStatic" class="relative inline-flex rounded-full h-2 w-2 bg-slate-600"></span>
+                        </span>
+                    </div>
+
+                    <!-- Decimal Places Input -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Decimal Places</label>
+                        <div class="flex items-center space-x-3">
+                            <input type="number" id="decimalPlaces" min="0" max="6" value="2" class="w-24 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono">
+                            <span class="text-xs text-slate-400">Controls precision for percentiles & duration</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Std Dev Decimal Places</label>
+                        <div class="flex items-center space-x-3">
+                            <input type="number" id="stdDecimalPlaces" min="0" max="6" step="1" value="2" class="w-24 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono">
+                            <span class="text-xs text-slate-400">Controls precision for the (± std) readout</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Action Presets -->
+            <div class="mt-6 pt-4 border-t border-slate-800">
+                <div class="text-xs font-medium text-slate-400 mb-2">Quick Presets:</div>
+                <div class="grid grid-cols-3 gap-2">
+                    <button onclick="setPreset(60)" class="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-lg text-xs text-slate-300 transition-colors">1 Hour</button>
+                    <button onclick="setPreset(390)" class="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-lg text-xs text-slate-300 transition-colors">P95 (6h 30m)</button>
+                    <button onclick="setPreset(1440)" class="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-lg text-xs text-slate-300 transition-colors">24 Hours</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Panel: Results & Visualization Dashboard -->
+        <section class="lg:col-span-7 flex flex-col space-y-6">
+            
+            <!-- Main Score Card -->
+            <div class="bg-gradient-to-br from-slate-900/90 to-indigo-950/40 border border-indigo-500/20 rounded-2xl p-6 shadow-2xl relative overflow-hidden backdrop-blur">
+                <div class="absolute -right-10 -top-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <span class="text-xs font-semibold uppercase tracking-wider text-indigo-400">Severity Percentile Rank</span>
+                        <h2 class="text-sm text-slate-400">How bad is this incident compared to GitHub history?</h2>
+                    </div>
+                    <div id="severityBadge" class="px-3 py-1 rounded-full text-xs font-bold border bg-slate-800 text-slate-300 border-slate-700">
+                        Calculating...
+                    </div>
+                </div>
+
+                <div class="flex flex-col md:flex-row md:items-baseline justify-between gap-4 py-4 border-y border-slate-800/80">
+                    <div>
+                        <div class="text-xs text-slate-400 mb-1">Estimated Percentile (P)</div>
+                        <div class="flex items-baseline space-x-2">
+                            <span id="percentileValue" class="text-4xl md:text-5xl font-extrabold font-mono text-white tracking-tight">--</span>
+                            <span class="text-2xl font-bold text-indigo-400">%</span>
+                            <span id="zScoreValue" class="text-sm font-mono text-slate-500">(-- std)</span>
+                        </div>
+                    </div>
+                    <div class="text-left md:text-right">
+                        <div class="text-xs text-slate-400 mb-1">Total Incident Duration</div>
+                        <div id="durationValue" class="text-xl md:text-2xl font-bold font-mono text-slate-200">--</div>
+                        <div id="durationMinutes" class="text-xs text-slate-400 font-mono">-- minutes</div>
+                    </div>
+                </div>
+
+                <!-- Visual Progress Bar for Percentile -->
+                <div class="mt-6 space-y-2">
+                    <div class="flex justify-between text-xs text-slate-400 font-mono">
+                        <span>P0 (0%)</span>
+                        <span>P50 (Median)</span>
+                        <span>P95 (Major)</span>
+                        <span>P99+ (Catastrophic)</span>
+                    </div>
+                    <div class="h-3 w-full bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800 relative">
+                        <div id="percentileBar" class="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-rose-500 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistical Breakdown Card -->
+            <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur flex-1">
+                <h3 class="text-sm font-semibold text-slate-200 mb-4 flex items-center">
+                    <svg class="w-4 h-4 mr-2 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    Distribution & Statistical Breakdown
+                </h3>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
+                        <div class="text-xs text-slate-400 mb-1">Log-Mean ($\mu$)</div>
+                        <div id="muValue" class="text-base font-mono font-bold text-slate-200">--</div>
+                        <div class="text-[10px] text-slate-500 mt-1">Scale parameter in natural log space</div>
+                    </div>
+
+                    <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
+                        <div class="text-xs text-slate-400 mb-1">Std. Deviation ($\sigma$)</div>
+                        <div id="sigmaValue" class="text-base font-mono font-bold text-slate-200">--</div>
+                        <div class="text-[10px] text-slate-500 mt-1">Calculated precisely from P50 and P95</div>
+                    </div>
+
+                    <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
+                        <div class="text-xs text-slate-400 mb-1">Expected Mean Duration</div>
+                        <div id="meanValue" class="text-base font-mono font-bold text-slate-200">--</div>
+                        <div class="text-[10px] text-slate-500 mt-1">Arithmetic expected value of distribution</div>
+                    </div>
+
+                    <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
+                        <div class="text-xs text-slate-400 mb-1">Model Status</div>
+                        <div class="text-base font-mono font-bold text-emerald-400">Analytical Exact</div>
+                        <div class="text-[10px] text-slate-500 mt-1">No extra points needed</div>
+                    </div>
+                </div>
+
+                <!-- Explanation Note -->
+                <div class="mt-4 p-3.5 bg-indigo-950/20 border border-indigo-500/20 rounded-xl text-xs text-indigo-200/80 leading-relaxed">
+                    <strong>Why do we only need 2 points?</strong> A Log-Normal distribution is fully parameterized by two variables: location ($\mu$) and scale ($\sigma$). Given exact percentiles like P50 and P95, we set up a linear system of equations using the inverse Cumulative Distribution Function (CDF) of the normal distribution to derive $\mu$ and $\sigma$ precisely.
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <script>
+        // Mathematical helper for Standard Normal Cumulative Distribution Function (Error function approximation)
+        function erf(x) {
+            // Abramowitz and Stegun approximation
+            const sign = (x >= 0) ? 1 : -1;
+            x = Math.abs(x);
+            const a1 = 0.254829592;
+            const a2 = -0.284496736;
+            const a3 = 1.421413741;
+            const a4 = -1.453152027;
+            const a5 = 1.061405429;
+            const p = 0.3275911;
+            const t = 1.0 / (1.0 + p * x);
+            const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+            return sign * y;
+        }
+
+        function normalCDF(x) {
+            return 0.5 * (1.0 + erf(x / Math.SQRT2));
+        }
+
+        function normalInverseCDF(p) {
+            // Beasley-Springer-Moro algorithm or rational approximation for standard normal inverse
+            if (p <= 0.0) return -Infinity;
+            if (p >= 1.0) return Infinity;
+            if (p === 0.5) return 0.0;
+
+            // Rational approximation constants
+            const a = [
+                -3.969683028665376e+01,  2.209460984245205e+02,
+                -2.759285104469687e+02,  1.383577518672690e+02,
+                -3.066479806614716e+01,  2.506628277459239e+00
+            ];
+            const b = [
+                -5.447609879822406e+01,  1.615858368580409e+02,
+                -1.556989798598866e+02,  6.680131188771972e+01,
+                -1.328068155288572e+01
+            ];
+            const c = [
+                -7.784894002430293e-03, -3.223964580411365e-01,
+                -2.400758277161838e+00, -2.549732539343734e+00,
+                4.374664141464968e+00,  2.938163982698783e+00
+            ];
+            const d = [
+                7.784695709041462e-03,  3.224671290700398e-01,
+                2.445134137142996e+00,  3.754408661907416e+00
+            ];
+
+            const pLow = 0.02425;
+            const pHigh = 1 - pLow;
+
+            if (p < pLow) {
+                const q = Math.sqrt(-2 * Math.log(p));
+                return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+                       ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+            } else if (p <= pHigh) {
+                const q = p - 0.5;
+                const r = q * q;
+                return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q /
+                       (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+            } else {
+                const q = Math.sqrt(-2 * Math.log(1 - p));
+                return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+                        ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+            }
+        }
+
+        // Given P50 = 83 min, P95 = 390 min
+        // Let's compute Log-Normal parameters mu and sigma
+        // ln(P50) = mu
+        // ln(P95) = mu + sigma * Z(0.95)
+        const P50_VAL = 83; // minutes
+        const P95_VAL = 390; // minutes (6h 30m)
+
+        const lnP50 = Math.log(P50_VAL);
+        const lnP95 = Math.log(P95_VAL);
+        const Z_95 = normalInverseCDF(0.95); // ~1.64485
+
+        const MU = lnP50;
+        const SIGMA = (lnP95 - lnP50) / Z_95;
+
+        // Mean of log-normal = exp(mu + sigma^2 / 2)
+        const MEAN_DURATION = Math.exp(MU + (SIGMA * SIGMA) / 2);
+
+        // DOM elements
+        const startTimeInput = document.getElementById('startTime');
+        const endTimeInput = document.getElementById('endTime');
+        const endTimeContainer = document.getElementById('endTimeContainer');
+        const isOngoingCheckbox = document.getElementById('isOngoing');
+        const decimalPlacesInput = document.getElementById('decimalPlaces');
+        const stdDecimalPlacesInput = document.getElementById('stdDecimalPlaces');
+        
+        const percentileValueEl = document.getElementById('percentileValue');
+        const zScoreValueEl = document.getElementById('zScoreValue');
+        const durationValueEl = document.getElementById('durationValue');
+        const durationMinutesEl = document.getElementById('durationMinutes');
+        const percentileBarEl = document.getElementById('percentileBar');
+        const severityBadgeEl = document.getElementById('severityBadge');
+        
+        const muValueEl = document.getElementById('muValue');
+        const sigmaValueEl = document.getElementById('sigmaValue');
+        const meanValueEl = document.getElementById('meanValue');
+        const ongoingPulseEl = document.getElementById('ongoingPulse');
+        const ongoingStaticEl = document.getElementById('ongoingStatic');
+        const startTimeTzLabelEl = document.getElementById('startTimeTzLabel');
+        const endTimeTzLabelEl = document.getElementById('endTimeTzLabel');
+
+        let timerInterval = null;
+
+        // Initialize default dates (e.g., started 2 hours ago in UTC)
+        function initDefaultTimes() {
+            const now = new Date();
+            const twoHoursAgo = new Date(now.getTime() - (2 * 60 * 60 * 1000));
+            
+            startTimeInput.value = formatDateTimeForInput(twoHoursAgo);
+            endTimeInput.value = formatDateTimeForInput(now);
+        }
+
+        // Formats a Date into the string that belongs in the datetime-local field,
+        // matching whichever timezone mode is currently selected so the round-trip
+        // (format -> parseInputAsDate) is consistent.
+        function formatDateTimeForInput(date) {
+            const pad = (n) => String(n).padStart(2, '0');
+            if (timezoneMode === 'utc') {
+                const year = date.getUTCFullYear();
+                const month = pad(date.getUTCMonth() + 1);
+                const day = pad(date.getUTCDate());
+                const hours = pad(date.getUTCHours());
+                const minutes = pad(date.getUTCMinutes());
+                return `${year}-${month}-${day}T${hours}:${minutes}`;
+            } else {
+                const year = date.getFullYear();
+                const month = pad(date.getMonth() + 1);
+                const day = pad(date.getDate());
+                const hours = pad(date.getHours());
+                const minutes = pad(date.getMinutes());
+                return `${year}-${month}-${day}T${hours}:${minutes}`;
+            }
+        }
+
+        // 'utc'   -> the text typed in the field IS UTC wall-clock time
+        // 'local' -> the text typed in the field IS this browser's local wall-clock time
+        let timezoneMode = 'utc';
+
+        function parseInputAsDate(val) {
+            if (!val) return null;
+            if (timezoneMode === 'utc') {
+                // Force interpretation as UTC regardless of browser locale
+                return new Date(val + 'Z');
+            }
+            // 'local' mode: datetime-local values are parsed as local time
+            // by the Date constructor natively when no 'Z'/offset is present.
+            return new Date(val);
+        }
+
+        function setTimezoneMode(mode) {
+            timezoneMode = mode;
+            const utcBtn = document.getElementById('tzUtcBtn');
+            const localBtn = document.getElementById('tzLocalBtn');
+            const activeClass = 'bg-indigo-500/20 text-indigo-300';
+            const inactiveClass = 'text-slate-400 hover:text-slate-200';
+
+            if (mode === 'utc') {
+                utcBtn.className = `px-3 py-1.5 rounded-md transition-colors ${activeClass}`;
+                localBtn.className = `px-3 py-1.5 rounded-md transition-colors ${inactiveClass}`;
+                startTimeTzLabelEl.textContent = 'UTC';
+                endTimeTzLabelEl.textContent = 'UTC';
+            } else {
+                localBtn.className = `px-3 py-1.5 rounded-md transition-colors ${activeClass}`;
+                utcBtn.className = `px-3 py-1.5 rounded-md transition-colors ${inactiveClass}`;
+                startTimeTzLabelEl.textContent = 'Local';
+                endTimeTzLabelEl.textContent = 'Local';
+            }
+            calculateSeverity();
+        }
+
+        function calculateSeverity() {
+            const startVal = startTimeInput.value;
+            if (!startVal) return;
+
+            const startDate = parseInputAsDate(startVal);
+            let endDate;
+
+            const isOngoing = isOngoingCheckbox.checked;
+
+            if (isOngoing) {
+                endDate = new Date(); // Current moment, timezone-agnostic (epoch-based)
+            } else {
+                const endVal = endTimeInput.value;
+                if (!endVal) {
+                    endDate = new Date();
+                } else {
+                    endDate = parseInputAsDate(endVal);
+                }
+            }
+
+            const diffMs = endDate - startDate;
+            const diffMinutes = Math.max(0, diffMs / (1000 * 60));
+
+            const decimals = parseInt(decimalPlacesInput.value) || 2;
+            const stdDecimals = parseInt(stdDecimalPlacesInput.value) || 0;
+
+            // Calculate Log-Normal CDF percentile for diffMinutes
+            let percentile = 0;
+            let zScore = 0;
+            if (diffMinutes > 0) {
+                const lnX = Math.log(diffMinutes);
+                zScore = (lnX - MU) / SIGMA;
+                percentile = normalCDF(zScore) * 100;
+            }
+
+            // Clamp percentile between 0 and 100
+            percentile = Math.min(100, Math.max(0, percentile));
+
+            // Format duration string
+            const durFormatted = formatDuration(diffMinutes);
+            durationValueEl.textContent = durFormatted;
+            durationMinutesEl.textContent = `${diffMinutes.toFixed(decimals)} total minutes`;
+
+            percentileValueEl.textContent = percentile.toFixed(decimals);
+            zScoreValueEl.textContent = `(${zScore >= 0 ? '+' : ''}${zScore.toFixed(stdDecimals)} std)`;
+            percentileBarEl.style.width = `${Math.min(100, Math.max(1, percentile))}%`;
+
+            // Update badge & styling based on severity
+            updateSeverityBadge(percentile);
+
+            // Update distribution stats display
+            muValueEl.textContent = MU.toFixed(4);
+            sigmaValueEl.textContent = SIGMA.toFixed(4);
+            meanValueEl.textContent = `${MEAN_DURATION.toFixed(1)} mins (${formatDuration(MEAN_DURATION)})`;
+        }
+
+        function formatDuration(totalMins) {
+            if (totalMins < 1) return `${(totalMins * 60).toFixed(0)}s`;
+            const hrs = Math.floor(totalMins / 60);
+            const mins = Math.floor(totalMins % 60);
+            const secs = Math.floor((totalMins * 60) % 60);
+
+            if (hrs === 0) return `${mins}m ${secs}s`;
+            return `${hrs}h ${mins}m`;
+        }
+
+        function updateSeverityBadge(p) {
+            let badgeText = 'Normal';
+            let badgeClass = 'bg-slate-800 text-slate-300 border-slate-700';
+
+            if (p >= 99) {
+                badgeText = 'Catastrophic (P99+)';
+                badgeClass = 'bg-rose-500/10 text-rose-400 border-rose-500/30 animate-pulse';
+            } else if (p >= 95) {
+                badgeText = 'Severe Major (P95+)';
+                badgeClass = 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+            } else if (p >= 75) {
+                badgeText = 'Elevated (P75+)';
+                badgeClass = 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30';
+            } else if (p >= 50) {
+                badgeText = 'Moderate (P50+)';
+                badgeClass = 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30';
+            } else {
+                badgeText = 'Minor (<P50)';
+                badgeClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+            }
+
+            severityBadgeEl.className = `px-3 py-1 rounded-full text-xs font-bold border ${badgeClass}`;
+            severityBadgeEl.textContent = badgeText;
+        }
+
+        function handleOngoingChange() {
+            const isOngoing = isOngoingCheckbox.checked;
+            if (isOngoing) {
+                endTimeContainer.style.opacity = '0.4';
+                endTimeContainer.style.pointerEvents = 'none';
+                ongoingPulseEl.classList.remove('hidden');
+                ongoingStaticEl.classList.add('hidden');
+
+                // Start live ticking interval
+                if (timerInterval) clearInterval(timerInterval);
+                timerInterval = setInterval(calculateSeverity, 1000);
+            } else {
+                endTimeContainer.style.opacity = '1';
+                endTimeContainer.style.pointerEvents = 'auto';
+                ongoingPulseEl.classList.add('hidden');
+                ongoingStaticEl.classList.remove('hidden');
+
+                if (timerInterval) clearInterval(timerInterval);
+                // Set end time to current moment if empty
+                if (!endTimeInput.value) {
+                    endTimeInput.value = formatDateTimeForInput(new Date());
+                }
+            }
+            calculateSeverity();
+        }
+
+        function setPreset(minutes) {
+            isOngoingCheckbox.checked = false;
+            handleOngoingChange();
+
+            const now = new Date();
+            const past = new Date(now.getTime() - (minutes * 60 * 1000));
+            startTimeInput.value = formatDateTimeForInput(past);
+            endTimeInput.value = formatDateTimeForInput(now);
+            calculateSeverity();
+        }
+
+        startTimeInput.addEventListener('input', calculateSeverity);
+        endTimeInput.addEventListener('input', calculateSeverity);
+        decimalPlacesInput.addEventListener('input', calculateSeverity);
+        stdDecimalPlacesInput.addEventListener('input', calculateSeverity);
+        isOngoingCheckbox.addEventListener('change', handleOngoingChange);
+
+        window.onload = function() {
+            setTimezoneMode('utc'); // sets initial button styling; also calls calculateSeverity
+            initDefaultTimes();
+            // Default to ongoing incident so user immediately sees live ticking
+            isOngoingCheckbox.checked = true;
+            handleOngoingChange();
+        };
+    </script>
+</body>
+</html>
