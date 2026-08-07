@@ -1,85 +1,531 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Widget Wall</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Widget Wall</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#151417;
+    --panel:#1c1b20;
+    --panel-2:#232228;
+    --line:#3d3a42;
+    --line-soft:#2a2830;
+    --paper:#edebe6;
+    --muted:#8b8578;
+    --signal:#e8622c;
+    --signal-dim:#e8622c33;
+    --danger:#c9573f;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 1px 1px, #ffffff08 1px, transparent 1px) 0 0/24px 24px,
+      var(--bg);
+    color:var(--paper);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+  }
+  ::selection{background:var(--signal-dim);}
+
+  header{
+    position:sticky; top:0; z-index:40;
+    background:#151417ee;
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line-soft);
+  }
+  .header-inner{
+    max-width:1280px; margin:0 auto; padding:20px 24px;
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+  }
+  .brand{display:flex; align-items:center; gap:12px;}
+  .brand-mark{
+    width:32px; height:32px; border-radius:8px;
+    background:linear-gradient(135deg,var(--signal),#b8451f);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 1px #ffffff14, 0 4px 12px -2px #e8622c55;
+  }
+  .brand-mark svg{width:16px;height:16px;}
+  h1{
+    font-family:'Space Grotesk',sans-serif; font-weight:700;
+    font-size:19px; letter-spacing:-0.01em; margin:0;
+  }
+  .brand-sub{
+    font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted);
+    letter-spacing:0.04em; margin-top:1px;
+  }
+  .header-actions{display:flex; gap:8px; align-items:center;}
+  .icon-btn{
+    width:38px; height:38px; border-radius:9px;
+    background:var(--panel); border:1px solid var(--line-soft);
+    color:var(--muted); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:.15s;
+  }
+  .icon-btn:hover{color:var(--paper); border-color:var(--line); background:var(--panel-2);}
+  .icon-btn svg{width:16px;height:16px;}
+
+  .btn-primary{
+    font-family:'Inter',sans-serif; font-weight:600; font-size:14px;
+    background:var(--signal); color:#1a0f08;
+    border:none; padding:10px 18px; border-radius:9px;
+    cursor:pointer; display:flex; align-items:center; gap:8px;
+    transition:.15s; box-shadow:0 2px 10px -2px #e8622c44;
+  }
+  .btn-primary:hover{background:#f26f38; transform:translateY(-1px);}
+  .btn-primary svg{width:15px;height:15px;}
+
+  main{max-width:1280px; margin:0 auto; padding:32px 24px 80px;}
+
+  #widgetGrid{
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+    gap:20px;
+  }
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line-soft);
+    border-radius:var(--radius);
+    overflow:hidden;
+    display:flex; flex-direction:column;
+    transition:border-color .15s, transform .15s;
+    position:relative;
+  }
+  .card.dragging{opacity:.4;}
+  .card.drag-over{border-color:var(--signal);}
+
+  .card-strip{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 12px;
+    background:var(--panel-2);
+    border-bottom:1px solid var(--line-soft);
+    cursor:grab;
+  }
+  .card-strip:active{cursor:grabbing;}
+  .jack{
+    width:8px; height:8px; border-radius:50%;
+    background:var(--signal);
+    box-shadow:0 0 0 3px var(--signal-dim);
+    flex-shrink:0; transition:box-shadow .2s;
+  }
+  .card:hover .jack{box-shadow:0 0 0 5px var(--signal-dim);}
+  .card-title{
+    font-family:'Space Grotesk',sans-serif; font-weight:500; font-size:13.5px;
+    flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .card-url{
+    font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:110px;
+  }
+  .card-controls{display:flex; gap:4px; flex-shrink:0;}
+  .mini-btn{
+    width:24px; height:24px; border-radius:6px; border:none;
+    background:transparent; color:var(--muted);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    transition:.15s;
+  }
+  .mini-btn:hover{background:var(--line-soft); color:var(--paper);}
+  .mini-btn.danger:hover{background:#c9573f22; color:var(--danger);}
+  .mini-btn svg{width:13px;height:13px;}
+
+  .frame-wrap{
+    width:100%; overflow:auto; background:#0e0d10;
+    display:flex; align-items:flex-start; justify-content:center;
+  }
+  .frame-wrap iframe{border:0; display:block;}
+
+  .card-footer{
+    padding:7px 12px; border-top:1px solid var(--line-soft);
+    font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted);
+    display:flex; justify-content:space-between;
+  }
+
+  .empty-state{
+    grid-column:1/-1;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:100px 20px; text-align:center; color:var(--muted);
+  }
+  .empty-state svg{width:40px; height:40px; margin-bottom:16px; opacity:.5;}
+  .empty-state h3{font-family:'Space Grotesk',sans-serif; color:var(--paper); font-weight:500; margin:0 0 6px;}
+  .empty-state p{font-size:13.5px; margin:0 0 20px; max-width:280px;}
+
+  /* Modal */
+  .modal-backdrop{
+    position:fixed; inset:0; background:#0a090bcc; backdrop-filter:blur(4px);
+    display:flex; align-items:center; justify-content:center; z-index:50;
+    opacity:0; pointer-events:none; transition:opacity .15s;
+  }
+  .modal-backdrop.open{opacity:1; pointer-events:auto;}
+  .modal{
+    background:var(--panel); border:1px solid var(--line);
+    border-radius:16px; width:100%; max-width:420px; margin:20px;
+    padding:24px; transform:translateY(8px); transition:transform .15s;
+    box-shadow:0 20px 60px -10px #000000aa;
+  }
+  .modal-backdrop.open .modal{transform:translateY(0);}
+  .modal h2{
+    font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:17px; margin:0 0 3px;
+  }
+  .modal .sub{font-size:12.5px; color:var(--muted); margin:0 0 20px;}
+  label{
+    font-size:11.5px; font-weight:600; color:var(--muted);
+    text-transform:uppercase; letter-spacing:.05em; display:block; margin-bottom:6px;
+  }
+  .field{margin-bottom:14px;}
+  input[type=text], input[type=number]{
+    width:100%; background:#0e0d10; border:1px solid var(--line-soft);
+    color:var(--paper); padding:10px 12px; border-radius:9px; font-size:13.5px;
+    font-family:'Inter',sans-serif; outline:none; transition:border-color .15s;
+  }
+  input:focus{border-color:var(--signal);}
+  .dim-row{display:flex; gap:10px;}
+  .dim-row .field{flex:1;}
+  .modal-actions{display:flex; justify-content:flex-end; gap:8px; margin-top:20px;}
+  .btn-ghost{
+    background:transparent; border:none; color:var(--muted);
+    font-size:13.5px; font-weight:500; padding:9px 14px; border-radius:8px; cursor:pointer;
+  }
+  .btn-ghost:hover{color:var(--paper); background:var(--line-soft);}
+  .error-msg{
+    font-size:12px; color:var(--danger); margin-top:-6px; margin-bottom:12px; display:none;
+  }
+
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--panel-2); border:1px solid var(--line);
+    padding:10px 18px; border-radius:9px; font-size:13px;
+    opacity:0; pointer-events:none; transition:.2s; z-index:60;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  @media (prefers-reduced-motion:reduce){*{transition:none !important;}}
+</style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body>
 
-    <header class="bg-white shadow-sm sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-            <h1 class="text-2xl font-bold text-gray-900">My Widget Wall</h1>
-            <button onclick="document.getElementById('modal').classList.remove('hidden')" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
-                + Add Widget
-            </button>
-        </div>
-    </header>
+<header>
+  <div class="header-inner">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#1a0f08" stroke-width="2.4" stroke-linecap="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h8M6 8v8M18 8v8M8 18h8"/></svg>
+      </div>
+      <div>
+        <h1>Widget Wall</h1>
+        <div class="brand-sub" id="countLabel">0 MODULES PATCHED</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="exportBtn" title="Export backup">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
+      <button class="icon-btn" id="importBtn" title="Import backup">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      </button>
+      <input type="file" id="importFile" accept="application/json" style="display:none">
+      <button class="btn-primary" id="addBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add module
+      </button>
+    </div>
+  </div>
+</header>
 
-    <main class="max-w-7xl mx-auto p-4">
-        <div id="widgetGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Widgets injected here -->
-        </div>
-    </main>
+<main>
+  <div id="widgetGrid"></div>
+</main>
 
-    <div id="modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50">
-        <div class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md">
-            <h2 class="text-xl font-semibold mb-4">Add New Widget</h2>
-            <input id="wUrl" type="text" placeholder="Iframe URL (https://...)" class="w-full p-2 border rounded mb-3">
-            <div class="flex gap-2">
-                <input id="wWidth" type="number" placeholder="Width (px)" class="w-1/2 p-2 border rounded">
-                <input id="wHeight" type="number" placeholder="Height (px)" class="w-1/2 p-2 border rounded">
-            </div>
-            <div class="mt-6 flex justify-end gap-2">
-                <button onclick="document.getElementById('modal').classList.add('hidden')" class="px-4 py-2 text-gray-600">Cancel</button>
-                <button onclick="saveWidget()" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Add to Wall</button>
-            </div>
-        </div>
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <h2 id="modalTitle">Patch in a new module</h2>
+    <p class="sub" id="modalSub">Give it a label and point it at a URL.</p>
+
+    <div class="field">
+      <label for="wTitle">Label</label>
+      <input id="wTitle" type="text" placeholder="e.g. Calendar, Weather, Notes">
+    </div>
+    <div class="field">
+      <label for="wUrl">Source URL</label>
+      <input id="wUrl" type="text" placeholder="https://...">
+      <div class="error-msg" id="urlError">Enter a valid https:// or http:// URL.</div>
+    </div>
+    <div class="dim-row">
+      <div class="field">
+        <label for="wWidth">Width (px)</label>
+        <input id="wWidth" type="number" placeholder="320" min="100">
+      </div>
+      <div class="field">
+        <label for="wHeight">Height (px)</label>
+        <input id="wHeight" type="number" placeholder="300" min="100">
+      </div>
     </div>
 
-    <script>
-        let widgets = JSON.parse(localStorage.getItem('myWidgets') || '[]');
+    <div class="modal-actions">
+      <button class="btn-ghost" id="cancelBtn">Cancel</button>
+      <button class="btn-primary" id="saveBtn">Save module</button>
+    </div>
+  </div>
+</div>
 
-        function render() {
-            const grid = document.getElementById('widgetGrid');
-            grid.innerHTML = '';
-            widgets.forEach((w, index) => {
-                const card = document.createElement('div');
-                card.className = 'bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center';
-                card.innerHTML = `
-                    <div class="w-full overflow-auto mb-3" style="width: ${w.width}px; height: ${w.height}px;">
-                        <iframe src="${w.url}" class="w-full h-full border-0"></iframe>
-                    </div>
-                    <button onclick="removeWidget(${index})" class="text-red-500 text-sm hover:underline">Remove Widget</button>
-                `;
-                grid.appendChild(card);
-            });
-        }
+<div class="toast" id="toast"></div>
 
-        function saveWidget() {
-            const url = document.getElementById('wUrl').value;
-            const width = document.getElementById('wWidth').value || 300;
-            const height = document.getElementById('wHeight').value || 300;
-            
-            if (!url) return;
-            widgets.push({ url, width, height });
-            localStorage.setItem('myWidgets', JSON.stringify(widgets));
-            document.getElementById('modal').classList.add('hidden');
-            render();
-        }
+<script>
+(function(){
+  const STORAGE_KEY = 'myWidgets';
+  let widgets = [];
+  let editingIndex = null;
+  let dragIndex = null;
 
-        function removeWidget(index) {
-            widgets.splice(index, 1);
-            localStorage.setItem('myWidgets', JSON.stringify(widgets));
-            render();
-        }
+  function loadWidgets(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      widgets = raw ? JSON.parse(raw) : [];
+      if(!Array.isArray(widgets)) widgets = [];
+    }catch(e){
+      console.error('Failed to load widgets from storage:', e);
+      widgets = [];
+      showToast('Saved data was unreadable — starting fresh');
+    }
+  }
 
+  function saveWidgets(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(widgets));
+      return true;
+    }catch(e){
+      console.error('Failed to save widgets:', e);
+      showToast('Could not save — storage may be full or blocked');
+      return false;
+    }
+  }
+
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(()=>t.classList.remove('show'), 2400);
+  }
+
+  function escapeHtml(str){
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function isValidUrl(str){
+    try{
+      const u = new URL(str);
+      return u.protocol === 'https:' || u.protocol === 'http:';
+    }catch(e){ return false; }
+  }
+
+  function render(){
+    const grid = document.getElementById('widgetGrid');
+    grid.innerHTML = '';
+    document.getElementById('countLabel').textContent =
+      widgets.length + (widgets.length === 1 ? ' MODULE PATCHED' : ' MODULES PATCHED');
+
+    if(widgets.length === 0){
+      grid.innerHTML = `
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h8M6 8v8M18 8v8M8 18h8"/></svg>
+          <h3>Nothing patched in yet</h3>
+          <p>Add a module to embed any page — a calendar, a tracker, a live dashboard — right onto your wall.</p>
+          <button class="btn-primary" id="emptyAddBtn">Add your first module</button>
+        </div>`;
+      document.getElementById('emptyAddBtn').addEventListener('click', openAddModal);
+      return;
+    }
+
+    widgets.forEach((w, index) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.draggable = true;
+      card.dataset.index = index;
+      const title = w.title && w.title.trim() ? w.title.trim() : 'Untitled module';
+      let host = '';
+      try{ host = new URL(w.url).host; }catch(e){ host = w.url; }
+
+      card.innerHTML = `
+        <div class="card-strip">
+          <span class="jack"></span>
+          <span class="card-title" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+          <span class="card-url" title="${escapeHtml(w.url)}">${escapeHtml(host)}</span>
+          <div class="card-controls">
+            <button class="mini-btn" data-action="edit" title="Edit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
+            </button>
+            <button class="mini-btn danger" data-action="remove" title="Remove">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="frame-wrap" style="height:${w.height}px;">
+          <iframe src="${escapeHtml(w.url)}" style="width:${w.width}px; height:${w.height}px;" loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
+        </div>
+        <div class="card-footer">
+          <span>${w.width}×${w.height}</span>
+          <span>#${String(index+1).padStart(2,'0')}</span>
+        </div>
+      `;
+
+      card.querySelector('[data-action="edit"]').addEventListener('click', (e)=>{
+        e.stopPropagation(); openEditModal(index);
+      });
+      card.querySelector('[data-action="remove"]').addEventListener('click', (e)=>{
+        e.stopPropagation(); removeWidget(index);
+      });
+
+      card.addEventListener('dragstart', (e)=>{
+        dragIndex = index;
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      card.addEventListener('dragend', ()=>{
+        card.classList.remove('dragging');
+        document.querySelectorAll('.card').forEach(c=>c.classList.remove('drag-over'));
+      });
+      card.addEventListener('dragover', (e)=>{
+        e.preventDefault();
+        card.classList.add('drag-over');
+      });
+      card.addEventListener('dragleave', ()=> card.classList.remove('drag-over'));
+      card.addEventListener('drop', (e)=>{
+        e.preventDefault();
+        card.classList.remove('drag-over');
+        const targetIndex = index;
+        if(dragIndex === null || dragIndex === targetIndex) return;
+        const moved = widgets.splice(dragIndex, 1)[0];
+        widgets.splice(targetIndex, 0, moved);
+        saveWidgets();
         render();
-    </script>
+      });
+
+      grid.appendChild(card);
+    });
+  }
+
+  function removeWidget(index){
+    widgets.splice(index, 1);
+    saveWidgets();
+    render();
+    showToast('Module removed');
+  }
+
+  function openAddModal(){
+    editingIndex = null;
+    document.getElementById('modalTitle').textContent = 'Patch in a new module';
+    document.getElementById('modalSub').textContent = 'Give it a label and point it at a URL.';
+    document.getElementById('saveBtn').textContent = 'Save module';
+    document.getElementById('wTitle').value = '';
+    document.getElementById('wUrl').value = '';
+    document.getElementById('wWidth').value = '';
+    document.getElementById('wHeight').value = '';
+    document.getElementById('urlError').style.display = 'none';
+    openModal();
+  }
+
+  function openEditModal(index){
+    editingIndex = index;
+    const w = widgets[index];
+    document.getElementById('modalTitle').textContent = 'Edit module';
+    document.getElementById('modalSub').textContent = 'Update its label, source, or size.';
+    document.getElementById('saveBtn').textContent = 'Save changes';
+    document.getElementById('wTitle').value = w.title || '';
+    document.getElementById('wUrl').value = w.url || '';
+    document.getElementById('wWidth').value = w.width;
+    document.getElementById('wHeight').value = w.height;
+    document.getElementById('urlError').style.display = 'none';
+    openModal();
+  }
+
+  function openModal(){
+    document.getElementById('modalBackdrop').classList.add('open');
+    setTimeout(()=>document.getElementById('wTitle').focus(), 50);
+  }
+  function closeModal(){
+    document.getElementById('modalBackdrop').classList.remove('open');
+  }
+
+  function handleSave(){
+    const title = document.getElementById('wTitle').value.trim();
+    const url = document.getElementById('wUrl').value.trim();
+    const width = parseInt(document.getElementById('wWidth').value, 10) || 320;
+    const height = parseInt(document.getElementById('wHeight').value, 10) || 300;
+
+    if(!isValidUrl(url)){
+      document.getElementById('urlError').style.display = 'block';
+      return;
+    }
+    document.getElementById('urlError').style.display = 'none';
+
+    const entry = { title, url, width: Math.max(100,width), height: Math.max(100,height) };
+
+    if(editingIndex !== null){
+      widgets[editingIndex] = entry;
+      showToast('Module updated');
+    }else{
+      widgets.push(entry);
+      showToast('Module added');
+    }
+    if(saveWidgets()){
+      closeModal();
+      render();
+    }
+  }
+
+  function exportBackup(){
+    const blob = new Blob([JSON.stringify(widgets, null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'widget-wall-backup.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('Backup downloaded');
+  }
+
+  function importBackup(file){
+    const reader = new FileReader();
+    reader.onload = () => {
+      try{
+        const data = JSON.parse(reader.result);
+        if(!Array.isArray(data)) throw new Error('not an array');
+        const clean = data.filter(w => w && typeof w.url === 'string' && isValidUrl(w.url));
+        widgets = clean;
+        saveWidgets();
+        render();
+        showToast('Backup imported — ' + clean.length + ' module(s)');
+      }catch(e){
+        console.error('Import failed:', e);
+        showToast('Import failed — invalid backup file');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  document.getElementById('addBtn').addEventListener('click', openAddModal);
+  document.getElementById('cancelBtn').addEventListener('click', closeModal);
+  document.getElementById('saveBtn').addEventListener('click', handleSave);
+  document.getElementById('modalBackdrop').addEventListener('click', (e)=>{
+    if(e.target.id === 'modalBackdrop') closeModal();
+  });
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape') closeModal();
+  });
+  document.getElementById('exportBtn').addEventListener('click', exportBackup);
+  document.getElementById('importBtn').addEventListener('click', ()=>document.getElementById('importFile').click());
+  document.getElementById('importFile').addEventListener('change', (e)=>{
+    if(e.target.files[0]) importBackup(e.target.files[0]);
+    e.target.value = '';
+  });
+
+  loadWidgets();
+  render();
+})();
+</script>
 </body>
 </html>
