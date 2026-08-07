@@ -327,6 +327,7 @@
   <div id="numpad"></div>
   <div id="controls">
     <button class="ctrl-btn" id="notes-toggle">Notes</button>
+    <button class="ctrl-btn" id="autonotes-toggle">Auto</button>
     <button class="ctrl-btn" id="erase-btn">Erase</button>
     <button class="ctrl-btn" id="new-btn">New</button>
   </div>
@@ -428,6 +429,10 @@
           <label for="d-toggle-controls">Notes / erase / new buttons</label>
           <label class="switch"><input type="checkbox" id="d-toggle-controls" checked><span class="track"></span></label>
         </div>
+        <div class="toggle-row">
+          <label for="d-toggle-autonotes">Auto candidate removal</label>
+          <label class="switch"><input type="checkbox" id="d-toggle-autonotes"><span class="track"></span></label>
+        </div>
       </div>
     </div>
 
@@ -474,6 +479,7 @@
         <tr><td class="param">numpad</td><td class="default">on</td><td>Set to <code>off</code> to hide the on-screen number pad (keyboard input still works).</td></tr>
         <tr><td class="param">controls</td><td class="default">on</td><td>Set to <code>off</code> to hide the Notes / Erase / New row.</td></tr>
         <tr><td class="param">transparent</td><td class="default">false</td><td>Set to <code>true</code> to drop the widget's own background so it blends with the host page behind the iframe.</td></tr>
+        <tr><td class="param">autonotes</td><td class="default">off</td><td>Set to <code>on</code> to automatically erase a digit from pencil-mark notes in the same row, column, and box whenever that digit is placed. Can also be toggled live with the "Auto" button.</td></tr>
       </tbody>
     </table>
     <p style="margin-top:24px; font-size:13px;">The widget posts a <code>window.postMessage</code> event of the form <code>{ type: 'sudoku-solved', time, mistakes }</code> to its parent frame when solved, if you want to react to completion from the host page.</p>
@@ -489,7 +495,7 @@
 // MODE DETECTION — presence of any recognized widget param -> widget view.
 // Otherwise -> designer view.
 // =========================================================================
-const WIDGET_PARAM_KEYS = ['sudoku','size','cellsize','seed','theme','accent','timer','timerspace','mistakes','autocheck','highlights','numpad','controls'];
+const WIDGET_PARAM_KEYS = ['sudoku','size','cellsize','seed','theme','accent','timer','timerspace','mistakes','autocheck','highlights','numpad','controls','autonotes'];
 const params = new URLSearchParams(window.location.search);
 const isWidgetMode = WIDGET_PARAM_KEYS.some(k => params.has(k));
 
@@ -519,6 +525,7 @@ function runWidget(params){
   const autoCheck = params.get('autocheck') !== 'off';
   const showHighlights = params.get('highlights') !== 'off';
   const transparentBg = params.get('transparent') === 'true';
+  let autoNotes = params.get('autonotes') === 'on';
 
   if(theme === 'dark'){
     document.documentElement.style.setProperty('--bg', '#17181B');
@@ -787,6 +794,18 @@ function runWidget(params){
       mistakes++;
     }
 
+    if(v !== 0 && autoNotes){
+      const r = Math.floor(i/9), c = i%9;
+      const br = Math.floor(r/3)*3, bc = Math.floor(c/3)*3;
+      for(let k=0;k<9;k++){
+        notes[idx(r,k)].delete(v);
+        notes[idx(k,c)].delete(v);
+      }
+      for(let bi=0;bi<3;bi++) for(let bj=0;bj<3;bj++){
+        notes[idx(br+bi,bc+bj)].delete(v);
+      }
+    }
+
     render();
     checkWin();
   }
@@ -845,6 +864,13 @@ function runWidget(params){
     e.target.classList.toggle('active', notesMode);
   });
 
+  const autonotesBtn = document.getElementById('autonotes-toggle');
+  autonotesBtn.classList.toggle('active', autoNotes);
+  autonotesBtn.addEventListener('click', (e) => {
+    autoNotes = !autoNotes;
+    e.target.classList.toggle('active', autoNotes);
+  });
+
   document.getElementById('new-btn').addEventListener('click', () => {
     const url = new URL(window.location.href);
     url.searchParams.delete('sudoku');
@@ -899,6 +925,7 @@ function runDesigner(){
   const toggleHighlights = el('d-toggle-highlights');
   const toggleNumpad = el('d-toggle-numpad');
   const toggleControls = el('d-toggle-controls');
+  const toggleAutonotes = el('d-toggle-autonotes');
 
   const iframe = el('preview-iframe');
   const codeIframe = el('d-code-iframe');
@@ -931,7 +958,7 @@ function runDesigner(){
     });
   });
 
-  [seedInput, themeSelect, toggleTimer, toggleMistakes, toggleAutocheck, toggleHighlights, toggleNumpad, toggleControls]
+  [seedInput, themeSelect, toggleTimer, toggleMistakes, toggleAutocheck, toggleHighlights, toggleNumpad, toggleControls, toggleAutonotes]
     .forEach(node => node.addEventListener('change', update));
 
   function buildParams(){
@@ -959,6 +986,7 @@ function runDesigner(){
     if(!toggleHighlights.checked) p.set('highlights', 'off');
     if(!toggleNumpad.checked) p.set('numpad', 'off');
     if(!toggleControls.checked) p.set('controls', 'off');
+    if(toggleAutonotes.checked) p.set('autonotes', 'on');
 
     return p;
   }
