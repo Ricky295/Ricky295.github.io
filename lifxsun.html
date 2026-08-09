@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sun emulator for LIFX</title>
+<style>
+  :root{
+    --ink:#241a12;
+    --paper:#fbf4e8;
+    --card:#ffffff;
+    --line:#e7dcc8;
+    --muted:#8a7a63;
+    --dawn-1:#2b2350;
+    --dawn-2:#8a4a6b;
+    --dawn-3:#e8794f;
+    --dawn-4:#f7c94c;
+    --accent:#d97a3d;
+    --accent-ink:#5c3111;
+    --ok:#3f7a4e;
+    --err:#b3452f;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:2rem 1.25rem 5rem;}
+
+  header.hero{position:relative;margin-bottom:2rem;}
+  .horizon{
+    position:relative;
+    height:150px;
+    border-radius:14px;
+    overflow:hidden;
+    border:1px solid var(--line);
+    background:linear-gradient(180deg,#2b2350 0%,#8a4a6b 45%,#e8794f 72%,#f7c94c 100%);
+    transition:background 0.4s ease;
+  }
+  .horizon .sun{
+    position:absolute;
+    left:50%;
+    width:46px;height:46px;
+    border-radius:50%;
+    background:#fff6df;
+    box-shadow:0 0 30px 8px rgba(255,230,170,0.55);
+    transform:translate(-50%,0);
+    transition:bottom 0.4s ease, opacity 0.4s ease, box-shadow 0.4s ease;
+  }
+  .horizon .ground{
+    position:absolute;left:0;right:0;bottom:0;height:22%;
+    background:#1c140d;
+    opacity:0.55;
+  }
+  h1{
+    font-family:Georgia,"Times New Roman",serif;
+    font-weight:400;
+    font-size:1.85rem;
+    letter-spacing:0.01em;
+    margin:1.1rem 0 0.2rem;
+  }
+  .tagline{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    color:var(--muted);
+    font-size:0.92rem;
+    margin:0;
+  }
+
+  .ui{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+
+  section.card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:1.2rem 1.3rem;
+    margin-bottom:1rem;
+  }
+  section.card h2{
+    font-family:Georgia,serif;
+    font-weight:400;
+    font-size:1.05rem;
+    margin:0 0 0.9rem;
+    display:flex;
+    align-items:center;
+    gap:0.5rem;
+  }
+  .step-num{
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    font-size:0.7rem;
+    font-weight:600;
+    color:#fff;
+    background:var(--accent);
+    width:20px;height:20px;
+    border-radius:50%;
+    display:inline-flex;
+    align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+
+  label{
+    display:block;
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    font-size:0.78rem;
+    color:var(--muted);
+    margin-bottom:0.3rem;
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+  }
+  input[type=text],input[type=password],input[type=number],input[type=time],select{
+    width:100%;
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    font-size:0.95rem;
+    padding:0.55rem 0.7rem;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:#fffdf9;
+    color:var(--ink);
+  }
+  input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  .field{margin-bottom:0.85rem;}
+  .row{display:flex;gap:0.7rem;}
+  .row > .field{flex:1;min-width:0;}
+
+  button{
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    font-size:0.9rem;
+    font-weight:600;
+    padding:0.6rem 1rem;
+    border-radius:8px;
+    border:1px solid var(--accent);
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  button.secondary{background:transparent;color:var(--accent-ink);}
+  button:disabled{opacity:0.5;cursor:not-allowed;}
+  button:active:not(:disabled){transform:scale(0.98);}
+
+  .status-line{
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    font-size:0.85rem;
+    margin-top:0.6rem;
+    display:flex;
+    align-items:center;
+    gap:0.4rem;
+  }
+  .status-line.ok{color:var(--ok);}
+  .status-line.err{color:var(--err);}
+
+  .bulb-list{display:flex;flex-direction:column;gap:0.5rem;margin-top:0.4rem;}
+  .bulb-item{
+    display:flex;align-items:center;gap:0.6rem;
+    padding:0.5rem 0.7rem;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    font-size:0.88rem;
+  }
+  .bulb-item input[type=checkbox]{width:16px;height:16px;flex-shrink:0;}
+  .bulb-item .swatch{
+    width:12px;height:12px;border-radius:50%;flex-shrink:0;
+    background:#ccc;
+  }
+  .bulb-item .name{flex:1;}
+  .bulb-item .kelvin-range{color:var(--muted);font-size:0.78rem;}
+
+  .segmented{
+    display:flex;
+    border:1px solid var(--line);
+    border-radius:8px;
+    overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    font-size:0.85rem;
+  }
+  .segmented button{
+    flex:1;
+    border:none;
+    border-radius:0;
+    background:#fffdf9;
+    color:var(--ink);
+    font-weight:500;
+    padding:0.5rem 0.4rem;
+  }
+  .segmented button.active{background:var(--accent);color:#fff;}
+  .segmented button + button{border-left:1px solid var(--line);}
+
+  .helper{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:0.78rem;color:var(--muted);margin-top:0.35rem;}
+
+  .toggle-row{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0.5rem 0;
+  }
+  .toggle-row .label-block{max-width:78%;}
+  .toggle-row .label-block .t-title{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:0.92rem;font-weight:500;}
+  .toggle-row .label-block .t-sub{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:0.78rem;color:var(--muted);}
+  .switch{position:relative;width:42px;height:24px;flex-shrink:0;}
+  .switch input{opacity:0;width:0;height:0;}
+  .switch .slider{position:absolute;inset:0;background:#d8cdb8;border-radius:24px;cursor:pointer;transition:0.2s;}
+  .switch .slider:before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:0.2s;}
+  .switch input:checked + .slider{background:var(--accent);}
+  .switch input:checked + .slider:before{transform:translateX(18px);}
+
+  .mode-toggle{display:flex;gap:0.5rem;margin-bottom:1rem;}
+  .mode-toggle button{flex:1;}
+  .mode-toggle button:not(.active){background:transparent;color:var(--ink);border-color:var(--line);}
+
+  .progress-wrap{display:none;margin-top:0.8rem;}
+  .progress-wrap.show{display:block;}
+  .progress-track{
+    height:8px;border-radius:4px;background:var(--line);overflow:hidden;
+  }
+  .progress-fill{
+    height:100%;background:linear-gradient(90deg,var(--dawn-3),var(--dawn-4));
+    width:0%;transition:width 0.3s linear;
+  }
+  .progress-label{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:0.8rem;color:var(--muted);margin-top:0.4rem;display:flex;justify-content:space-between;}
+
+  .schedule-summary{
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    font-size:0.88rem;
+    background:#fdf6ea;
+    border:1px dashed var(--line);
+    border-radius:8px;
+    padding:0.7rem 0.9rem;
+    margin-top:0.6rem;
+    line-height:1.5;
+  }
+  .schedule-summary b{color:var(--accent-ink);}
+
+  footer{
+    text-align:center;
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    font-size:0.78rem;
+    color:var(--muted);
+    margin-top:1.5rem;
+  }
+  a{color:var(--accent-ink);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="horizon" id="horizon">
+      <div class="ground"></div>
+      <div class="sun" id="sun" style="bottom:-30px;opacity:0;"></div>
+    </div>
+    <h1>Sun emulator</h1>
+    <p class="tagline">A slow, natural sunrise or sunset for your LIFX bulbs.</p>
+  </header>
+
+  <div class="ui">
+
+    <!-- Step 1: API key -->
+    <section class="card">
+      <h2><span class="step-num">1</span>Connect to LIFX</h2>
+      <div class="field">
+        <label for="apiKey">API key</label>
+        <input type="password" id="apiKey" placeholder="Paste your LIFX personal access token">
+      </div>
+      <button id="connectBtn">Connect &amp; fetch bulbs</button>
+      <div class="status-line" id="connectStatus"></div>
+      <p class="helper">Get a token from <a href="https://cloud.lifx.com/settings" target="_blank" rel="noopener">cloud.lifx.com/settings</a>. It's used only in your browser to call the LIFX API directly — nothing is sent anywhere else.</p>
+    </section>
+
+    <!-- Step 2: bulbs -->
+    <section class="card" id="bulbSection" style="display:none;">
+      <h2><span class="step-num">2</span>Choose lights</h2>
+      <div class="bulb-list" id="bulbList"></div>
+    </section>
+
+    <!-- Step 3: mode -->
+    <section class="card" id="modeSection" style="display:none;">
+      <h2><span class="step-num">3</span>Sunrise or sunset</h2>
+      <div class="mode-toggle">
+        <button id="modeSunrise" class="active">Sunrise — brighten &amp; cool up</button>
+        <button id="modeSunset">Sunset — dim &amp; warm down</button>
+      </div>
+    </section>
+
+    <!-- Step 4: timing -->
+    <section class="card" id="timeSection" style="display:none;">
+      <h2><span class="step-num">4</span>When it happens</h2>
+      <div class="segmented" id="timeModeSeg">
+        <button data-mode="fixed" class="active">Fixed time</button>
+        <button data-mode="sunrise">Relative to sunrise</button>
+        <button data-mode="sunset">Relative to sunset</button>
+      </div>
+
+      <div id="fixedTimeFields" style="margin-top:1rem;">
+        <div class="field">
+          <label for="fixedTime">Time of day</label>
+          <input type="time" id="fixedTime" value="07:00">
+        </div>
+      </div>
+
+      <div id="relativeTimeFields" style="display:none;margin-top:1rem;">
+        <div class="row">
+          <div class="field">
+            <label for="offsetDirection">Offset</label>
+            <select id="offsetDirection">
+              <option value="before">Minutes before</option>
+              <option value="after">Minutes after</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="offsetMinutes">Minutes</label>
+            <input type="number" id="offsetMinutes" value="30" min="0" max="240">
+          </div>
+        </div>
+        <div class="field">
+          <label for="latlon">Location (for sun times)</label>
+          <input type="text" id="latlon" placeholder="Latitude, longitude — e.g. 45.4642, 9.1900">
+          <p class="helper" id="geoHelper">We'll try to use your browser location automatically.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 5: options -->
+    <section class="card" id="optionsSection" style="display:none;">
+      <h2><span class="step-num">5</span>Animation</h2>
+      <div class="row">
+        <div class="field">
+          <label for="duration">Duration (minutes)</label>
+          <input type="number" id="duration" value="20" min="1" max="180">
+        </div>
+        <div class="field">
+          <label for="startBrightness">Start brightness</label>
+          <select id="startBrightness"></select>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <div class="label-block">
+          <div class="t-title">Shift color temperature with brightness</div>
+          <div class="t-sub">On supported bulbs, warms from 4000K down to the warmest tone they support as brightness falls (or the reverse for sunrise).</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="shiftCct" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Step 6: run -->
+    <section class="card" id="runSection" style="display:none;">
+      <h2><span class="step-num">6</span>Run it</h2>
+      <div class="schedule-summary" id="scheduleSummary"></div>
+      <div class="row" style="margin-top:1rem;">
+        <button id="runBtn">Start now</button>
+        <button id="scheduleBtn" class="secondary">Schedule for trigger time</button>
+      </div>
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-label">
+          <span id="progressText">Waiting to start…</span>
+          <button id="stopBtn" class="secondary" style="padding:0.2rem 0.6rem;font-size:0.78rem;">Stop</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer>Runs entirely in this browser tab. Keep this tab open while a schedule is armed or an animation is running.</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var state = {
+    apiKey: "",
+    bulbs: [],
+    mode: "sunrise",
+    timeMode: "fixed",
+    scheduleTimer: null,
+    animTimer: null,
+    coords: null
+  };
+
+  var LIFX_BASE = "https://api.lifx.com/v1";
+  var WARM_TARGET = 2000;
+  var COOL_NEUTRAL = 4000;
+
+  function $(id){ return document.getElementById(id); }
+
+  function setStatus(el, msg, kind){
+    el.textContent = msg;
+    el.className = "status-line" + (kind ? " " + kind : "");
+  }
+
+  // ---- Sun visual in the hero ----
+  function paintHorizon(progress, mode){
+    // progress 0..1 across the animation, mode sunrise/sunset
+    var sun = $("sun");
+    var horizon = $("horizon");
+    var p = mode === "sunrise" ? progress : 1 - progress;
+    var bottom = -20 + p * 130;
+    var opacity = 0.15 + p * 0.85;
+    sun.style.bottom = bottom + "px";
+    sun.style.opacity = opacity;
+    var stops = [
+      "#2b2350 0%","#8a4a6b " + (30 + p*20) + "%","#e8794f " + (60+p*15) + "%","#f7c94c 100%"
+    ];
+    horizon.style.background = "linear-gradient(180deg," + stops.join(",") + ")";
+  }
+  paintHorizon(0.15, "sunrise");
+
+  // ---- Kelvin <-> mireds not needed; LIFX API takes kelvin directly ----
+
+  function kelvinToRgbApprox(k){
+    // rough visual approximation for swatch dots only
+    var temp = k / 100, r, g, b;
+    if (temp <= 66) { r = 255; g = 99.47*Math.log(temp)-161.12; }
+    else { r = 329.7*Math.pow(temp-60,-0.1332); g = 288.12*Math.pow(temp-60,-0.0755); }
+    if (temp >= 66) b = 255;
+    else if (temp <= 19) b = 0;
+    else b = 138.5*Math.log(temp-10)-305.0;
+    function c(v){ return Math.max(0,Math.min(255,Math.round(v))); }
+    return "rgb(" + c(r) + "," + c(g) + "," + c(b) + ")";
+  }
+
+  // ---- LIFX API ----
+  function lifxGet(path){
+    return fetch(LIFX_BASE + path, {
+      headers: { "Authorization": "Bearer " + state.apiKey }
+    }).then(function(res){
+      if (!res.ok) {
+        return res.json().catch(function(){ return {}; }).then(function(body){
+          var msg = (body && body.error) ? body.error : ("HTTP " + res.status);
+          throw new Error(msg);
+        });
+      }
+      return res.json();
+    });
+  }
+
+  function lifxPutState(selector, payload){
+    return fetch(LIFX_BASE + "/lights/" + encodeURIComponent(selector) + "/state", {
+      method: "PUT",
+      headers: {
+        "Authorization": "Bearer " + state.apiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    }).then(function(res){
+      if (!res.ok) {
+        return res.json().catch(function(){ return {}; }).then(function(body){
+          var msg = (body && body.error) ? body.error : ("HTTP " + res.status);
+          throw new Error(msg);
+        });
+      }
+      return res.json();
+    });
+  }
+
+  // ---- Step 1: connect ----
+  $("connectBtn").addEventListener("click", function(){
+    var key = $("apiKey").value.trim();
+    var statusEl = $("connectStatus");
+    if (!key) {
+      setStatus(statusEl, "Enter your API key first.", "err");
+      return;
+    }
+    state.apiKey = key;
+    $("connectBtn").disabled = true;
+    setStatus(statusEl, "Fetching your lights…", "");
+
+    lifxGet("/lights/all").then(function(lights){
+      state.bulbs = lights.map(function(l){
+        return {
+          id: l.id,
+          label: l.label,
+          selected: true,
+          min_kelvin: (l.product && l.product.capabilities && l.product.capabilities.min_kelvin) || 2500,
+          max_kelvin: (l.product && l.product.capabilities && l.product.capabilities.max_kelvin) || 9000,
+          supportsColor: !!(l.product && l.product.capabilities && l.product.capabilities.has_color),
+          power: l.power,
+          brightness: l.brightness
+        };
+      });
+      if (state.bulbs.length === 0) {
+        setStatus(statusEl, "Connected, but no lights were found on your account.", "err");
+        $("connectBtn").disabled = false;
+        return;
+      }
+      setStatus(statusEl, "Connected — found " + state.bulbs.length + " light" + (state.bulbs.length===1?"":"s") + ".", "ok");
+      renderBulbs();
+      revealSteps();
+      $("connectBtn").disabled = false;
+    }).catch(function(err){
+      setStatus(statusEl, "Couldn't connect: " + err.message, "err");
+      $("connectBtn").disabled = false;
+    });
+  });
+
+  function renderBulbs(){
+    var list = $("bulbList");
+    list.innerHTML = "";
+    state.bulbs.forEach(function(b, idx){
+      var row = document.createElement("div");
+      row.className = "bulb-item";
+      var warmest = b.min_kelvin;
+      row.innerHTML =
+        '<input type="checkbox" data-idx="' + idx + '" ' + (b.selected ? "checked" : "") + '>' +
+        '<span class="swatch" style="background:' + kelvinToRgbApprox(2700) + '"></span>' +
+        '<span class="name">' + escapeHtml(b.label) + '</span>' +
+        '<span class="kelvin-range">' + warmest + 'K\u2013' + b.max_kelvin + 'K</span>';
+      list.appendChild(row);
+    });
+    list.querySelectorAll('input[type=checkbox]').forEach(function(cb){
+      cb.addEventListener("change", function(){
+        state.bulbs[+cb.dataset.idx].selected = cb.checked;
+        updateSummary();
+      });
+    });
+  }
+
+  function escapeHtml(s){
+    var d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function revealSteps(){
+    $("bulbSection").style.display = "";
+    $("modeSection").style.display = "";
+    $("timeSection").style.display = "";
+    $("optionsSection").style.display = "";
+    $("runSection").style.display = "";
+    populateStartBrightness();
+    updateSummary();
+    tryGeolocate();
+  }
+
+  // ---- Step 3: mode ----
+  $("modeSunrise").addEventListener("click", function(){ setMode("sunrise"); });
+  $("modeSunset").addEventListener("click", function(){ setMode("sunset"); });
+  function setMode(m){
+    state.mode = m;
+    $("modeSunrise").className = m === "sunrise" ? "active" : "";
+    $("modeSunset").className = m === "sunset" ? "active" : "";
+    populateStartBrightness();
+    updateSummary();
+    paintHorizon(0.15, m);
+  }
+
+  function populateStartBrightness(){
+    var sel = $("startBrightness");
+    sel.innerHTML = "";
+    var opts = state.mode === "sunrise"
+      ? [{v:1,l:"1% (off-ish)"},{v:5,l:"5%"},{v:10,l:"10%"}]
+      : [{v:100,l:"100%"},{v:80,l:"80%"},{v:60,l:"60% (current-ish)"}];
+    opts.forEach(function(o){
+      var el = document.createElement("option");
+      el.value = o.v; el.textContent = o.l;
+      sel.appendChild(el);
+    });
+  }
+
+  // ---- Step 4: timing ----
+  var timeModeButtons = document.querySelectorAll("#timeModeSeg button");
+  timeModeButtons.forEach(function(btn){
+    btn.addEventListener("click", function(){
+      timeModeButtons.forEach(function(b){ b.classList.remove("active"); });
+      btn.classList.add("active");
+      state.timeMode = btn.dataset.mode;
+      $("fixedTimeFields").style.display = state.timeMode === "fixed" ? "" : "none";
+      $("relativeTimeFields").style.display = state.timeMode === "fixed" ? "none" : "";
+      if (state.timeMode !== "fixed") {
+        $("offsetDirection").value = state.timeMode === "sunrise" ? "before" : "before";
+      }
+      updateSummary();
+    });
+  });
+
+  $("fixedTime").addEventListener("change", updateSummary);
+  $("offsetDirection").addEventListener("change", updateSummary);
+  $("offsetMinutes").addEventListener("input", updateSummary);
+  $("latlon").addEventListener("input", function(){
+    var parts = $("latlon").value.split(",");
+    if (parts.length === 2) {
+      var lat = parseFloat(parts[0]), lon = parseFloat(parts[1]);
+      if (!isNaN(lat) && !isNaN(lon)) state.coords = {lat:lat, lon:lon};
+    }
+    updateSummary();
+  });
+  $("duration").addEventListener("input", updateSummary);
+  $("shiftCct").addEventListener("change", updateSummary);
+  $("startBrightness").addEventListener("change", updateSummary);
+
+  function tryGeolocate(){
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(function(pos){
+      state.coords = {lat: pos.coords.latitude, lon: pos.coords.longitude};
+      $("latlon").value = pos.coords.latitude.toFixed(4) + ", " + pos.coords.longitude.toFixed(4);
+      $("geoHelper").textContent = "Using your browser's current location.";
+      updateSummary();
+    }, function(){
+      $("geoHelper").textContent = "Location unavailable — enter latitude, longitude manually for sunrise/sunset-relative timing.";
+    }, { timeout: 6000 });
+  }
+
+  // Sunrise/sunset calculation (NOAA simplified algorithm)
+  function getSunTimes(date, lat, lon){
+    function toRad(d){ return d * Math.PI/180; }
+    function toDeg(r){ return r * 180/Math.PI; }
+    var zenith = 90.833;
+    var N = Math.floor((date - new Date(date.getFullYear(),0,0)) / 86400000);
+    function calc(isSunrise){
+      var lngHour = lon / 15;
+      var t = N + ((isSunrise ? 6 : 18) - lngHour) / 24;
+      var M = (0.9856 * t) - 3.289;
+      var L = M + (1.916 * Math.sin(toRad(M))) + (0.020 * Math.sin(2*toRad(M))) + 282.634;
+      L = (L + 360) % 360;
+      var RA = toDeg(Math.atan(0.91764 * Math.tan(toRad(L))));
+      RA = (RA + 360) % 360;
+      var Lquadrant = Math.floor(L/90) * 90;
+      var RAquadrant = Math.floor(RA/90) * 90;
+      RA = RA + (Lquadrant - RAquadrant);
+      RA = RA / 15;
+      var sinDec = 0.39782 * Math.sin(toRad(L));
+      var cosDec = Math.cos(Math.asin(sinDec));
+      var cosH = (Math.cos(toRad(zenith)) - (sinDec * Math.sin(toRad(lat)))) / (cosDec * Math.cos(toRad(lat)));
+      if (cosH > 1 || cosH < -1) return null;
+      var H = isSunrise ? 360 - toDeg(Math.acos(cosH)) : toDeg(Math.acos(cosH));
+      H = H / 15;
+      var T = H + RA - (0.06571 * t) - 6.622;
+      var UT = (T - lngHour + 24) % 24;
+      return UT;
+    }
+    var sunriseUT = calc(true);
+    var sunsetUT = calc(false);
+    function utToLocalDate(ut){
+      if (ut === null) return null;
+      var d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 0,0,0));
+      d.setUTCMinutes(d.getUTCMinutes() + ut*60);
+      return d;
+    }
+    return { sunrise: utToLocalDate(sunriseUT), sunset: utToLocalDate(sunsetUT) };
+  }
+
+  function computeTriggerTime(){
+    var now = new Date();
+    if (state.timeMode === "fixed") {
+      var parts = $("fixedTime").value.split(":");
+      var t = new Date();
+      t.setHours(+parts[0], +parts[1] || 0, 0, 0);
+      if (t < now) t.setDate(t.getDate() + 1);
+      return t;
+    }
+    if (!state.coords) return null;
+    var todaySun = getSunTimes(now, state.coords.lat, state.coords.lon);
+    var anchor = state.timeMode === "sunrise" ? todaySun.sunrise : todaySun.sunset;
+    if (!anchor) return null;
+    var dir = $("offsetDirection").value;
+    var mins = parseInt($("offsetMinutes").value, 10) || 0;
+    var t = new Date(anchor.getTime() + (dir === "before" ? -mins : mins) * 60000);
+    if (t < now) {
+      var tomorrow = new Date(now.getTime() + 86400000);
+      var tmrSun = getSunTimes(tomorrow, state.coords.lat, state.coords.lon);
+      anchor = state.timeMode === "sunrise" ? tmrSun.sunrise : tmrSun.sunset;
+      if (!anchor) return null;
+      t = new Date(anchor.getTime() + (dir === "before" ? -mins : mins) * 60000);
+    }
+    return t;
+  }
+
+  function fmtTime(d){
+    if (!d) return "unknown";
+    return d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+  }
+
+  function updateSummary(){
+    var selected = state.bulbs.filter(function(b){ return b.selected; });
+    var trigger = computeTriggerTime();
+    var dur = $("duration").value || "0";
+    var mode = state.mode;
+    var shift = $("shiftCct").checked;
+    var lines = [];
+    lines.push("<b>" + selected.length + "</b> light" + (selected.length===1?"":"s") + " selected, running a <b>" + mode + "</b> over <b>" + dur + " min</b>.");
+    lines.push("Trigger time: <b>" + fmtTime(trigger) + "</b>" + (state.timeMode !== "fixed" ? " (based on " + state.timeMode + " " + $("offsetDirection").value + " " + ($("offsetMinutes").value||0) + " min)" : "") + ".");
+    lines.push(shift ? "Color temperature will shift with brightness on supported bulbs." : "Color temperature will stay fixed — only brightness changes.");
+    $("scheduleSummary").innerHTML = lines.join("<br>");
+  }
+
+  // ---- Animation engine ----
+  function buildKeyframes(bulb){
+    // returns {startB, endB, startK, endK} in 0..1 brightness and kelvin
+    var startPct = parseInt($("startBrightness").value, 10);
+    var endPct = state.mode === "sunrise" ? 100 : Math.min(startPct, 5);
+    if (state.mode === "sunset" && !$("startBrightness").options.length) endPct = 1;
+    if (state.mode === "sunset") endPct = 1;
+    if (state.mode === "sunrise") endPct = 100;
+
+    var shift = $("shiftCct").checked;
+    var warmest = bulb.min_kelvin;
+    var startK, endK;
+    if (state.mode === "sunrise") {
+      startK = shift ? warmest : COOL_NEUTRAL;
+      endK = shift ? COOL_NEUTRAL : COOL_NEUTRAL;
+    } else {
+      startK = shift ? COOL_NEUTRAL : COOL_NEUTRAL;
+      endK = shift ? warmest : COOL_NEUTRAL;
+    }
+    return {
+      startB: startPct/100, endB: endPct/100,
+      startK: startK, endK: endK
+    };
+  }
+
+  function lerp(a,b,t){ return a + (b-a)*t; }
+
+  function runAnimation(){
+    var selected = state.bulbs.filter(function(b){ return b.selected; });
+    if (selected.length === 0) { alert("Select at least one light."); return; }
+    var durationMin = parseFloat($("duration").value) || 1;
+    var totalMs = durationMin * 60000;
+    var stepMs = 1000; // refresh once per second
+    var steps = Math.max(1, Math.round(totalMs / stepMs)); // no cap
+
+    var kf = {};
+    selected.forEach(function(b){ kf[b.id] = buildKeyframes(b); });
+
+    // ensure lights are on at the right starting point before animating
+    var initPromises = selected.map(function(b){
+      var k = kf[b.id];
+      return lifxPutState(b.id, {
+        power: "on",
+        brightness: k.startB,
+        color: "kelvin:" + Math.round(k.startK),
+        duration: 1
+      }).catch(function(e){ console.error(e); });
+    });
+
+    Promise.all(initPromises).then(function(){
+      var progressWrap = $("progressWrap");
+      progressWrap.className = "progress-wrap show";
+      var currentStep = 0;
+
+      function tick(){
+        currentStep++;
+        var t = currentStep / steps;
+        var pct = Math.min(100, Math.round(t*100));
+        $("progressFill").style.width = pct + "%";
+        $("progressText").textContent = state.mode === "sunrise" ? "Rising… " + pct + "%" : "Setting… " + pct + "%";
+        paintHorizon(t, state.mode);
+
+        selected.forEach(function(b){
+          var k = kf[b.id];
+          var brightness = lerp(k.startB, k.endB, t);
+          var kelvin = lerp(k.startK, k.endK, t);
+          lifxPutState(b.id, {
+            brightness: brightness,
+            color: "kelvin:" + Math.round(kelvin),
+            duration: stepMs/1000
+          }).catch(function(e){ console.error(e); });
+        });
+
+        if (currentStep >= steps) {
+          clearInterval(state.animTimer);
+          state.animTimer = null;
+          if (state.mode === "sunset") {
+            selected.forEach(function(b){
+              lifxPutState(b.id, { power: "off", duration: 1 }).catch(function(e){ console.error(e); });
+            });
+          }
+          $("progressText").textContent = state.mode === "sunrise" ? "Sunrise complete." : "Sunset complete.";
+          $("runBtn").disabled = false;
+        }
+      }
+
+      $("runBtn").disabled = true;
+      tick();
+      state.animTimer = setInterval(tick, stepMs);
+    });
+  }
+
+  $("runBtn").addEventListener("click", function(){
+    if (state.scheduleTimer) {
+      clearTimeout(state.scheduleTimer);
+      state.scheduleTimer = null;
+    }
+    runAnimation();
+  });
+
+  $("stopBtn").addEventListener("click", function(){
+    if (state.animTimer) { clearInterval(state.animTimer); state.animTimer = null; }
+    if (state.scheduleTimer) { clearTimeout(state.scheduleTimer); state.scheduleTimer = null; }
+    $("progressText").textContent = "Stopped.";
+    $("runBtn").disabled = false;
+  });
+
+  $("scheduleBtn").addEventListener("click", function(){
+    var trigger = computeTriggerTime();
+    if (!trigger) {
+      alert("Couldn't determine the trigger time. Check your location for sunrise/sunset-relative timing.");
+      return;
+    }
+    var msUntil = trigger.getTime() - Date.now();
+    if (state.scheduleTimer) clearTimeout(state.scheduleTimer);
+    state.scheduleTimer = setTimeout(runAnimation, msUntil);
+    var progressWrap = $("progressWrap");
+    progressWrap.className = "progress-wrap show";
+    $("progressFill").style.width = "0%";
+    $("progressText").textContent = "Armed — will start at " + fmtTime(trigger) + ". Keep this tab open.";
+  });
+
+})();
+</script>
+</body>
+</html>
