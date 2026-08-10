@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Daily Grid — Sudoku Ledger</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+  :root{
+    --paper:#F5F2EA;
+    --paper-2:#EDE8DC;
+    --lead:#262420;
+    --lead-soft:#5b5648;
+    --rule:#c9c2b0;
+    --ink-blue:#33506b;
+    --ink-blue-soft:#33506b22;
+    --plat:#7b8896;
+    --plat-bg:#eef0f2;
+    --gold:#a4761f;
+    --gold-bg:#f6ecd6;
+    --silver:#7d7d78;
+    --silver-bg:#eeece5;
+    --bronze:#9a5a34;
+    --bronze-bg:#f3e4d6;
+    --err:#a14438;
+    --given:#232019;
+    --user:#33506b;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 27px, #00000005 27px, #00000005 28px);
+    color:var(--lead);
+    font-family:'Spectral', Georgia, serif;
+    min-height:100vh;
+    padding:28px 16px 60px;
+  }
+
+  .wrap{max-width:920px;margin:0 auto;}
+
+  /* ===== Header / masthead ===== */
+  .masthead{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    border-bottom:3px solid var(--lead);
+    padding-bottom:14px; margin-bottom:6px;
+    flex-wrap:wrap; gap:10px;
+  }
+  .masthead-title{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700; font-size:2.1rem; letter-spacing:-0.01em;
+    display:flex; align-items:baseline; gap:10px;
+  }
+  .masthead-title .num{
+    font-family:'JetBrains Mono', monospace; font-size:0.95rem; font-weight:600;
+    color:var(--ink-blue); border:1.5px solid var(--ink-blue); border-radius:3px;
+    padding:2px 7px;
+  }
+  .masthead-sub{
+    font-family:'JetBrains Mono', monospace; font-size:0.72rem; letter-spacing:0.12em;
+    text-transform:uppercase; color:var(--lead-soft);
+  }
+  .masthead-date{
+    font-family:'JetBrains Mono', monospace; font-size:0.8rem; color:var(--lead-soft);
+    text-align:right;
+  }
+
+  /* ===== Controls strip ===== */
+  .controls{
+    display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end;
+    background:var(--paper-2);
+    border:1px solid var(--rule);
+    padding:16px 18px; margin:18px 0 22px; border-radius:2px;
+  }
+  .field{display:flex; flex-direction:column; gap:5px;}
+  .field label{
+    font-family:'JetBrains Mono', monospace; font-size:0.66rem; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--lead-soft);
+  }
+  .field input, .field select{
+    font-family:'JetBrains Mono', monospace; font-size:0.9rem;
+    background:var(--paper); border:1px solid var(--lead); border-radius:2px;
+    padding:7px 9px; color:var(--lead); min-width:150px;
+  }
+  .field input:focus, .field select:focus{outline:2px solid var(--ink-blue); outline-offset:1px;}
+  .btn{
+    font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:0.85rem;
+    background:var(--lead); color:var(--paper); border:none; border-radius:2px;
+    padding:10px 18px; cursor:pointer; letter-spacing:0.01em;
+    transition:transform .08s ease, background .15s ease;
+  }
+  .btn:hover{background:var(--ink-blue);}
+  .btn:active{transform:translateY(1px);}
+  .btn.ghost{
+    background:transparent; color:var(--lead); border:1.5px solid var(--lead);
+  }
+  .btn.ghost:hover{background:var(--lead); color:var(--paper);}
+  .btn:disabled{opacity:0.4; cursor:not-allowed;}
+  .btn-row{display:flex; gap:8px; flex-wrap:wrap;}
+
+  /* ===== rank badge on masthead when generated ===== */
+  .rank-flag{
+    font-family:'JetBrains Mono', monospace; font-size:0.72rem; font-weight:600;
+    letter-spacing:0.08em; text-transform:uppercase;
+    padding:4px 10px; border-radius:20px; display:inline-flex; align-items:center; gap:6px;
+  }
+  .rank-flag .dot{width:8px;height:8px;border-radius:50%;}
+  .rank-flag.plat{background:var(--plat-bg); color:var(--plat);}
+  .rank-flag.plat .dot{background:var(--plat);}
+  .rank-flag.gold{background:var(--gold-bg); color:var(--gold);}
+  .rank-flag.gold .dot{background:var(--gold);}
+  .rank-flag.silver{background:var(--silver-bg); color:var(--silver);}
+  .rank-flag.silver .dot{background:var(--silver);}
+  .rank-flag.bronze{background:var(--bronze-bg); color:var(--bronze);}
+  .rank-flag.bronze .dot{background:var(--bronze);}
+
+  /* ===== Main layout ===== */
+  .main-grid{display:grid; grid-template-columns:1fr; gap:24px;}
+  @media(min-width:800px){ .main-grid{grid-template-columns: minmax(0,1fr) 300px;} }
+
+  .puzzle-col{display:flex; flex-direction:column; gap:16px;}
+  .puzzle-frame{
+    background:var(--paper-2); border:1px solid var(--rule); border-radius:2px;
+    padding:20px; display:flex; flex-direction:column; align-items:center; gap:14px;
+  }
+  .puzzle-meta{
+    display:flex; justify-content:space-between; width:100%;
+    font-family:'JetBrains Mono', monospace; font-size:0.7rem; color:var(--lead-soft);
+    text-transform:uppercase; letter-spacing:0.08em;
+  }
+
+  #sudokuHost{width:100%; display:flex; justify-content:center;}
+
+  .sidebar{display:flex; flex-direction:column; gap:16px;}
+  .panel{
+    background:var(--paper-2); border:1px solid var(--rule); border-radius:2px; padding:16px 18px;
+  }
+  .panel h3{
+    font-family:'Space Grotesk', sans-serif; font-size:0.85rem; margin:0 0 10px;
+    text-transform:uppercase; letter-spacing:0.08em; color:var(--lead);
+    border-bottom:1px solid var(--rule); padding-bottom:8px;
+  }
+  .panel p.hint{font-size:0.82rem; color:var(--lead-soft); line-height:1.5; margin:0 0 8px;}
+
+  /* ===== Ledger / ranking table ===== */
+  .ledger-table{width:100%; border-collapse:collapse; font-family:'JetBrains Mono', monospace; font-size:0.76rem;}
+  .ledger-table th, .ledger-table td{padding:6px 4px; text-align:left; border-bottom:1px dashed var(--rule);}
+  .ledger-table th{font-weight:600; color:var(--lead-soft); text-transform:uppercase; font-size:0.62rem; letter-spacing:0.06em;}
+  .ledger-table td.rankname{font-weight:700;}
+  .ledger-table tr.plat td.rankname{color:var(--plat);}
+  .ledger-table tr.gold td.rankname{color:var(--gold);}
+  .ledger-table tr.silver td.rankname{color:var(--silver);}
+  .ledger-table tr.bronze td.rankname{color:var(--bronze);}
+  .ledger-table td.time{font-weight:600;}
+
+  .technique-log{max-height:180px; overflow-y:auto; font-family:'JetBrains Mono', monospace; font-size:0.72rem; color:var(--lead-soft); line-height:1.7;}
+  .technique-log div{display:flex; justify-content:space-between; border-bottom:1px dotted var(--rule); padding:2px 0;}
+  .technique-log .tname{color:var(--lead);}
+
+  /* ===== Export panel ===== */
+  .export-grid{display:flex; flex-direction:column; gap:8px;}
+  .export-grid .btn{width:100%; text-align:left;}
+
+  .footnote{
+    font-family:'JetBrains Mono', monospace; font-size:0.68rem; color:var(--lead-soft);
+    margin-top:6px; line-height:1.6;
+  }
+
+  .status-msg{
+    font-family:'JetBrains Mono', monospace; font-size:0.75rem; color:var(--ink-blue);
+    min-height:1.2em;
+  }
+  .status-msg.err{color:var(--err);}
+
+  /* ===== Print preview (hidden host for building printable HTML) ===== */
+  #printBuildHost{display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <div>
+      <div class="masthead-title">The Daily Grid <span class="num" id="mastheadNo">No. —</span></div>
+      <div class="masthead-sub">A puzzle generated fresh, from the date itself</div>
+    </div>
+    <div class="masthead-date" id="mastheadDate">— — —</div>
+  </div>
+
+  <div class="controls">
+    <div class="field">
+      <label for="dateInput">Puzzle date</label>
+      <input type="date" id="dateInput">
+    </div>
+    <div class="field">
+      <label for="paperSizeInput">Paper size</label>
+      <select id="paperSizeInput">
+        <option value="210x297" selected>A4 (210 × 297 mm)</option>
+        <option value="216x279">US Letter (216 × 279 mm)</option>
+        <option value="148x210">A5 (148 × 210 mm)</option>
+      </select>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="generateBtn">Generate puzzle</button>
+      <button class="btn ghost" id="revealBtn" disabled>Reveal solution</button>
+    </div>
+    <div class="status-msg" id="statusMsg"></div>
+  </div>
+
+  <div class="main-grid">
+    <div class="puzzle-col">
+      <div class="puzzle-frame">
+        <div class="puzzle-meta">
+          <span id="difficultyTag">Difficulty: —</span>
+          <span id="rankFlagHost"></span>
+        </div>
+        <div id="sudokuHost"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Print &amp; export</h3>
+        <p class="hint">Produces a standalone printable sheet: the grid, blank answer grid, and the full time ledger below with the 10%-per-mistake rule printed at the foot.</p>
+        <div class="export-grid">
+          <button class="btn" id="printBtn">Open print sheet (PDF via browser print)</button>
+          <button class="btn ghost" id="downloadHtmlBtn">Download printable .html</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="panel">
+        <h3>Ranking ledger</h3>
+        <table class="ledger-table" id="ledgerTable">
+          <thead><tr><th>Rank</th><th>Target time</th><th>Pace</th></tr></thead>
+          <tbody id="ledgerBody">
+            <tr><td colspan="3" style="color:var(--lead-soft);">Generate a puzzle to compute times</td></tr>
+          </tbody>
+        </table>
+        <div class="footnote">Add 10% to your target time for every mistake made along the way.</div>
+      </div>
+
+      <div class="panel">
+        <h3>Solver technique log</h3>
+        <p class="hint">How the human-style solver cracked today's grid, in the order a solver would actually find these.</p>
+        <div class="technique-log" id="techLog">—</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="printBuildHost"></div>
+
+<script>
+/* =========================================================================
+   THE DAILY GRID — date-seeded sudoku generator + human technique solver
+   ========================================================================= */
+
+/* ---------- PRNG: seeded from date string ---------- */
+function stringSeed(str){
+  let h = 1779033703 ^ str.length;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function(){
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+  };
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeRng(dateStr, size){
+  const seedFn = stringSeed(dateStr + '|' + size);
+  const seedInt = Math.floor(seedFn() * 4294967296);
+  return mulberry32(seedInt);
+}
+function shuffle(arr, rng){
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/* ---------- Board geometry for size N (4,6,9) ---------- */
+function boxDims(N){
+  if (N === 9) return {bw:3, bh:3};
+  if (N === 6) return {bw:3, bh:2};
+  if (N === 4) return {bw:2, bh:2};
+  throw new Error('unsupported size');
+}
+
+/* ---------- full solution generator (backtracking + randomized order) ---------- */
+function generateFullSolution(N, rng){
+  const {bw, bh} = boxDims(N);
+  const grid = Array.from({length:N}, () => Array(N).fill(0));
+
+  function boxIndex(r,c){ return Math.floor(r/bh)*(N/bw) + Math.floor(c/bw); }
+  function valid(r,c,v){
+    for (let i=0;i<N;i++){ if (grid[r][i]===v || grid[i][c]===v) return false; }
+    const br = Math.floor(r/bh)*bh, bc = Math.floor(c/bw)*bw;
+    for (let i=0;i<bh;i++) for (let j=0;j<bw;j++){ if (grid[br+i][bc+j]===v) return false; }
+    return true;
+  }
+  function fill(pos){
+    if (pos === N*N) return true;
+    const r = Math.floor(pos/N), c = pos % N;
+    const nums = shuffle(Array.from({length:N}, (_,i)=>i+1), rng);
+    for (const v of nums){
+      if (valid(r,c,v)){
+        grid[r][c] = v;
+        if (fill(pos+1)) return true;
+        grid[r][c] = 0;
+      }
+    }
+    return false;
+  }
+  fill(0);
+  return grid;
+}
+
+/* ---------- count solutions up to limit (for uniqueness check) ---------- */
+function countSolutions(grid, N, limit){
+  const {bw,bh} = boxDims(N);
+  const g = grid.map(row=>row.slice());
+  let count = 0;
+
+  function candidates(r,c){
+    const used = new Set();
+    for (let i=0;i<N;i++){ used.add(g[r][i]); used.add(g[i][c]); }
+    const br=Math.floor(r/bh)*bh, bc=Math.floor(c/bw)*bw;
+    for (let i=0;i<bh;i++) for(let j=0;j<bw;j++) used.add(g[br+i][bc+j]);
+    const out=[];
+    for (let v=1; v<=N; v++) if(!used.has(v)) out.push(v);
+    return out;
+  }
+  function findEmpty(){
+    let best=null, bestLen=99;
+    for (let r=0;r<N;r++) for(let c=0;c<N;c++){
+      if (g[r][c]===0){
+        const cand = candidates(r,c);
+        if (cand.length < bestLen){ bestLen = cand.length; best = {r,c,cand}; if(bestLen<=1) return best; }
+      }
+    }
+    return best;
+  }
+  function solve(){
+    if (count >= limit) return;
+    const cell = findEmpty();
+    if (!cell) { count++; return; }
+    for (const v of cell.cand){
+      g[cell.r][cell.c] = v;
+      solve();
+      g[cell.r][cell.c] = 0;
+      if (count >= limit) return;
+    }
+  }
+  solve();
+  return count;
+}
+
+/* ---------- puzzle generator: remove cells while keeping unique solution ---------- */
+function generatePuzzle(N, rng){
+  const solution = generateFullSolution(N, rng);
+  const puzzle = solution.map(row=>row.slice());
+  const positions = shuffle(Array.from({length:N*N}, (_,i)=>i), rng);
+
+  // Target clue count (9x9 classic minimum territory)
+  const minClues = 28;
+
+  let clueCount = N*N;
+  for (const pos of positions){
+    if (clueCount <= minClues) break;
+    const r = Math.floor(pos/N), c = pos % N;
+    if (puzzle[r][c] === 0) continue;
+    const backup = puzzle[r][c];
+    puzzle[r][c] = 0;
+    const solCount = countSolutions(puzzle, N, 2);
+    if (solCount !== 1){
+      puzzle[r][c] = backup; // revert, keep unique
+    } else {
+      clueCount--;
+    }
+  }
+  return {puzzle, solution};
+}
+
+/* =========================================================================
+   HUMAN-STYLE TECHNIQUE SOLVER
+   Solves using techniques in a fixed order of difficulty/familiarity,
+   logging every application with a technique name + estimated seconds.
+   Techniques (in order applied): boxHS, lineHS, naked1, pointing,
+   nakedPair, hiddenPair, nakedTriple, xwing, swordfish.
+   ========================================================================= */
+
+const TECHNIQUE_SECONDS = {
+  boxHS: 4,       // hidden single confined to a box — most human-familiar
+  lineHS: 6,      // hidden single confined to a row/col
+  naked1: 3,      // only one candidate remains in a cell
+  pointing: 12,   // locked candidates: pointing pairs/triples
+  nakedPair: 15,
+  hiddenPair: 20,
+  nakedTriple: 25,
+  xwing: 35,
+  swordfish: 50
+};
+const TECHNIQUE_LABEL = {
+  boxHS:'Box Hidden Single', lineHS:'Line Hidden Single', naked1:'Naked Single',
+  pointing:'Pointing/Claiming', nakedPair:'Naked Pair', hiddenPair:'Hidden Pair',
+  nakedTriple:'Naked Triple', xwing:'X-Wing', swordfish:'Swordfish'
+};
+// difficulty rank of each technique — determines overall tier
+const TECHNIQUE_TIER = {
+  boxHS:1, lineHS:1, naked1:1,
+  pointing:2, nakedPair:2, hiddenPair:2,
+  nakedTriple:3, xwing:4, swordfish:4
+};
+
+function humanSolve(puzzleIn, N){
+  const {bw,bh} = boxDims(N);
+  const g = puzzleIn.map(row=>row.slice());
+  const log = []; // {technique, count}
+  const counts = {};
+  for (const k in TECHNIQUE_SECONDS) counts[k]=0;
+
+  function boxOf(r,c){ return {br:Math.floor(r/bh)*bh, bc:Math.floor(c/bw)*bw}; }
+
+  function candidatesFor(r,c){
+    if (g[r][c] !== 0) return [];
+    const used = new Set();
+    for (let i=0;i<N;i++){ used.add(g[r][i]); used.add(g[i][c]); }
+    const {br,bc} = boxOf(r,c);
+    for (let i=0;i<bh;i++) for(let j=0;j<bw;j++) used.add(g[br+i][bc+j]);
+    const out=[];
+    for (let v=1; v<=N; v++) if(!used.has(v)) out.push(v);
+    return out;
+  }
+  function allCandidates(){
+    const C = Array.from({length:N}, ()=>Array(N).fill(null));
+    for (let r=0;r<N;r++) for(let c=0;c<N;c++) if (g[r][c]===0) C[r][c] = candidatesFor(r,c);
+    return C;
+  }
+  function isSolved(){
+    for (let r=0;r<N;r++) for(let c=0;c<N;c++) if (g[r][c]===0) return false;
+    return true;
+  }
+
+  function place(r,c,v,technique){
+    g[r][c] = v;
+    counts[technique]++;
+    log.push({technique, r, c, v});
+  }
+
+  function tryNakedSingle(C){
+    for (let r=0;r<N;r++) for(let c=0;c<N;c++){
+      if (g[r][c]===0 && C[r][c] && C[r][c].length===1){
+        place(r,c,C[r][c][0], 'naked1');
+        return true;
+      }
+    }
+    return false;
+  }
+  function tryBoxHiddenSingle(C){
+    const boxRows = N/bh, boxCols = N/bw;
+    for (let bR=0; bR<boxRows; bR++) for (let bC=0; bC<boxCols; bC++){
+      const br=bR*bh, bc=bC*bw;
+      const cellsInBox = [];
+      for (let i=0;i<bh;i++) for(let j=0;j<bw;j++) cellsInBox.push([br+i,bc+j]);
+      for (let v=1; v<=N; v++){
+        const spots = cellsInBox.filter(([r,c]) => g[r][c]===0 && C[r][c] && C[r][c].includes(v));
+        if (spots.length === 1){
+          place(spots[0][0], spots[0][1], v, 'boxHS');
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+  function tryLineHiddenSingle(C){
+    // rows
+    for (let r=0;r<N;r++){
+      for (let v=1; v<=N; v++){
+        const spots=[];
+        for (let c=0;c<N;c++) if (g[r][c]===0 && C[r][c] && C[r][c].includes(v)) spots.push([r,c]);
+        if (spots.length===1){ place(spots[0][0],spots[0][1],v,'lineHS'); return true; }
+      }
+    }
+    // cols
+    for (let c=0;c<N;c++){
+      for (let v=1; v<=N; v++){
+        const spots=[];
+        for (let r=0;r<N;r++) if (g[r][c]===0 && C[r][c] && C[r][c].includes(v)) spots.push([r,c]);
+        if (spots.length===1){ place(spots[0][0],spots[0][1],v,'lineHS'); return true; }
+      }
+    }
+    return false;
+  }
+
+  // Elimination-only techniques: pointing, nakedPair, hiddenPair, nakedTriple, xwing, swordfish.
+  // These mutate candidate sets C in place (via closures) and return true if any elimination happened.
+  function tryPointing(C){
+    const boxRows=N/bh, boxCols=N/bw;
+    for (let bR=0;bR<boxRows;bR++) for(let bC=0;bC<boxCols;bC++){
+      const br=bR*bh, bc=bC*bw;
+      for (let v=1; v<=N; v++){
+        const cells=[];
+        for (let i=0;i<bh;i++) for(let j=0;j<bw;j++){
+          const r=br+i,c=bc+j;
+          if (g[r][c]===0 && C[r][c] && C[r][c].includes(v)) cells.push([r,c]);
+        }
+        if (cells.length>=2 && cells.length<=bw){
+          const sameRow = cells.every(([r])=>r===cells[0][0]);
+          const sameCol = cells.every(([,c])=>c===cells[0][1]);
+          if (sameRow){
+            let changed=false;
+            const r0=cells[0][0];
+            for (let c=0;c<N;c++){
+              if ((c<bc || c>=bc+bw) && g[r0][c]===0 && C[r0][c] && C[r0][c].includes(v)){
+                C[r0][c] = C[r0][c].filter(x=>x!==v); changed=true;
+              }
+            }
+            if (changed){ counts.pointing++; log.push({technique:'pointing', note:`row lock v${v}`}); return true; }
+          }
+          if (sameCol){
+            let changed=false;
+            const c0=cells[0][1];
+            for (let r=0;r<N;r++){
+              if ((r<br || r>=br+bh) && g[r][c0]===0 && C[r][c0] && C[r][c0].includes(v)){
+                C[r][c0] = C[r][c0].filter(x=>x!==v); changed=true;
+              }
+            }
+            if (changed){ counts.pointing++; log.push({technique:'pointing', note:`col lock v${v}`}); return true; }
+          }
+        }
+      }
+    }
+    return false;
+  }
+  function combinations(arr,k){
+    const res=[];
+    function rec(start, combo){
+      if (combo.length===k){ res.push(combo.slice()); return; }
+      for (let i=start;i<arr.length;i++){ combo.push(arr[i]); rec(i+1,combo); combo.pop(); }
+    }
+    rec(0,[]);
+    return res;
+  }
+  function tryNakedPair(C){
+    for (let r=0;r<N;r++){
+      const cells = [];
+      for (let c=0;c<N;c++) if (g[r][c]===0 && C[r][c] && C[r][c].length===2) cells.push(c);
+      for (const [c1,c2] of combinations(cells,2)){
+        if (c1===undefined) continue;
+        const a=C[r][c1], b=C[r][c2];
+        if (a.length===2 && b.length===2 && a[0]===b[0] && a[1]===b[1]){
+          let changed=false;
+          for (let c=0;c<N;c++){
+            if (c!==c1 && c!==c2 && g[r][c]===0 && C[r][c]){
+              const before=C[r][c].length;
+              C[r][c] = C[r][c].filter(x=>x!==a[0] && x!==a[1]);
+              if (C[r][c].length!==before) changed=true;
+            }
+          }
+          if (changed){ counts.nakedPair++; log.push({technique:'nakedPair', note:`row ${r+1}`}); return true; }
+        }
+      }
+    }
+    for (let c=0;c<N;c++){
+      const cells = [];
+      for (let r=0;r<N;r++) if (g[r][c]===0 && C[r][c] && C[r][c].length===2) cells.push(r);
+      for (const [r1,r2] of combinations(cells,2)){
+        if (r1===undefined) continue;
+        const a=C[r1][c], b=C[r2][c];
+        if (a.length===2 && b.length===2 && a[0]===b[0] && a[1]===b[1]){
+          let changed=false;
+          for (let r=0;r<N;r++){
+            if (r!==r1 && r!==r2 && g[r][c]===0 && C[r][c]){
+              const before=C[r][c].length;
+              C[r][c] = C[r][c].filter(x=>x!==a[0] && x!==a[1]);
+              if (C[r][c].length!==before) changed=true;
+            }
+          }
+          if (changed){ counts.nakedPair++; log.push({technique:'nakedPair', note:`col ${c+1}`}); return true; }
+        }
+      }
+    }
+    return false;
+  }
+  function tryHiddenPair(C){
+    function scanUnit(cellsList, unitLabel){
+      for (let v1=1; v1<=N; v1++) for (let v2=v1+1; v2<=N; v2++){
+        const spotsV1 = cellsList.filter(([r,c]) => C[r][c] && C[r][c].includes(v1));
+        const spotsV2 = cellsList.filter(([r,c]) => C[r][c] && C[r][c].includes(v2));
+        if (spotsV1.length===2 && spotsV2.length===2 &&
+            spotsV1[0][0]===spotsV2[0][0] && spotsV1[0][1]===spotsV2[0][1] &&
+            spotsV1[1][0]===spotsV2[1][0] && spotsV1[1][1]===spotsV2[1][1]){
+          let changed=false;
+          for (const [r,c] of spotsV1){
+            const before=C[r][c].length;
+            C[r][c] = C[r][c].filter(x=>x===v1||x===v2);
+            if (C[r][c].length!==before) changed=true;
+          }
+          if (changed){ counts.hiddenPair++; log.push({technique:'hiddenPair', note:unitLabel}); return true; }
+        }
+      }
+      return false;
+    }
+    for (let r=0;r<N;r++){
+      const cells=[]; for(let c=0;c<N;c++) if(g[r][c]===0) cells.push([r,c]);
+      if (scanUnit(cells, `row ${r+1}`)) return true;
+    }
+    for (let c=0;c<N;c++){
+      const cells=[]; for(let r=0;r<N;r++) if(g[r][c]===0) cells.push([r,c]);
+      if (scanUnit(cells, `col ${c+1}`)) return true;
+    }
+    return false;
+  }
+  function tryNakedTriple(C){
+    function scanUnit(cellsList, label){
+      const candCells = cellsList.filter(([r,c]) => C[r][c] && C[r][c].length>=2 && C[r][c].length<=3);
+      for (const combo of combinations(candCells,3)){
+        const union = new Set();
+        combo.forEach(([r,c]) => C[r][c].forEach(v=>union.add(v)));
+        if (union.size===3){
+          let changed=false;
+          for (const [r,c] of cellsList){
+            const inCombo = combo.some(([rr,cc])=>rr===r&&cc===c);
+            if (!inCombo && g[r][c]===0 && C[r][c]){
+              const before=C[r][c].length;
+              C[r][c] = C[r][c].filter(x=>!union.has(x));
+              if (C[r][c].length!==before) changed=true;
+            }
+          }
+          if (changed){ counts.nakedTriple++; log.push({technique:'nakedTriple', note:label}); return true; }
+        }
+      }
+      return false;
+    }
+    for (let r=0;r<N;r++){
+      const cells=[]; for(let c=0;c<N;c++) if(g[r][c]===0) cells.push([r,c]);
+      if (scanUnit(cells, `row ${r+1}`)) return true;
+    }
+    for (let c=0;c<N;c++){
+      const cells=[]; for(let r=0;r<N;r++) if(g[r][c]===0) cells.push([r,c]);
+      if (scanUnit(cells, `col ${c+1}`)) return true;
+    }
+    return false;
+  }
+  function tryXWing(C){
+    for (let v=1; v<=N; v++){
+      // rows -> cols
+      const rowSpots = [];
+      for (let r=0;r<N;r++){
+        const cs=[]; for(let c=0;c<N;c++) if(g[r][c]===0 && C[r][c] && C[r][c].includes(v)) cs.push(c);
+        if (cs.length===2) rowSpots.push({r, cs});
+      }
+      for (const [a,b] of combinations(rowSpots,2)){
+        if (!a) continue;
+        if (a.cs[0]===b.cs[0] && a.cs[1]===b.cs[1]){
+          let changed=false;
+          for (let r=0;r<N;r++){
+            if (r!==a.r && r!==b.r){
+              for (const c of a.cs){
+                if (g[r][c]===0 && C[r][c] && C[r][c].includes(v)){
+                  C[r][c]=C[r][c].filter(x=>x!==v); changed=true;
+                }
+              }
+            }
+          }
+          if (changed){ counts.xwing++; log.push({technique:'xwing', note:`v${v} rows`}); return true; }
+        }
+      }
+    }
+    return false;
+  }
+  function trySwordfish(C){
+    for (let v=1; v<=N; v++){
+      const rowSpots=[];
+      for (let r=0;r<N;r++){
+        const cs=[]; for(let c=0;c<N;c++) if(g[r][c]===0 && C[r][c] && C[r][c].includes(v)) cs.push(c);
+        if (cs.length>=2 && cs.length<=3) rowSpots.push({r,cs});
+      }
+      for (const combo of combinations(rowSpots,3)){
+        const union = new Set();
+        combo.forEach(rs => rs.cs.forEach(c=>union.add(c)));
+        if (union.size===3){
+          let changed=false;
+          const rowsUsed = combo.map(rs=>rs.r);
+          for (let r=0;r<N;r++){
+            if (!rowsUsed.includes(r)){
+              for (const c of union){
+                if (g[r][c]===0 && C[r][c] && C[r][c].includes(v)){
+                  C[r][c]=C[r][c].filter(x=>x!==v); changed=true;
+                }
+              }
+            }
+          }
+          if (changed){ counts.swordfish++; log.push({technique:'swordfish', note:`v${v}`}); return true; }
+        }
+      }
+    }
+    return false;
+  }
+
+  let guard = 0;
+  const maxIter = N*N*40;
+  while (!isSolved() && guard < maxIter){
+    guard++;
+    const C = allCandidates();
+    if (tryBoxHiddenSingle(C)) continue;
+    if (tryLineHiddenSingle(C)) continue;
+    if (tryNakedSingle(C)) continue;
+    if (tryPointing(C)) continue;
+    if (tryNakedPair(C)) continue;
+    if (tryHiddenPair(C)) continue;
+    if (tryNakedTriple(C)) continue;
+    if (tryXWing(C)) continue;
+    if (trySwordfish(C)) continue;
+    break; // stuck — techniques exhausted (shouldn't happen with our generator's clue counts)
+  }
+
+  const solved = isSolved();
+  let maxTier = 0;
+  for (const k in counts) if (counts[k] > 0) maxTier = Math.max(maxTier, TECHNIQUE_TIER[k]);
+  const tierName = ['—','Gentle','Moderate','Sharp','Expert'][maxTier] || 'Expert';
+
+  // total baseline seconds = sum(count * seconds) — this is the "par" solve time
+  let baseSeconds = 0;
+  for (const k in counts) baseSeconds += counts[k] * TECHNIQUE_SECONDS[k];
+
+  return { solved, counts, log, maxTier, tierName, baseSeconds, finalGrid: g };
+}
+
+/* =========================================================================
+   RANK TIME TABLE
+   Bronze = careful/beginner pace (slowest), Platinum = expert pace (fastest).
+   Multipliers apply to the technique-weighted baseSeconds from the solver.
+   Also builds the literal technique-by-rank seconds table you asked for.
+   ========================================================================= */
+// Explicit per-technique seconds at each rank (not a flat multiplier — expert
+// solvers barely slow down on harder patterns, so platinum's curve is much
+// flatter than bronze's; beginners pay a steep price for anything past a
+// hidden single).
+const RANK_TIMES = {
+  platinum: { boxHS:5,    lineHS:10,   naked1:10,   pointing:12,   nakedPair:25,  hiddenPair:40,  nakedTriple:45,  xwing:60,   swordfish:80  },
+  gold:     { boxHS:7.5,  lineHS:12,   naked1:15,   pointing:20,   nakedPair:30,  hiddenPair:60,  nakedTriple:70,  xwing:80,   swordfish:100 },
+  silver:   { boxHS:10,   lineHS:15,   naked1:20,   pointing:30,   nakedPair:45,  hiddenPair:90,  nakedTriple:100, xwing:120,  swordfish:150 },
+  bronze:   { boxHS:15,   lineHS:25,   naked1:40,   pointing:80,   nakedPair:100, hiddenPair:130, nakedTriple:165, xwing:230,  swordfish:330 }
+};
+const RANK_ORDER = ['platinum','gold','silver','bronze'];
+
+function buildRankTimes(solveResult){
+  // per-technique seconds at each rank, in the exact structure requested:
+  // {"bronze": {"boxHS": s, "lineHS": s, "naked1": s, ...}, "silver": {...}, ...}
+  const table = RANK_TIMES;
+
+  // total target time per rank = sum(count_used * per-technique rank seconds)
+  const totals = {};
+  RANK_ORDER.forEach(rank => {
+    let sum = 0;
+    for (const k in solveResult.counts) sum += solveResult.counts[k] * table[rank][k];
+    totals[rank] = Math.max(30, Math.round(sum));
+  });
+
+  return { perTechnique: table, totals };
+}
+
+function fmtTime(sec){
+  const m = Math.floor(sec/60), s = sec%60;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+/* =========================================================================
+   RENDERING
+   ========================================================================= */
+let currentState = null; // {N, puzzle, solution, solveResult, rankTimes, dateStr, paperSize}
+
+function renderGrid(hostEl, N, puzzle, {interactive=true, showSolution=false, solution=null} = {}){
+  const {bw,bh} = boxDims(N);
+  const cellPx = 44;
+  const table = document.createElement('table');
+  table.style.borderCollapse = 'collapse';
+  table.style.background = '#fdfcf8';
+  table.style.border = '3px solid #262420';
+
+  for (let r=0;r<N;r++){
+    const tr = document.createElement('tr');
+    for (let c=0;c<N;c++){
+      const td = document.createElement('td');
+      const given = puzzle[r][c] !== 0;
+      const val = showSolution ? solution[r][c] : puzzle[r][c];
+      td.style.width = cellPx+'px';
+      td.style.height = cellPx+'px';
+      td.style.textAlign = 'center';
+      td.style.fontFamily = "'JetBrains Mono', monospace";
+      td.style.fontSize = (cellPx*0.42)+'px';
+      td.style.fontWeight = given ? '700' : '500';
+      td.style.color = given ? '#232019' : (showSolution ? '#33506b' : '#33506b');
+      td.style.borderTop = (r % bh === 0) ? '2.5px solid #262420' : '1px solid #c9c2b0';
+      td.style.borderLeft = (c % bw === 0) ? '2.5px solid #262420' : '1px solid #c9c2b0';
+      td.style.borderRight = (c === N-1) ? '2.5px solid #262420' : 'none';
+      td.style.borderBottom = (r === N-1) ? '2.5px solid #262420' : 'none';
+      td.style.userSelect = 'none';
+      td.textContent = val !== 0 ? val : '';
+      tr.appendChild(td);
+    }
+    table.appendChild(tr);
+  }
+  hostEl.innerHTML = '';
+  hostEl.appendChild(table);
+}
+
+function tierToRankFlag(tierName){
+  const map = { Gentle:'bronze', Moderate:'silver', Sharp:'gold', Expert:'plat' };
+  return map[tierName] || 'bronze';
+}
+function tierLabel(flag){
+  return { plat:'Platinum-tier puzzle', gold:'Gold-tier puzzle', silver:'Silver-tier puzzle', bronze:'Bronze-tier puzzle' }[flag];
+}
+
+function renderLedger(rankTimes){
+  const body = document.getElementById('ledgerBody');
+  body.innerHTML = '';
+  const paceLabel = { platinum:'Expert pace', gold:'Sharp pace', silver:'Steady pace', bronze:'Careful pace' };
+  RANK_ORDER.forEach(rank => {
+    const tr = document.createElement('tr');
+    tr.className = rank === 'platinum' ? 'plat' : rank;
+    tr.innerHTML = `<td class="rankname">${rank[0].toUpperCase()+rank.slice(1)}</td>
+      <td class="time">${fmtTime(rankTimes.totals[rank])}</td>
+      <td>${paceLabel[rank]}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+function renderTechLog(solveResult){
+  const host = document.getElementById('techLog');
+  host.innerHTML = '';
+  if (!solveResult.log.length){ host.textContent = '—'; return; }
+  const summary = {};
+  solveResult.log.forEach(entry => {
+    summary[entry.technique] = (summary[entry.technique]||0) + 1;
+  });
+  Object.keys(TECHNIQUE_SECONDS).forEach(k => {
+    if (!summary[k]) return;
+    const row = document.createElement('div');
+    row.innerHTML = `<span class="tname">${TECHNIQUE_LABEL[k]}</span><span>× ${summary[k]}</span>`;
+    host.appendChild(row);
+  });
+}
+
+function dayOfYearNumber(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  const start = new Date(d.getFullYear(),0,0);
+  const diff = d - start;
+  return Math.floor(diff / 86400000);
+}
+
+/* ---------- main generate flow ---------- */
+function doGenerate(){
+  const dateStr = document.getElementById('dateInput').value;
+  const size = 9;
+  const paperSize = document.getElementById('paperSizeInput').value;
+  const statusEl = document.getElementById('statusMsg');
+
+  if (!dateStr){
+    statusEl.textContent = 'Pick a date first.';
+    statusEl.classList.add('err');
+    return;
+  }
+  statusEl.classList.remove('err');
+  statusEl.textContent = 'Generating…';
+
+  setTimeout(() => {
+    try{
+      const rng = makeRng(dateStr, size);
+      const { puzzle, solution } = generatePuzzle(size, rng);
+      const solveResult = humanSolve(puzzle, size);
+      const rankTimes = buildRankTimes(solveResult);
+
+      currentState = { N:size, puzzle, solution, solveResult, rankTimes, dateStr, paperSize };
+
+      renderGrid(document.getElementById('sudokuHost'), size, puzzle, {interactive:false});
+      renderLedger(rankTimes);
+      renderTechLog(solveResult);
+
+      document.getElementById('difficultyTag').textContent = `Difficulty: ${solveResult.tierName}`;
+      const flag = tierToRankFlag(solveResult.tierName);
+      document.getElementById('rankFlagHost').innerHTML =
+        `<span class="rank-flag ${flag}"><span class="dot"></span>${tierLabel(flag)}</span>`;
+
+      document.getElementById('mastheadNo').textContent = 'No. ' + dayOfYearNumber(dateStr);
+      const dObj = new Date(dateStr+'T00:00:00');
+      document.getElementById('mastheadDate').textContent = dObj.toLocaleDateString(undefined, { weekday:'long', year:'numeric', month:'long', day:'numeric' }) + ` · ${size}×${size} sheet`;
+
+      document.getElementById('revealBtn').disabled = false;
+      statusEl.textContent = solveResult.solved
+        ? `Solved by human technique chain in ${solveResult.log.length} logged steps.`
+        : `Note: solver needed techniques beyond swordfish for a few cells — puzzle still has a unique solution.`;
+    } catch(e){
+      console.error(e);
+      statusEl.textContent = 'Generation failed — try again or a different date.';
+      statusEl.classList.add('err');
+    }
+  }, 10);
+}
+
+let solutionRevealed = false;
+document.getElementById('revealBtn').addEventListener('click', () => {
+  if (!currentState) return;
+  solutionRevealed = !solutionRevealed;
+  renderGrid(document.getElementById('sudokuHost'), currentState.N, currentState.puzzle, {
+    showSolution: solutionRevealed, solution: currentState.solution
+  });
+  document.getElementById('revealBtn').textContent = solutionRevealed ? 'Hide solution' : 'Reveal solution';
+});
+
+document.getElementById('generateBtn').addEventListener('click', doGenerate);
+
+/* =========================================================================
+   PRINT SHEET BUILDER
+   Builds a standalone HTML document string: puzzle grid, blank answer grid,
+   ranking ledger with technique breakdown, and the 10%-per-mistake note.
+   ========================================================================= */
+function gridToHTMLTable(N, grid, {cellPx=44, blank=false} = {}){
+  const {bw,bh} = boxDims(N);
+  let html = `<table style="border-collapse:collapse;border:3px solid #111;margin:0 auto;">`;
+  for (let r=0;r<N;r++){
+    html += '<tr>';
+    for (let c=0;c<N;c++){
+      const val = blank ? '' : (grid[r][c] || '');
+      const bt = (r % bh === 0) ? '2.5px solid #111' : '1px solid #999';
+      const bl = (c % bw === 0) ? '2.5px solid #111' : '1px solid #999';
+      const br = (c === N-1) ? '2.5px solid #111' : 'none';
+      const bb = (r === N-1) ? '2.5px solid #111' : 'none';
+      html += `<td style="width:${cellPx}px;height:${cellPx}px;text-align:center;font-family:'Courier New',monospace;font-size:${Math.round(cellPx*0.42)}px;font-weight:${blank?400:700};border-top:${bt};border-left:${bl};border-right:${br};border-bottom:${bb};">${val}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</table>';
+  return html;
+}
+
+function buildPrintableDocument(){
+  if (!currentState) return null;
+  const { N, puzzle, solution, solveResult, rankTimes, dateStr, paperSize } = currentState;
+  const dObj = new Date(dateStr+'T00:00:00');
+  const dateLabel = dObj.toLocaleDateString(undefined, { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  const puzzleNo = dayOfYearNumber(dateStr);
+  const [pageW, pageH] = (paperSize || '210x297').split('x').map(Number);
+
+  const rankRows = RANK_ORDER.map(rank => {
+    const color = { platinum:'#7b8896', gold:'#a4761f', silver:'#7d7d78', bronze:'#9a5a34' }[rank];
+    return `<tr>
+      <td style="padding:6px 10px;font-weight:700;color:${color};text-transform:capitalize;">${rank}</td>
+      <td style="padding:6px 10px;font-family:'Courier New',monospace;">${fmtTime(rankTimes.totals[rank])}</td>
+    </tr>`;
+  }).join('');
+
+  const techRows = Object.keys(TECHNIQUE_SECONDS).map(k => {
+    if (!solveResult.counts[k]) return '';
+    return `<tr>
+      <td style="padding:4px 10px;">${TECHNIQUE_LABEL[k]}</td>
+      <td style="padding:4px 10px;font-family:'Courier New',monospace;">× ${solveResult.counts[k]}</td>
+      <td style="padding:4px 10px;font-family:'Courier New',monospace;">${TECHNIQUE_SECONDS[k]}s base</td>
+    </tr>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>The Daily Grid — No. ${puzzleNo}</title>
+<style>
+  @page { size: ${pageW}mm ${pageH}mm; margin: 14mm; }
+  body{ font-family: Georgia, serif; color:#111; max-width:${pageW}mm; margin:0 auto; padding:36px 24px; }
+  h1{ font-family: Arial, sans-serif; font-size:26px; border-bottom:3px solid #111; padding-bottom:10px; margin-bottom:4px;}
+  .sub{ font-family: Arial, sans-serif; font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:#555; margin-bottom:24px;}
+  .grids{ display:flex; gap:40px; flex-wrap:wrap; justify-content:center; margin:24px 0; page-break-inside:avoid;}
+  .grid-block{ text-align:center; }
+  .grid-block .label{ font-family:Arial, sans-serif; font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:#555; margin-bottom:8px;}
+  h2{ font-family: Arial, sans-serif; font-size:16px; border-top:1px solid #ccc; padding-top:16px; margin-top:32px;}
+  table.ledger{ border-collapse:collapse; width:100%; max-width:400px; margin:0 auto;}
+  table.ledger td{ border-bottom:1px dashed #ccc; }
+  table.techtable{ border-collapse:collapse; width:100%; max-width:500px; margin:12px auto 0; font-size:13px;}
+  table.techtable td{ border-bottom:1px dotted #ddd; }
+  .note{ font-family: Arial, sans-serif; font-size:12px; color:#555; text-align:center; margin-top:14px; }
+  .difficulty-flag{ text-align:center; font-family:Arial, sans-serif; font-size:12px; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:20px; color:#555; }
+  @media print { .no-print{ display:none; } body{ padding:12px; } }
+  .print-btn{ display:block; margin:0 auto 24px; padding:10px 18px; font-family:Arial, sans-serif; font-weight:700; background:#111; color:#fff; border:none; border-radius:3px; cursor:pointer; }
+</style>
+</head>
+<body>
+  <button class="print-btn no-print" onclick="window.print()">Print / Save as PDF</button>
+  <h1>The Daily Grid <span style="font-weight:400;font-size:16px;">No. ${puzzleNo}</span></h1>
+  <div class="sub">${dateLabel} · ${pageW}×${pageH}mm sheet · ${solveResult.tierName} difficulty</div>
+
+  <div class="grids">
+    <div class="grid-block">
+      <div class="label">Puzzle</div>
+      ${gridToHTMLTable(N, puzzle, {cellPx: 38})}
+    </div>
+    <div class="grid-block">
+      <div class="label">Answer sheet (blank)</div>
+      ${gridToHTMLTable(N, puzzle, {cellPx: 38, blank:true})}
+    </div>
+  </div>
+
+  <h2>Ranking ledger — target completion times</h2>
+  <table class="ledger">${rankRows}</table>
+  <div class="note">Add 10% to your target time for every mistake made along the way.</div>
+
+  <h2>Technique breakdown (how a human solver cracks this grid)</h2>
+  <table class="techtable">${techRows}</table>
+
+  <h2>Solution</h2>
+  <div class="grids">
+    <div class="grid-block">
+      ${gridToHTMLTable(N, solution, {cellPx: 32})}
+    </div>
+  </div>
+</body></html>`;
+}
+
+document.getElementById('printBtn').addEventListener('click', () => {
+  if (!currentState){
+    document.getElementById('statusMsg').textContent = 'Generate a puzzle first.';
+    document.getElementById('statusMsg').classList.add('err');
+    return;
+  }
+  const html = buildPrintableDocument();
+  const w = window.open('', '_blank');
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+});
+
+document.getElementById('downloadHtmlBtn').addEventListener('click', () => {
+  if (!currentState){
+    document.getElementById('statusMsg').textContent = 'Generate a puzzle first.';
+    document.getElementById('statusMsg').classList.add('err');
+    return;
+  }
+  const html = buildPrintableDocument();
+  const blob = new Blob([html], {type:'text/html'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `daily-grid-${currentState.dateStr}-${currentState.N}x${currentState.N}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+/* ---------- init: default to today ---------- */
+(function init(){
+  const today = new Date();
+  const iso = today.toISOString().slice(0,10);
+  document.getElementById('dateInput').value = iso;
+  doGenerate();
+})();
+</script>
+</body>
+</html>
