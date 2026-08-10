@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Il canzoniere</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Source+Serif+4:wght@400;600&family=EB+Garamond:wght@400;600&family=Inter:wght@400;500;600&display=swap');
+
+  :root{
+    --paper: #FBF7EE;
+    --paper-edge: #EDE5D2;
+    --ink: #2B2620;
+    --ink-soft: #6B6255;
+    --accent: #7A5230;
+    --accent-soft: #B98A55;
+    --line: #DED2B8;
+    --danger: #A3402E;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family: var(--sans);
+    background: #F4EFE3;
+    color: var(--ink);
+    min-height:100vh;
+  }
+  .app{max-width:760px;margin:0 auto;padding:0 20px 80px;}
+
+  header.top{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:28px 0 18px;
+    border-bottom:1px solid var(--line);
+    margin-bottom:24px;
+  }
+  .brand{display:flex;align-items:baseline;gap:10px;}
+  .brand h1{
+    font-family:'Fraunces', serif;
+    font-size:28px;font-weight:600;margin:0;letter-spacing:-0.01em;
+  }
+  .brand .mark{
+    font-family:'Fraunces', serif;
+    font-style:italic;color:var(--accent-soft);font-size:16px;
+  }
+  nav.tabs{display:flex;gap:6px;}
+  nav.tabs button{
+    font-family:var(--sans);font-size:13px;font-weight:500;
+    background:none;border:1px solid transparent;color:var(--ink-soft);
+    padding:8px 14px;border-radius:20px;cursor:pointer;
+    transition:all .15s ease;
+  }
+  nav.tabs button:hover{color:var(--ink);}
+  nav.tabs button.active{background:var(--ink);color:var(--paper);}
+
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .song-list{list-style:none;margin:0;padding:0;}
+  .song-item{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:16px 4px;border-bottom:1px solid var(--line);
+    cursor:pointer;
+  }
+  .song-item:hover .song-title{color:var(--accent);}
+  .song-title{
+    font-family:'Fraunces', serif;font-size:19px;font-weight:400;
+    transition:color .15s ease;
+  }
+  .song-sub{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .song-item .chev{color:var(--ink-soft);font-size:18px;}
+
+  .empty{
+    padding:60px 10px;text-align:center;color:var(--ink-soft);
+  }
+  .empty .big{font-family:'Fraunces', serif;font-size:20px;color:var(--ink);margin-bottom:6px;}
+
+  /* reader */
+  .reader-overlay{
+    position:fixed;inset:0;background:rgba(43,38,32,0.5);
+    display:none;align-items:flex-start;justify-content:center;
+    padding:24px 16px;z-index:50;overflow-y:auto;
+  }
+  .reader-overlay.active{display:flex;}
+  .reader-card{
+    background:var(--paper);
+    border:1px solid var(--paper-edge);
+    border-radius:10px;
+    max-width:640px;width:100%;
+    padding:36px 40px 48px;
+    margin:20px 0;
+    position:relative;
+  }
+  .reader-top{
+    display:flex;align-items:flex-start;justify-content:space-between;
+    margin-bottom:6px;gap:16px;
+  }
+  .reader-title{font-family:'Fraunces', serif;font-size:26px;font-weight:600;margin:0;line-height:1.25;}
+  .reader-artist{font-size:13px;color:var(--ink-soft);margin:4px 0 0;}
+  .close-btn{
+    background:none;border:1px solid var(--line);border-radius:50%;
+    width:32px;height:32px;flex:none;cursor:pointer;color:var(--ink-soft);
+    font-size:16px;line-height:1;
+  }
+  .close-btn:hover{color:var(--ink);border-color:var(--ink-soft);}
+
+  .type-controls{
+    display:flex;align-items:center;gap:14px;
+    margin:22px 0 26px;padding:10px 14px;
+    background:var(--paper-edge);border-radius:8px;
+    font-size:13px;
+  }
+  .type-controls .label{color:var(--ink-soft);margin-right:2px;}
+  .font-buttons{display:flex;gap:4px;}
+  .font-buttons button{
+    font-size:12px;padding:5px 10px;border-radius:6px;
+    border:1px solid var(--line);background:var(--paper);
+    cursor:pointer;color:var(--ink-soft);
+  }
+  .font-buttons button.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .size-controls{display:flex;align-items:center;gap:8px;margin-left:auto;}
+  .size-controls button{
+    width:26px;height:26px;border-radius:50%;border:1px solid var(--line);
+    background:var(--paper);cursor:pointer;font-size:14px;color:var(--ink);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .size-controls button:hover{border-color:var(--accent-soft);}
+  .size-val{font-size:12px;color:var(--ink-soft);min-width:32px;text-align:center;}
+
+  .lyrics{
+    white-space:pre-wrap;
+    line-height:1.85;
+    color:var(--ink);
+  }
+  .f-serif{font-family:'Source Serif 4', serif;}
+  .f-garamond{font-family:'EB Garamond', serif;}
+  .f-sans{font-family:var(--sans);}
+
+  /* private area */
+  .lock{
+    max-width:340px;margin:60px auto;text-align:center;
+  }
+  .lock .big{font-family:'Fraunces', serif;font-size:22px;margin-bottom:8px;}
+  .lock p{color:var(--ink-soft);font-size:14px;margin-bottom:20px;}
+  input[type=password], input[type=text], textarea{
+    width:100%;font-family:var(--sans);font-size:14px;
+    padding:10px 12px;border-radius:8px;border:1px solid var(--line);
+    background:#fff;color:var(--ink);
+  }
+  textarea{resize:vertical;min-height:220px;font-family:'Source Serif 4', serif;line-height:1.7;}
+  input:focus, textarea:focus{outline:none;border-color:var(--accent-soft);box-shadow:0 0 0 3px rgba(122,82,48,0.12);}
+  .btn{
+    font-family:var(--sans);font-size:14px;font-weight:500;
+    padding:10px 18px;border-radius:8px;border:1px solid var(--ink);
+    background:var(--ink);color:var(--paper);cursor:pointer;
+  }
+  .btn:hover{background:#443c32;}
+  .btn.secondary{background:none;color:var(--ink);border-color:var(--line);}
+  .btn.secondary:hover{border-color:var(--ink-soft);}
+  .btn.danger{background:none;color:var(--danger);border-color:var(--danger);opacity:0.85;}
+
+  .field{margin-bottom:16px;}
+  .field label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:6px;font-weight:500;}
+
+  .admin-header{
+    display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;
+  }
+  .admin-header h2{font-family:'Fraunces', serif;font-size:20px;margin:0;font-weight:600;}
+
+  .form-card{
+    background:#fff;border:1px solid var(--line);border-radius:10px;
+    padding:22px 24px;margin-bottom:28px;
+  }
+  .form-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:4px;}
+
+  .admin-row{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 4px;border-bottom:1px solid var(--line);
+  }
+  .admin-row-title{font-family:'Fraunces', serif;font-size:17px;}
+  .admin-row-actions{display:flex;gap:8px;}
+  .icon-btn{
+    background:none;border:1px solid var(--line);border-radius:6px;
+    padding:6px 10px;font-size:12px;color:var(--ink-soft);cursor:pointer;
+  }
+  .icon-btn:hover{color:var(--ink);border-color:var(--ink-soft);}
+  .icon-btn.danger:hover{color:var(--danger);border-color:var(--danger);}
+
+  .status{font-size:12px;color:var(--ink-soft);margin-top:10px;min-height:16px;}
+  .status.err{color:var(--danger);}
+
+  @media(max-width:480px){
+    .reader-card{padding:26px 20px 36px;}
+    .type-controls{flex-wrap:wrap;row-gap:10px;}
+    .size-controls{margin-left:0;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Il canzoniere</h1>
+      <span class="mark">testi</span>
+    </div>
+    <nav class="tabs">
+      <button id="tab-public" class="active">Canzoni</button>
+      <button id="tab-private">Area privata</button>
+    </nav>
+  </header>
+
+  <div id="view-public" class="view active">
+    <ul id="public-list" class="song-list"></ul>
+    <div id="public-empty" class="empty" style="display:none;">
+      <div class="big">Nessuna canzone ancora</div>
+      <div>Aggiungile dall'area privata.</div>
+    </div>
+  </div>
+
+  <div id="view-private" class="view">
+    <div id="lock-screen" class="lock">
+      <div class="big">Area privata</div>
+      <p>Inserisci la password per aggiungere o modificare le canzoni.</p>
+      <div class="field">
+        <input type="password" id="password-input" placeholder="Password">
+      </div>
+      <button class="btn" id="unlock-btn" style="width:100%;">Entra</button>
+      <div class="status err" id="lock-status"></div>
+    </div>
+
+    <div id="admin-panel" style="display:none;">
+      <div class="admin-header">
+        <h2>Le tue canzoni</h2>
+        <button class="btn" id="new-song-btn">+ Nuova canzone</button>
+      </div>
+
+      <div id="song-form-card" class="form-card" style="display:none;">
+        <div class="field">
+          <label>Titolo</label>
+          <input type="text" id="form-title" placeholder="Titolo della canzone">
+        </div>
+        <div class="field">
+          <label>Artista / autore (facoltativo)</label>
+          <input type="text" id="form-artist" placeholder="Artista">
+        </div>
+        <div class="field">
+          <label>Carica un file (.txt, .pdf, .docx) &mdash; facoltativo</label>
+          <input type="file" id="form-file" accept=".txt,.pdf,.docx">
+          <div style="font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.5;">
+            .txt e .docx danno risultati puliti. I PDF con accordi o tablature possono uscire con righe spezzate: in quel caso usa "Unisci righe spezzate" e correggi a mano.
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-weight:400;cursor:pointer;">
+            <input type="checkbox" id="form-strip-chords" checked style="width:auto;">
+            Rimuovi gli accordi (es. Am, G, Em) dal testo caricato
+          </label>
+          <div class="status" id="file-status"></div>
+        </div>
+        <div class="field">
+          <label>Testo</label>
+          <textarea id="form-lyrics" placeholder="Incolla o scrivi qui il testo, oppure carica un file sopra..."></textarea>
+          <button type="button" class="icon-btn" id="merge-lines-btn" style="margin-top:8px;">Unisci righe spezzate</button>
+        </div>
+        <div class="form-actions">
+          <button class="btn secondary" id="form-cancel">Annulla</button>
+          <button class="btn" id="form-save">Salva canzone</button>
+        </div>
+        <div class="status" id="form-status"></div>
+      </div>
+
+      <div id="admin-list-wrap">
+        <div id="admin-list"></div>
+        <div id="admin-empty" class="empty" style="display:none;">
+          <div class="big">Nessuna canzone ancora</div>
+          <div>Premi "Nuova canzone" per iniziare.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="reader-overlay" id="reader-overlay">
+  <div class="reader-card">
+    <div class="reader-top">
+      <div>
+        <p class="reader-title" id="reader-title"></p>
+        <p class="reader-artist" id="reader-artist"></p>
+      </div>
+      <button class="close-btn" id="reader-close">&times;</button>
+    </div>
+
+    <div class="type-controls">
+      <span class="label">Carattere</span>
+      <div class="font-buttons">
+        <button data-font="f-serif" class="active">Classico</button>
+        <button data-font="f-garamond">Elegante</button>
+        <button data-font="f-sans">Semplice</button>
+      </div>
+      <div class="size-controls">
+        <button id="size-down" aria-label="Riduci">&minus;</button>
+        <span class="size-val" id="size-val">18px</span>
+        <button id="size-up" aria-label="Aumenta">+</button>
+      </div>
+    </div>
+
+    <div class="lyrics f-serif" id="lyrics-text" style="font-size:18px;"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script>
+if(window['pdfjsLib']){
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+const PASSWORD = "papa2026";
+let songs = [];
+let unlocked = false;
+let currentFont = "f-serif";
+let currentSize = 18;
+
+const el = id => document.getElementById(id);
+
+async function loadSongs(){
+  try{
+    const res = await window.storage.get('songs-list', true);
+    songs = res ? JSON.parse(res.value) : [];
+  }catch(e){
+    songs = [];
+  }
+  renderPublic();
+  if(unlocked) renderAdmin();
+}
+
+async function saveSongs(){
+  try{
+    await window.storage.set('songs-list', JSON.stringify(songs), true);
+  }catch(e){
+    console.error('Errore di salvataggio', e);
+  }
+}
+
+function renderPublic(){
+  const list = el('public-list');
+  list.innerHTML = '';
+  el('public-empty').style.display = songs.length ? 'none' : 'block';
+  songs.forEach(s => {
+    const li = document.createElement('li');
+    li.className = 'song-item';
+    li.innerHTML = `<div><div class="song-title">${escapeHtml(s.title)}</div>${s.artist ? `<div class="song-sub">${escapeHtml(s.artist)}</div>` : ''}</div><span class="chev">›</span>`;
+    li.addEventListener('click', () => openReader(s));
+    list.appendChild(li);
+  });
+}
+
+function renderAdmin(){
+  const list = el('admin-list');
+  list.innerHTML = '';
+  el('admin-empty').style.display = songs.length ? 'none' : 'block';
+  songs.forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'admin-row';
+    row.innerHTML = `
+      <div class="admin-row-title">${escapeHtml(s.title)}</div>
+      <div class="admin-row-actions">
+        <button class="icon-btn" data-act="view">Leggi</button>
+        <button class="icon-btn" data-act="edit">Modifica</button>
+        <button class="icon-btn danger" data-act="delete">Elimina</button>
+      </div>`;
+    row.querySelector('[data-act="view"]').addEventListener('click', () => openReader(s));
+    row.querySelector('[data-act="edit"]').addEventListener('click', () => openForm(s));
+    row.querySelector('[data-act="delete"]').addEventListener('click', () => deleteSong(s.id));
+    list.appendChild(row);
+  });
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// reader
+function openReader(song){
+  el('reader-title').textContent = song.title;
+  el('reader-artist').textContent = song.artist || '';
+  el('lyrics-text').textContent = song.lyrics;
+  el('reader-overlay').classList.add('active');
+}
+el('reader-close').addEventListener('click', () => el('reader-overlay').classList.remove('active'));
+el('reader-overlay').addEventListener('click', e => {
+  if(e.target === el('reader-overlay')) el('reader-overlay').classList.remove('active');
+});
+
+document.querySelectorAll('.font-buttons button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.font-buttons button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    el('lyrics-text').classList.remove(currentFont);
+    currentFont = btn.dataset.font;
+    el('lyrics-text').classList.add(currentFont);
+  });
+});
+el('size-up').addEventListener('click', () => {
+  currentSize = Math.min(currentSize + 2, 34);
+  applySize();
+});
+el('size-down').addEventListener('click', () => {
+  currentSize = Math.max(currentSize - 2, 12);
+  applySize();
+});
+function applySize(){
+  el('lyrics-text').style.fontSize = currentSize + 'px';
+  el('size-val').textContent = currentSize + 'px';
+}
+
+// tabs
+el('tab-public').addEventListener('click', () => switchTab('public'));
+el('tab-private').addEventListener('click', () => switchTab('private'));
+function switchTab(which){
+  el('tab-public').classList.toggle('active', which === 'public');
+  el('tab-private').classList.toggle('active', which === 'private');
+  el('view-public').classList.toggle('active', which === 'public');
+  el('view-private').classList.toggle('active', which === 'private');
+}
+
+// unlock
+el('unlock-btn').addEventListener('click', tryUnlock);
+el('password-input').addEventListener('keydown', e => { if(e.key === 'Enter') tryUnlock(); });
+function tryUnlock(){
+  const val = el('password-input').value;
+  if(val === PASSWORD){
+    unlocked = true;
+    el('lock-screen').style.display = 'none';
+    el('admin-panel').style.display = 'block';
+    renderAdmin();
+  }else{
+    el('lock-status').textContent = 'Password sbagliata. Riprova.';
+  }
+}
+
+// strips inline chord tokens (e.g. "In your C house I G long to Am be")
+// while leaving the actual words intact.
+function stripChords(text){
+  const chordToken = /^[A-Ga-g](#|b)?(maj|min|m|sus|dim|aug|add|M)?\d{0,2}(\/[A-Ga-g](#|b)?)?$/;
+
+  // A line counts as a "chord/tab" line if, once you strip out bar characters
+  // ('|'), dots, a trailing repeat marker like "(x6)", and whitespace, every
+  // remaining token is a chord name. This catches both spaced-out chord lines
+  // ("Em . D . Am") and tab-style lines with bars glued to chords
+  // ("|Em . D|C . |Am | . |"), which the old token-by-token approach missed.
+  function isChordOrTabLine(trimmed){
+    if(trimmed === '') return false;
+    const noRepeat = trimmed.replace(/\s*\(x\d+\)\s*$/i, '');
+    // split on bar characters and whitespace alike, drop empty/dot-only bits
+    const tokens = noRepeat
+      .split(/[|\s]+/)
+      .map(t => t.replace(/^\.+|\.+$/g, ''))
+      .filter(t => t !== '' && t !== '.');
+    if(tokens.length === 0) return false; // pure bars/dots, e.g. "| . |"
+    return tokens.every(t => chordToken.test(t));
+  }
+
+  const lines = text.split(/\r?\n/);
+
+  // pass 1: drop chord/tab-only lines, and strip inline chord tokens from
+  // lines that mix chords with real words.
+  let cleaned = lines.map(line => {
+    let trimmed = line.trim();
+    if(trimmed === '') return '';
+    if(isChordOrTabLine(trimmed)) return null;
+
+    const words = trimmed.split(/\s+/);
+    const kept = words.filter(w => {
+      const clean = w.replace(/[(),]/g, '');
+      if(chordToken.test(clean)) return false;
+      if(/^(m|M|maj|min|sus|dim|aug|add)?\d{0,2}$/.test(clean) && clean.length <= 3 && /\d|m$/i.test(clean)) return false;
+      return true;
+    });
+    return kept.join(' ');
+  }).filter(l => l !== null);
+
+  // pass 2: merge short fragments that are really one broken-up lyric line.
+  // Heuristic: a line under ~5 words that doesn't end in punctuation is
+  // likely continued on the next line, so glue it to what follows.
+  const merged = [];
+  let buffer = '';
+  cleaned.forEach(line => {
+    if(line === ''){
+      if(buffer){ merged.push(buffer); buffer = ''; }
+      merged.push('');
+      return;
+    }
+    buffer = buffer ? (buffer + ' ' + line) : line;
+    const wordCount = buffer.split(/\s+/).length;
+    const endsClause = /[.!?,;:]$/.test(buffer);
+    if(wordCount >= 6 || endsClause){
+      merged.push(buffer);
+      buffer = '';
+    }
+  });
+  if(buffer) merged.push(buffer);
+
+  return merged.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function mergeShortLines(text){
+  const lines = text.split(/\r?\n/);
+  const merged = [];
+  let buffer = '';
+  lines.forEach(line => {
+    const trimmed = line.trim();
+    if(trimmed === ''){
+      if(buffer){ merged.push(buffer); buffer = ''; }
+      merged.push('');
+      return;
+    }
+    buffer = buffer ? (buffer + ' ' + trimmed) : trimmed;
+    const wordCount = buffer.split(/\s+/).length;
+    const endsClause = /[.!?,;:]$/.test(buffer);
+    if(wordCount >= 6 || endsClause){
+      merged.push(buffer);
+      buffer = '';
+    }
+  });
+  if(buffer) merged.push(buffer);
+  return merged.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+el('merge-lines-btn').addEventListener('click', () => {
+  el('form-lyrics').value = mergeShortLines(el('form-lyrics').value);
+});
+
+// file extraction
+el('form-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const status = el('file-status');
+  status.classList.remove('err');
+  status.textContent = 'Lettura del file in corso...';
+  try{
+    const ext = file.name.split('.').pop().toLowerCase();
+    let text = '';
+    if(ext === 'txt'){
+      text = await file.text();
+    }else if(ext === 'pdf'){
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+      const pages = [];
+      for(let i = 1; i <= pdf.numPages; i++){
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+
+        // Each item has transform = [scaleX, skewX, skewY, scaleY, x, y].
+        // Group into rows using a Y-tolerance, but ALSO catch chord objects
+        // that share x-position with an already-placed lyric fragment
+        // (small vertical offset = superscript chord), by using a wider
+        // tolerance keyed to font size AND checking horizontal overlap.
+        const items = content.items.map(it => ({
+          x: it.transform[4], y: it.transform[5],
+          h: Math.abs(it.transform[3]) || 10,
+          w: it.width || (it.str.length * 4),
+          str: it.str
+        })).filter(it => it.str.trim() !== '');
+
+        // sort primarily top-to-bottom, then left-to-right
+        items.sort((a,b) => (b.y - a.y) || (a.x - b.x));
+
+        const rows = [];
+        items.forEach(it => {
+          // find an existing row whose baseline is close AND whose x-range
+          // doesn't already contain this item at a different sub-position
+          let row = rows.find(r => Math.abs(r.y - it.y) < r.tol);
+          if(!row){
+            row = {y: it.y, tol: Math.max(it.h * 0.6, 4), items: []};
+            rows.push(row);
+          }
+          row.items.push(it);
+        });
+
+        rows.sort((a,b) => b.y - a.y);
+        const pageLines = rows.map(r => {
+          r.items.sort((a,b) => a.x - b.x);
+          return r.items.map(it => it.str).join(' ').replace(/\s+/g,' ').trim();
+        }).filter(l => l !== '');
+
+        pages.push(pageLines.join('\n'));
+      }
+      text = pages.join('\n\n');
+    }else if(ext === 'docx'){
+      const buf = await file.arrayBuffer();
+      const result = await mammoth.extractRawText({arrayBuffer: buf});
+      text = result.value;
+    }else{
+      status.textContent = 'Formato non supportato. Usa .txt, .pdf o .docx.';
+      status.classList.add('err');
+      return;
+    }
+    el('form-lyrics').value = el('form-strip-chords').checked ? stripChords(text.trim()) : text.trim();
+    if(!el('form-title').value.trim()){
+      el('form-title').value = file.name.replace(/\.[^.]+$/, '');
+    }
+    status.textContent = 'Testo caricato da ' + file.name + '.';
+  }catch(err){
+    status.textContent = 'Impossibile leggere il file. Prova a incollare il testo a mano.';
+    status.classList.add('err');
+  }
+});
+
+// admin form
+let editingId = null;
+el('new-song-btn').addEventListener('click', () => openForm(null));
+el('form-cancel').addEventListener('click', closeForm);
+el('form-save').addEventListener('click', saveForm);
+
+function openForm(song){
+  editingId = song ? song.id : null;
+  el('form-title').value = song ? song.title : '';
+  el('form-artist').value = song ? (song.artist || '') : '';
+  el('form-lyrics').value = song ? song.lyrics : '';
+  el('form-file').value = '';
+  el('form-strip-chords').checked = true;
+  el('file-status').textContent = '';
+  el('file-status').classList.remove('err');
+  el('form-status').textContent = '';
+  el('song-form-card').style.display = 'block';
+  el('form-title').focus();
+}
+function closeForm(){
+  el('song-form-card').style.display = 'none';
+  editingId = null;
+}
+async function saveForm(){
+  const title = el('form-title').value.trim();
+  const lyrics = el('form-lyrics').value.trim();
+  if(!title || !lyrics){
+    el('form-status').textContent = 'Inserisci almeno titolo e testo.';
+    el('form-status').classList.add('err');
+    return;
+  }
+  el('form-status').classList.remove('err');
+  el('form-status').textContent = 'Salvataggio...';
+
+  if(editingId){
+    const s = songs.find(x => x.id === editingId);
+    s.title = title;
+    s.artist = el('form-artist').value.trim();
+    s.lyrics = lyrics;
+  }else{
+    songs.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+      title, artist: el('form-artist').value.trim(), lyrics
+    });
+  }
+  await saveSongs();
+  renderPublic();
+  renderAdmin();
+  el('form-status').textContent = 'Salvata.';
+  setTimeout(closeForm, 500);
+}
+async function deleteSong(id){
+  if(!confirm('Eliminare questa canzone?')) return;
+  songs = songs.filter(s => s.id !== id);
+  await saveSongs();
+  renderPublic();
+  renderAdmin();
+}
+
+loadSongs();
+</script>
+</body>
+</html>
