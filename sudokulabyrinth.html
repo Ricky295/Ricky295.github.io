@@ -1542,7 +1542,7 @@ if (typeof module !== 'undefined' && module.exports) {
                 <div class="mini-stat"><span class="mini-stat-label">Moves</span><span id="lab-moves-stat" class="mini-stat-value">0</span></div>
                 <div class="mini-stat"><span class="mini-stat-label">On-Screen</span><span id="screen-moves-stat" class="mini-stat-value">0</span></div>
                 <div class="mini-stat"><span class="mini-stat-label">Mv/s Now</span><span id="mps-now-stat" class="mini-stat-value">0.0</span></div>
-                <div class="mini-stat"><span class="mini-stat-label">Mv/s Avg</span><span id="mps-avg-stat" class="mini-stat-value">0.0</span></div>
+                <div class="mini-stat"><span class="mini-stat-label">Mv/min Avg</span><span id="mps-avg-stat" class="mini-stat-value">0.0</span></div>
                 <div class="mini-stat"><span class="mini-stat-label">Mv/s Max</span><span id="mps-max-stat" class="mini-stat-value">0.0</span></div>
             </div>
 
@@ -1599,6 +1599,9 @@ if (typeof module !== 'undefined' && module.exports) {
                 <div style="display:flex; align-items:center; gap:8px; justify-content:center; margin-bottom:15px;">
                     <label for="puzzleCountInput" class="stat-label" style="margin:0;">Sudokus to solve (same labyrinth):</label>
                     <input type="number" id="puzzleCountInput" min="1" max="50" value="1" style="width:60px; background:#1e1e2d; color:var(--text-main); border:1px solid var(--border-color); border-radius:6px; padding:6px; text-align:center; font-weight:700;">
+                    <label class="stat-label" style="margin:0; display:flex; align-items:center; gap:6px;">
+                        <input type="checkbox" id="regenNumbersToggle" checked> Regenerate numbers each round
+                    </label>
                 </div>
 
                 <!-- 9x9 Sudoku Grid as a Table -->
@@ -1623,14 +1626,14 @@ if (typeof module !== 'undefined' && module.exports) {
     <div id="victory-modal" class="overlay hidden">
         <div class="modal">
             <h2>🏆 MAZE DECRYPTED!</h2>
-            <p>Incredible! You navigated the giant labyrinth, looted the key digit values, and successfully decoded the 9x9 Sudoku encryption core.</p>
+            <p id="victory-message">Incredible! You navigated the giant labyrinth, looted the key digit values, and successfully decoded the 9x9 Sudoku encryption core.</p>
             <div class="stat-card" style="margin-bottom: 20px;">
                 <div class="stat-label">Completed Run Record</div>
                 <div id="victory-time" class="stat-value" style="color:var(--accent-success); font-size:1.8rem;">00:00</div>
             </div>
             <div class="mini-stat-row" style="margin-bottom:20px;">
                 <div class="mini-stat"><span class="mini-stat-label">Total Moves</span><span id="victory-total-moves" class="mini-stat-value">0</span></div>
-                <div class="mini-stat"><span class="mini-stat-label">Avg Mv/Sec</span><span id="victory-avg-mps" class="mini-stat-value">0.0</span></div>
+                <div class="mini-stat"><span class="mini-stat-label">Avg Mv/Min</span><span id="victory-avg-mps" class="mini-stat-value">0.0</span></div>
                 <div class="mini-stat"><span class="mini-stat-label">Max Mv/Sec</span><span id="victory-max-mps" class="mini-stat-value">0.0</span></div>
             </div>
             <button id="playAgainBtn" style="width: 100%;">Construct New Labyrinth</button>
@@ -1785,7 +1788,7 @@ if (typeof module !== 'undefined' && module.exports) {
             if (!gameActive && labyrinthMoveCount === 0) return 0;
             const elapsedSec = (performance.now() - startTime) / 1000;
             if (elapsedSec <= 0) return 0;
-            return labyrinthMoveCount / elapsedSec;
+            return (labyrinthMoveCount / elapsedSec) * 60; // Convert to moves per minute
         }
 
         function resetMoveStats() {
@@ -1959,8 +1962,16 @@ if (typeof module !== 'undefined' && module.exports) {
             selectedInventoryNum = null;
             // inventory intentionally kept — leftover digits carry into the next puzzle
 
-            generateSudokuPuzzle();
-            populateMazeWithKeyItems(); // scatter new required digits into the same maze
+            const regenNumbers = document.getElementById('regenNumbersToggle').checked;
+
+            if (regenNumbers) {
+                generateSudokuPuzzle();
+                populateMazeWithKeyItems(); // scatter new required digits into the same maze
+            } else {
+                // Keep the same puzzle/solution — just reset the board back to its
+                // starting clues so the player solves the identical numbers again.
+                sudokuUserGrid = [...sudokuPuzzle];
+            }
 
             renderInventorySlots();
             renderSudokuBoard();
@@ -2488,6 +2499,18 @@ if (typeof module !== 'undefined' && module.exports) {
                 document.getElementById('victory-total-moves').innerText = labyrinthMoveCount;
                 document.getElementById('victory-avg-mps').innerText = computeAverageMps().toFixed(2);
                 document.getElementById('victory-max-mps').innerText = maxMovesPerSec.toFixed(1);
+
+                const levelLabel = cpuLevel.charAt(0).toUpperCase() + cpuLevel.slice(1);
+                let victoryMessage = "Incredible! You navigated the giant labyrinth, looted the key digit values, and successfully decoded the 9x9 Sudoku encryption core.";
+                if (gameMode === 'vscpu') {
+                    victoryMessage = cpuFinishedFirst
+                        ? `Even if you lost against ${levelLabel}, you still navigated enough to finish. Good job!`
+                        : `Congratulations! You navigated the labyrinth well enough to defeat ${levelLabel}.`;
+                } else if (gameMode === 'tas') {
+                    victoryMessage = "The bot completed the run for you well enough to solve it at extreme speeds.";
+                }
+                document.getElementById('victory-message').innerText = victoryMessage;
+
                 document.getElementById('victory-modal').classList.remove('hidden');
             }
         }
@@ -2693,6 +2716,7 @@ if (typeof module !== 'undefined' && module.exports) {
         // ==========================================================================
         let cpuState = null;
         let cpuTimerHandle = null;
+        let cpuFinishedFirst = false; // true once the CPU completes its sudoku copy before the player does
 
         function buildCpuMirrorInstance() {
             // Mirror the CURRENT sudoku + maze (same seed/content = fair race)
@@ -2720,6 +2744,7 @@ if (typeof module !== 'undefined' && module.exports) {
         }
 
         function startCpuSimulation() {
+            cpuFinishedFirst = false;
             cpuState = buildCpuMirrorInstance();
             cpuState.totalNeeded = cpuComputeNeeded(cpuState);
             cpuState.phase = 'switching';
@@ -2877,6 +2902,7 @@ if (typeof module !== 'undefined' && module.exports) {
                     // CPU finished its sudoku copy
                     document.getElementById('cpu-status').innerText = 'Finished!';
                     document.getElementById('cpu-progress').innerText = `${cpuState.totalNeeded}/${cpuState.totalNeeded}`;
+                    if (gameActive) cpuFinishedFirst = true; // player hasn't won yet, so the CPU beat them
                     return; // stop ticking, CPU is done
                 }
                 if (cpuNeedsMoreLoot(cpuState) && !cpuHasPendingSolve(cpuState)) {
