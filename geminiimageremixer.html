@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Image Remixer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f3ff',
+                            100: '#e1e7fe',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#1e1b4b',
+                            950: '#0f0e26',
+                        },
+                        darkbg: {
+                            base: '#090d16',
+                            surface: '#111827',
+                            card: '#161f32',
+                            border: '#233047',
+                            input: '#0d1322'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #090d16;
+            color: #f1f5f9;
+        }
+        .card-surface {
+            background-color: #111827;
+            border: 1px solid #233047;
+        }
+        .input-surface {
+            background-color: #0c1220;
+            border: 1px solid #233047;
+        }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(99, 102, 241, 0.25); }
+            50% { box-shadow: 0 0 28px rgba(168, 85, 247, 0.45); }
+        }
+        .glow-effect { animation: pulse-glow 3s infinite; }
+    </style>
+</head>
+<body class="h-full bg-darkbg-base text-slate-100 flex flex-col antialiased">
+
+    <!-- Top Navigation Header -->
+    <header class="border-b border-darkbg-border bg-darkbg-surface/90 backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+            
+            <!-- Brand Logo & Title -->
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25">
+                    <i class="fa-solid fa-wand-magic-sparkles text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">Gemini Image Remixer</h1>
+                    <p class="text-xs text-slate-400 font-medium">Powered by Gemini 3.1 Flash Image</p>
+                </div>
+            </div>
+
+            <!-- Action Links & Options -->
+            <div class="flex items-center space-x-2 sm:space-x-3">
+                <!-- User requested share artifact link -->
+                <a href="https://share.gemini.google/kE41kHiMwmRJ" 
+                   target="_blank" 
+                   rel="noopener noreferrer" 
+                   title="Open Gemini Reference Link"
+                   class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-950/80 hover:bg-indigo-900/80 text-indigo-300 border border-indigo-700/60 text-xs font-semibold transition-all duration-200 shadow-sm hover:border-indigo-500">
+                    <i class="fa-solid fa-share-nodes text-indigo-400"></i>
+                    <span class="hidden sm:inline">Reference Chat</span>
+                    <i class="fa-solid fa-arrow-up-right-from-square text-[10px] opacity-70"></i>
+                </a>
+
+                <button id="themeToggle" class="p-2.5 rounded-xl bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-700 transition border border-slate-700/80">
+                    <i class="fa-solid fa-moon dark:hidden text-amber-400"></i>
+                    <i class="fa-solid fa-sun hidden dark:inline text-amber-300"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-y-auto">
+        
+        <div class="lg:col-span-5 flex flex-col space-y-5">
+            
+            <!-- API Key Input Section -->
+            <div class="card-surface p-5 rounded-2xl shadow-lg">
+                <label for="apiKeyInput" class="block text-xs font-bold uppercase tracking-wider mb-2 flex items-center justify-between text-slate-300">
+                    <span class="flex items-center gap-2 text-indigo-300"><i class="fa-solid fa-key"></i> Gemini API Key</span>
+                    <span class="text-[11px] normal-case font-normal text-slate-400">Optional if runtime key exists</span>
+                </label>
+                <div class="relative">
+                    <input type="password" id="apiKeyInput" placeholder="Leave blank to use canvas runtime key..." class="w-full pl-4 pr-10 py-2.5 rounded-xl input-surface text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                    <button type="button" id="toggleKeyVisibility" class="absolute right-3 top-3 text-slate-400 hover:text-slate-200">
+                        <i class="fa-solid fa-eye text-sm"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Image Upload Dropzone Section -->
+            <div class="card-surface p-5 rounded-2xl shadow-lg flex-1 flex flex-col">
+                <label class="block text-xs font-bold uppercase tracking-wider mb-2 flex items-center justify-between text-slate-300">
+                    <span class="flex items-center gap-2 text-indigo-300"><i class="fa-solid fa-image"></i> Source Image</span>
+                    <span id="imageStatus" class="text-xs normal-case font-semibold text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded-md">Required</span>
+                </label>
+                
+                <div id="dropZone" class="border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 flex-1 min-h-[200px] bg-darkbg-input relative overflow-hidden group">
+                    <input type="file" id="imageInput" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer z-10">
+                    
+                    <div id="uploadPlaceholder" class="text-center flex flex-col items-center">
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-950 text-indigo-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300 border border-indigo-800/80 shadow-md">
+                            <i class="fa-solid fa-cloud-arrow-up text-xl"></i>
+                        </div>
+                        <p class="text-sm font-semibold mb-1 text-slate-200">Click to upload or drag & drop</p>
+                        <p class="text-xs text-slate-400">PNG, JPG, WEBP formats up to 10MB</p>
+                    </div>
+
+                    <div id="imagePreviewContainer" class="hidden absolute inset-0 w-full h-full bg-slate-950 flex items-center justify-center p-2">
+                        <img id="imagePreview" src="" alt="Source Preview" class="max-h-full max-w-full object-contain rounded-lg">
+                        <button type="button" id="removeImage" class="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-900/90 text-white flex items-center justify-center hover:bg-red-600 transition z-20 border border-slate-700">
+                            <i class="fa-solid fa-xmark text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Style Instruction & Aspect Ratio -->
+            <div class="card-surface p-5 rounded-2xl shadow-lg">
+                <label for="stylePrompt" class="block text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-2 text-indigo-300">
+                    <i class="fa-solid fa-palette"></i> Remix Style & Instructions
+                </label>
+                <textarea id="stylePrompt" rows="3" placeholder="e.g., Transform this photo into an 80s synthwave neon digital artwork with colorful retrowave aesthetics..." class="w-full p-3 rounded-xl input-surface text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition resize-none"></textarea>
+                
+                <div class="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="flex items-center space-x-2">
+                        <label class="text-xs font-medium text-slate-400">Aspect Ratio:</label>
+                        <select id="aspectRatio" class="text-xs px-3 py-2 rounded-xl input-surface text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                            <option value="1:1">1:1 (Square)</option>
+                            <option value="16:9">16:9 (Landscape)</option>
+                            <option value="9:16">9:16 (Portrait)</option>
+                            <option value="4:3">4:3 (Standard)</option>
+                        </select>
+                    </div>
+
+                    <button id="remixBtn" disabled class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-semibold text-sm shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Remix Image
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="lg:col-span-7 card-surface rounded-2xl p-5 shadow-lg flex flex-col min-h-[420px]">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-darkbg-border">
+                <h2 class="font-bold text-sm uppercase tracking-wider flex items-center gap-2 text-purple-300">
+                    <i class="fa-solid fa-sparkles text-purple-400"></i> Remix Output
+                </h2>
+                <div id="actionButtons" class="hidden flex items-center gap-2">
+                    <button id="downloadBtn" class="px-3.5 py-1.5 rounded-xl bg-slate-800 text-slate-200 text-xs font-semibold hover:bg-slate-700 transition border border-slate-700 flex items-center gap-1.5">
+                        <i class="fa-solid fa-download text-indigo-400"></i> Download
+                    </button>
+                    <button id="useAsSourceBtn" class="px-3.5 py-1.5 rounded-xl bg-indigo-950 text-indigo-300 text-xs font-semibold hover:bg-indigo-900 transition border border-indigo-700/80 flex items-center gap-1.5">
+                        <i class="fa-solid fa-arrow-rotate-right"></i> Use as Source
+                    </button>
+                </div>
+            </div>
+
+            <!-- Output Display Box -->
+            <div id="outputContainer" class="flex-1 rounded-xl bg-darkbg-input border border-darkbg-border flex items-center justify-center relative overflow-hidden min-h-[320px]">
+                
+                <!-- Placeholder Initial State -->
+                <div id="outputPlaceholder" class="text-center p-6">
+                    <div class="w-16 h-16 rounded-2xl bg-slate-900 text-slate-500 flex items-center justify-center mx-auto mb-3 text-2xl border border-slate-800">
+                        <i class="fa-solid fa-image"></i>
+                    </div>
+                    <p class="text-sm font-semibold text-slate-300">Your remixed artwork will display here</p>
+                    <p class="text-xs text-slate-500 mt-1">Select an input image and type your style instructions to start</p>
+                </div>
+
+                <!-- Loading Spinner State -->
+                <div id="loadingState" class="hidden flex flex-col items-center justify-center p-6">
+                    <div class="relative w-16 h-16 mb-4">
+                        <div class="absolute inset-0 rounded-full border-4 border-indigo-500/20 border-t-indigo-500 animate-spin"></div>
+                        <div class="absolute inset-2 rounded-full border-4 border-purple-500/20 border-b-purple-500 animate-spin" style="animation-direction: reverse; animation-duration: 1.2s;"></div>
+                    </div>
+                    <p id="loadingStatusText" class="text-sm font-bold text-indigo-400 animate-pulse">Transforming image with Gemini 3.1 Flash...</p>
+                    <p class="text-xs text-slate-400 mt-1">Applying style parameters and generating pixels</p>
+                </div>
+
+                <!-- Result Image State -->
+                <div id="resultState" class="hidden absolute inset-0 w-full h-full flex items-center justify-center p-3 bg-slate-950">
+                    <img id="resultImage" src="" alt="Remixed Output" class="max-h-full max-w-full object-contain rounded-lg shadow-xl">
+                </div>
+
+            </div>
+
+            <!-- Error Banner -->
+            <div id="errorBanner" class="hidden mt-3 p-3.5 rounded-xl bg-red-950/80 border border-red-800/80 text-red-200 text-xs flex items-center gap-2.5">
+                <i class="fa-solid fa-triangle-exclamation text-red-400 text-sm flex-shrink-0"></i>
+                <span id="errorMessage" class="flex-1 font-medium"></span>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // Theme Toggling logic
+        const themeToggle = document.getElementById('themeToggle');
+        themeToggle.addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+        });
+
+        // DOM Element references
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const toggleKeyVisibility = document.getElementById('toggleKeyVisibility');
+        const imageInput = document.getElementById('imageInput');
+        const dropZone = document.getElementById('dropZone');
+        const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const imagePreview = document.getElementById('imagePreview');
+        const removeImage = document.getElementById('removeImage');
+        const imageStatus = document.getElementById('imageStatus');
+        const stylePrompt = document.getElementById('stylePrompt');
+        const aspectRatio = document.getElementById('aspectRatio');
+        const remixBtn = document.getElementById('remixBtn');
+        
+        const outputPlaceholder = document.getElementById('outputPlaceholder');
+        const loadingState = document.getElementById('loadingState');
+        const resultState = document.getElementById('resultState');
+        const resultImage = document.getElementById('resultImage');
+        const actionButtons = document.getElementById('actionButtons');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const useAsSourceBtn = document.getElementById('useAsSourceBtn');
+        const errorBanner = document.getElementById('errorBanner');
+        const errorMessage = document.getElementById('errorMessage');
+
+        let sourceImageBase64 = null;
+        let sourceImageMimeType = null;
+        let lastResultBase64 = null;
+        let lastResultMimeType = null;
+
+        // Toggle API Key Field Visibility
+        toggleKeyVisibility.addEventListener('click', () => {
+            const isPassword = apiKeyInput.getAttribute('type') === 'password';
+            apiKeyInput.setAttribute('type', isPassword ? 'text' : 'password');
+            toggleKeyVisibility.innerHTML = isPassword ? '<i class="fa-solid fa-eye-slash text-sm"></i>' : '<i class="fa-solid fa-eye text-sm"></i>';
+        });
+
+        // Process source uploaded image file
+        function handleImageFile(file) {
+            if (!file || !file.type.startsWith('image/')) {
+                showError('Please select a valid image file (PNG, JPG, WEBP).');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const dataUrl = e.target.result;
+                const base64Data = dataUrl.split(',')[1];
+                
+                sourceImageBase64 = base64Data;
+                sourceImageMimeType = file.type;
+
+                imagePreview.src = dataUrl;
+                imagePreviewContainer.classList.remove('hidden');
+                uploadPlaceholder.classList.add('hidden');
+                imageStatus.textContent = 'Loaded';
+                imageStatus.className = 'text-xs normal-case font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded-md';
+                
+                hideError();
+                validateForm();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        imageInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleImageFile(e.target.files[0]);
+            }
+        });
+
+        // Drag & Drop event bindings
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.add('border-indigo-500', 'bg-indigo-950/20');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('border-indigo-500', 'bg-indigo-950/20');
+            }, false);
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            if (e.dataTransfer.files.length > 0) {
+                handleImageFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        removeImage.addEventListener('click', (e) => {
+            e.stopPropagation();
+            sourceImageBase64 = null;
+            sourceImageMimeType = null;
+            imageInput.value = '';
+            imagePreview.src = '';
+            imagePreviewContainer.classList.add('hidden');
+            uploadPlaceholder.classList.remove('hidden');
+            imageStatus.textContent = 'Required';
+            imageStatus.className = 'text-xs normal-case font-semibold text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded-md';
+            validateForm();
+        });
+
+        stylePrompt.addEventListener('input', validateForm);
+
+        function validateForm() {
+            if (sourceImageBase64 && stylePrompt.value.trim().length > 0) {
+                remixBtn.removeAttribute('disabled');
+            } else {
+                remixBtn.setAttribute('disabled', 'true');
+            }
+        }
+
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            errorBanner.classList.remove('hidden');
+        }
+
+        function hideError() {
+            errorBanner.classList.add('hidden');
+        }
+
+        // Gemini API call with exponential backoff handling
+        async function callGeminiWithRetry(url, payload, apiKey, retries = 3, delay = 1000) {
+            const headers = { 'Content-Type': 'application/json' };
+            let targetUrl = url;
+            if (apiKey) {
+                const separator = url.includes('?') ? '&' : '?';
+                targetUrl = `${url}${separator}key=${encodeURIComponent(apiKey)}`;
+            }
+
+            try {
+                const response = await fetch(targetUrl, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errJson = await response.json().catch(() => ({}));
+                    throw new Error(errJson.error?.message || `API Error: ${response.status} ${response.statusText}`);
+                }
+
+                return await response.json();
+            } catch (err) {
+                if (retries > 0) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return callGeminiWithRetry(url, payload, apiKey, retries - 1, delay * 2);
+                }
+                throw err;
+            }
+        }
+
+        // Trigger Remix Execution
+        remixBtn.addEventListener('click', async () => {
+            if (!sourceImageBase64 || !stylePrompt.value.trim()) return;
+
+            const userKey = apiKeyInput.value.trim();
+            const promptText = stylePrompt.value.trim();
+            const selectedAspect = aspectRatio.value;
+
+            // Update UI loading states
+            outputPlaceholder.classList.add('hidden');
+            resultState.classList.add('hidden');
+            actionButtons.classList.add('hidden');
+            loadingState.classList.remove('hidden');
+            hideError();
+            remixBtn.setAttribute('disabled', 'true');
+
+            try {
+                const payload = {
+                    contents: [{
+                        role: "user",
+                        parts: [
+                            { text: promptText },
+                            {
+                                inlineData: {
+                                    mimeType: sourceImageMimeType,
+                                    data: sourceImageBase64
+                                }
+                            }
+                        ]
+                    }],
+                    generationConfig: {
+                        responseModalities: ['IMAGE'],
+                        imageConfig: { aspectRatio: selectedAspect }
+                    }
+                };
+
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent`;
+                
+                const result = await callGeminiWithRetry(apiUrl, payload, userKey);
+                
+                const part = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                if (!part || !part.inlineData) {
+                    throw new Error("No image was returned by Gemini. Please try refining your style prompt.");
+                }
+
+                lastResultBase64 = part.inlineData.data;
+                lastResultMimeType = part.inlineData.mimeType || 'image/png';
+                const resultDataUrl = `data:${lastResultMimeType};base64,${lastResultBase64}`;
+
+                resultImage.src = resultDataUrl;
+                loadingState.classList.add('hidden');
+                resultState.classList.remove('hidden');
+                actionButtons.classList.remove('hidden');
+
+            } catch (err) {
+                console.error("Gemini Remix Error:", err);
+                loadingState.classList.add('hidden');
+                outputPlaceholder.classList.remove('hidden');
+                showError(err.message || "Failed to generate image remix. Please verify your API key and try again.");
+            } finally {
+                validateForm();
+            }
+        });
+
+        // Download Generated Image
+        downloadBtn.addEventListener('click', () => {
+            if (!lastResultBase64) return;
+            const link = document.createElement('a');
+            link.href = `data:${lastResultMimeType};base64,${lastResultBase64}`;
+            link.download = `gemini-remix-${Date.now()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        // Reuse Output Image as new Input Source
+        useAsSourceBtn.addEventListener('click', () => {
+            if (!lastResultBase64) return;
+            sourceImageBase64 = lastResultBase64;
+            sourceImageMimeType = lastResultMimeType;
+            
+            const dataUrl = `data:${sourceImageMimeType};base64,${sourceImageBase64}`;
+            imagePreview.src = dataUrl;
+            imagePreviewContainer.classList.remove('hidden');
+            uploadPlaceholder.classList.add('hidden');
+            imageStatus.textContent = 'Loaded (Result)';
+            imageStatus.className = 'text-xs normal-case font-semibold text-indigo-400 bg-indigo-950/60 border border-indigo-800/60 px-2 py-0.5 rounded-md';
+
+            stylePrompt.value = '';
+            validateForm();
+        });
+    </script>
+</body>
+</html>
