@@ -772,44 +772,30 @@
     }
   }
 
-  // ---------- GitHub cloud sync ----------
-  // Songs are stored as individual .chordpro files in a GitHub repo, using the
-  // GitHub Contents API. localStorage is kept as an offline cache/fallback:
-  // if GitHub can't be reached, the app falls back to whatever was last synced.
+  // ---------- Cloud sync via Google Apps Script proxy ----------
+  // Songs are stored as individual .chordpro files in a GitHub repo, but the
+  // browser never talks to GitHub or holds a GitHub token. Instead it calls
+  // a Google Apps Script "Web app" that you deploy yourself; the script
+  // holds the real GitHub token as a Script Property on Google's servers
+  // and relays list/save/delete requests to the GitHub Contents API.
   //
-  // SETUP: paste a GitHub personal access token below. Use a FINE-GRAINED token
-  // (github.com/settings/tokens?type=beta) scoped ONLY to the "github-drive"
-  // repo, with "Contents: Read and write" permission and nothing else. Anyone
-  // who can view this file's source can use this token, so keep the repo
-  // private and the token's scope as narrow as possible.
-  const GITHUB_TOKEN  = "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";
-  const GITHUB_OWNER  = "Ricky295";
-  const GITHUB_REPO   = "github-drive";
-  const GITHUB_BRANCH = "main";
-  const GITHUB_FOLDER = "chordpro songs";
+  // SETUP:
+  // 1. Deploy the companion ChordSheetProxy.gs as an Apps Script Web App
+  //    (see the setup comment at the top of that file).
+  // 2. Paste its /exec URL into PROXY_URL below.
+  // 3. Pick a long random string, put it in the script's SHARED_SECRET
+  //    property AND in PROXY_SECRET below. This is what stops strangers
+  //    from using your proxy even though the URL itself is public-ish.
+  const PROXY_URL    = "https://script.google.com/macros/s/AKfycbwkEk1nweSFKefn-g0jDED5gO5mu0yALLPnRodpNbu6JogbSk2Q3bMj4oD6hNhrr2S3/exec";
+  const PROXY_SECRET = "v90_PGMxzkqBpAqwNa8q8_EK2vIAuk0yF8Uz2oCX9WA";
 
-  const GH_API = "https://api.github.com";
   let githubOnline = false;      // true once a sync has succeeded this session
   let githubSyncing = false;
   let githubStatusEl = null;     // set once the private-area DOM exists
 
   function ghConfigured(){
-    return GITHUB_TOKEN && GITHUB_TOKEN.indexOf("PASTE_YOUR") !== 0 &&
-           GITHUB_OWNER && GITHUB_OWNER.indexOf("YOUR_GITHUB") !== 0;
-  }
-
-  function ghHeaders(){
-    return {
-      "Authorization": "Bearer " + GITHUB_TOKEN,
-      "Accept": "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28"
-    };
-  }
-
-  function ghContentsUrl(path){
-    const full = GITHUB_FOLDER ? (GITHUB_FOLDER + "/" + path) : path;
-    return GH_API + "/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO +
-           "/contents/" + full.split("/").map(encodeURIComponent).join("/");
+    return PROXY_URL && PROXY_URL.indexOf("PASTE_YOUR") !== 0 &&
+           PROXY_SECRET && PROXY_SECRET.indexOf("PASTE_THE") !== 0;
   }
 
   function slugify(title, fallback){
@@ -827,7 +813,29 @@
     if(msg) console[isErr ? 'warn' : 'log']('[github-drive] ' + msg);
   }
 
-  // Fetches every .chordpro file in the repo folder and replaces `songs`.
+  async function proxyGet(action, params){
+    const url = new URL(PROXY_URL);
+    url.searchParams.set('action', action);
+    url.searchParams.set('secret', PROXY_SECRET);
+    Object.entries(params || {}).forEach(([k, v]) => url.searchParams.set(k, v));
+    const res = await fetch(url.toString());
+    const data = await res.json();
+    if(!res.ok || !data.ok) throw new Error(data.error || ('Proxy request failed: ' + res.status));
+    return data;
+  }
+
+  async function proxyPost(action, body){
+    const res = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids a CORS preflight against Apps Script
+      body: JSON.stringify(Object.assign({ action, secret: PROXY_SECRET }, body))
+    });
+    const data = await res.json();
+    if(!res.ok || !data.ok) throw new Error(data.error || ('Proxy request failed: ' + res.status));
+    return data;
+  }
+
+  // Fetches every song file (via the proxy) and replaces `songs`.
   // Returns true on success, false if it fell back to the local cache.
   async function githubLoadAll(){
     if(!ghConfigured()){
@@ -835,58 +843,34 @@
       return false;
     }
     githubSyncing = true;
-    setGithubStatus('Syncing from GitHub…');
+    setGithubStatus('Syncing…');
     try{
-      const listUrl = GITHUB_FOLDER
-        ? GH_API + "/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/contents/" +
-          GITHUB_FOLDER.split("/").map(encodeURIComponent).join("/") + "?ref=" + GITHUB_BRANCH
-        : GH_API + "/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/contents?ref=" + GITHUB_BRANCH;
-
-      const listRes = await fetch(listUrl, { headers: ghHeaders() });
-
-      if(listRes.status === 404){
-        // Folder doesn't exist yet — treat as empty, not an error.
-        githubOnline = true;
-        setGithubStatus('Connected. No songs in the repo yet.');
-        githubSyncing = false;
-        return true;
-      }
-      if(!listRes.ok) throw new Error('GitHub list failed: ' + listRes.status);
-
-      const entries = await listRes.json();
-      const files = (Array.isArray(entries) ? entries : [])
-        .filter(e => e.type === 'file' && /\.(chordpro|cho|crd|pro|txt)$/i.test(e.name));
-
-      const loaded = [];
-      for(const f of files){
-        const fileRes = await fetch(f.url + "?ref=" + GITHUB_BRANCH, { headers: ghHeaders() });
-        if(!fileRes.ok) continue;
-        const fileJson = await fileRes.json();
-        const text = decodeURIComponent(escape(atob(fileJson.content.replace(/\n/g, ''))));
-        const song = parseChordPro(text);
-        song._raw = text;
+      const data = await proxyGet('list');
+      const loaded = data.songs.map(f => {
+        const song = parseChordPro(f.text);
+        song._raw = f.text;
         song._ghPath = f.path;
-        song._ghSha = fileJson.sha;
-        loaded.push(song);
-      }
+        song._ghSha = f.sha;
+        return song;
+      });
 
       songs = loaded;
       currentIndex = songs.length ? 0 : -1;
       githubOnline = true;
       saveToStorage();
-      setGithubStatus('Synced ' + songs.length + ' song' + (songs.length === 1 ? '' : 's') + ' from GitHub.');
+      setGithubStatus('Synced ' + songs.length + ' song' + (songs.length === 1 ? '' : 's') + '.');
       return true;
     }catch(err){
       githubOnline = false;
-      setGithubStatus('Could not reach GitHub, showing local copy: ' + err.message, true);
+      setGithubStatus('Could not reach cloud sync, showing local copy: ' + err.message, true);
       return false;
     }finally{
       githubSyncing = false;
     }
   }
 
-  // Creates or updates a song's file in the repo. Mutates `song` with the
-  // resulting _ghPath/_ghSha so future saves update rather than duplicate.
+  // Creates or updates a song's file. Mutates `song` with the resulting
+  // _ghPath/_ghSha so future saves update rather than duplicate.
   async function githubSaveSong(song){
     if(!ghConfigured()){
       setGithubStatus('Cloud sync not configured — saved locally only.', true);
@@ -894,56 +878,37 @@
     }
     try{
       const path = song._ghPath || slugify(song.title, 'song-' + Date.now());
-      const body = {
-        message: (song._ghSha ? 'Update ' : 'Add ') + (song.title || path),
-        content: btoa(unescape(encodeURIComponent(song._raw || rebuildChordProText(song)))),
-        branch: GITHUB_BRANCH
-      };
-      if(song._ghSha) body.sha = song._ghSha;
-
-      const res = await fetch(ghContentsUrl(path), {
-        method: 'PUT',
-        headers: Object.assign({ 'Content-Type': 'application/json' }, ghHeaders()),
-        body: JSON.stringify(body)
+      const data = await proxyPost('save', {
+        path,
+        sha: song._ghSha || undefined,
+        title: song.title,
+        text: song._raw || rebuildChordProText(song)
       });
-      if(!res.ok){
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.message || ('GitHub save failed: ' + res.status));
-      }
-      const data = await res.json();
-      song._ghPath = path;
-      song._ghSha = data.content.sha;
+      song._ghPath = data.path;
+      song._ghSha = data.sha;
       githubOnline = true;
-      setGithubStatus('Saved "' + (song.title || path) + '" to GitHub.');
+      setGithubStatus('Saved "' + (song.title || path) + '".');
       return true;
     }catch(err){
-      setGithubStatus('Could not save to GitHub (kept locally): ' + err.message, true);
+      setGithubStatus('Could not save (kept locally): ' + err.message, true);
       return false;
     }
   }
 
   async function githubDeleteSong(song){
     if(!ghConfigured() || !song._ghPath || !song._ghSha){
-      return false; // never synced to GitHub, nothing to delete remotely
+      return false; // never synced, nothing to delete remotely
     }
     try{
-      const res = await fetch(ghContentsUrl(song._ghPath), {
-        method: 'DELETE',
-        headers: Object.assign({ 'Content-Type': 'application/json' }, ghHeaders()),
-        body: JSON.stringify({
-          message: 'Delete ' + (song.title || song._ghPath),
-          sha: song._ghSha,
-          branch: GITHUB_BRANCH
-        })
+      await proxyPost('delete', {
+        path: song._ghPath,
+        sha: song._ghSha,
+        title: song.title
       });
-      if(!res.ok){
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.message || ('GitHub delete failed: ' + res.status));
-      }
-      setGithubStatus('Deleted "' + (song.title || song._ghPath) + '" from GitHub.');
+      setGithubStatus('Deleted "' + (song.title || song._ghPath) + '".');
       return true;
     }catch(err){
-      setGithubStatus('Could not delete from GitHub: ' + err.message, true);
+      setGithubStatus('Could not delete: ' + err.message, true);
       return false;
     }
   }
