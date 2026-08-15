@@ -67,6 +67,58 @@
     margin-bottom: 4rem;
   }
 
+  /* --- BIRTHDAY BURST ANIMATION --- */
+  .stage.birthday-burst .orbit-ring {
+    animation: ringPulse 1.8s ease-out;
+  }
+  .stage.birthday-burst .age-number .int {
+    animation: intPop 1.8s ease-out;
+  }
+  @keyframes ringPulse {
+    0%   { box-shadow: 0 0 0 0 #e8b84b00; border-color: var(--line); }
+    12%  { box-shadow: 0 0 40px 8px #e8b84b80; border-color: var(--accent); }
+    100% { box-shadow: 0 0 0 0 #e8b84b00; border-color: var(--line); }
+  }
+  @keyframes intPop {
+    0%   { transform: scale(1); color: var(--text); }
+    12%  { transform: scale(1.35); color: var(--accent); }
+    35%  { transform: scale(1); color: var(--accent); }
+    100% { transform: scale(1); color: var(--text); }
+  }
+
+  .confetti-piece {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 7px;
+    height: 12px;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 5;
+  }
+  .stage.birthday-burst .confetti-piece {
+    animation: confettiFly 1.6s ease-out forwards;
+  }
+  @keyframes confettiFly {
+    0% {
+      opacity: 1;
+      transform: translate(-50%, -50%) rotate(0deg) translateY(0);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -50%) rotate(var(--rot)) translateY(var(--dist));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stage.birthday-burst .orbit-ring,
+    .stage.birthday-burst .age-number .int,
+    .stage.birthday-burst .confetti-piece {
+      animation: none;
+    }
+  }
+
+
   .orbit-ring {
     position: absolute;
     inset: 0;
@@ -590,6 +642,39 @@
   const progressFill = document.getElementById('progressFill');
   const CIRC = 2 * Math.PI * 94;
   let lastShowDigits = -1;
+  let lastIntPart = null; // tracks whole-year count to detect birthday rollover
+  const stageEl = document.querySelector('.stage');
+
+  function fireConfetti() {
+    if (!stageEl) return;
+    const colors = ['#e8b84b', '#7fd4a8', '#8ab4f8', '#e8848b', '#c99bf0', '#f0ede4'];
+    const pieces = [];
+    for (let i = 0; i < 24; i++) {
+      const p = document.createElement('div');
+      p.className = 'confetti-piece';
+      const angle = Math.random() * 360;
+      const dist = 90 + Math.random() * 120;
+      p.style.background = colors[i % colors.length];
+      p.style.setProperty('--rot', `${(Math.random() * 720 - 360).toFixed(0)}deg`);
+      p.style.setProperty('--dist', `${dist}px`);
+      p.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+      p.style.animationDelay = `${(Math.random() * 0.15).toFixed(2)}s`;
+      stageEl.appendChild(p);
+      pieces.push(p);
+    }
+    setTimeout(() => pieces.forEach(p => p.remove()), 2000);
+  }
+
+  function triggerBirthdayBurst() {
+    if (!stageEl) return;
+    stageEl.classList.remove('birthday-burst');
+    // force reflow so the animation can restart if triggered again quickly
+    void stageEl.offsetWidth;
+    stageEl.classList.add('birthday-burst');
+    fireConfetti();
+    setTimeout(() => stageEl.classList.remove('birthday-burst'), 1900);
+  }
+
 
   let state = {
     bday: null,
@@ -643,6 +728,7 @@
       document.querySelectorAll('#planetGrid .planet-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       lastShowDigits = -1;
+      lastIntPart = null;
       updateShareUrl();
     });
     grid.appendChild(btn);
@@ -662,10 +748,37 @@
     state.bday = isNaN(d) ? null : d;
   }
 
-  [bYear, bMonth, bDay, bHour, bMinute].forEach(el => {
-    el.addEventListener('input', () => {
+  // Auto-advance: once a field is filled to its natural max length with a
+  // plausible value, jump focus to the next field automatically.
+  const bdayChain = [
+    { el: bYear,   maxLen: 4 },
+    { el: bMonth,  maxLen: 2, max: 12 },
+    { el: bDay,    maxLen: 2, max: 31 },
+    { el: bHour,   maxLen: 2, max: 23 },
+    { el: bMinute, maxLen: 2, max: 59 }
+  ];
+
+  bdayChain.forEach((field, i) => {
+    field.el.addEventListener('input', () => {
       readBdayInputs();
+      lastIntPart = null;
       updateShareUrl();
+
+      const raw = field.el.value.replace(/[^0-9]/g, '');
+      const next = bdayChain[i + 1];
+      if (!next || !raw) return;
+
+      const val = parseInt(raw, 10);
+      const atMaxLen = raw.length >= field.maxLen;
+      // Also advance early if a second digit would exceed the field's max
+      // (e.g. typing "3" in month can't become "3x" ≤ 12, so no early jump,
+      // but typing "9" in hour could become "9x" > 23, so jump right away).
+      const cannotExtend = field.max !== undefined && val * 10 > field.max;
+
+      if (atMaxLen || cannotExtend) {
+        next.el.focus();
+        next.el.select();
+      }
     });
   });
 
@@ -689,12 +802,28 @@
     });
   });
 
+  // Resolve a safe base URL for share/embed links. In sandboxed preview
+  // contexts (e.g. srcdoc iframes) location.origin is "null" and
+  // location.pathname is "srcdoc" — fall back to an empty base so links
+  // don't render as "nullsrcdoc?...".
+  function getShareBase() {
+    const origin = window.location.origin;
+    const pathname = window.location.pathname;
+    const originBad = !origin || origin === 'null';
+    const pathBad = !pathname || pathname === 'srcdoc' || pathname === '/srcdoc';
+    if (originBad || pathBad) return '';
+    return origin + pathname;
+  }
+
   function updateShareUrl() {
+    const base = getShareBase();
     const shareParams = new URLSearchParams();
     if (state.bday && !isNaN(state.bday)) shareParams.set('bday', state.bday.toISOString());
+    shareParams.set('planet', state.planet);
+    shareParams.set('digits', `${state.digitsMin}..${state.digitsMax}`);
     shareParams.set('view', '1');
-    const url = `${window.location.origin}${window.location.pathname}?${shareParams.toString()}`;
-    shareUrl.textContent = url;
+    const url = base ? `${base}?${shareParams.toString()}` : '';
+    shareUrl.textContent = url || 'unavailable in this preview — open the file directly';
     shareUrl.dataset.full = url;
 
     // full editable link (used by the "customize your own" link in view mode)
@@ -702,7 +831,7 @@
     if (state.bday && !isNaN(state.bday)) editParams.set('bday', state.bday.toISOString());
     editParams.set('planet', state.planet);
     editParams.set('digits', `${state.digitsMin}..${state.digitsMax}`);
-    const editUrl = `${window.location.origin}${window.location.pathname}?${editParams.toString()}`;
+    const editUrl = base ? `${base}?${editParams.toString()}` : '#';
     const editLink = document.getElementById('editLink');
     if (editLink) editLink.href = editUrl;
 
@@ -713,8 +842,10 @@
     embedParams.set('digits', `${state.digitsMin}..${state.digitsMax}`);
     embedParams.set('w', '360');
     embedParams.set('h', '240');
-    const embedUrl = `${window.location.origin}${window.location.pathname}?${embedParams.toString()}`;
-    const snippet = `<iframe src="${embedUrl}" width="360" height="240" style="border:none;"></iframe>`;
+    const embedUrl = base ? `${base}?${embedParams.toString()}` : '';
+    const snippet = embedUrl
+      ? `<iframe src="${embedUrl}" width="360" height="240" style="border:none;"></iframe>`
+      : 'unavailable in this preview — open the file directly';
     const embedSnippet = document.getElementById('embedSnippet');
     if (embedSnippet) {
       embedSnippet.textContent = snippet;
@@ -766,17 +897,54 @@
 
   // --- digit-reveal formatting ---
   function digitsToShow(frac, minDigits, maxDigits) {
+    // Escalate precision near *either* birthday boundary: just after the
+    // last one (frac near 0) and just before the next one (frac near 1).
+    // Distance to the nearest boundary drives how many extra digits show.
+    const distToNearestBoundary = Math.min(frac, 1 - frac);
     let extra = 0;
-    let threshold = 0.9;
+    let threshold = 0.1;
     for (let i = 1; i <= maxDigits - minDigits; i++) {
-      if (frac >= threshold) {
+      if (distToNearestBoundary <= threshold) {
         extra = i;
-        threshold = threshold + (1 - threshold) * 0.9;
+        threshold = threshold * 0.1;
       } else {
         break;
       }
     }
     return Math.min(minDigits + extra, maxDigits);
+  }
+
+  // --- Earth-specific calendar anniversary helpers ---
+  // Earth years are calculated from the *actual* calendar anniversary of the
+  // birthday (handling leap years / variable month lengths correctly)
+  // instead of a fixed 365.25636-day constant. "Age" is a delta between the
+  // most recent anniversary and the next one.
+
+  // Returns the birthday anniversary for a given calendar year, preserving
+  // time-of-day. Handles Feb 29 birthdays on non-leap years by rolling to
+  // Mar 1 (a common, predictable convention).
+  function anniversaryInYear(bday, year) {
+    const d = new Date(year, bday.getMonth(), bday.getDate(),
+      bday.getHours(), bday.getMinutes(), bday.getSeconds(), bday.getMilliseconds());
+    // If day rolled over (e.g. Feb 29 -> Mar 1 in a non-leap year), that's
+    // already what `new Date` does automatically since Date normalizes.
+    return d;
+  }
+
+  function lastAndNextEarthAnniversary(bday, now) {
+    // Start guessing from birth year, then walk forward using the
+    // actual calendar year difference for an exact anchor.
+    let year = now.getFullYear();
+    let candidate = anniversaryInYear(bday, year);
+    let last, next;
+    if (candidate <= now) {
+      last = candidate;
+      next = anniversaryInYear(bday, year + 1);
+    } else {
+      next = candidate;
+      last = anniversaryInYear(bday, year - 1);
+    }
+    return { last, next };
   }
 
   function planetAge(ms, planetKey) {
@@ -785,7 +953,29 @@
     return ms / msPerYear;
   }
 
+  // Earth age: whole years = calendar years elapsed since birth; fractional
+  // part = delta between last real anniversary and next real anniversary
+  // (correctly sized, whether that span is 365 or 366 days).
+  function earthAge(bday, now) {
+    const { last, next } = lastAndNextEarthAnniversary(bday, now);
+    const spanMs = next - last;
+    const intoYearMs = now - last;
+    const frac = spanMs > 0 ? intoYearMs / spanMs : 0;
+
+    // Whole-year count: calendar years between birth anniversary and `last`.
+    // Computed by counting how many anniversaries have passed since birth.
+    let wholeYears = last.getFullYear() - bday.getFullYear();
+    // If the birthday-in-birth-year hasn't technically "happened" yet
+    // relative to birth timestamp (shouldn't occur, but guard anyway):
+    if (anniversaryInYear(bday, bday.getFullYear()) > bday) wholeYears -= 0;
+
+    return { age: wholeYears + frac, intPart: wholeYears, frac, last, next };
+  }
+
   function nextBirthday(bday, now, planetKey) {
+    if ((planetKey || state.planet) === 'earth') {
+      return lastAndNextEarthAnniversary(bday, now).next;
+    }
     const body = BODIES[planetKey] || BODIES.earth;
     const msPerYear = body.days * 24 * 60 * 60 * 1000;
     const elapsed = now - bday;
@@ -847,11 +1037,30 @@
     }
 
     const now = new Date();
-    const ms = now - state.bday;
-    const age = Math.max(0, planetAge(ms));
+    let age, intPart, frac;
+    if (state.planet === 'earth') {
+      const ea = earthAge(state.bday, now);
+      age = ea.age;
+    } else {
+      const ms = now - state.bday;
+      age = planetAge(ms);
+    }
+    // Split into integer/fractional parts so the sign is on the whole
+    // number, not distributed across both (avoids "-1" + ".99" reading
+    // as -1.99 when the real value is -0.01).
+    intPart = age < 0 ? Math.ceil(age) : Math.floor(age);
+    frac = Math.abs(age - intPart);
+    // ceil(-0.5) is -0, which stringifies to "0" and silently loses the
+    // sign. Track it explicitly so a not-yet-born countdown (e.g. -0.5)
+    // still displays as "-0.xx" instead of "0.xx".
+    const isNegative = age < 0;
+    const intPartStr = isNegative ? `-${Math.abs(intPart)}` : `${intPart}`;
 
-    const intPart = Math.floor(age);
-    const frac = age - intPart;
+    // Detect a birthday rollover (whole-year count went up) and celebrate.
+    if (lastIntPart !== null && intPart > lastIntPart) {
+      triggerBirthdayBurst();
+    }
+    lastIntPart = intPart;
 
     const minDigits = state.digitsMin;
     const maxDigits = state.digitsMax;
@@ -867,12 +1076,12 @@
         i >= lastShowDigits ? `<span class="new">${c}</span>` : `<span>${c}</span>`
       ).join('');
       ageNumber.innerHTML =
-        `<span class="int">${intPart}</span><span class="dot">.</span><span class="dec">${html}</span>`;
+        `<span class="int">${intPartStr}</span><span class="dot">.</span><span class="dec">${html}</span>`;
       lastShowDigits = showDigits;
     } else {
       const intEl = ageNumber.querySelector('.int');
       const decEl = ageNumber.querySelector('.dec');
-      if (intEl) intEl.textContent = intPart;
+      if (intEl) intEl.textContent = intPartStr;
       if (decEl) {
         const spans = decEl.querySelectorAll('span');
         fracStr.split('').forEach((c, i) => {
