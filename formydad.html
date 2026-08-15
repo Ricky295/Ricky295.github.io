@@ -96,6 +96,7 @@
   .layout{
     display:flex;
     height:calc(100% - 53px);
+    position:relative;
   }
 
   /* Sidebar - song list */
@@ -107,7 +108,42 @@
     padding:10px 0;
     display:flex;
     flex-direction:column;
+    transition:width .18s ease, min-width .18s ease, padding .18s ease, opacity .12s ease;
   }
+  body.sidebar-collapsed .sidebar{
+    width:0;
+    min-width:0;
+    padding:10px 0;
+    opacity:0;
+    overflow:hidden;
+    border-right-color:transparent;
+    pointer-events:none;
+  }
+  .sidebar-toggle{
+    position:absolute;
+    top:64px;
+    left:230px;
+    width:20px;
+    height:36px;
+    background:var(--panel, #10151c);
+    border:1px solid var(--border);
+    border-left:none;
+    border-radius:0 6px 6px 0;
+    color:var(--text-dim);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    z-index:20;
+    transition:left .18s ease;
+  }
+  .sidebar-toggle:hover{ color:var(--text); }
+  body.sidebar-collapsed .sidebar-toggle{
+    left:0;
+    border-radius:0 6px 6px 0;
+  }
+  .sidebar-toggle svg{ transition:transform .18s ease; }
+  body.sidebar-collapsed .sidebar-toggle svg{ transform:rotate(180deg); }
   .sidebar-title{
     font-size:11px;
     text-transform:uppercase;
@@ -283,6 +319,16 @@
     font-size:0.62em;
     position:relative;
     top:-0.5em;
+  }
+
+  /* Chords are hidden everywhere unless the private area is unlocked */
+  body:not(.chords-visible) .chord,
+  body:not(.chords-visible) .cword .cchord{
+    display:none;
+  }
+  /* collapse the reserved chord space above lyrics when hidden, so lines don't have empty gaps */
+  body:not(.chords-visible) .cword{
+    padding-top:0;
   }
 
   /* Transport bar (visual, like screenshot) */
@@ -558,6 +604,7 @@
 
   @media (max-width:720px){
     .sidebar{ display:none; }
+    .sidebar-toggle{ display:none; }
     .viewer{ padding:24px 18px 130px; }
     .song-title{ font-size:24px; }
     .settings-popover{ right:-10px; }
@@ -610,7 +657,10 @@
   </div>
 
   <div class="layout">
-    <div class="sidebar">
+    <button class="sidebar-toggle" id="sidebarToggle" title="Toggle song list">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="sidebar" id="sidebarPanel">
       <div class="sidebar-title">Songs</div>
       <div id="songList"></div>
     </div>
@@ -1308,12 +1358,16 @@
   }
 
   document.getElementById('privateAreaToggle').addEventListener('click', openPrivateArea);
+  document.getElementById('sidebarToggle').addEventListener('click', () => {
+    document.body.classList.toggle('sidebar-collapsed');
+  });
   document.getElementById('lockCloseBtn').addEventListener('click', closePrivateArea);
   document.getElementById('adminCloseBtn').addEventListener('click', closePrivateArea);
   lockOverlay.addEventListener('click', (e) => { if(e.target === lockOverlay) closePrivateArea(); });
 
   document.getElementById('lockAgainBtn').addEventListener('click', () => {
     privateUnlocked = false;
+    document.body.classList.remove('chords-visible');
     lockScreenCard.style.display = 'block';
     adminCard.style.display = 'none';
     songFormCard.style.display = 'none';
@@ -1328,6 +1382,7 @@
   function tryUnlock(){
     if(pwInput.value === PRIVATE_PASSWORD){
       privateUnlocked = true;
+      document.body.classList.add('chords-visible');
       lockScreenCard.style.display = 'none';
       adminCard.style.display = 'block';
       renderAdminList();
