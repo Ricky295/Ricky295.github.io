@@ -1445,6 +1445,105 @@ if (typeof module !== 'undefined' && module.exports) {
             outline-offset: -2px;
             z-index: 5;
         }
+
+        /* New Game Settings submenu */
+        .new-game-settings {
+            margin-bottom: 15px;
+        }
+
+        .new-game-settings-toggle {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #27273a;
+            border: 1px solid var(--border-color);
+            box-shadow: none;
+            font-size: 0.85rem;
+            font-weight: 700;
+            padding: 10px 14px;
+            color: var(--text-main);
+            cursor: pointer;
+            border-radius: 8px;
+        }
+
+        .new-game-settings-toggle:hover {
+            background: #302f47;
+        }
+
+        .new-game-settings-toggle .chevron {
+            transition: transform 0.2s ease;
+            color: var(--accent-primary);
+        }
+
+        .new-game-settings-toggle.open .chevron {
+            transform: rotate(180deg);
+        }
+
+        .new-game-settings-panel {
+            margin-top: 8px;
+            padding: 14px;
+            background: #1e1e2d;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .settings-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .settings-row label,
+        .settings-row-label {
+            font-size: 0.82rem;
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .settings-row input[type="number"] {
+            width: 64px;
+            background: #12121c;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 6px;
+            text-align: center;
+            font-weight: 700;
+        }
+
+        .settings-row-choice {
+            flex-wrap: wrap;
+        }
+
+        .segmented-control {
+            display: flex;
+            background: #12121c;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .segmented-btn {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            color: var(--text-main);
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 6px 12px;
+            cursor: pointer;
+            border-radius: 0;
+        }
+
+        .segmented-btn.active {
+            background: var(--accent-primary);
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -1596,12 +1695,27 @@ if (typeof module !== 'undefined' && module.exports) {
                     <button class="diff-btn active" data-diff="medium">Medium</button>
                     <button class="diff-btn" data-diff="hard">Hard</button>
                 </div>
-                <div style="display:flex; align-items:center; gap:8px; justify-content:center; margin-bottom:15px;">
-                    <label for="puzzleCountInput" class="stat-label" style="margin:0;">Sudokus to solve (same labyrinth):</label>
-                    <input type="number" id="puzzleCountInput" min="1" max="50" value="1" style="width:60px; background:#1e1e2d; color:var(--text-main); border:1px solid var(--border-color); border-radius:6px; padding:6px; text-align:center; font-weight:700;">
-                    <label class="stat-label" style="margin:0; display:flex; align-items:center; gap:6px;">
-                        <input type="checkbox" id="regenNumbersToggle" checked> Regenerate numbers each round
-                    </label>
+
+                <!-- New Game Settings Submenu -->
+                <div class="new-game-settings">
+                    <button type="button" id="newGameSettingsToggle" class="new-game-settings-toggle">
+                        <span>⚙ New Game Settings</span>
+                        <span id="newGameSettingsChevron" class="chevron">▾</span>
+                    </button>
+                    <div id="newGameSettingsPanel" class="new-game-settings-panel hidden">
+                        <div class="settings-row">
+                            <label for="puzzleCountInput">Sudokus to solve (same labyrinth)</label>
+                            <input type="number" id="puzzleCountInput" min="1" max="50" value="1">
+                        </div>
+                        <div class="settings-row settings-row-choice">
+                            <span class="settings-row-label">Numbers between rounds</span>
+                            <div class="segmented-control" id="regenSegmented" role="group" aria-label="Regenerate numbers each round">
+                                <button type="button" class="segmented-btn active" data-value="regen">Regenerate</button>
+                                <button type="button" class="segmented-btn" data-value="keep">Keep Same</button>
+                            </div>
+                            <input type="checkbox" id="regenNumbersToggle" checked style="display:none;">
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 9x9 Sudoku Grid as a Table -->
@@ -1815,6 +1929,7 @@ if (typeof module !== 'undefined' && module.exports) {
         // Start initialization
         window.addEventListener('DOMContentLoaded', () => {
             setupDifficultyToggles();
+            setupNewGameSettings();
             setupDPadControls();
             setupModeToggles();
             setupCpuLevelToggles();
@@ -1862,6 +1977,26 @@ if (typeof module !== 'undefined' && module.exports) {
             document.getElementById('tas-auto-sudoku').addEventListener('change', () => { /* read live in loop */ });
             document.getElementById('tas-show-path').addEventListener('change', () => {
                 if (!document.getElementById('tas-show-path').checked) clearPathHint();
+            });
+        }
+
+        // Setup New Game Settings submenu (collapsible panel + segmented control)
+        function setupNewGameSettings() {
+            const toggleBtn = document.getElementById('newGameSettingsToggle');
+            const panel = document.getElementById('newGameSettingsPanel');
+            toggleBtn.addEventListener('click', () => {
+                const isOpen = !panel.classList.contains('hidden');
+                panel.classList.toggle('hidden', isOpen);
+                toggleBtn.classList.toggle('open', !isOpen);
+            });
+
+            const hiddenCheckbox = document.getElementById('regenNumbersToggle');
+            document.querySelectorAll('#regenSegmented .segmented-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('#regenSegmented .segmented-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    hiddenCheckbox.checked = (btn.getAttribute('data-value') === 'regen');
+                });
             });
         }
 
