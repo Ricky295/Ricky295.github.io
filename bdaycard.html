@@ -459,6 +459,11 @@
   body.view-mode .stage {
     margin-bottom: 0;
   }
+  body.view-mode.all-planets-mode .all-planets {
+    margin-bottom: 0;
+  }
+
+  body.widget-mode .planet-grid { display: none; }
   body.view-mode .wrap {
     justify-content: center;
   }
@@ -520,6 +525,93 @@
     gap: 0.9rem;
   }
 
+  /* --- ALL PLANETS VIEW --- */
+  .all-planets {
+    display: none;
+    width: min(92vw, 900px);
+    font-family: 'Courier New', monospace;
+    margin-bottom: 3rem;
+    font-size: clamp(0.85rem, 1.4vw, 1.15rem);
+  }
+  body.all-planets-mode .all-planets {
+    display: block;
+  }
+  body.all-planets-mode .stage {
+    display: none;
+  }
+
+  .ap-row {
+    display: grid;
+    grid-template-columns: 5.5em 1fr auto;
+    align-items: center;
+    gap: 0.8em;
+    padding: 0.7em 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .ap-row:last-child { border-bottom: none; }
+
+  .ap-name {
+    font-size: 1em;
+    color: var(--text-dim);
+    letter-spacing: 0.03em;
+  }
+
+  .ap-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    min-width: 0;
+  }
+  .ap-bar-track {
+    flex: 1;
+    height: 0.9em;
+    background: var(--bg-deep);
+    border: 1px solid var(--line-bright);
+    border-radius: 3px;
+    overflow: hidden;
+    min-width: 60px;
+  }
+  .ap-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    filter: drop-shadow(0 0 4px var(--accent-dim));
+    transition: width 0.3s linear;
+  }
+  .ap-age {
+    font-size: 1em;
+    color: var(--text);
+    white-space: nowrap;
+    min-width: 4.6em;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ap-bday {
+    font-size: 0.85em;
+    color: var(--text-faint);
+    white-space: nowrap;
+    text-align: right;
+  }
+  .ap-bday .ap-num {
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ap-empty {
+    color: var(--text-faint);
+    font-size: 1em;
+    padding: 1rem 0;
+  }
+
+  @media (max-width: 520px) {
+    .ap-row {
+      grid-template-columns: 1fr;
+      gap: 0.3em;
+    }
+    .ap-bday { text-align: left; }
+    .ap-age { text-align: left; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .age-number .dec span { animation: none; }
     .progress-ring .fill { transition: none; }
@@ -529,6 +621,8 @@
 <body>
 
 <div class="wrap">
+
+  <div class="all-planets" id="allPlanets"></div>
 
   <div class="stage">
     <svg class="progress-ring" viewBox="0 0 200 200">
@@ -680,7 +774,8 @@
     bday: null,
     planet: 'earth',
     digitsMin: 2,
-    digitsMax: 5
+    digitsMax: 5,
+    allPlanets: false
   };
 
   // --- init from URL ---
@@ -688,11 +783,14 @@
   const urlPlanet = params.get('planet');
   const urlDigits = params.get('digits');
 
+
   if (urlBday) {
     const d = new Date(urlBday);
     if (!isNaN(d)) state.bday = d;
   }
-  if (urlPlanet && BODIES[urlPlanet.toLowerCase()]) {
+  if (urlPlanet && urlPlanet.toLowerCase() === 'all') {
+    state.allPlanets = true;
+  } else if (urlPlanet && BODIES[urlPlanet.toLowerCase()]) {
     state.planet = urlPlanet.toLowerCase();
   }
   if (urlDigits) {
@@ -717,22 +815,49 @@
   digitMin.value = state.digitsMin;
   digitMax.value = state.digitsMax;
 
-  // build planet buttons (single-select, drives the live ring)
+  const allPlanetsEl = document.getElementById('allPlanets');
+
+  function applyViewMode() {
+    document.body.classList.toggle('all-planets-mode', state.allPlanets);
+  }
+  applyViewMode();
+
+  // build planet buttons (single-select, drives the live ring), plus
+  // an "All" entry that switches to the all-planets list view.
+  function setActivePlanetBtn(activeKey) {
+    document.querySelectorAll('#planetGrid .planet-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.key === activeKey);
+    });
+  }
+
   Object.entries(BODIES).forEach(([key, body]) => {
     const btn = document.createElement('button');
-    btn.className = 'planet-btn' + (key === state.planet ? ' active' : '');
+    btn.className = 'planet-btn' + (!state.allPlanets && key === state.planet ? ' active' : '');
     btn.textContent = body.label.split(' ')[0];
     btn.dataset.key = key;
     btn.addEventListener('click', () => {
       state.planet = key;
-      document.querySelectorAll('#planetGrid .planet-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+      state.allPlanets = false;
+      applyViewMode();
+      setActivePlanetBtn(key);
       lastShowDigits = -1;
       lastIntPart = null;
       updateShareUrl();
     });
     grid.appendChild(btn);
   });
+
+  const allBtn = document.createElement('button');
+  allBtn.className = 'planet-btn' + (state.allPlanets ? ' active' : '');
+  allBtn.textContent = 'All';
+  allBtn.dataset.key = 'all';
+  allBtn.addEventListener('click', () => {
+    state.allPlanets = true;
+    applyViewMode();
+    setActivePlanetBtn('all');
+    updateShareUrl();
+  });
+  grid.appendChild(allBtn);
 
   function readBdayInputs() {
     const y = parseInt(bYear.value, 10);
@@ -819,7 +944,7 @@
     const base = getShareBase();
     const shareParams = new URLSearchParams();
     if (state.bday && !isNaN(state.bday)) shareParams.set('bday', state.bday.toISOString());
-    shareParams.set('planet', state.planet);
+    shareParams.set('planet', state.allPlanets ? 'all' : state.planet);
     shareParams.set('digits', `${state.digitsMin}..${state.digitsMax}`);
     shareParams.set('view', '1');
     const url = base ? `${base}?${shareParams.toString()}` : '';
@@ -829,7 +954,7 @@
     // full editable link (used by the "customize your own" link in view mode)
     const editParams = new URLSearchParams();
     if (state.bday && !isNaN(state.bday)) editParams.set('bday', state.bday.toISOString());
-    editParams.set('planet', state.planet);
+    editParams.set('planet', state.allPlanets ? 'all' : state.planet);
     editParams.set('digits', `${state.digitsMin}..${state.digitsMax}`);
     const editUrl = base ? `${base}?${editParams.toString()}` : '#';
     const editLink = document.getElementById('editLink');
@@ -1026,7 +1151,56 @@
       `<span class="next-date">${dateStr} · ${timeStr} (Earth time)</span>`;
   }
 
+  // Simple sub-day progress bar: fraction of current age-year completed,
+  // rendered as a fixed-width ASCII-ish block bar (visual, using divs).
+  function renderAllPlanets(now) {
+    if (!allPlanetsEl) return;
+
+    if (!state.bday || isNaN(state.bday)) {
+      allPlanetsEl.innerHTML = '<div class="ap-empty">set your birthday below</div>';
+      return;
+    }
+
+    const rows = Object.entries(BODIES).map(([key, body]) => {
+      let age, frac;
+      if (key === 'earth') {
+        const ea = earthAge(state.bday, now);
+        age = ea.age;
+        frac = ea.frac;
+      } else {
+        const ms = now - state.bday;
+        age = planetAge(ms, key);
+        const intPart = age < 0 ? Math.ceil(age) : Math.floor(age);
+        frac = Math.abs(age - intPart);
+      }
+
+      const showDigits = digitsToShow(frac, state.digitsMin, state.digitsMax);
+      const ageStr = age.toFixed(showDigits);
+      const pct = Math.max(0, Math.min(1, frac)) * 100;
+
+      const next = nextBirthday(state.bday, now, key);
+      const remaining = next - now;
+      const dateStr = next.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const countdownStr = formatCountdown(remaining);
+
+      return `
+        <div class="ap-row">
+          <div class="ap-name">${body.label.split(' ')[0]}</div>
+          <div class="ap-bar-wrap">
+            <div class="ap-bar-track"><div class="ap-bar-fill" style="width:${pct}%"></div></div>
+            <div class="ap-age">${ageStr}</div>
+          </div>
+          <div class="ap-bday">bday: <span class="ap-num">${countdownStr}</span> (${dateStr})</div>
+        </div>`;
+    }).join('');
+
+    allPlanetsEl.innerHTML = rows;
+  }
+
   function render() {
+    if (state.allPlanets) {
+      renderAllPlanets(new Date());
+    }
     if (!state.bday || isNaN(state.bday)) {
       ageNumber.innerHTML = '<span class="int">0</span><span class="dot">.</span><span class="dec"><span>00</span></span>';
       caption.textContent = 'set your birthday above';
