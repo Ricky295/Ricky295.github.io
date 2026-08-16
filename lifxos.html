@@ -1,0 +1,1861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>LIFX OS</title>
+<style>
+  :root{
+    /* iPadOS-inspired but tuned toward a "smart lighting hub" identity:
+       cooler, filament-warm accent instead of default iOS blue. */
+    --sky-1:#dce6f2;
+    --sky-2:#eef2f8;
+    --wall-blur: saturate(180%) blur(30px);
+    --glass: rgba(255,255,255,0.55);
+    --glass-strong: rgba(255,255,255,0.78);
+    --glass-border: rgba(255,255,255,0.6);
+    --ink: #1c2430;
+    --ink-dim: #5b6472;
+    --ink-faint: #8991a0;
+    --accent: #e8934f;       /* filament amber, ties back to LIFX warmth */
+    --accent-ink: #7a4b1f;
+    --accent-2: #4f8ee8;      /* cool complementary — "daylight" blue */
+    --ok: #3f9d5d;
+    --err: #d64545;
+    --dock-bg: rgba(255,255,255,0.35);
+    --radius-app: 20px;
+    --radius-win: 22px;
+    --shadow-soft: 0 10px 30px rgba(30,40,60,0.14);
+    --shadow-win: 0 25px 60px rgba(20,28,45,0.28);
+    font-size: 16px;
+  }
+
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ height:100%; margin:0; overflow:hidden; }
+
+  body{
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(1100px 700px at 15% -10%, #f3e6d3 0%, transparent 55%),
+      radial-gradient(900px 900px at 100% 0%, #d9e8f5 0%, transparent 50%),
+      radial-gradient(1200px 900px at 50% 120%, #e3d9f2 0%, transparent 55%),
+      linear-gradient(160deg, var(--sky-1), var(--sky-2) 60%, #f4eee1 100%);
+    background-attachment: fixed;
+    position: relative;
+    user-select: none;
+  }
+
+  /* ---------- Status bar ---------- */
+  #statusbar{
+    position: fixed; top:0; left:0; right:0; height:34px;
+    display:flex; align-items:center; justify-content: space-between;
+    padding: 0 22px;
+    font-size: 13px; font-weight: 600; letter-spacing: 0.2px;
+    color: var(--ink);
+    z-index: 500;
+    pointer-events: none;
+  }
+  #statusbar .sb-left{ display:flex; align-items:center; gap:6px; }
+  #statusbar .sb-right{ display:flex; align-items:center; gap:8px; }
+  .sb-pill{
+    background: var(--glass);
+    backdrop-filter: var(--wall-blur);
+    -webkit-backdrop-filter: var(--wall-blur);
+    border: 1px solid var(--glass-border);
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-dim);
+    display:flex; align-items:center; gap:5px;
+  }
+  .sb-dot{ width:6px; height:6px; border-radius:50%; background: var(--ok); box-shadow: 0 0 5px var(--ok); }
+  .sb-dot.off{ background: var(--err); box-shadow: 0 0 5px var(--err); }
+
+  /* ---------- Springboard ---------- */
+  #springboard{
+    position: absolute; inset: 0;
+    padding: 70px 40px 130px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #greeting{
+    max-width: 1100px; margin: 0 auto 22px;
+    padding: 0 4px;
+  }
+  #greeting h1{
+    font-size: 28px; font-weight: 700; margin: 0 0 2px;
+    letter-spacing: -0.02em;
+  }
+  #greeting p{
+    margin: 0; color: var(--ink-dim); font-size: 14px; font-weight: 500;
+  }
+
+  #app-grid{
+    max-width: 1100px; margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 96px);
+    gap: 26px 18px;
+    justify-content: start;
+  }
+
+  .app-icon{
+    display:flex; flex-direction: column; align-items: center; gap: 8px;
+    cursor: pointer;
+    -webkit-user-drag: element;
+  }
+  .app-icon .glyph{
+    width: 68px; height: 68px;
+    border-radius: var(--radius-app);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255,255,255,0.4);
+    position: relative;
+    transition: transform 0.15s cubic-bezier(.2,.9,.3,1.3);
+  }
+  .app-icon:active .glyph{ transform: scale(0.88); }
+  .app-icon .label{
+    font-size: 11.5px; font-weight: 600; color: var(--ink);
+    text-shadow: 0 1px 2px rgba(255,255,255,0.5);
+    text-align: center;
+    max-width: 88px;
+    white-space: nowrap; overflow:hidden; text-overflow: ellipsis;
+  }
+  .glyph svg{ width: 34px; height:34px; }
+
+  .glyph.g-panel{ background: linear-gradient(155deg,#2b2620,#463c2c); }
+  .glyph.g-sun{ background: linear-gradient(155deg,#f7c94c,#e8794f); }
+  .glyph.g-timer{ background: linear-gradient(155deg,#5b6bd6,#3a4aa8); }
+  .glyph.g-scenes{ background: linear-gradient(155deg,#8a4a6b,#4a2b50); }
+  .glyph.g-wake{ background: linear-gradient(155deg,#79c7e0,#3f8ea8); }
+  .glyph.g-quick{ background: linear-gradient(155deg,#e8934f,#c8763a); }
+  .glyph.g-color{ background: conic-gradient(from 180deg,#ff5e5e,#f7c94c,#5be08a,#5ba3f7,#b06be0,#ff5e5e); }
+  .glyph.g-settings{ background: linear-gradient(155deg,#9aa2ad,#6b7280); }
+
+  /* long-press wobble (jiggle mode) */
+  .jiggling .app-icon{ animation: jiggle 0.28s infinite ease-in-out; }
+  .jiggling .app-icon:nth-child(even){ animation-delay: 0.05s; }
+  @keyframes jiggle{
+    0%{ transform: rotate(-1.4deg); }
+    50%{ transform: rotate(1.4deg); }
+    100%{ transform: rotate(-1.4deg); }
+  }
+  .jiggle-badge{
+    position:absolute; top:-6px; left:-6px;
+    width:20px; height:20px; border-radius:50%;
+    background:#8992a0; color:#fff; font-size:14px; font-weight:800;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    display:none;
+  }
+  .jiggling .jiggle-badge{ display:flex; }
+
+  .app-icon.dragging{ opacity: 0.35; }
+  .drop-target{ outline: 2px dashed rgba(80,90,110,0.35); outline-offset: 4px; border-radius: 20px; }
+
+  /* ---------- Dock ---------- */
+  #dock{
+    position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+    display:flex; align-items:center; gap: 18px;
+    padding: 12px 20px;
+    background: var(--dock-bg);
+    backdrop-filter: var(--wall-blur);
+    -webkit-backdrop-filter: var(--wall-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: 26px;
+    box-shadow: var(--shadow-soft);
+    z-index: 400;
+  }
+  #dock .app-icon .glyph{ width:56px; height:56px; border-radius:16px; }
+  #dock .app-icon .glyph svg{ width:28px; height:28px; }
+  #dock .app-icon .label{ display:none; }
+
+  /* ---------- Windows ---------- */
+  .window{
+    position: absolute;
+    background: var(--glass-strong);
+    backdrop-filter: var(--wall-blur);
+    -webkit-backdrop-filter: var(--wall-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-win);
+    box-shadow: var(--shadow-win);
+    display:flex; flex-direction: column;
+    overflow: hidden;
+    z-index: 100;
+    min-width: 320px; min-height: 220px;
+  }
+  .window.max{ border-radius: 0; }
+  .window .win-titlebar{
+    height: 46px; flex-shrink:0;
+    display:flex; align-items:center; justify-content: space-between;
+    padding: 0 14px 0 16px;
+    cursor: grab;
+    border-bottom: 1px solid rgba(30,40,60,0.06);
+  }
+  .window .win-titlebar:active{ cursor: grabbing; }
+  .win-title-group{ display:flex; align-items:center; gap:10px; }
+  .win-title-group .ticon{
+    width: 24px; height:24px; border-radius:7px; display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .win-title-group .ticon svg{ width:14px; height:14px; }
+  .win-title{ font-size: 14px; font-weight: 700; }
+  .win-controls{ display:flex; gap:8px; }
+  .win-btn{
+    width: 13px; height:13px; border-radius:50%; border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; position:relative;
+    box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.15);
+  }
+  .win-btn.close{ background:#ff5f57; }
+  .win-btn.min{ background:#febc2e; }
+  .win-btn.max{ background:#28c840; }
+  .win-btn:hover::after{
+    content:''; position:absolute; inset:3px; border-radius:50%;
+    background: rgba(0,0,0,0.25);
+  }
+  .win-body{ flex:1; overflow-y:auto; overflow-x:hidden; position:relative; }
+  .win-resize{
+    position:absolute; right:0; bottom:0; width:20px; height:20px; cursor: nwse-resize;
+    z-index: 5;
+  }
+
+  .window.opening{ animation: winOpen 0.22s cubic-bezier(.2,.9,.25,1.1); }
+  @keyframes winOpen{
+    from{ opacity:0; transform: scale(0.85) translateY(14px); }
+    to{ opacity:1; transform: scale(1) translateY(0); }
+  }
+  .window.closing{ animation: winClose 0.16s ease forwards; }
+  @keyframes winClose{
+    to{ opacity:0; transform: scale(0.86) translateY(10px); }
+  }
+  .window.minimized{ display:none; }
+
+  /* ---------- Common in-app UI kit ---------- */
+  .app-scroll{ padding: 20px 22px 30px; }
+  .kit-label{
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink-faint); margin-bottom: 6px; display:block;
+  }
+  .kit-field{ margin-bottom: 14px; }
+  .kit-input, .kit-select{
+    width:100%; font-family: inherit; font-size: 14px;
+    padding: 9px 12px; border-radius: 10px;
+    border: 1px solid rgba(30,40,60,0.14);
+    background: rgba(255,255,255,0.7);
+    color: var(--ink);
+  }
+  .kit-input:focus, .kit-select:focus{ outline: 2px solid var(--accent); outline-offset: 1px; }
+  .kit-row{ display:flex; gap:10px; }
+  .kit-row > .kit-field{ flex:1; min-width:0; }
+
+  .kit-btn{
+    font-family: inherit; font-size: 13px; font-weight: 700;
+    padding: 9px 16px; border-radius: 11px; border: none; cursor: pointer;
+    background: rgba(30,40,60,0.08); color: var(--ink);
+    transition: transform 0.08s ease, background 0.15s ease;
+  }
+  .kit-btn:hover{ background: rgba(30,40,60,0.13); }
+  .kit-btn:active{ transform: scale(0.96); }
+  .kit-btn.primary{ background: var(--accent); color:#fff; }
+  .kit-btn.primary:hover{ filter: brightness(1.06); }
+  .kit-btn.danger{ background: rgba(214,69,69,0.12); color: var(--err); }
+  .kit-btn.danger:hover{ background: rgba(214,69,69,0.2); }
+  .kit-btn:disabled{ opacity:0.4; cursor:not-allowed; }
+  .kit-btn.small{ padding:6px 11px; font-size: 11.5px; border-radius:9px; }
+
+  .kit-card{
+    background: rgba(255,255,255,0.55);
+    border: 1px solid rgba(30,40,60,0.08);
+    border-radius: 16px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+
+  .kit-msg{ font-size: 12.5px; color: var(--ink-dim); margin: 10px 0; min-height: 16px; }
+  .kit-msg.ok{ color: var(--ok); }
+  .kit-msg.err{ color: var(--err); }
+
+  .kit-switch{ position:relative; width:44px; height:26px; flex-shrink:0; display:inline-block; }
+  .kit-switch input{ opacity:0; width:0; height:0; }
+  .kit-switch .slider{ position:absolute; inset:0; background:#d7dbe3; border-radius:26px; cursor:pointer; transition:0.18s; }
+  .kit-switch .slider::before{ content:''; position:absolute; width:20px; height:20px; left:3px; top:3px; background:#fff; border-radius:50%; transition:0.18s; box-shadow:0 1px 3px rgba(0,0,0,0.25); }
+  .kit-switch input:checked + .slider{ background: var(--accent); }
+  .kit-switch input:checked + .slider::before{ transform: translateX(18px); }
+
+  .empty-state{
+    text-align:center; padding: 40px 20px; color: var(--ink-faint);
+  }
+  .empty-state svg{ width:44px; height:44px; margin-bottom: 10px; opacity:0.5; }
+  .empty-state .et{ font-size:14px; font-weight:700; color: var(--ink-dim); margin-bottom:4px; }
+  .empty-state .es{ font-size:12.5px; }
+
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb{ background: rgba(30,40,60,0.18); border-radius:8px; }
+  ::-webkit-scrollbar-track{ background: transparent; }
+
+  /* toast */
+  #toast-host{
+    position: fixed; top: 44px; left:50%; transform: translateX(-50%);
+    z-index: 900; display:flex; flex-direction: column; gap:8px; align-items:center;
+    pointer-events:none;
+  }
+  .toast{
+    background: rgba(28,36,48,0.88);
+    color:#fff; font-size:13px; font-weight:600;
+    padding: 10px 16px; border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    animation: toastIn 0.2s ease;
+  }
+  @keyframes toastIn{ from{ opacity:0; transform: translateY(-8px);} to{ opacity:1; transform:translateY(0);} }
+</style>
+</head>
+<body>
+
+<div id="statusbar">
+  <div class="sb-left">
+    <span id="sb-time" style="font-variant-numeric: tabular-nums;">--:--</span>
+  </div>
+  <div class="sb-right">
+    <div class="sb-pill" id="conn-pill"><span class="sb-dot off" id="conn-dot"></span><span id="conn-text">Not connected</span></div>
+  </div>
+</div>
+
+<div id="springboard">
+  <div id="greeting">
+    <h1 id="greet-h1">Hello</h1>
+    <p id="greet-p">Your lights, from one home screen.</p>
+  </div>
+  <div id="app-grid"></div>
+</div>
+
+<div id="dock"></div>
+<div id="toast-host"></div>
+
+<script id="app-registry-data" type="application/json">
+{}
+</script>
+
+<script>
+/* =========================================================================
+   LIFX OS — core shell: springboard, dock, window manager, shared API layer
+   ========================================================================= */
+
+const $ = id => document.getElementById(id);
+
+function toast(msg){
+  const host = $('toast-host');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  host.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity 0.25s'; setTimeout(()=>el.remove(), 260); }, 2200);
+}
+
+/* ---------- Shared LIFX API layer (used by every app) ---------- */
+const LIFX = {
+  token: localStorage.getItem('lifxos_token') || '',
+  base: 'https://api.lifx.com/v1',
+  lightsCache: [],
+  listeners: new Set(),
+
+  setToken(t){
+    this.token = t;
+    localStorage.setItem('lifxos_token', t);
+    this.notify();
+  },
+  onChange(fn){ this.listeners.add(fn); return () => this.listeners.delete(fn); },
+  notify(){ this.listeners.forEach(fn => fn()); },
+
+  async request(path, opts={}){
+    if (!this.token) throw new Error('No API token set. Open Settings to connect.');
+    const res = await fetch(this.base + path, {
+      ...opts,
+      headers: {
+        'Authorization': 'Bearer ' + this.token,
+        'Content-Type': 'application/json',
+        ...(opts.headers||{})
+      }
+    });
+    if (!res.ok){
+      let detail = '';
+      try{ const j = await res.json(); detail = j.error || JSON.stringify(j); }catch(e){}
+      throw new Error('LIFX API error ' + res.status + (detail ? ': ' + detail : ''));
+    }
+    if (res.status === 204) return null;
+    return res.json();
+  },
+
+  async listLights(){
+    const data = await this.request('/lights/all');
+    this.lightsCache = data;
+    updateConnPill(true, data.length);
+    return data;
+  },
+
+  async setState(selector, body){
+    return this.request('/lights/' + encodeURIComponent(selector) + '/state', {
+      method: 'PUT', body: JSON.stringify(body)
+    });
+  },
+
+  async effect(selector, name, body){
+    return this.request('/lights/' + encodeURIComponent(selector) + '/effects/' + name, {
+      method: 'POST', body: JSON.stringify(body)
+    });
+  },
+
+  async testConnection(){
+    try{
+      await this.listLights();
+      return true;
+    }catch(e){
+      updateConnPill(false, 0);
+      throw e;
+    }
+  }
+};
+
+function updateConnPill(ok, count){
+  $('conn-dot').classList.toggle('off', !ok);
+  $('conn-text').textContent = ok ? (count + ' light' + (count===1?'':'s')) : 'Not connected';
+}
+
+/* ---------- Clock / greeting ---------- */
+function tickClock(){
+  const d = new Date();
+  $('sb-time').textContent = d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  const h = d.getHours();
+  const greet = h < 5 ? 'Still up' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : h < 21 ? 'Good evening' : 'Good night';
+  $('greet-h1').textContent = greet;
+}
+tickClock();
+setInterval(tickClock, 15000);
+
+/* ---------- Icon SVGs (inline, no external deps) ---------- */
+const ICONS = {
+  panel: `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="#f0e6d6" stroke-width="1.6"/><circle cx="8" cy="9" r="1.4" fill="#ffb066"/><circle cx="13" cy="9" r="1.4" fill="#f0e6d6" fill-opacity="0.4"/><circle cx="8" cy="14" r="1.4" fill="#f0e6d6" fill-opacity="0.4"/><circle cx="13" cy="14" r="1.4" fill="#ffb066"/><rect x="17" y="7" width="2.4" height="10" rx="1.2" fill="#ffb066"/></svg>`,
+  sun: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="5" fill="#fff6df"/><g stroke="#fff6df" stroke-width="1.6" stroke-linecap="round"><line x1="12" y1="3" x2="12" y2="5.5"/><line x1="4.5" y1="9" x2="6.6" y2="10.2"/><line x1="19.5" y1="9" x2="17.4" y2="10.2"/></g></svg>`,
+  timer: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke="#e6e9ff" stroke-width="1.7"/><path d="M12 8v5l3.2 2" stroke="#e6e9ff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><line x1="9.5" y1="2.5" x2="14.5" y2="2.5" stroke="#e6e9ff" stroke-width="1.7" stroke-linecap="round"/></svg>`,
+  scenes: `<svg viewBox="0 0 24 24" fill="none"><path d="M12 3c3 3 5 6 5 9a5 5 0 1 1-10 0c0-3 2-6 5-9Z" fill="#f4d9e6"/><path d="M12 8c1.6 1.7 2.6 3.4 2.6 5" stroke="#4a2b50" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+  wake: `<svg viewBox="0 0 24 24" fill="none"><path d="M4 15a8 8 0 0 1 16 0" stroke="#eaf7fc" stroke-width="1.7" stroke-linecap="round"/><line x1="2.5" y1="15" x2="21.5" y2="15" stroke="#eaf7fc" stroke-width="1.7" stroke-linecap="round"/><line x1="12" y1="15" x2="12" y2="9" stroke="#eaf7fc" stroke-width="1.7" stroke-linecap="round"/><line x1="7" y1="4" x2="9" y2="6.5" stroke="#eaf7fc" stroke-width="1.5" stroke-linecap="round"/><line x1="17" y1="4" x2="15" y2="6.5" stroke="#eaf7fc" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+  quick: `<svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="#fff3e6"/></svg>`,
+  color: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" fill="#ffffff" fill-opacity="0.85"/><circle cx="12" cy="12" r="3" fill="#2b2620"/></svg>`,
+  settings: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#fff" stroke-width="1.6"/><path d="M19 12a7 7 0 0 0-.1-1.2l1.9-1.5-1.5-2.6-2.3.7a6.9 6.9 0 0 0-2-1.2l-.4-2.4H9.4l-.4 2.4a6.9 6.9 0 0 0-2 1.2l-2.3-.7-1.5 2.6L5 10.8a7 7 0 0 0 0 2.4l-1.9 1.5 1.5 2.6 2.3-.7c.6.5 1.3.9 2 1.2l.4 2.4h5.2l.4-2.4a6.9 6.9 0 0 0 2-1.2l2.3.7 1.5-2.6-1.9-1.5c.07-.4.1-.8.1-1.2Z" stroke="#fff" stroke-width="1.3" stroke-linejoin="round"/></svg>`,
+};
+
+/* ---------- App registry ---------- */
+/* Each app: { id, name, glyphClass, icon, dock:boolean, mount(container, winApi) } */
+const APPS = [];
+function registerApp(app){ APPS.push(app); }
+
+function buildSpringboardAndDock(){
+  const grid = $('app-grid');
+  const dock = $('dock');
+  grid.innerHTML = '';
+  dock.innerHTML = '';
+  const order = getIconOrder();
+  const byId = Object.fromEntries(APPS.map(a=>[a.id,a]));
+  order.forEach(id => {
+    const app = byId[id];
+    if (!app) return;
+    const isDock = getDockIds().includes(id);
+    const el = makeIconEl(app);
+    (isDock ? dock : grid).appendChild(el);
+  });
+}
+
+function makeIconEl(app){
+  const el = document.createElement('div');
+  el.className = 'app-icon';
+  el.draggable = true;
+  el.dataset.appId = app.id;
+  el.innerHTML = `
+    <div class="glyph g-${app.glyph}">
+      <div class="jiggle-badge">−</div>
+      ${app.icon}
+    </div>
+    <div class="label">${app.name}</div>
+  `;
+  el.addEventListener('click', () => {
+    if (document.body.classList.contains('jiggling')) return;
+    openApp(app.id);
+  });
+
+  let pressTimer;
+  el.addEventListener('mousedown', () => { pressTimer = setTimeout(()=>enterJiggle(), 550); });
+  el.addEventListener('mouseup', () => clearTimeout(pressTimer));
+  el.addEventListener('mouseleave', () => clearTimeout(pressTimer));
+
+  el.addEventListener('dragstart', e => {
+    el.classList.add('dragging');
+    e.dataTransfer.setData('text/plain', app.id);
+  });
+  el.addEventListener('dragend', () => el.classList.remove('dragging'));
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drop-target'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drop-target'));
+  el.addEventListener('drop', e => {
+    e.preventDefault();
+    el.classList.remove('drop-target');
+    const draggedId = e.dataTransfer.getData('text/plain');
+    reorderIcons(draggedId, app.id);
+  });
+
+  return el;
+}
+
+function enterJiggle(){
+  document.body.classList.add('jiggling');
+  const done = () => { document.body.classList.remove('jiggling'); document.removeEventListener('click', done); };
+  setTimeout(()=> document.addEventListener('click', done), 50);
+}
+
+/* ---------- Icon order persistence ---------- */
+const DEFAULT_ORDER = ['panel','sun','timer','scenes','wake','color','quick','settings'];
+const DEFAULT_DOCK = ['panel','sun','timer','settings'];
+
+function getIconOrder(){
+  try{
+    const saved = JSON.parse(localStorage.getItem('lifxos_order'));
+    if (Array.isArray(saved) && saved.length) return saved;
+  }catch(e){}
+  return DEFAULT_ORDER.slice();
+}
+function getDockIds(){
+  try{
+    const saved = JSON.parse(localStorage.getItem('lifxos_dock'));
+    if (Array.isArray(saved) && saved.length) return saved;
+  }catch(e){}
+  return DEFAULT_DOCK.slice();
+}
+function saveOrder(order, dock){
+  localStorage.setItem('lifxos_order', JSON.stringify(order));
+  localStorage.setItem('lifxos_dock', JSON.stringify(dock));
+}
+function reorderIcons(draggedId, targetId){
+  if (draggedId === targetId) return;
+  let order = getIconOrder();
+  let dock = getDockIds();
+  order = order.filter(id => id !== draggedId);
+  const idx = order.indexOf(targetId);
+  order.splice(idx, 0, draggedId);
+  saveOrder(order, dock);
+  buildSpringboardAndDock();
+}
+
+/* =========================================================================
+   Window manager
+   ========================================================================= */
+let zTop = 100;
+let winCount = 0;
+const openWindows = {}; // appId -> window element (single instance per app)
+
+function openApp(appId){
+  if (openWindows[appId]){
+    const w = openWindows[appId];
+    w.classList.remove('minimized');
+    focusWindow(w);
+    return;
+  }
+  const app = APPS.find(a => a.id === appId);
+  if (!app) return;
+
+  winCount++;
+  const win = document.createElement('div');
+  win.className = 'window opening';
+  win.dataset.appId = appId;
+
+  const offset = (winCount % 6) * 26;
+  const w = app.defaultSize?.w || 560;
+  const h = app.defaultSize?.h || 560;
+  win.style.width = w + 'px';
+  win.style.height = h + 'px';
+  win.style.left = Math.max(20, (window.innerWidth - w)/2 + offset - 60) + 'px';
+  win.style.top = Math.max(50, (window.innerHeight - h)/2 + offset - 80) + 'px';
+
+  win.innerHTML = `
+    <div class="win-titlebar">
+      <div class="win-title-group">
+        <div class="ticon glyph g-${app.glyph}" style="width:24px;height:24px;border-radius:7px;">${app.icon}</div>
+        <div class="win-title">${app.name}</div>
+      </div>
+      <div class="win-controls">
+        <button class="win-btn close" title="Close"></button>
+        <button class="win-btn min" title="Minimize"></button>
+        <button class="win-btn max" title="Maximize"></button>
+      </div>
+    </div>
+    <div class="win-body"></div>
+    <div class="win-resize"></div>
+  `;
+  document.body.appendChild(win);
+  openWindows[appId] = win;
+
+  focusWindow(win);
+  makeDraggable(win);
+  makeResizable(win);
+
+  win.querySelector('.win-btn.close').addEventListener('click', () => closeWindow(win, appId));
+  win.querySelector('.win-btn.min').addEventListener('click', () => { win.classList.add('minimized'); });
+  win.querySelector('.win-btn.max').addEventListener('click', () => toggleMax(win));
+  win.addEventListener('mousedown', () => focusWindow(win));
+
+  const body = win.querySelector('.win-body');
+  const winApi = {
+    close: () => closeWindow(win, appId),
+    setTitle: (t) => { win.querySelector('.win-title').textContent = t; }
+  };
+  app.mount(body, winApi);
+
+  win.addEventListener('animationend', () => win.classList.remove('opening'), { once:true });
+}
+
+function focusWindow(win){
+  zTop += 1;
+  win.style.zIndex = zTop;
+}
+
+function closeWindow(win, appId){
+  win.classList.add('closing');
+  win.addEventListener('animationend', () => {
+    win.remove();
+    delete openWindows[appId];
+  }, { once:true });
+}
+
+function toggleMax(win){
+  if (win.dataset.maxed === '1'){
+    win.style.width = win.dataset.prevW;
+    win.style.height = win.dataset.prevH;
+    win.style.left = win.dataset.prevL;
+    win.style.top = win.dataset.prevT;
+    win.classList.remove('max');
+    win.dataset.maxed = '0';
+  } else {
+    win.dataset.prevW = win.style.width;
+    win.dataset.prevH = win.style.height;
+    win.dataset.prevL = win.style.left;
+    win.dataset.prevT = win.style.top;
+    win.style.left = '0px'; win.style.top = '34px';
+    win.style.width = window.innerWidth + 'px';
+    win.style.height = (window.innerHeight - 34) + 'px';
+    win.classList.add('max');
+    win.dataset.maxed = '1';
+  }
+}
+
+function makeDraggable(win){
+  const bar = win.querySelector('.win-titlebar');
+  let sx, sy, sl, st, dragging = false;
+  bar.addEventListener('mousedown', e => {
+    if (e.target.closest('.win-btn')) return;
+    if (win.dataset.maxed === '1') return;
+    dragging = true;
+    sx = e.clientX; sy = e.clientY;
+    sl = win.offsetLeft; st = win.offsetTop;
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    win.style.left = Math.max(0, sl + (e.clientX - sx)) + 'px';
+    win.style.top = Math.max(0, st + (e.clientY - sy)) + 'px';
+  });
+  window.addEventListener('mouseup', () => dragging = false);
+}
+
+function makeResizable(win){
+  const handle = win.querySelector('.win-resize');
+  let sx, sy, sw, sh, resizing = false;
+  handle.addEventListener('mousedown', e => {
+    resizing = true;
+    sx = e.clientX; sy = e.clientY;
+    sw = win.offsetWidth; sh = win.offsetHeight;
+    e.preventDefault(); e.stopPropagation();
+  });
+  window.addEventListener('mousemove', e => {
+    if (!resizing) return;
+    win.style.width = Math.max(320, sw + (e.clientX - sx)) + 'px';
+    win.style.height = Math.max(220, sh + (e.clientY - sy)) + 'px';
+  });
+  window.addEventListener('mouseup', () => resizing = false);
+}
+
+/* boot sequence happens at bottom of file after all apps register */
+</script>
+
+<!-- ==================== APP: SETTINGS ==================== -->
+<script>
+registerApp({
+  id: 'settings', name: 'Settings', glyph: 'settings', icon: ICONS.settings,
+  defaultSize: { w: 460, h: 420 },
+  mount(container){
+    container.innerHTML = `
+      <div class="app-scroll">
+        <div class="kit-card">
+          <span class="kit-label">LIFX API Token</span>
+          <div class="kit-field">
+            <input class="kit-input" type="password" id="set-token" placeholder="Paste your token from cloud.lifx.com/settings" value="${LIFX.token ? LIFX.token.replace(/./g,'•') : ''}">
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="kit-btn primary" id="set-connect">Connect</button>
+            <button class="kit-btn" id="set-test">Test connection</button>
+          </div>
+          <div class="kit-msg" id="set-msg"></div>
+        </div>
+        <div class="kit-card">
+          <span class="kit-label">About</span>
+          <p style="font-size:13px; color:var(--ink-dim); line-height:1.5; margin:0;">
+            LIFX OS is a lightweight home‑screen shell for your LIFX lights. Long‑press (or click‑hold) any icon
+            to rearrange the springboard and dock — drag icons onto each other to reorder, same as iPadOS.
+          </p>
+        </div>
+        <div class="kit-card">
+          <span class="kit-label">Reset layout</span>
+          <button class="kit-btn danger small" id="set-reset">Restore default icon layout</button>
+        </div>
+      </div>
+    `;
+    const input = container.querySelector('#set-token');
+    let revealed = false;
+    input.addEventListener('focus', () => { if (!revealed){ input.value = LIFX.token; revealed = true; } });
+
+    container.querySelector('#set-connect').addEventListener('click', async () => {
+      const v = input.value.trim();
+      if (!v) { setMsg('Enter a token first.', 'err'); return; }
+      LIFX.setToken(v);
+      setMsg('Saved. Testing connection…');
+      try{ const lights = await LIFX.testConnection(); setMsg('Connected — found lights.', 'ok'); toast('Connected to LIFX'); }
+      catch(e){ setMsg(e.message, 'err'); }
+    });
+    container.querySelector('#set-test').addEventListener('click', async () => {
+      setMsg('Testing…');
+      try{ await LIFX.testConnection(); setMsg('Connection OK.', 'ok'); }
+      catch(e){ setMsg(e.message, 'err'); }
+    });
+    container.querySelector('#set-reset').addEventListener('click', () => {
+      localStorage.removeItem('lifxos_order');
+      localStorage.removeItem('lifxos_dock');
+      buildSpringboardAndDock();
+      toast('Layout reset');
+    });
+    function setMsg(t, cls){
+      const m = container.querySelector('#set-msg');
+      m.textContent = t; m.className = 'kit-msg' + (cls ? ' '+cls : '');
+    }
+  }
+});
+</script>
+
+<!-- ==================== APP: QUICK TOGGLE ==================== -->
+<script>
+registerApp({
+  id: 'quick', name: 'Quick Toggle', glyph: 'quick', icon: ICONS.quick,
+  defaultSize: { w: 400, h: 360 },
+  mount(container){
+    container.innerHTML = `
+      <div class="app-scroll">
+        <div class="kit-card" style="display:flex; flex-direction:column; gap:10px;">
+          <span class="kit-label">All lights</span>
+          <div style="display:flex; gap:8px;">
+            <button class="kit-btn primary" id="q-on" style="flex:1;">All on</button>
+            <button class="kit-btn" id="q-off" style="flex:1;">All off</button>
+          </div>
+        </div>
+        <div class="kit-card">
+          <span class="kit-label">Brightness</span>
+          <input type="range" min="1" max="100" value="80" id="q-bright" style="width:100%;">
+        </div>
+        <div class="kit-card">
+          <span class="kit-label">Mood presets</span>
+          <div style="display:flex; flex-wrap:wrap; gap:8px;" id="q-presets"></div>
+        </div>
+        <div class="kit-msg" id="q-msg"></div>
+      </div>
+    `;
+    const presets = [
+      { name:'Relax', color:'kelvin:2500 brightness:0.4' },
+      { name:'Focus', color:'kelvin:5000 brightness:1.0' },
+      { name:'Movie', color:'hue:260 saturation:0.6 brightness:0.15' },
+      { name:'Party', color:'hue:300 saturation:1 brightness:0.9' },
+      { name:'Night light', color:'kelvin:2000 brightness:0.05' },
+    ];
+    const wrap = container.querySelector('#q-presets');
+    presets.forEach(p => {
+      const b = document.createElement('button');
+      b.className = 'kit-btn small';
+      b.textContent = p.name;
+      b.addEventListener('click', async () => {
+        try{ await LIFX.setState('all', { power:'on', color:p.color, duration:1 }); setMsg(p.name+' applied', 'ok'); }
+        catch(e){ setMsg(e.message, 'err'); }
+      });
+      wrap.appendChild(b);
+    });
+    container.querySelector('#q-on').addEventListener('click', async () => {
+      try{ await LIFX.setState('all', { power:'on', duration:1 }); setMsg('All lights on', 'ok'); }
+      catch(e){ setMsg(e.message, 'err'); }
+    });
+    container.querySelector('#q-off').addEventListener('click', async () => {
+      try{ await LIFX.setState('all', { power:'off', duration:1 }); setMsg('All lights off', 'ok'); }
+      catch(e){ setMsg(e.message, 'err'); }
+    });
+    container.querySelector('#q-bright').addEventListener('change', async (e) => {
+      try{ await LIFX.setState('all', { power:'on', brightness: e.target.value/100, duration:1 }); setMsg('Brightness set to '+e.target.value+'%', 'ok'); }
+      catch(e2){ setMsg(e2.message, 'err'); }
+    });
+    function setMsg(t, cls){
+      const m = container.querySelector('#q-msg');
+      m.textContent = t; m.className = 'kit-msg' + (cls?' '+cls:'');
+    }
+  }
+});
+</script>
+
+<!-- ==================== APP: COLOR PICKER ==================== -->
+<script>
+registerApp({
+  id: 'color', name: 'Color', glyph: 'color', icon: ICONS.color,
+  defaultSize: { w: 420, h: 480 },
+  mount(container){
+    container.innerHTML = `
+      <div class="app-scroll">
+        <div class="kit-card">
+          <span class="kit-label">Target</span>
+          <select class="kit-select" id="c-target">
+            <option value="all">All lights</option>
+          </select>
+        </div>
+        <div class="kit-card" style="text-align:center;">
+          <input type="color" id="c-picker" value="#e8934f" style="width:100%; height:64px; border:none; border-radius:14px; cursor:pointer; background:none;">
+        </div>
+        <div class="kit-card">
+          <span class="kit-label">Kelvin (white balance)</span>
+          <input type="range" min="1500" max="9000" value="3500" id="c-kelvin" style="width:100%;">
+          <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--ink-faint);">
+            <span>Warm 1500K</span><span id="c-kelvin-val">3500K</span><span>Cool 9000K</span>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="kit-btn primary" id="c-apply-color" style="flex:1;">Apply color</button>
+          <button class="kit-btn" id="c-apply-kelvin" style="flex:1;">Apply kelvin</button>
+        </div>
+        <div class="kit-msg" id="c-msg"></div>
+      </div>
+    `;
+    refreshTargets();
+    LIFX.onChange(refreshTargets);
+
+    function refreshTargets(){
+      const sel = container.querySelector('#c-target');
+      const current = sel.value;
+      sel.innerHTML = '<option value="all">All lights</option>' +
+        LIFX.lightsCache.map(l => `<option value="id:${l.id}">${escapeHtml(l.label)}</option>`).join('');
+      sel.value = current || 'all';
+    }
+    if (LIFX.token) LIFX.listLights().catch(()=>{});
+
+    container.querySelector('#c-kelvin').addEventListener('input', e => {
+      container.querySelector('#c-kelvin-val').textContent = e.target.value + 'K';
+    });
+    container.querySelector('#c-apply-color').addEventListener('click', async () => {
+      const hex = container.querySelector('#c-picker').value;
+      const { h, s, v } = hexToHsb(hex);
+      const selector = container.querySelector('#c-target').value;
+      try{
+        await LIFX.setState(selector, { power:'on', color:`hue:${h.toFixed(1)} saturation:${s.toFixed(2)} brightness:${v.toFixed(2)}`, duration:1 });
+        setMsg('Color applied', 'ok');
+      }catch(e){ setMsg(e.message, 'err'); }
+    });
+    container.querySelector('#c-apply-kelvin').addEventListener('click', async () => {
+      const k = container.querySelector('#c-kelvin').value;
+      const selector = container.querySelector('#c-target').value;
+      try{
+        await LIFX.setState(selector, { power:'on', color:`kelvin:${k}`, duration:1 });
+        setMsg('Kelvin applied', 'ok');
+      }catch(e){ setMsg(e.message, 'err'); }
+    });
+    function setMsg(t, cls){
+      const m = container.querySelector('#c-msg');
+      m.textContent = t; m.className = 'kit-msg' + (cls?' '+cls:'');
+    }
+  }
+});
+
+function hexToHsb(hex){
+  let r = parseInt(hex.substr(1,2),16)/255;
+  let g = parseInt(hex.substr(3,2),16)/255;
+  let b = parseInt(hex.substr(5,2),16)/255;
+  const max = Math.max(r,g,b), min = Math.min(r,g,b);
+  const d = max - min;
+  let h = 0;
+  if (d !== 0){
+    if (max === r) h = ((g-b)/d) % 6;
+    else if (max === g) h = (b-r)/d + 2;
+    else h = (r-g)/d + 4;
+    h *= 60; if (h<0) h += 360;
+  }
+  const s = max === 0 ? 0 : d/max;
+  const v = max;
+  return { h, s, v };
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+
+<!-- ==================== APP: TIMER ==================== -->
+<script>
+registerApp({
+  id: 'timer', name: 'Timer', glyph: 'timer', icon: ICONS.timer,
+  defaultSize: { w: 420, h: 600 },
+  mount(container){
+    container.innerHTML = `
+      <div class="app-scroll">
+        <div class="kit-card">
+          <span class="kit-label">Target</span>
+          <select class="kit-select" id="tm-target"><option value="all">All lights</option></select>
+          <div style="font-size:11px; color:var(--ink-faint); margin-top:6px;" id="tm-caps">—</div>
+        </div>
+        <div class="kit-card">
+          <span class="kit-label">Setting</span>
+          <select class="kit-select" id="tm-action" style="margin-bottom:10px;">
+            <option value="stable">Stable (no change until end)</option>
+            <option value="up">Brightness up</option>
+            <option value="down">Brightness down</option>
+            <option value="cct-down">CCT down (warmer)</option>
+            <option value="cct-up">CCT up (cooler)</option>
+            <option value="color">Color</option>
+            <option value="blink">Blink</option>
+          </select>
+
+          <div id="tm-stable-wrap" class="kit-field" style="display:none;">
+            <span class="kit-label">End action</span>
+            <select class="kit-select" id="tm-stable-end">
+              <option value="off">Turn off</option>
+              <option value="on">Turn on</option>
+              <option value="toggle">Toggle</option>
+              <option value="none">Nothing</option>
+            </select>
+          </div>
+
+          <div id="tm-dim-wrap" class="kit-field" style="display:none;">
+            <span class="kit-label">Target brightness %</span>
+            <input class="kit-input" type="number" id="tm-dim-val" min="1" max="100" value="20">
+          </div>
+
+          <div id="tm-cct-wrap" class="kit-field" style="display:none;">
+            <span class="kit-label">Target kelvin</span>
+            <input class="kit-input" type="number" id="tm-cct-val" min="1500" max="9000" value="3500">
+          </div>
+
+          <div id="tm-color-wrap" class="kit-field" style="display:none;">
+            <span class="kit-label">Target color</span>
+            <input type="color" id="tm-color-val" value="#e8934f" style="width:100%; height:38px; border:none; border-radius:9px; cursor:pointer; background:none; padding:0;">
+          </div>
+
+          <div id="tm-blink-wrap" class="kit-field" style="display:none;">
+            <span class="kit-label">Blink count</span>
+            <input class="kit-input" type="number" id="tm-blink-count" min="1" max="30" value="6">
+          </div>
+
+          <div class="kit-row">
+            <div class="kit-field">
+              <span class="kit-label">Minutes</span>
+              <input class="kit-input" type="number" id="tm-mins" min="1" value="15">
+            </div>
+            <div class="kit-field" id="tm-fade-wrap">
+              <span class="kit-label">Fade duration (s)</span>
+              <input class="kit-input" type="number" id="tm-fade" min="0" value="2">
+            </div>
+          </div>
+          <button class="kit-btn primary" id="tm-start" style="width:100%;">Start timer</button>
+        </div>
+        <div class="kit-card" id="tm-active-card" style="display:none;">
+          <span class="kit-label">Running</span>
+          <div style="font-size:28px; font-weight:800; font-variant-numeric:tabular-nums; margin:6px 0;" id="tm-countdown">00:00</div>
+          <div style="font-size:12.5px; color:var(--ink-dim); margin-bottom:6px;" id="tm-desc"></div>
+          <div style="font-size:11.5px; color:var(--ink-faint); margin-bottom:10px;">Setting: <b id="tm-state-label">stable</b></div>
+          <button class="kit-btn danger small" id="tm-cancel">Cancel timer</button>
+        </div>
+        <div class="kit-msg" id="tm-msg"></div>
+      </div>
+    `;
+    let interval = null, endAt = null, pendingAction = null, blinkTimer = null, blinkState = 'on';
+
+    function currentLight(){
+      const selector = container.querySelector('#tm-target').value;
+      if (selector === 'all') return null;
+      const id = selector.replace('id:','');
+      return LIFX.lightsCache.find(x => x.id === id) || null;
+    }
+
+    function capsFor(light){
+      // white-only / tunable-white / full-color, based on LIFX product capabilities.
+      if (!light) return { level: 'unknown', text: 'Mixed selection — capability shown per light once picked individually.' };
+      const caps = (light.product && light.product.capabilities) || {};
+      if (caps.has_color) return { level: 'color', text: 'Full color (RGB + tunable white).' };
+      if (caps.has_variable_color_temp !== false) return { level: 'tunable', text: 'Tunable white (kelvin only, no color).' };
+      return { level: 'white', text: 'White-only (fixed color temperature).' };
+    }
+
+    function refreshTargets(){
+      const sel = container.querySelector('#tm-target');
+      const current = sel.value;
+      sel.innerHTML = '<option value="all">All lights</option>' +
+        LIFX.lightsCache.map(l => `<option value="id:${l.id}">${escapeHtml(l.label)}</option>`).join('');
+      sel.value = current || 'all';
+      refreshCapsAndOptions();
+    }
+
+    function refreshCapsAndOptions(){
+      const caps = capsFor(currentLight());
+      container.querySelector('#tm-caps').textContent = caps.text;
+      const actionSel = container.querySelector('#tm-action');
+      const cctOpt = actionSel.querySelector('option[value="cct-down"]');
+      const cctOpt2 = actionSel.querySelector('option[value="cct-up"]');
+      const colorOpt = actionSel.querySelector('option[value="color"]');
+      // Disable options the target genuinely can't do (only meaningful for a single light, not "all")
+      const disableCct = caps.level === 'white';
+      const disableColor = caps.level === 'white' || caps.level === 'tunable';
+      cctOpt.disabled = disableCct; cctOpt2.disabled = disableCct;
+      colorOpt.disabled = disableColor;
+      if ((disableCct && (actionSel.value==='cct-down'||actionSel.value==='cct-up')) ||
+          (disableColor && actionSel.value==='color')){
+        actionSel.value = 'stable';
+        actionSel.dispatchEvent(new Event('change'));
+      }
+    }
+
+    refreshTargets();
+    LIFX.onChange(refreshTargets);
+    if (LIFX.token) LIFX.listLights().catch(()=>{});
+    container.querySelector('#tm-target').addEventListener('change', refreshCapsAndOptions);
+
+    function showFieldsFor(action){
+      container.querySelector('#tm-stable-wrap').style.display = action === 'stable' ? 'block' : 'none';
+      container.querySelector('#tm-dim-wrap').style.display = (action === 'up' || action === 'down') ? 'block' : 'none';
+      container.querySelector('#tm-cct-wrap').style.display = (action === 'cct-up' || action === 'cct-down') ? 'block' : 'none';
+      container.querySelector('#tm-color-wrap').style.display = action === 'color' ? 'block' : 'none';
+      container.querySelector('#tm-blink-wrap').style.display = action === 'blink' ? 'block' : 'none';
+      container.querySelector('#tm-fade-wrap').style.display = action === 'blink' ? 'none' : 'block';
+    }
+    container.querySelector('#tm-action').addEventListener('change', e => showFieldsFor(e.target.value));
+    showFieldsFor('stable');
+
+    container.querySelector('#tm-start').addEventListener('click', () => {
+      const mins = parseFloat(container.querySelector('#tm-mins').value) || 1;
+      const action = container.querySelector('#tm-action').value;
+      const fade = parseFloat(container.querySelector('#tm-fade').value) || 0;
+      const selector = container.querySelector('#tm-target').value;
+      const dimVal = parseInt(container.querySelector('#tm-dim-val').value, 10) || 20;
+      const cctVal = parseInt(container.querySelector('#tm-cct-val').value, 10) || 3500;
+      const colorVal = container.querySelector('#tm-color-val').value;
+      const stableEnd = container.querySelector('#tm-stable-end').value;
+      const blinkCount = parseInt(container.querySelector('#tm-blink-count').value, 10) || 6;
+
+      endAt = Date.now() + mins*60000;
+      pendingAction = { action, fade, selector, dimVal, cctVal, colorVal, stableEnd, blinkCount };
+      container.querySelector('#tm-active-card').style.display = 'block';
+      const label =
+        action === 'stable' ? (stableEnd === 'none' ? 'stay as-is' : stableEnd === 'off' ? 'then turn off' : stableEnd === 'on' ? 'then turn on' : 'then toggle')
+        : action === 'up' ? `brighten to ${dimVal}%`
+        : action === 'down' ? `dim to ${dimVal}%`
+        : action === 'cct-down' ? `shift warmer to ${cctVal}K`
+        : action === 'cct-up' ? `shift cooler to ${cctVal}K`
+        : action === 'color' ? 'change color'
+        : `blink ${blinkCount}× (0.5s on/off)`;
+      container.querySelector('#tm-desc').textContent = `Will ${label} — ${targetLabel(selector)}`;
+      container.querySelector('#tm-state-label').textContent = action === 'stable' ? 'stable'
+        : action === 'up' ? 'brightness up'
+        : action === 'down' ? 'brightness down'
+        : action === 'cct-down' ? 'CCT down'
+        : action === 'cct-up' ? 'CCT up'
+        : action === 'color' ? 'color'
+        : 'stable';
+      setMsg('Timer started', 'ok');
+
+      if (interval) clearInterval(interval);
+      tickCountdown();
+      interval = setInterval(tickCountdown, 1000);
+    });
+
+    container.querySelector('#tm-cancel').addEventListener('click', () => {
+      if (interval) clearInterval(interval);
+      if (blinkTimer) clearInterval(blinkTimer);
+      interval = null; endAt = null; blinkTimer = null;
+      container.querySelector('#tm-active-card').style.display = 'none';
+      setMsg('Timer cancelled', '');
+    });
+
+    async function tickCountdown(){
+      const remain = Math.max(0, endAt - Date.now());
+      const mm = String(Math.floor(remain/60000)).padStart(2,'0');
+      const ss = String(Math.floor((remain%60000)/1000)).padStart(2,'0');
+      container.querySelector('#tm-countdown').textContent = mm+':'+ss;
+      if (remain <= 0){
+        clearInterval(interval); interval = null;
+        try{
+          const { action, fade, selector, dimVal, cctVal, colorVal, stableEnd, blinkCount } = pendingAction;
+          if (action === 'stable'){
+            if (stableEnd === 'off') await LIFX.setState(selector, { power:'off', duration: fade });
+            else if (stableEnd === 'on') await LIFX.setState(selector, { power:'on', duration: fade });
+            else if (stableEnd === 'toggle'){
+              const light = currentLight();
+              const isOn = light ? light.power === 'on' : true;
+              await LIFX.setState(selector, { power: isOn ? 'off' : 'on', duration: fade });
+            }
+            // 'none' does nothing
+          } else if (action === 'up' || action === 'down'){
+            await LIFX.setState(selector, { power:'on', brightness: dimVal/100, duration: fade });
+          } else if (action === 'cct-down' || action === 'cct-up'){
+            await LIFX.setState(selector, { power:'on', color: 'kelvin:'+cctVal, duration: fade });
+          } else if (action === 'color'){
+            const { h, s, v } = hexToHsb(colorVal);
+            await LIFX.setState(selector, { power:'on', color: `hue:${h.toFixed(1)} saturation:${s.toFixed(2)} brightness:${v.toFixed(2)}`, duration: fade });
+          } else if (action === 'blink'){
+            await runBlink(selector, blinkCount);
+            setMsg('Timer completed', 'ok');
+            toast('Timer finished');
+            container.querySelector('#tm-active-card').style.display = 'none';
+            return;
+          }
+          setMsg('Timer completed', 'ok');
+          toast('Timer finished');
+        }catch(e){ setMsg(e.message, 'err'); }
+        container.querySelector('#tm-active-card').style.display = 'none';
+      }
+    }
+
+    function runBlink(selector, count){
+      return new Promise(resolve => {
+        let n = 0;
+        blinkState = 'off'; // first flip turns it on
+        container.querySelector('#tm-state-label').textContent = 'blinking';
+        blinkTimer = setInterval(async () => {
+          blinkState = blinkState === 'on' ? 'off' : 'on';
+          try{ await LIFX.setState(selector, { power: blinkState, duration: 0 }); }catch(e){}
+          n++;
+          if (n >= count*2){
+            clearInterval(blinkTimer); blinkTimer = null;
+            resolve();
+          }
+        }, 500);
+      });
+    }
+
+    function targetLabel(selector){
+      if (selector === 'all') return 'all lights';
+      const id = selector.replace('id:','');
+      const l = LIFX.lightsCache.find(x => x.id === id);
+      return l ? l.label : selector;
+    }
+    function setMsg(t, cls){
+      const m = container.querySelector('#tm-msg');
+      m.textContent = t; m.className = 'kit-msg' + (cls?' '+cls:'');
+    }
+  }
+});
+</script>
+
+<!-- ==================== APP: SCENES ==================== -->
+<script>
+registerApp({
+  id: 'scenes', name: 'Scenes', glyph: 'scenes', icon: ICONS.scenes,
+  defaultSize: { w: 460, h: 520 },
+  mount(container){
+    container.innerHTML = `
+      <div class="app-scroll">
+        <div class="kit-card" style="display:flex; justify-content:space-between; align-items:center;">
+          <span class="kit-label" style="margin:0;">Saved scenes</span>
+          <button class="kit-btn small" id="sc-save-current">Save current state</button>
+        </div>
+        <div id="sc-list"></div>
+        <div class="kit-msg" id="sc-msg"></div>
+      </div>
+    `;
+    renderList();
+
+    container.querySelector('#sc-save-current').addEventListener('click', async () => {
+      try{
+        if (!LIFX.token) { setMsg('Connect in Settings first.', 'err'); return; }
+        const lights = await LIFX.listLights();
+        const name = prompt('Name this scene:', 'My scene');
+        if (!name) return;
+        const scenes = getScenes();
+        scenes.push({
+          id: 'sc_' + Date.now(),
+          name,
+          states: lights.map(l => ({
+            id: l.id, label: l.label, power: l.power,
+            brightness: l.brightness,
+            color: l.color
+          }))
+        });
+        saveScenes(scenes);
+        renderList();
+        setMsg('Scene saved', 'ok');
+      }catch(e){ setMsg(e.message, 'err'); }
+    });
+
+    function renderList(){
+      const list = container.querySelector('#sc-list');
+      const scenes = getScenes();
+      if (!scenes.length){
+        list.innerHTML = `<div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 3c3 3 5 6 5 9a5 5 0 1 1-10 0c0-3 2-6 5-9Z" stroke="#8991a0" stroke-width="1.4"/></svg>
+          <div class="et">No scenes yet</div>
+          <div class="es">Set your lights how you like, then "Save current state."</div>
+        </div>`;
+        return;
+      }
+      list.innerHTML = scenes.map(sc => `
+        <div class="kit-card" style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:700; font-size:13.5px;">${escapeHtml(sc.name)}</div>
+            <div style="font-size:11.5px; color:var(--ink-faint);">${sc.states.length} light(s)</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button class="kit-btn small primary" data-apply="${sc.id}">Apply</button>
+            <button class="kit-btn small danger" data-del="${sc.id}">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    container.querySelector('#sc-list').addEventListener('click', async e => {
+      const applyId = e.target.dataset.apply;
+      const delId = e.target.dataset.del;
+      if (applyId){
+        const sc = getScenes().find(s => s.id === applyId);
+        if (!sc) return;
+        try{
+          for (const st of sc.states){
+            await LIFX.setState('id:'+st.id, {
+              power: st.power, brightness: st.brightness,
+              color: st.color ? `hue:${st.color.hue||0} saturation:${st.color.saturation||0} kelvin:${st.color.kelvin||3500}` : undefined,
+              duration: 1.2
+            });
+          }
+          setMsg('Scene "'+sc.name+'" applied', 'ok');
+        }catch(err){ setMsg(err.message, 'err'); }
+      } else if (delId){
+        saveScenes(getScenes().filter(s => s.id !== delId));
+        renderList();
+      }
+    });
+
+    function setMsg(t, cls){
+      const m = container.querySelector('#sc-msg');
+      m.textContent = t; m.className = 'kit-msg' + (cls?' '+cls:'');
+    }
+  }
+});
+function getScenes(){ try{ return JSON.parse(localStorage.getItem('lifxos_scenes')) || []; }catch(e){ return []; } }
+function saveScenes(s){ localStorage.setItem('lifxos_scenes', JSON.stringify(s)); }
+</script>
+
+<!-- ==================== APP: WAKE (alarm variant of sun) ==================== -->
+<script>
+registerApp({
+  id: 'wake', name: 'Wake Alarm', glyph: 'wake', icon: ICONS.wake,
+  defaultSize: { w: 420, h: 460 },
+  mount(container){
+    container.innerHTML = `
+      <div class="app-scroll">
+        <div class="kit-card">
+          <span class="kit-label">Wake time</span>
+          <input class="kit-input" type="time" id="w-time" value="07:00">
+        </div>
+        <div class="kit-card">
+          <div class="kit-row">
+            <div class="kit-field">
+              <span class="kit-label">Ramp length (min)</span>
+              <input class="kit-input" type="number" id="w-ramp" min="1" value="20">
+            </div>
+            <div class="kit-field">
+              <span class="kit-label">Target</span>
+              <select class="kit-select" id="w-target"><option value="all">All lights</option></select>
+            </div>
+          </div>
+        </div>
+        <div class="kit-card" style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:700; font-size:13.5px;">Enable alarm</div>
+            <div style="font-size:11.5px; color:var(--ink-faint);" id="w-status">Off — keep this tab open while armed.</div>
+          </div>
+          <label class="kit-switch"><input type="checkbox" id="w-enable"><span class="slider"></span></label>
+        </div>
+        <div class="kit-msg" id="w-msg"></div>
+      </div>
+    `;
+    function refreshTargets(){
+      const sel = container.querySelector('#w-target');
+      const current = sel.value;
+      sel.innerHTML = '<option value="all">All lights</option>' +
+        LIFX.lightsCache.map(l => `<option value="id:${l.id}">${escapeHtml(l.label)}</option>`).join('');
+      sel.value = current || 'all';
+    }
+    refreshTargets();
+    LIFX.onChange(refreshTargets);
+    if (LIFX.token) LIFX.listLights().catch(()=>{});
+
+    let armTimer = null, animInterval = null;
+
+    container.querySelector('#w-enable').addEventListener('change', e => {
+      if (e.target.checked) arm(); else disarm();
+    });
+
+    function arm(){
+      const [hh,mm] = container.querySelector('#w-time').value.split(':').map(Number);
+      const now = new Date();
+      let target = new Date();
+      target.setHours(hh, mm, 0, 0);
+      if (target <= now) target.setDate(target.getDate()+1);
+      const msUntil = target - now;
+      armTimer = setTimeout(runRamp, msUntil);
+      container.querySelector('#w-status').textContent = 'Armed for ' + target.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) + '. Keep this tab open.';
+      setMsg('Alarm armed', 'ok');
+    }
+    function disarm(){
+      if (armTimer) clearTimeout(armTimer);
+      if (animInterval) clearInterval(animInterval);
+      container.querySelector('#w-status').textContent = 'Off — keep this tab open while armed.';
+      setMsg('Alarm disabled', '');
+    }
+    async function runRamp(){
+      const rampMin = parseFloat(container.querySelector('#w-ramp').value) || 20;
+      const selector = container.querySelector('#w-target').value;
+      const totalMs = rampMin * 60000;
+      const stepMs = 2000;
+      const steps = Math.max(1, Math.round(totalMs/stepMs));
+      let step = 0;
+      await LIFX.setState(selector, { power:'on', brightness:0.01, color:'kelvin:2000', duration:1 }).catch(()=>{});
+      animInterval = setInterval(async () => {
+        step++;
+        const t = step/steps;
+        const brightness = Math.min(1, t);
+        const kelvin = Math.round(2000 + t*3000);
+        try{ await LIFX.setState(selector, { brightness, color:'kelvin:'+kelvin, duration: stepMs/1000 }); }catch(e){}
+        if (step >= steps){
+          clearInterval(animInterval);
+          toast('Wake ramp complete');
+          container.querySelector('#w-enable').checked = false;
+          container.querySelector('#w-status').textContent = 'Off — keep this tab open while armed.';
+        }
+      }, stepMs);
+    }
+    function setMsg(t, cls){
+      const m = container.querySelector('#w-msg');
+      m.textContent = t; m.className = 'kit-msg' + (cls?' '+cls:'');
+    }
+  }
+});
+</script>
+
+<!-- ==================== APP: SUN EMULATOR ==================== -->
+<script>
+registerApp({
+  id: 'sun', name: 'Sun Emulator', glyph: 'sun', icon: ICONS.sun,
+  defaultSize: { w: 460, h: 620 },
+  mount(container){
+    container.innerHTML = `
+      <div class="app-scroll">
+        <div class="kit-card" style="padding:0; overflow:hidden;">
+          <div id="su-horizon" style="position:relative; height:110px; background:linear-gradient(180deg,#2b2350 0%,#8a4a6b 45%,#e8794f 72%,#f7c94c 100%); transition:background 0.4s ease;">
+            <div id="su-sun-dot" style="position:absolute; left:50%; width:34px; height:34px; border-radius:50%; background:#fff6df; box-shadow:0 0 24px 6px rgba(255,230,170,0.55); transform:translate(-50%,0); bottom:-40px; transition:bottom 0.4s ease, opacity 0.4s ease;"></div>
+            <div style="position:absolute; left:0; right:0; bottom:0; height:22%; background:#1c140d; opacity:0.5;"></div>
+          </div>
+        </div>
+
+        <div class="kit-card">
+          <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button class="kit-btn primary" id="su-mode-rise" style="flex:1;">Sunrise</button>
+            <button class="kit-btn" id="su-mode-set" style="flex:1;">Sunset</button>
+          </div>
+          <span class="kit-label">Target lights</span>
+          <select class="kit-select" id="su-target" style="margin-bottom:10px;"><option value="all">All lights</option></select>
+          <div class="kit-row">
+            <div class="kit-field">
+              <span class="kit-label">Duration (min)</span>
+              <input class="kit-input" type="number" id="su-duration" min="1" value="20">
+            </div>
+            <div class="kit-field">
+              <span class="kit-label">Start brightness %</span>
+              <input class="kit-input" type="number" id="su-start-b" min="1" max="100" value="1">
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; margin: 4px 0 6px;">
+            <label class="kit-switch"><input type="checkbox" id="su-shift" checked><span class="slider"></span></label>
+            <span style="font-size:12.5px; color:var(--ink-dim);">Shift color temperature with brightness</span>
+          </div>
+        </div>
+
+        <div class="kit-card">
+          <span class="kit-label">Trigger</span>
+          <div style="display:flex; gap:8px; margin-bottom:10px;">
+            <button class="kit-btn small primary" id="su-trig-fixed">Fixed time</button>
+            <button class="kit-btn small" id="su-trig-sunrise">At sunrise</button>
+            <button class="kit-btn small" id="su-trig-sunset">At sunset</button>
+          </div>
+          <div id="su-trig-fixed-wrap">
+            <span class="kit-label">Time</span>
+            <input class="kit-input" type="time" id="su-fixed-time" value="07:00">
+          </div>
+          <div id="su-trig-offset-wrap" style="display:none;">
+            <div class="kit-row">
+              <div class="kit-field">
+                <span class="kit-label">Offset</span>
+                <select class="kit-select" id="su-offset-dir"><option value="before">Before</option><option value="after">After</option></select>
+              </div>
+              <div class="kit-field">
+                <span class="kit-label">Minutes</span>
+                <input class="kit-input" type="number" id="su-offset-min" min="0" value="0">
+              </div>
+            </div>
+            <div class="helper" style="font-size:11.5px; color:var(--ink-faint);" id="su-geo-helper">Using approximate location — allow browser geolocation for accuracy.</div>
+          </div>
+        </div>
+
+        <div class="kit-card" id="su-summary-card">
+          <span class="kit-label">Summary</span>
+          <div style="font-size:12.5px; color:var(--ink-dim); line-height:1.5;" id="su-summary">—</div>
+          <div class="progress-track" style="height:7px; border-radius:4px; background:rgba(30,40,60,0.1); overflow:hidden; margin-top:10px; display:none;" id="su-progress-track">
+            <div style="height:100%; background:linear-gradient(90deg,#e8794f,#f7c94c); width:0%; transition:width 0.3s linear;" id="su-progress-fill"></div>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px;">
+          <button class="kit-btn primary" id="su-run" style="flex:1;">Run now</button>
+          <button class="kit-btn" id="su-schedule" style="flex:1;">Schedule</button>
+          <button class="kit-btn danger" id="su-stop">Stop</button>
+        </div>
+        <div class="kit-msg" id="su-msg"></div>
+      </div>
+    `;
+
+    const state = { mode:'sunrise', trigger:'fixed', coords:null, animTimer:null, scheduleTimer:null };
+
+    if (navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(pos => {
+        state.coords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        container.querySelector('#su-geo-helper').textContent = 'Using your device location.';
+        updateSummary();
+      }, () => {
+        container.querySelector('#su-geo-helper').textContent = 'Location unavailable — sunrise/sunset-relative timing needs it.';
+      }, { timeout: 6000 });
+    }
+
+    function refreshTargets(){
+      const sel = container.querySelector('#su-target');
+      const current = sel.value;
+      sel.innerHTML = '<option value="all">All lights</option>' +
+        LIFX.lightsCache.map(l => `<option value="id:${l.id}">${escapeHtml(l.label)}</option>`).join('');
+      sel.value = current || 'all';
+    }
+    refreshTargets();
+    LIFX.onChange(refreshTargets);
+    if (LIFX.token) LIFX.listLights().catch(()=>{});
+
+    function setMode(m){
+      state.mode = m;
+      container.querySelector('#su-mode-rise').className = 'kit-btn' + (m==='sunrise' ? ' primary' : '') ;
+      container.querySelector('#su-mode-set').className = 'kit-btn' + (m==='sunset' ? ' primary' : '');
+      updateSummary();
+    }
+    container.querySelector('#su-mode-rise').addEventListener('click', () => setMode('sunrise'));
+    container.querySelector('#su-mode-set').addEventListener('click', () => setMode('sunset'));
+
+    function setTrigger(t){
+      state.trigger = t;
+      container.querySelector('#su-trig-fixed').className = 'kit-btn small' + (t==='fixed' ? ' primary' : '');
+      container.querySelector('#su-trig-sunrise').className = 'kit-btn small' + (t==='sunrise' ? ' primary' : '');
+      container.querySelector('#su-trig-sunset').className = 'kit-btn small' + (t==='sunset' ? ' primary' : '');
+      container.querySelector('#su-trig-fixed-wrap').style.display = t === 'fixed' ? 'block' : 'none';
+      container.querySelector('#su-trig-offset-wrap').style.display = t === 'fixed' ? 'none' : 'block';
+      updateSummary();
+    }
+    container.querySelector('#su-trig-fixed').addEventListener('click', () => setTrigger('fixed'));
+    container.querySelector('#su-trig-sunrise').addEventListener('click', () => setTrigger('sunrise'));
+    container.querySelector('#su-trig-sunset').addEventListener('click', () => setTrigger('sunset'));
+
+    ['su-duration','su-start-b','su-shift','su-fixed-time','su-offset-dir','su-offset-min'].forEach(id => {
+      container.querySelector('#'+id).addEventListener('input', updateSummary);
+      container.querySelector('#'+id).addEventListener('change', updateSummary);
+    });
+
+    function getSunTimes(date, lat, lon){
+      function toRad(d){ return d*Math.PI/180; } function toDeg(r){ return r*180/Math.PI; }
+      const zenith = 90.833;
+      const N = Math.floor((date - new Date(date.getFullYear(),0,0)) / 86400000);
+      function calc(isSunrise){
+        const lngHour = lon/15;
+        const t = N + ((isSunrise?6:18) - lngHour)/24;
+        const M = (0.9856*t) - 3.289;
+        let L = M + (1.916*Math.sin(toRad(M))) + (0.020*Math.sin(2*toRad(M))) + 282.634;
+        L = (L+360)%360;
+        let RA = toDeg(Math.atan(0.91764*Math.tan(toRad(L))));
+        RA = (RA+360)%360;
+        const Lq = Math.floor(L/90)*90, RAq = Math.floor(RA/90)*90;
+        RA = (RA + (Lq-RAq))/15;
+        const sinDec = 0.39782*Math.sin(toRad(L));
+        const cosDec = Math.cos(Math.asin(sinDec));
+        const cosH = (Math.cos(toRad(zenith)) - (sinDec*Math.sin(toRad(lat)))) / (cosDec*Math.cos(toRad(lat)));
+        if (cosH > 1 || cosH < -1) return null;
+        let H = isSunrise ? 360 - toDeg(Math.acos(cosH)) : toDeg(Math.acos(cosH));
+        H = H/15;
+        const T = H + RA - (0.06571*t) - 6.622;
+        return (T - lngHour + 24) % 24;
+      }
+      function utToLocal(ut){
+        if (ut===null) return null;
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(),0,0,0));
+        d.setUTCMinutes(d.getUTCMinutes() + ut*60);
+        return d;
+      }
+      return { sunrise: utToLocal(calc(true)), sunset: utToLocal(calc(false)) };
+    }
+
+    function computeTriggerTime(){
+      const now = new Date();
+      if (state.trigger === 'fixed'){
+        const [hh,mm] = container.querySelector('#su-fixed-time').value.split(':').map(Number);
+        const t = new Date(); t.setHours(hh,mm||0,0,0);
+        if (t < now) t.setDate(t.getDate()+1);
+        return t;
+      }
+      if (!state.coords) return null;
+      const dir = container.querySelector('#su-offset-dir').value;
+      const mins = parseInt(container.querySelector('#su-offset-min').value,10) || 0;
+      let sun = getSunTimes(now, state.coords.lat, state.coords.lon);
+      let anchor = state.trigger === 'sunrise' ? sun.sunrise : sun.sunset;
+      if (!anchor) return null;
+      let t = new Date(anchor.getTime() + (dir==='before'?-mins:mins)*60000);
+      if (t < now){
+        const tmr = new Date(now.getTime()+86400000);
+        sun = getSunTimes(tmr, state.coords.lat, state.coords.lon);
+        anchor = state.trigger === 'sunrise' ? sun.sunrise : sun.sunset;
+        if (!anchor) return null;
+        t = new Date(anchor.getTime() + (dir==='before'?-mins:mins)*60000);
+      }
+      return t;
+    }
+    function fmtTime(d){ return d ? d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : 'unknown'; }
+
+    function targetLabel(selector){
+      if (selector === 'all') return 'all lights';
+      const id = selector.replace('id:','');
+      const l = LIFX.lightsCache.find(x => x.id === id);
+      return l ? l.label : selector;
+    }
+
+    function updateSummary(){
+      const trigger = computeTriggerTime();
+      const dur = container.querySelector('#su-duration').value || '0';
+      const selector = container.querySelector('#su-target').value;
+      const lines = [];
+      lines.push(`<b>${state.mode === 'sunrise' ? 'Sunrise' : 'Sunset'}</b> over <b>${dur} min</b> for <b>${escapeHtml(targetLabel(selector))}</b>.`);
+      lines.push('Trigger time: <b>' + fmtTime(trigger) + '</b>' + (state.trigger !== 'fixed' ? ` (${state.trigger} ${container.querySelector('#su-offset-dir').value} ${container.querySelector('#su-offset-min').value||0} min)` : '') + '.');
+      container.querySelector('#su-summary').innerHTML = lines.join('<br>');
+    }
+    updateSummary();
+    setMode('sunrise'); setTrigger('fixed');
+
+    function paintHorizon(t, mode){
+      const horizon = container.querySelector('#su-horizon');
+      const dot = container.querySelector('#su-sun-dot');
+      const p = mode === 'sunrise' ? t : 1 - t;
+      const stops = [
+        [0,'#2b2350'],[0.45,'#8a4a6b'],[0.72,'#e8794f'],[1,'#f7c94c']
+      ];
+      const bg = `linear-gradient(180deg, ${interpGradient(stops, 1-p)}, ${interpGradient(stops, Math.max(0,1-p-0.3))} 45%, ${interpGradient(stops, Math.min(1,1-p+0.3))} 72%, ${interpGradient(stops, p)} 100%)`;
+      horizon.style.background = bg;
+      const bottomPx = -10 + p * 100;
+      dot.style.bottom = bottomPx + 'px';
+      dot.style.opacity = String(Math.min(1, p*1.4));
+    }
+    function interpGradient(stops, t){
+      t = Math.max(0, Math.min(1, t));
+      for (let i=0;i<stops.length-1;i++){
+        if (t >= stops[i][0] && t <= stops[i+1][0]){
+          const localT = (t - stops[i][0]) / (stops[i+1][0]-stops[i][0] || 1);
+          return lerpColor(stops[i][1], stops[i+1][1], localT);
+        }
+      }
+      return stops[stops.length-1][1];
+    }
+    function lerpColor(a,b,t){
+      const ca = hexToRgb(a), cb = hexToRgb(b);
+      const r = Math.round(ca[0]+(cb[0]-ca[0])*t);
+      const g = Math.round(ca[1]+(cb[1]-ca[1])*t);
+      const bl = Math.round(ca[2]+(cb[2]-ca[2])*t);
+      return `rgb(${r},${g},${bl})`;
+    }
+    function hexToRgb(h){ return [parseInt(h.substr(1,2),16), parseInt(h.substr(3,2),16), parseInt(h.substr(5,2),16)]; }
+
+    function lerp(a,b,t){ return a + (b-a)*t; }
+    const COOL_NEUTRAL = 3500;
+
+    function buildKeyframes(){
+      const startPct = parseInt(container.querySelector('#su-start-b').value,10) || 1;
+      const endPct = state.mode === 'sunrise' ? 100 : 1;
+      const shift = container.querySelector('#su-shift').checked;
+      const warmest = 2000;
+      let startK, endK;
+      if (state.mode === 'sunrise'){ startK = shift ? warmest : COOL_NEUTRAL; endK = COOL_NEUTRAL; }
+      else { startK = COOL_NEUTRAL; endK = shift ? warmest : COOL_NEUTRAL; }
+      return { startB: startPct/100, endB: endPct/100, startK, endK };
+    }
+
+    function runAnimation(){
+      const selector = container.querySelector('#su-target').value;
+      const durMin = parseFloat(container.querySelector('#su-duration').value) || 1;
+      const totalMs = durMin * 60000;
+      const stepMs = 1000;
+      const steps = Math.max(1, Math.round(totalMs/stepMs));
+      const kf = buildKeyframes();
+
+      LIFX.setState(selector, { power:'on', brightness:kf.startB, color:'kelvin:'+Math.round(kf.startK), duration:1 }).catch(()=>{});
+
+      container.querySelector('#su-progress-track').style.display = 'block';
+      let step = 0;
+      function tick(){
+        step++;
+        const t = step/steps;
+        const pct = Math.min(100, Math.round(t*100));
+        container.querySelector('#su-progress-fill').style.width = pct + '%';
+        paintHorizon(t, state.mode);
+        const brightness = lerp(kf.startB, kf.endB, t);
+        const kelvin = lerp(kf.startK, kf.endK, t);
+        LIFX.setState(selector, { brightness, color:'kelvin:'+Math.round(kelvin), duration: stepMs/1000 }).catch(()=>{});
+        if (step >= steps){
+          clearInterval(state.animTimer);
+          state.animTimer = null;
+          if (state.mode === 'sunset') LIFX.setState(selector, { power:'off', duration:1 }).catch(()=>{});
+          setMsg(state.mode==='sunrise' ? 'Sunrise complete.' : 'Sunset complete.', 'ok');
+        }
+      }
+      tick();
+      state.animTimer = setInterval(tick, stepMs);
+    }
+
+    container.querySelector('#su-run').addEventListener('click', () => {
+      if (state.scheduleTimer){ clearTimeout(state.scheduleTimer); state.scheduleTimer = null; }
+      setMsg('Running…');
+      runAnimation();
+    });
+    container.querySelector('#su-schedule').addEventListener('click', () => {
+      const trigger = computeTriggerTime();
+      if (!trigger){ setMsg('Could not determine trigger time — check location.', 'err'); return; }
+      const msUntil = trigger.getTime() - Date.now();
+      if (state.scheduleTimer) clearTimeout(state.scheduleTimer);
+      state.scheduleTimer = setTimeout(runAnimation, msUntil);
+      setMsg('Armed — will start at ' + fmtTime(trigger) + '. Keep this tab open.', 'ok');
+    });
+    container.querySelector('#su-stop').addEventListener('click', () => {
+      if (state.animTimer){ clearInterval(state.animTimer); state.animTimer = null; }
+      if (state.scheduleTimer){ clearTimeout(state.scheduleTimer); state.scheduleTimer = null; }
+      setMsg('Stopped.', '');
+    });
+
+    function setMsg(t, cls){
+      const m = container.querySelector('#su-msg');
+      m.textContent = t; m.className = 'kit-msg' + (cls?' '+cls:'');
+    }
+  }
+});
+</script>
+
+<!-- ==================== APP: PANEL ==================== -->
+<script>
+registerApp({
+  id: 'panel', name: 'Panel', glyph: 'panel', icon: ICONS.panel,
+  defaultSize: { w: 640, h: 620 },
+  mount(container){
+    container.innerHTML = `
+      <div class="app-scroll">
+        <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+          <button class="kit-btn small primary" id="pn-all-on">All on</button>
+          <button class="kit-btn small" id="pn-all-off">All off</button>
+          <button class="kit-btn small" id="pn-refresh">Refresh</button>
+          <div style="flex:1;"></div>
+          <div style="display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--ink-dim);">
+            Fade
+            <input type="number" id="pn-duration" value="1" min="0" step="0.5" style="width:48px; padding:5px 6px; border-radius:8px; border:1px solid rgba(30,40,60,0.14); font-family:inherit; font-size:12px;">
+            s
+          </div>
+        </div>
+        <div id="pn-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr)); gap:12px;"></div>
+        <div class="kit-msg" id="pn-msg"></div>
+      </div>
+    `;
+
+    async function load(){
+      if (!LIFX.token){ renderEmpty('Connect your LIFX account in Settings to see your lights here.'); return; }
+      try{
+        setMsg('Loading…');
+        await LIFX.listLights();
+        render();
+        setMsg(LIFX.lightsCache.length + ' light(s) loaded', 'ok');
+      }catch(e){ setMsg(e.message, 'err'); renderEmpty(e.message); }
+    }
+    load();
+    LIFX.onChange(() => { if (LIFX.lightsCache.length) render(); });
+
+    function renderEmpty(msg){
+      container.querySelector('#pn-grid').innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="#8991a0" stroke-width="1.4"/></svg>
+        <div class="et">No lights to show</div>
+        <div class="es">${escapeHtml(msg)}</div>
+      </div>`;
+    }
+
+    function cardGlow(l){
+      if (l.power !== 'on' || !l.color) return 'rgba(0,0,0,0)';
+      const { hue=0, saturation=0, kelvin=3500 } = l.color;
+      if (saturation < 0.08){
+        const t = Math.max(0, Math.min(1, (kelvin-2000)/7000));
+        return lerpColorHex('#ffb066', '#bcd9ff', t);
+      }
+      return `hsl(${hue}, ${Math.round(saturation*100)}%, 55%)`;
+    }
+    function lerpColorHex(a,b,t){
+      const ca=[parseInt(a.substr(1,2),16),parseInt(a.substr(3,2),16),parseInt(a.substr(5,2),16)];
+      const cb=[parseInt(b.substr(1,2),16),parseInt(b.substr(3,2),16),parseInt(b.substr(5,2),16)];
+      const r=Math.round(ca[0]+(cb[0]-ca[0])*t), g=Math.round(ca[1]+(cb[1]-ca[1])*t), bl=Math.round(ca[2]+(cb[2]-ca[2])*t);
+      return `rgb(${r},${g},${bl})`;
+    }
+
+    function rgbToHex(l){
+      // best-effort current color as hex, for the <input type=color> default
+      if (!l.color) return '#ffffff';
+      const { hue=0, saturation=0, brightness=1 } = l.color;
+      if (saturation < 0.02) return '#ffffff';
+      return hsbToHex(hue, saturation, Math.max(0.35, brightness));
+    }
+    function hsbToHex(h,s,v){
+      const c = v*s, x = c*(1-Math.abs((h/60)%2-1)), m = v-c;
+      let r,g,b;
+      if (h<60){[r,g,b]=[c,x,0];} else if (h<120){[r,g,b]=[x,c,0];} else if (h<180){[r,g,b]=[0,c,x];}
+      else if (h<240){[r,g,b]=[0,x,c];} else if (h<300){[r,g,b]=[x,0,c];} else {[r,g,b]=[c,0,x];}
+      const toHex = n => Math.round((n+m)*255).toString(16).padStart(2,'0');
+      return '#'+toHex(r)+toHex(g)+toHex(b);
+    }
+
+    function render(){
+      const grid = container.querySelector('#pn-grid');
+      grid.innerHTML = LIFX.lightsCache.map((l, idx) => {
+        const caps = (l.product && l.product.capabilities) || {};
+        const hasColor = !!caps.has_color;
+        const hasVariableTemp = caps.has_variable_color_temp !== false; // most LIFX bulbs support this; default true if unknown
+        const minK = (l.product && l.product.capabilities && l.product.capabilities.min_kelvin) || 1500;
+        const maxK = (l.product && l.product.capabilities && l.product.capabilities.max_kelvin) || 9000;
+        const curK = (l.color && l.color.kelvin) || 3500;
+        return `
+        <div class="kit-card" style="position:relative; overflow:hidden; padding-top:16px;">
+          <div style="position:absolute; top:0; left:0; right:0; height:3px; background:${cardGlow(l)};"></div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div>
+              <div style="font-weight:700; font-size:13.5px;">${escapeHtml(l.label)}</div>
+              <div style="font-size:11px; color:var(--ink-faint);">${l.power==='on' ? Math.round((l.brightness||0)*100)+'%' : 'off'}</div>
+            </div>
+            <label class="kit-switch">
+              <input type="checkbox" data-idx="${idx}" data-action="toggle" ${l.power==='on' ? 'checked':''}>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <span class="kit-label" style="margin-bottom:3px;">Brightness</span>
+          <input type="range" min="1" max="100" value="${Math.round((l.brightness||0)*100)}" data-idx="${idx}" data-action="brightness" style="width:100%; margin-bottom:10px;">
+
+          ${hasVariableTemp ? `
+          <span class="kit-label" style="margin-bottom:3px;">Kelvin</span>
+          <input type="range" min="${minK}" max="${maxK}" value="${curK}" data-idx="${idx}" data-action="kelvin" style="width:100%;">
+          <div style="display:flex; justify-content:space-between; font-size:10.5px; color:var(--ink-faint); margin-bottom:10px;">
+            <span>Warm ${minK}K</span><span data-readout="kelvin-${idx}">${curK}K</span><span>Cool ${maxK}K</span>
+          </div>` : ''}
+
+          ${hasColor ? `
+          <span class="kit-label" style="margin-bottom:3px;">Color</span>
+          <input type="color" value="${rgbToHex(l)}" data-idx="${idx}" data-action="picker" style="width:100%; height:36px; border:none; border-radius:9px; cursor:pointer; background:none; padding:0;">
+          ` : `<div style="font-size:11px; color:var(--ink-faint); margin-top:2px;">White-only bulb — no color support.</div>`}
+        </div>
+      `; }).join('');
+    }
+
+    function getDuration(){ return parseFloat(container.querySelector('#pn-duration').value) || 0; }
+
+    // live readout while dragging (no API call until release)
+    container.querySelector('#pn-grid').addEventListener('input', e => {
+      const el = e.target;
+      if (el.dataset.action === 'kelvin'){
+        const readout = container.querySelector(`[data-readout="kelvin-${el.dataset.idx}"]`);
+        if (readout) readout.textContent = el.value + 'K';
+      }
+    });
+
+    container.querySelector('#pn-grid').addEventListener('change', async e => {
+      const el = e.target;
+      const action = el.dataset.action;
+      if (!action) return;
+      const idx = el.dataset.idx;
+      const light = LIFX.lightsCache[idx];
+      const selector = 'id:' + light.id;
+      const duration = getDuration();
+      try{
+        if (action === 'toggle'){
+          const newPower = el.checked ? 'on' : 'off';
+          await LIFX.setState(selector, { power:newPower, duration });
+          light.power = newPower;
+          setMsg(light.label + ' turned ' + newPower, 'ok');
+        } else if (action === 'brightness'){
+          const val = parseInt(el.value,10)/100;
+          await LIFX.setState(selector, { brightness: val, power:'on', duration });
+          light.brightness = val; light.power = 'on';
+          setMsg(light.label + ' brightness set to ' + el.value + '%', 'ok');
+        } else if (action === 'kelvin'){
+          const k = parseInt(el.value,10);
+          await LIFX.setState(selector, { color: 'kelvin:'+k, power:'on', duration });
+          if (light.color) light.color.kelvin = k;
+          light.power = 'on';
+          setMsg(light.label + ' set to ' + k + 'K', 'ok');
+        } else if (action === 'picker'){
+          const hex = el.value;
+          const { h, s, v } = hexToHsb(hex);
+          await LIFX.setState(selector, {
+            color: `hue:${h.toFixed(1)} saturation:${s.toFixed(2)} brightness:${v.toFixed(2)}`,
+            power: 'on', duration
+          });
+          setMsg(light.label + ' color updated', 'ok');
+          await LIFX.listLights(); render();
+        }
+      }catch(err){ setMsg(err.message, 'err'); }
+    });
+
+    container.querySelector('#pn-all-on').addEventListener('click', async () => {
+      try{ await LIFX.setState('all', { power:'on', duration:getDuration() }); setMsg('All lights on', 'ok'); await LIFX.listLights(); render(); }
+      catch(e){ setMsg(e.message, 'err'); }
+    });
+    container.querySelector('#pn-all-off').addEventListener('click', async () => {
+      try{ await LIFX.setState('all', { power:'off', duration:getDuration() }); setMsg('All lights off', 'ok'); await LIFX.listLights(); render(); }
+      catch(e){ setMsg(e.message, 'err'); }
+    });
+    container.querySelector('#pn-refresh').addEventListener('click', load);
+
+    function setMsg(t, cls){
+      const m = container.querySelector('#pn-msg');
+      m.textContent = t; m.className = 'kit-msg' + (cls?' '+cls:'');
+    }
+  }
+});
+</script>
+
+<script>
+/* =========================================================================
+   Boot
+   ========================================================================= */
+buildSpringboardAndDock();
+if (LIFX.token){
+  LIFX.listLights().catch(()=>{});
+}
+</script>
+
+</body>
+</html>
