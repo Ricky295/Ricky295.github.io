@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sticky Timer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root{
+    --board: #C9A876;
+    --board-dark: #B8945F;
+    --yellow: #FDE98F;
+    --yellow-dark: #F4D964;
+    --ink: #2B2506;
+    --alert: #7A1F1F;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+    font-family: 'Inter', sans-serif;
+  }
+
+  body{
+    background:
+      radial-gradient(circle at 20% 20%, rgba(255,255,255,0.05), transparent 40%),
+      radial-gradient(circle at 80% 70%, rgba(0,0,0,0.06), transparent 45%),
+      repeating-linear-gradient(0deg, var(--board) 0px, var(--board) 2px, var(--board-dark) 2px, var(--board-dark) 3px),
+      var(--board);
+    background-blend-mode: normal;
+    position: relative;
+  }
+
+  /* cork texture speckle */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background-image: radial-gradient(rgba(0,0,0,0.08) 1px, transparent 1px);
+    background-size: 6px 6px;
+    opacity: 0.35;
+    pointer-events:none;
+  }
+
+  #toolbar{
+    position: fixed;
+    top: 18px; left: 18px;
+    z-index: 1000;
+    background: rgba(30,24,10,0.88);
+    backdrop-filter: blur(6px);
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 220px;
+  }
+
+  #toolbar h1{
+    margin: 0 0 2px 0;
+    font-family: 'Kalam', cursive;
+    font-size: 20px;
+    color: var(--yellow);
+    letter-spacing: 0.5px;
+  }
+
+  #toolbar .sub{
+    margin: -8px 0 4px 0;
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+  }
+
+  .preset-row{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  button.chip{
+    background: var(--yellow);
+    color: var(--ink);
+    border: none;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s ease, background 0.15s ease;
+  }
+  button.chip:hover{ background: var(--yellow-dark); transform: translateY(-1px); }
+  button.chip:active{ transform: translateY(0); }
+
+  .divider{
+    height: 1px;
+    background: rgba(255,255,255,0.12);
+    margin: 2px 0;
+  }
+
+  .action-btn{
+    background: transparent;
+    color: rgba(255,255,255,0.85);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .action-btn:hover{ background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.4); }
+
+  input.field{
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 8px;
+    color: white;
+    padding: 6px 8px;
+    font-size: 12px;
+    width: 100%;
+    font-family: 'Inter', sans-serif;
+  }
+  input.field::placeholder{ color: rgba(255,255,255,0.4); }
+
+  #board{
+    position: absolute;
+    inset: 0;
+  }
+
+  .note{
+    position: absolute;
+    width: 230px;
+    background: var(--yellow);
+    border-radius: 3px 3px 8px 8px;
+    box-shadow:
+      3px 6px 12px rgba(0,0,0,0.28),
+      0 1px 0 rgba(255,255,255,0.4) inset;
+    user-select: none;
+    transform: rotate(var(--tilt, -1.5deg));
+    transition: box-shadow 0.15s ease;
+  }
+  .note.dragging{
+    box-shadow: 6px 12px 22px rgba(0,0,0,0.4);
+    z-index: 500;
+    transition: none;
+  }
+
+  .pin{
+    position: absolute;
+    top: -7px; left: 50%;
+    transform: translateX(-50%);
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #e2564a, #a3241b 70%);
+    box-shadow: 0 2px 3px rgba(0,0,0,0.4);
+    pointer-events: none;
+  }
+
+  .note-top{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 10px 0 12px;
+    cursor: grab;
+  }
+  .note.dragging .note-top{ cursor: grabbing; }
+
+  .note-label{
+    font-family: 'Kalam', cursive;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 175px;
+  }
+
+  .close-btn{
+    background: none;
+    border: none;
+    color: var(--ink);
+    font-size: 14px;
+    cursor: pointer;
+    opacity: 0.6;
+    line-height: 1;
+    padding: 2px 4px;
+  }
+  .close-btn:hover{ opacity: 1; }
+
+  .note-time{
+    text-align: center;
+    font-family: 'Kalam', cursive;
+    font-weight: 700;
+    font-size: 34px;
+    color: var(--ink);
+    padding: 10px 0 6px 0;
+    letter-spacing: 1px;
+  }
+  .note-time.done{ color: var(--alert); }
+
+  .ctrl-btn{
+    background: var(--yellow-dark);
+    border: 1px solid rgba(0,0,0,0.15);
+    border-radius: 6px;
+    width: 26px; height: 26px;
+    font-size: 12px;
+    color: var(--ink);
+    cursor: pointer;
+    padding: 0;
+  }
+  .ctrl-btn:hover{ filter: brightness(0.95); }
+
+  .note-controls{
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    padding-bottom: 14px;
+  }
+
+  #empty-hint{
+    position: fixed;
+    bottom: 24px; right: 28px;
+    color: rgba(0,0,0,0.35);
+    font-family: 'Kalam', cursive;
+    font-size: 15px;
+    pointer-events: none;
+  }
+
+  .note.popped{
+    opacity: 0.4;
+  }
+
+  .note.popped .note-top,
+  .note.popped .note-controls{
+    pointer-events: none;
+  }
+
+  /* floating "always on top" fallback panel, used when no real PiP API works */
+  .float-pip{
+    position: fixed;
+    top: 20px; right: 20px;
+    width: 220px;
+    background: var(--yellow);
+    border-radius: 3px 3px 8px 8px;
+    box-shadow: 3px 8px 20px rgba(0,0,0,0.35);
+    z-index: 99999;
+    font-family: 'Inter', sans-serif;
+    cursor: move;
+  }
+  .float-pip .fp-top{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px 0 10px;
+  }
+  .float-pip .fp-label{
+    font-family: 'Kalam', cursive;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+  }
+  .float-pip .fp-close{
+    background: none; border: none; cursor: pointer;
+    font-size: 13px; color: var(--ink); opacity: 0.6;
+  }
+  .float-pip .fp-time{
+    text-align: center;
+    font-family: 'Kalam', cursive;
+    font-weight: 700;
+    font-size: 30px;
+    color: var(--ink);
+    padding: 6px 0 10px 0;
+  }
+  .float-pip .fp-time.done{ color: var(--alert); }
+
+  /* styles used inside the PiP window body */
+  .pip-body{
+    margin: 0;
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--board);
+    font-family: 'Inter', sans-serif;
+  }
+  .pip-note{
+    width: 92%;
+    background: var(--yellow);
+    border-radius: 3px 3px 8px 8px;
+    box-shadow: 3px 6px 12px rgba(0,0,0,0.28);
+    text-align: center;
+    padding: 10px 8px 16px 8px;
+  }
+  .pip-label{
+    font-family: 'Kalam', cursive;
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .pip-time{
+    font-family: 'Kalam', cursive;
+    font-weight: 700;
+    font-size: 44px;
+    color: var(--ink);
+  }
+  .pip-time.done{ color: var(--alert); }
+  .pip-controls{
+    display: flex; justify-content: center; gap: 10px; margin-top: 10px;
+  }
+  .pip-controls button{
+    background: var(--yellow-dark);
+    border: 1px solid rgba(0,0,0,0.15);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <h1>📌 Sticky Timer</h1>
+  <div class="sub">Stack as many notes as you like</div>
+
+  <div class="preset-row" id="presetRow"></div>
+
+  <div class="divider"></div>
+
+  <input class="field" id="customMinutes" type="number" placeholder="Custom minutes" min="0" step="0.5">
+  <button class="action-btn" id="startCustom">Start custom timer</button>
+
+  <input class="field" id="endTime" type="time">
+  <button class="action-btn" id="startEndTime">Countdown to time</button>
+
+  <div class="divider"></div>
+
+  <button class="action-btn" id="startStopwatch">▶ New stopwatch</button>
+</div>
+
+<div id="board"></div>
+<div id="empty-hint">Drag notes anywhere on the board →</div>
+
+<script>
+const PRESETS = [1, 5, 10, 30, 60];
+const board = document.getElementById('board');
+const presetRow = document.getElementById('presetRow');
+let noteCount = 0;
+let zTop = 10;
+
+// notification permission
+if ('Notification' in window && Notification.permission === 'default') {
+  Notification.requestPermission();
+}
+
+const PIP_INTERACTIVE_SUPPORTED = 'documentPictureInPicture' in window;
+const PIP_VIDEO_SUPPORTED = document.createElement('video').requestPictureInPicture !== undefined;
+
+const ua = navigator.userAgent;
+const IS_SAFARI = /^((?!chrome|chromium|crios|edg|opr|vivaldi|firefox|fxios).)*safari/i.test(ua);
+
+if (IS_SAFARI) {
+  const warn = document.createElement('div');
+  warn.style.cssText = 'position:fixed;bottom:24px;left:18px;max-width:270px;background:rgba(122,31,31,0.92);color:rgba(255,255,255,0.92);font-size:12px;line-height:1.5;padding:10px 12px;border-radius:10px;z-index:1000;';
+  warn.innerHTML = '⚠️ <strong>Safari note:</strong> pop-out (both 📌 and 🖼) is unreliable in Safari due to browser limitations. For pop-out timers, use Chrome, Edge, or Vivaldi instead.';
+  document.body.appendChild(warn);
+} else if (!PIP_INTERACTIVE_SUPPORTED) {
+  const warn = document.createElement('div');
+  warn.style.cssText = 'position:fixed;bottom:24px;left:18px;max-width:260px;background:rgba(30,24,10,0.88);color:rgba(255,255,255,0.85);font-size:12px;padding:10px 12px;border-radius:10px;z-index:1000;';
+  warn.textContent = '📌 interactive pop-out needs Chrome or Edge on desktop. 🖼 universal pop-out still works here.';
+  document.body.appendChild(warn);
+}
+
+PRESETS.forEach(m => {
+  const b = document.createElement('button');
+  b.className = 'chip';
+  b.textContent = m + ' min';
+  b.onclick = () => spawnNote(`${m} min timer`, 'countdown', m * 60);
+  presetRow.appendChild(b);
+});
+
+document.getElementById('startCustom').onclick = () => {
+  const val = parseFloat(document.getElementById('customMinutes').value);
+  if (val > 0) spawnNote(`${roundClean(val)} min timer`, 'countdown', val * 60);
+};
+
+document.getElementById('startEndTime').onclick = () => {
+  const val = document.getElementById('endTime').value;
+  if (!val) return;
+  const [hh, mm] = val.split(':').map(Number);
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(hh, mm, 0, 0);
+  if (target <= now) target.setDate(target.getDate() + 1);
+  const seconds = (target - now) / 1000;
+  spawnNote(`Ends at ${val}`, 'countdown', seconds);
+};
+
+document.getElementById('startStopwatch').onclick = () => {
+  spawnNote('Stopwatch', 'stopwatch', 0);
+};
+
+function roundClean(n){
+  return Math.round(n * 10) / 10;
+}
+
+function formatSeconds(secs){
+  const neg = secs < 0;
+  let s = Math.abs(Math.round(secs));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  let text = h > 0
+    ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+    : `${m}:${String(sec).padStart(2,'0')}`;
+  return (neg ? '-' : '') + text;
+}
+
+function spawnNote(label, mode, totalSeconds){
+  noteCount++;
+  const cascade = (noteCount - 1) % 8;
+  const x = 260 + cascade * 26;
+  const y = 40 + cascade * 26;
+  const tilt = (Math.random() * 4 - 2).toFixed(2) + 'deg';
+
+  const note = document.createElement('div');
+  note.className = 'note';
+  note.style.left = x + 'px';
+  note.style.top = y + 'px';
+  note.style.setProperty('--tilt', tilt);
+  note.style.zIndex = ++zTop;
+
+  note.innerHTML = `
+    <div class="pin"></div>
+    <div class="note-top">
+      <div class="note-label">${escapeHtml(label)}</div>
+      <button class="close-btn">✕</button>
+    </div>
+    <div class="note-time">--:--</div>
+    <div class="note-controls">
+      <button class="ctrl-btn pause-btn">⏸</button>
+      <button class="ctrl-btn reset-btn">↺</button>
+      <button class="ctrl-btn pip-interactive-btn" title="Pop out (interactive, Chrome/Edge only)">📌</button>
+      <button class="ctrl-btn pip-video-btn" title="Pop out (universal, works everywhere)">🖼</button>
+    </div>
+  `;
+  board.appendChild(note);
+
+  const state = {
+    startTime: performance.now() / 1000,
+    elapsedBase: 0,
+    paused: false,
+    done: false
+  };
+
+  const timeEl = note.querySelector('.note-time');
+  const pauseBtn = note.querySelector('.pause-btn');
+  const resetBtn = note.querySelector('.reset-btn');
+  const closeBtn = note.querySelector('.close-btn');
+  const pipInteractiveBtn = note.querySelector('.pip-interactive-btn');
+  const pipVideoBtn = note.querySelector('.pip-video-btn');
+  if (IS_SAFARI){
+    pipInteractiveBtn.title = '⚠ Unreliable in Safari — try Chrome/Edge/Vivaldi';
+    pipVideoBtn.title = '⚠ Unreliable in Safari — try Chrome/Edge/Vivaldi';
+    pipInteractiveBtn.style.opacity = '0.55';
+    pipVideoBtn.style.opacity = '0.55';
+  }
+  const topBar = note.querySelector('.note-top');
+
+  // refs to elements inside the interactive PiP window, when open
+  let pipWin = null;
+  let pipTimeEl = null;
+  let pipPauseBtn = null;
+  let floatTimeEl = null;
+
+  // refs for the universal (video-based) PiP, when open
+  let videoPipActive = false;
+  let pipCanvas = null;
+  let pipCtx = null;
+  let pipVideoEl = null;
+  let pipVideoRafId = null;
+
+  let intervalId = setInterval(tick, 100);
+
+  function tick(){
+    let elapsed;
+    if (state.paused || state.done){
+      elapsed = state.elapsedBase;
+    } else {
+      elapsed = state.elapsedBase + (performance.now()/1000 - state.startTime);
+    }
+
+    let text, isDone = false;
+    if (mode === 'stopwatch'){
+      text = formatSeconds(elapsed);
+    } else {
+      const remaining = Math.max(0, totalSeconds - elapsed);
+      text = formatSeconds(remaining);
+      if (remaining <= 0 && !state.done && !state.paused){
+        state.done = true;
+        notifyDone(label);
+      }
+      isDone = state.done;
+    }
+
+    timeEl.textContent = text;
+    timeEl.classList.toggle('done', isDone);
+
+    if (pipTimeEl){
+      pipTimeEl.textContent = text;
+      pipTimeEl.classList.toggle('done', isDone);
+    }
+
+    if (floatTimeEl){
+      floatTimeEl.textContent = text;
+      floatTimeEl.classList.toggle('done', isDone);
+    }
+
+    if (videoPipActive && pipCtx){
+      drawVideoPipFrame(text, isDone);
+    }
+  }
+
+  function drawVideoPipFrame(text, isDone){
+    const w = pipCanvas.width, h = pipCanvas.height;
+    pipCtx.fillStyle = '#FDE98F';
+    pipCtx.fillRect(0, 0, w, h);
+    pipCtx.fillStyle = '#2B2506';
+    pipCtx.font = '600 20px Inter, sans-serif';
+    pipCtx.textAlign = 'center';
+    pipCtx.fillText(truncateForCanvas(label, 24), w / 2, 34, w - 20);
+    pipCtx.fillStyle = isDone ? '#7A1F1F' : '#2B2506';
+    pipCtx.font = '700 56px Inter, sans-serif';
+    pipCtx.fillText(text, w / 2, h / 2 + 24);
+  }
+
+  function truncateForCanvas(str, max){
+    return str.length > max ? str.slice(0, max - 1) + '…' : str;
+  }
+
+  function syncPauseButtons(){
+    const icon = state.paused ? '▶' : '⏸';
+    pauseBtn.textContent = icon;
+    if (pipPauseBtn) pipPauseBtn.textContent = icon;
+  }
+
+  function notifyDone(label){
+    if ('Notification' in window && Notification.permission === 'granted'){
+      new Notification('Sticky Timer', { body: `${label} has finished!` });
+    }
+    // gentle beep via WebAudio, no external asset needed
+    try{
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+      osc.start(); osc.stop(ctx.currentTime + 0.6);
+    } catch(e){}
+  }
+
+  function togglePause(){
+    if (state.done) return;
+    if (state.paused){
+      state.startTime = performance.now()/1000;
+      state.paused = false;
+    } else {
+      state.elapsedBase += performance.now()/1000 - state.startTime;
+      state.paused = true;
+    }
+    syncPauseButtons();
+  }
+
+  function doReset(){
+    state.startTime = performance.now()/1000;
+    state.elapsedBase = 0;
+    state.done = false;
+    state.paused = false;
+    syncPauseButtons();
+    timeEl.classList.remove('done');
+    if (pipTimeEl) pipTimeEl.classList.remove('done');
+    if (floatTimeEl) floatTimeEl.classList.remove('done');
+  }
+
+  pauseBtn.onclick = togglePause;
+  resetBtn.onclick = doReset;
+
+  closeBtn.onclick = () => {
+    clearInterval(intervalId);
+    if (pipWin) pipWin.close();
+    if (videoPipActive && document.pictureInPictureElement === pipVideoEl){
+      document.exitPictureInPicture().catch(() => {});
+    }
+    cleanupVideoPip();
+    note.remove();
+  };
+
+  pipInteractiveBtn.onclick = async () => {
+    if (!PIP_INTERACTIVE_SUPPORTED){
+      alert('Interactive pop-out needs Chrome or Edge on desktop. Try the 🖼 universal pop-out instead.');
+      return;
+    }
+    if (pipWin){
+      pipWin.focus();
+      return;
+    }
+    try{
+      pipWin = await documentPictureInPicture.requestWindow({ width: 240, height: 200 });
+    } catch(e){
+      alert('Could not open pop-out window.');
+      return;
+    }
+
+    // copy needed fonts/styles into the PiP document
+    [...document.styleSheets].forEach(sheet => {
+      try{
+        const css = [...sheet.cssRules].map(r => r.cssText).join('\n');
+        const styleEl = pipWin.document.createElement('style');
+        styleEl.textContent = css;
+        pipWin.document.head.appendChild(styleEl);
+      } catch(e){
+        // cross-origin stylesheet (e.g. Google Fonts) - link it instead
+        if (sheet.href){
+          const linkEl = pipWin.document.createElement('link');
+          linkEl.rel = 'stylesheet';
+          linkEl.href = sheet.href;
+          pipWin.document.head.appendChild(linkEl);
+        }
+      }
+    });
+
+    pipWin.document.body.className = 'pip-body';
+    pipWin.document.body.innerHTML = `
+      <div class="pip-note">
+        <div class="pip-label">${escapeHtml(label)}</div>
+        <div class="pip-time">${timeEl.textContent}</div>
+        <div class="pip-controls">
+          <button class="pip-pause">${state.paused ? '▶' : '⏸'}</button>
+          <button class="pip-reset">↺</button>
+        </div>
+      </div>
+    `;
+
+    pipTimeEl = pipWin.document.querySelector('.pip-time');
+    pipPauseBtn = pipWin.document.querySelector('.pip-pause');
+    pipTimeEl.classList.toggle('done', state.done);
+    pipWin.document.querySelector('.pip-pause').onclick = togglePause;
+    pipWin.document.querySelector('.pip-reset').onclick = doReset;
+
+    note.classList.add('popped');
+
+    pipWin.addEventListener('pagehide', () => {
+      pipWin = null;
+      pipTimeEl = null;
+      pipPauseBtn = null;
+      note.classList.remove('popped');
+    });
+  };
+
+  pipVideoBtn.onclick = async () => {
+    if (videoPipActive){
+      // already open in some mode - try to refocus real PiP if applicable
+      if (pipVideoEl && document.pictureInPictureEnabled){
+        try{ await pipVideoEl.requestPictureInPicture(); return; } catch(e){}
+      }
+      if (floatPipEl){ return; } // floating fallback already visible
+    }
+
+    const errors = [];
+
+    // ---- Attempt 1: canvas.captureStream() -> <video> -> requestPictureInPicture() ----
+    try{
+      if (!document.pictureInPictureEnabled) throw new Error('document.pictureInPictureEnabled is false');
+
+      pipCanvas = document.createElement('canvas');
+      pipCanvas.width = 320;
+      pipCanvas.height = 220;
+      pipCtx = pipCanvas.getContext('2d');
+      drawVideoPipFrame(timeEl.textContent, state.done);
+
+      if (typeof pipCanvas.captureStream !== 'function') throw new Error('captureStream unsupported');
+
+      pipVideoEl = document.createElement('video');
+      pipVideoEl.muted = true;
+      pipVideoEl.setAttribute('muted', '');
+      pipVideoEl.playsInline = true;
+      pipVideoEl.setAttribute('playsinline', '');
+      pipVideoEl.style.cssText = 'position:fixed;opacity:0;pointer-events:none;width:2px;height:2px;';
+      document.body.appendChild(pipVideoEl);
+
+      const stream = pipCanvas.captureStream(10); // 10fps is plenty for a clock
+      pipVideoEl.srcObject = stream;
+
+      await pipVideoEl.play();
+
+      if (pipVideoEl.requestPictureInPicture){
+        await pipVideoEl.requestPictureInPicture();
+      } else if (pipVideoEl.webkitSupportsPresentationMode && pipVideoEl.webkitSupportsPresentationMode('picture-in-picture')){
+        // older Safari fallback API
+        pipVideoEl.webkitSetPresentationMode('picture-in-picture');
+      } else {
+        throw new Error('no PiP entry point on video element');
+      }
+
+      videoPipActive = true;
+      note.classList.add('popped');
+      pipVideoEl.addEventListener('leavepictureinpicture', cleanupVideoPip, { once: true });
+      pipVideoEl.addEventListener('webkitpresentationmodechanged', () => {
+        if (pipVideoEl.webkitPresentationMode !== 'picture-in-picture') cleanupVideoPip();
+      });
+      return; // success, stop here
+    } catch(e){
+      errors.push('captureStream+video: ' + e.message);
+      cleanupVideoPip();
+    }
+
+    // ---- Attempt 2: MediaRecorder-derived stream as a workaround for flaky captureStream ----
+    try{
+      if (!document.pictureInPictureEnabled || typeof MediaRecorder === 'undefined') throw new Error('MediaRecorder path unavailable');
+
+      pipCanvas = document.createElement('canvas');
+      pipCanvas.width = 320;
+      pipCanvas.height = 220;
+      pipCtx = pipCanvas.getContext('2d');
+      drawVideoPipFrame(timeEl.textContent, state.done);
+
+      const stream = pipCanvas.captureStream(0); // manual frame pushes
+      const track = stream.getVideoTracks()[0];
+      if (track && typeof track.requestFrame === 'function'){
+        track.requestFrame();
+      }
+
+      pipVideoEl = document.createElement('video');
+      pipVideoEl.muted = true;
+      pipVideoEl.playsInline = true;
+      pipVideoEl.style.cssText = 'position:fixed;opacity:0;pointer-events:none;width:2px;height:2px;';
+      document.body.appendChild(pipVideoEl);
+      pipVideoEl.srcObject = stream;
+
+      await pipVideoEl.play();
+      await pipVideoEl.requestPictureInPicture();
+
+      videoPipActive = true;
+      note.classList.add('popped');
+      pipVideoEl.addEventListener('leavepictureinpicture', cleanupVideoPip, { once: true });
+      return;
+    } catch(e){
+      errors.push('MediaRecorder path: ' + e.message);
+      cleanupVideoPip();
+    }
+
+    // ---- Attempt 3: floating always-on-top in-page panel (works everywhere, no browser API needed) ----
+    try{
+      openFloatingFallback();
+      return;
+    } catch(e){
+      errors.push('floating fallback: ' + e.message);
+    }
+
+    console.warn('Sticky Timer pop-out failed:', errors.join(' | '));
+    alert(IS_SAFARI
+      ? "Pop-out doesn't work reliably in Safari. Try Chrome, Edge, or Vivaldi instead."
+      : "Pop-out isn't available in this browser. Try Chrome or Edge for the 📌 interactive mode.");
+  };
+
+  let floatPipEl = null;
+
+  function openFloatingFallback(){
+    floatPipEl = document.createElement('div');
+    floatPipEl.className = 'float-pip';
+    floatPipEl.innerHTML = `
+      <div class="fp-top">
+        <div class="fp-label">${escapeHtml(label)}</div>
+        <button class="fp-close">✕</button>
+      </div>
+      <div class="fp-time">${timeEl.textContent}</div>
+    `;
+    document.body.appendChild(floatPipEl);
+    videoPipActive = true;
+    note.classList.add('popped');
+
+    const fpTime = floatPipEl.querySelector('.fp-time');
+    floatTimeEl = fpTime;
+
+    floatPipEl.querySelector('.fp-close').onclick = (e) => {
+      e.stopPropagation();
+      cleanupVideoPip();
+    };
+
+    // draggable
+    let fdx = 0, fdy = 0, fdragging = false;
+    floatPipEl.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('fp-close')) return;
+      fdragging = true;
+      fdx = e.clientX - floatPipEl.offsetLeft;
+      fdy = e.clientY - floatPipEl.offsetTop;
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!fdragging) return;
+      floatPipEl.style.left = (e.clientX - fdx) + 'px';
+      floatPipEl.style.top = (e.clientY - fdy) + 'px';
+      floatPipEl.style.right = 'auto';
+    });
+    window.addEventListener('mouseup', () => { fdragging = false; });
+  }
+
+  function cleanupVideoPip(){
+    videoPipActive = false;
+    note.classList.remove('popped');
+    if (pipVideoEl){
+      pipVideoEl.pause();
+      if (pipVideoEl.srcObject){
+        pipVideoEl.srcObject.getTracks().forEach(t => t.stop());
+      }
+      pipVideoEl.remove();
+    }
+    if (floatPipEl){
+      floatPipEl.remove();
+      floatPipEl = null;
+    }
+    pipVideoEl = null;
+    pipCanvas = null;
+    pipCtx = null;
+    floatTimeEl = null;
+  }
+
+  // dragging
+  let dragging = false, dx = 0, dy = 0;
+  topBar.addEventListener('mousedown', (e) => {
+    if (e.target === closeBtn) return;
+    dragging = true;
+    note.classList.add('dragging');
+    note.style.zIndex = ++zTop;
+    dx = e.clientX - note.offsetLeft;
+    dy = e.clientY - note.offsetTop;
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    note.style.left = (e.clientX - dx) + 'px';
+    note.style.top = (e.clientY - dy) + 'px';
+  });
+  window.addEventListener('mouseup', () => {
+    if (dragging){
+      dragging = false;
+      note.classList.remove('dragging');
+    }
+  });
+
+  // touch support
+  topBar.addEventListener('touchstart', (e) => {
+    if (e.target === closeBtn) return;
+    const t = e.touches[0];
+    dragging = true;
+    note.classList.add('dragging');
+    note.style.zIndex = ++zTop;
+    dx = t.clientX - note.offsetLeft;
+    dy = t.clientY - note.offsetTop;
+  }, {passive: true});
+  window.addEventListener('touchmove', (e) => {
+    if (!dragging) return;
+    const t = e.touches[0];
+    note.style.left = (t.clientX - dx) + 'px';
+    note.style.top = (t.clientY - dy) + 'px';
+  }, {passive: true});
+  window.addEventListener('touchend', () => {
+    if (dragging){
+      dragging = false;
+      note.classList.remove('dragging');
+    }
+  });
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+</script>
+
+</body>
+</html>
