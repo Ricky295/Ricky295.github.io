@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sufufu</title>
-    <script src="duodokuapi.js"></script>
-    <script src="duodokusolver.js"></script>
-    <script src="duodokudifficulties.js"></script>
+    <script type="module" src="duodokutecniques-bridge.js"></script>
     <link rel="stylesheet" href="googletitle.css">
     <style>
         * {
@@ -202,7 +200,7 @@
         .difficulty-medium { color: #f7971e; }
         .difficulty-hard { color: #ee0979; }
         .difficulty-expert { color: #c31432; }
-        .difficulty-insane { color: #764ba2; }
+        .difficulty-extreme { color: #764ba2; }
 
         .generation-status {
             margin-top: 20px;
@@ -297,60 +295,46 @@
 <body>
     <button class="theme-toggle" id="themeToggle" title="Toggle light/dark mode">🌙</button>
     <h1 class="gradient-title">Sufufu</h1>
-    
+
     <div class="controls">
         <div class="form-group">
-            <label for="generationMode">Generation Mode:</label>
-            <select id="generationMode" onchange="updateGenerationMode()">
-                <option value="difficulty" selected>By Target Difficulty</option>
-                <option value="clues">By Number of Clues</option>
-            </select>
-        </div>
-
-        <div class="form-group" id="difficultyGroup">
             <label for="targetDifficulty">Target Difficulty:</label>
             <select id="targetDifficulty">
-                <option value="1">Easy</option>
-                <option value="2">Medium</option>
-                <option value="3" selected>Hard</option>
-                <option value="4">Challenging</option>
+                <option value="0">Easy</option>
+                <option value="1">Medium</option>
+                <option value="2" selected>Hard</option>
+                <option value="3">Expert</option>
+                <option value="4">Extreme</option>
             </select>
-            <small>Challenging puzzles require advanced solving techniques</small>
+            <small>Extreme puzzles require advanced solving techniques (combinations)</small>
         </div>
 
-        <div class="form-group" id="clueCountMode" style="display: none;">
+        <div class="form-group" id="clueCountMode">
             <label for="clueCountType">Clue Count Strategy:</label>
             <select id="clueCountType">
                 <option value="normal" selected>Normal (Target difficulty with moderate clues)</option>
-                <option value="minimal">Minimal (Remove clues until difficulty increases)</option>
+                <option value="minimal">Minimal (Remove clues until difficulty rises above target)</option>
             </select>
-            <small>Minimal mode creates harder puzzles with fewer clues</small>
+            <small>Minimal mode digs out as many clues as possible while staying at or below the target difficulty</small>
         </div>
 
-        <div class="form-group" id="cluesGroup" style="display: none;">
-            <label for="clueRange">Number of Clues: <span id="clueValue">30</span></label>
-            <input type="range" id="clueRange" min="12" max="40" value="30" oninput="updateClueValue()">
-            <span class="difficulty-label">Estimated Difficulty: <span id="difficultyLabel" class="difficulty-hard">Hard</span></span>
-        </div>
-        
         <div class="form-group">
             <label for="zoomInput">Zoom Level:</label>
             <select id="zoomInput" onchange="saveZoomPreference()">
                 <option value="auto">Auto (Responsive)</option>
                 <option value="custom">Custom...</option>
             </select>
-            <input type="number" id="customZoomInput" placeholder="Custom zoom (10-200)" min="10" max="200" 
+            <input type="number" id="customZoomInput" placeholder="Custom zoom (10-200)" min="10" max="200"
                    style="display: none; margin-top: 10px;" onchange="saveZoomPreference()">
             <small id="autoZoomInfo" style="display: none; color: #64b5f6;"></small>
         </div>
-        
+
         <button class="generate-btn" id="generateDifficultyBtn" onclick="generateByDifficulty()">Generate Puzzle</button>
-        <button class="generate-btn" id="generateCluesBtn" onclick="generateCustomDuodoku()" style="display: none;">Generate by Clues</button>
         <button class="secondary-btn" onclick="printDuodokus()">Print Multiple Puzzles</button>
         <button class="secondary-btn" onclick="constructDuodoku()">Puzzle Constructor</button>
-        
+
         <div id="generationStatus" class="generation-status"></div>
-        
+
         <p class="info-text">Rules: Every row, column and 2×4 square should have numbers 1-4 twice without touching orthogonally.</p>
         <p class="info-text">
             <a href="https://docs.google.com/document/d/1cx2ORJ-nlWS2oJ2APMchSWB2yJXVdcf8PsKY34Xa3PA/edit?usp=drivesdk" target="_blank">
@@ -360,53 +344,37 @@
     </div>
 
     <script>
-        // Difficulty constants are imported from duodokudifficulties.js
+        // ------------------------------------------------------------------
+        // Difficulty tiers, mirroring sufufu_hint_overhaul.py's
+        // DIFFICULTY_TIERS / TECHNIQUES_BY_DIFFICULTY classification:
+        // a puzzle's tier is set by the HARDEST technique its logical
+        // solve actually needed (technique order == duodokutecniques.js's
+        // TECHNIQUE_KEYS order).
+        // ------------------------------------------------------------------
+        const DIFFICULTY_NAMES = ["Easy", "Medium", "Hard", "Expert", "Extreme"];
 
-        function updateGenerationMode() {
-            const mode = document.getElementById("generationMode").value;
-            const cluesGroup = document.getElementById("cluesGroup");
-            const difficultyGroup = document.getElementById("difficultyGroup");
-            const clueCountMode = document.getElementById("clueCountMode");
-            const generateCluesBtn = document.getElementById("generateCluesBtn");
-            const generateDifficultyBtn = document.getElementById("generateDifficultyBtn");
+        // Ceiling index into TECHNIQUE_KEYS (inclusive) allowed to appear
+        // for a puzzle to still count as this tier. Matches
+        // sufufu_hint_overhaul.py's DIFFICULTY_TIERS ceilings (3, 7, 11, 13, 15).
+        const DIFFICULTY_CEILING_INDEX = [3, 7, 11, 13, 15];
 
-            if (mode === "clues") {
-                cluesGroup.style.display = "block";
-                difficultyGroup.style.display = "none";
-                clueCountMode.style.display = "none";
-                generateCluesBtn.style.display = "block";
-                generateDifficultyBtn.style.display = "none";
-            } else {
-                cluesGroup.style.display = "none";
-                difficultyGroup.style.display = "block";
-                clueCountMode.style.display = "block";
-                generateCluesBtn.style.display = "none";
-                generateDifficultyBtn.style.display = "block";
-            }
-        }
+        // Minimum clue-holes to dig towards before accepting a "minimal"
+        // puzzle at a given tier, mirroring _dig_puzzle_towards_tier's
+        // min_empty = 20 (i.e. at most 44 clues on the 64-cell board).
+        const MIN_EMPTY_CELLS = 20;
 
-        function updateClueValue() {
-            const clueValue = document.getElementById("clueRange").value;
-            document.getElementById("clueValue").textContent = clueValue;
-            
-            // Update difficulty label based on clue count
-            const difficultyLabel = document.getElementById("difficultyLabel");
-            if (clueValue <= 18) {
-                difficultyLabel.textContent = "Insane";
-                difficultyLabel.className = "difficulty-insane";
-            } else if (clueValue >= 19 && clueValue <= 23) {
-                difficultyLabel.textContent = "Expert";
-                difficultyLabel.className = "difficulty-expert";
-            } else if (clueValue >= 24 && clueValue <= 28) {
-                difficultyLabel.textContent = "Hard";
-                difficultyLabel.className = "difficulty-hard";
-            } else if (clueValue >= 29 && clueValue <= 34) {
-                difficultyLabel.textContent = "Medium";
-                difficultyLabel.className = "difficulty-medium";
-            } else if (clueValue >= 35 && clueValue <= 40) {
-                difficultyLabel.textContent = "Easy";
-                difficultyLabel.className = "difficulty-easy";
-            }
+        let Techniques = null;
+
+        function waitForTechniques() {
+            return new Promise((resolve) => {
+                if (window.DuoDokuTechniques) {
+                    resolve(window.DuoDokuTechniques);
+                    return;
+                }
+                window.addEventListener('duodokutechniques-ready', () => {
+                    resolve(window.DuoDokuTechniques);
+                }, { once: true });
+            });
         }
 
         function showStatus(message, type) {
@@ -421,245 +389,324 @@
             statusDiv.style.display = "none";
         }
 
-        // Initialize candidates for empty cells
-        function initializeCandidates(puzzle) {
-            const candidates = Array(8).fill(null).map(() => Array(8).fill(null).map(() => []));
-            const generator = new DuoDoKuGenerator();
-            
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    if (puzzle[r][c] === 0) {
-                        for (let digit = 1; digit <= 4; digit++) {
-                            if (generator.isNotDuplicated(r, c, digit, puzzle)) {
-                                candidates[r][c].push(digit);
-                            }
-                        }
-                    }
-                }
+        // Count non-zero cells in a puzzle string.
+        function countCluesFromString(puzzleString) {
+            let count = 0;
+            for (let i = 0; i < puzzleString.length; i++) {
+                if (puzzleString[i] !== '0') count++;
             }
-            return candidates;
+            return count;
         }
 
-        // Deep copy a 2D array
-        function deepCopy2D(arr) {
-            return arr.map(row => [...row]);
+        // Given a solve() result's counts map, find the index of the
+        // hardest technique actually used (mirrors classify_difficulty's
+        // hardest_idx = max(log) in sufufu_hint_overhaul.py).
+        function hardestTechniqueIndex(counts) {
+            const keys = Techniques.TECHNIQUE_KEYS;
+            let hardest = -1;
+            for (let i = 0; i < keys.length; i++) {
+                if (counts[keys[i]] > 0) hardest = i;
+            }
+            return hardest;
         }
 
-        // Count non-zero cells
-        function countClues(puzzle) {
+        // Classify a puzzle string's difficulty tier index (0=Easy..4=Extreme)
+        // based on the hardest technique required to solve it logically.
+        // Returns null if the puzzle can't be fully solved by the technique
+        // chain (shouldn't normally happen for puzzles we've verified unique).
+        function classifyDifficulty(puzzleString) {
+            const result = Techniques.solve(puzzleString);
+            if (!result.solved) return null;
+            const hardest = hardestTechniqueIndex(result.counts);
+            for (let tier = 0; tier < DIFFICULTY_CEILING_INDEX.length; tier++) {
+                if (hardest <= DIFFICULTY_CEILING_INDEX[tier]) return tier;
+            }
+            return DIFFICULTY_CEILING_INDEX.length - 1;
+        }
+
+        function shuffledCellOrder() {
+            const cells = [];
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) cells.push([r, c]);
+            }
+            for (let i = cells.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [cells[i], cells[j]] = [cells[j], cells[i]];
+            }
+            return cells;
+        }
+
+        function boardToString(board) {
+            return board.map(row => row.join('')).join('');
+        }
+
+        function stringToBoard(str) {
+            const board = [];
+            for (let r = 0; r < 8; r++) {
+                board.push(str.slice(r * 8, r * 8 + 8).split('').map(Number));
+            }
+            return board;
+        }
+
+        function countEmpty(board) {
             let count = 0;
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
-                    if (puzzle[r][c] !== 0) count++;
+                    if (board[r][c] === 0) count++;
                 }
             }
             return count;
         }
 
-        // Check if puzzle has unique solution
-        function hasUniqueSolution(puzzle) {
-            const solver = new DuoDoKuSolver();
-            solver.enterPuzzle(puzzle);
-            return solver.hasUniqueSolution();
+        // "Normal" generation: dig clues out of a fresh full solution,
+        // stopping as soon as the puzzle first reaches the target tier
+        // (mirrors _dig_puzzle_towards_tier / generate_puzzle_for_tier
+        // in sufufu_hint_overhaul.py, non-minimal path).
+        async function digTowardsTier(solutionBoard, targetTier) {
+            const board = solutionBoard.map(row => [...row]);
+            const cells = shuffledCellOrder();
+
+            let bestBoard = null;
+            let bestTier = null;
+
+            for (let idx = 0; idx < cells.length; idx++) {
+                if (bestTier !== null) {
+                    const empties = countEmpty(board);
+                    if (bestTier >= targetTier && empties >= MIN_EMPTY_CELLS) {
+                        break; // already at/past requested tier with enough holes
+                    }
+                }
+
+                const [r, c] = cells[idx];
+                const backup = board[r][c];
+                if (backup === 0) continue;
+                board[r][c] = 0;
+
+                const candidateString = boardToString(board);
+                const solveResult = Techniques.solve(candidateString);
+
+                if (!solveResult.solved) {
+                    board[r][c] = backup;
+                    continue;
+                }
+                if (!hasUniqueSolution(candidateString)) {
+                    board[r][c] = backup;
+                    continue;
+                }
+
+                const hardest = hardestTechniqueIndex(solveResult.counts);
+                let tier = DIFFICULTY_CEILING_INDEX.length - 1;
+                for (let t = 0; t < DIFFICULTY_CEILING_INDEX.length; t++) {
+                    if (hardest <= DIFFICULTY_CEILING_INDEX[t]) { tier = t; break; }
+                }
+
+                bestBoard = board.map(row => [...row]);
+                bestTier = tier;
+
+                if (idx % 40 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                    showStatus(`Generating... (${countCluesFromString(boardToString(board))} clues, tier so far: ${DIFFICULTY_NAMES[tier]})`, 'generating');
+                }
+            }
+
+            if (bestBoard === null) {
+                bestBoard = solutionBoard.map(row => [...row]);
+                const solveResult = Techniques.solve(boardToString(bestBoard));
+                bestTier = solveResult.solved ? hardestTechniqueIndex(solveResult.counts) : 0;
+                bestTier = Math.max(0, Math.min(bestTier, DIFFICULTY_CEILING_INDEX.length - 1));
+            }
+
+            return { board: bestBoard, tier: bestTier };
         }
 
-        async function generateDuodoku(targetDifficulty, useMinimalClues = false) {
-            return new Promise((resolve) => {
-                const generator = new DuoDoKuGenerator();
-                const solver = new duodokudifficulties();
-                
-                // Generate a complete solution
-                generator.generateSeedPuzzle();
-                let solution = deepCopy2D(generator.mPuzzle);
-                let puzzle = deepCopy2D(solution);
-                
-                // Create removability matrix
-                let removable = Array(8).fill(null).map(() => Array(8).fill(true));
-                let attempts = 0;
-                let currentDifficulty = Difficulty.EASY;
-                let bestPuzzle = null;
-                let bestDifficulty = null;
-                
-                const processGeneration = async () => {
-                    // Keep trying until we get the exact target difficulty
-                    while (bestDifficulty !== targetDifficulty) {
-                        // Reset for new attempt
-                        puzzle = deepCopy2D(solution);
-                        removable = Array(8).fill(null).map(() => Array(8).fill(true));
-                        attempts = 0;
-                        const maxAttemptsPerRun = 10000;
-                        let runBestPuzzle = null;
-                        let runBestDifficulty = null;
-                        
-                        while (attempts < maxAttemptsPerRun) {
-                            attempts++;
-                            
-                            // Find removable cells
-                            const removableCells = [];
-                            for (let r = 0; r < 8; r++) {
-                                for (let c = 0; c < 8; c++) {
-                                    if (puzzle[r][c] !== 0 && removable[r][c]) {
-                                        removableCells.push([r, c]);
-                                    }
-                                }
-                            }
-                            
-                            if (removableCells.length === 0) break;
-                            
-                            // Try to remove a random cell
-                            const randomIndex = Math.floor(Math.random() * removableCells.length);
-                            const [r, c] = removableCells[randomIndex];
-                            const originalValue = puzzle[r][c];
-                            
-                            // Mark this cell as no longer removable
-                            removable[r][c] = false;
-                            
-                            // Try removing the cell
-                            puzzle[r][c] = 0;
-                            
-                            // Check if puzzle still has solution and get difficulty
-                            const testPuzzle = deepCopy2D(puzzle);
-                            const candidates = initializeCandidates(testPuzzle);
-                            solver.refreshCandidates(testPuzzle, candidates);
-                            
-                            const difficulty = solver.solve(testPuzzle, candidates);
-                            const hasValidSolution = hasUniqueSolution(puzzle);
-                            
-                            if (hasValidSolution) {
-                                currentDifficulty = difficulty;
-                                
-                                // For minimal clues mode
-                                if (useMinimalClues) {
-                                    // Keep removing if we haven't exceeded target difficulty
-                                    if (difficulty <= targetDifficulty) {
-                                        runBestPuzzle = deepCopy2D(puzzle);
-                                        runBestDifficulty = difficulty;
-                                    } else {
-                                        // Exceeded target, restore and stop
-                                        puzzle[r][c] = originalValue;
-                                        break;
-                                    }
-                                } else {
-                                    // Normal mode - keep best match to target
-                                    if (difficulty === targetDifficulty) {
-                                        runBestPuzzle = deepCopy2D(puzzle);
-                                        runBestDifficulty = difficulty;
-                                        break; // Found exact match
-                                    } else {
-                                        // Update best if this is closer to target or first valid puzzle
-                                        if (runBestPuzzle === null || 
-                                            Math.abs(difficulty - targetDifficulty) < Math.abs(runBestDifficulty - targetDifficulty)) {
-                                            runBestPuzzle = deepCopy2D(puzzle);
-                                            runBestDifficulty = difficulty;
-                                        }
-                                    }
-                                }
-                            } else {
-                                // Invalid removal - restore the cell
-                                puzzle[r][c] = originalValue;
-                            }
-                            
-                            // Update status periodically
-                            if (attempts % 100 === 0) {
-                                await new Promise(resolve => setTimeout(resolve, 1));
-                                const statusMsg = `Generating... (${countClues(puzzle)} clues, current: ${currentDifficulty}, target: ${targetDifficulty})`;
-                                showStatus(statusMsg, 'generating');
-                            }
-                        }
-                        
-                        // Update overall best
-                        if (runBestPuzzle !== null && 
-                            (bestPuzzle === null || 
-                             runBestDifficulty === targetDifficulty || 
-                             Math.abs(runBestDifficulty - targetDifficulty) < Math.abs(bestDifficulty - targetDifficulty))) {
-                            bestPuzzle = runBestPuzzle;
-                            bestDifficulty = runBestDifficulty;
-                        }
-                        
-                        // If we found exact target, we're done
-                        if (bestDifficulty === targetDifficulty) {
-                            break;
-                        }
-                        
-                        // Otherwise, try again
-                        showStatus(`Attempt complete. Best so far: ${bestDifficulty}. Retrying for exact target...`, 'generating');
-                        await new Promise(resolve => setTimeout(resolve, 100));
+        // "Minimal" generation: same digging process, but instead of
+        // stopping the moment the target tier is reached, keep removing
+        // clues for as long as the puzzle stays AT OR BELOW the target
+        // tier and keeps a unique solution — i.e. push clues as low as
+        // possible without exceeding the requested difficulty.
+        async function digMinimalForTier(solutionBoard, targetTier) {
+            const board = solutionBoard.map(row => [...row]);
+            const cells = shuffledCellOrder();
+
+            let bestBoard = board.map(row => [...row]);
+            let bestTier = classifyDifficulty(boardToString(board));
+            if (bestTier === null) bestTier = 0;
+
+            for (let idx = 0; idx < cells.length; idx++) {
+                const [r, c] = cells[idx];
+                const backup = board[r][c];
+                if (backup === 0) continue;
+
+                board[r][c] = 0;
+                const candidateString = boardToString(board);
+
+                const solveResult = Techniques.solve(candidateString);
+                let ok = solveResult.solved;
+                let tier = null;
+                if (ok) {
+                    const hardest = hardestTechniqueIndex(solveResult.counts);
+                    tier = DIFFICULTY_CEILING_INDEX.length - 1;
+                    for (let t = 0; t < DIFFICULTY_CEILING_INDEX.length; t++) {
+                        if (hardest <= DIFFICULTY_CEILING_INDEX[t]) { tier = t; break; }
                     }
-                    
-                    resolve({ puzzle: bestPuzzle, difficulty: bestDifficulty });
-                };
-                
-                processGeneration();
-            });
+                    // Removing this clue must not push difficulty above target,
+                    // and must keep the puzzle uniquely solvable.
+                    if (tier > targetTier || !hasUniqueSolution(candidateString)) {
+                        ok = false;
+                    }
+                }
+
+                if (!ok) {
+                    board[r][c] = backup; // restore - this clue can't be removed
+                    continue;
+                }
+
+                bestBoard = board.map(row => [...row]);
+                bestTier = tier;
+
+                if (idx % 40 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                    showStatus(`Digging for minimal clues... (${countCluesFromString(boardToString(board))} clues, tier: ${DIFFICULTY_NAMES[tier]})`, 'generating');
+                }
+            }
+
+            return { board: bestBoard, tier: bestTier };
         }
-        
-        function generateCustomDuodoku() {
-            const generator = new DuoDoKuGenerator();
-            generator.generateSeedPuzzle();
-            
-            // Get selected number of clues
-            const clues = parseInt(document.getElementById("clueRange").value);
-            
-            generator.generatePuzzle(clues);
-            const puzzle = generator.mPuzzle;
-            const puzzleString = puzzle.flat().join('');
-            
-            const zoom = getZoomValue();
-            window.location.href = "https://ricky295.github.io/duodokuplay.html?puzzle=" + 
-                encodeURIComponent(puzzleString) + "&zoom=" + encodeURIComponent(zoom);
+
+        // Uniqueness check: try solving with the full technique chain from
+        // both "what it resolves to" perspectives isn't directly available,
+        // so we do a light backtracking count-solutions check capped at 2.
+        function hasUniqueSolution(puzzleString) {
+            const board = stringToBoard(puzzleString);
+            let solutionCount = 0;
+
+            const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+            function isValid(r, c, d) {
+                let rowCount = 0, colCount = 0, regionCount = 0;
+                for (let cc = 0; cc < 8; cc++) if (board[r][cc] === d) rowCount++;
+                if (rowCount >= 2) return false;
+                for (let rr = 0; rr < 8; rr++) if (board[rr][c] === d) colCount++;
+                if (colCount >= 2) return false;
+                for (const [rr, cc] of Techniques.getRegionIndices(r, c)) {
+                    if (board[rr][cc] === d) regionCount++;
+                }
+                if (regionCount >= 2) return false;
+                for (const [dr, dc] of directions) {
+                    const nr = r + dr, nc = c + dc;
+                    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && board[nr][nc] === d) return false;
+                }
+                return true;
+            }
+
+            function findEmptyCells() {
+                const cells = [];
+                for (let r = 0; r < 8; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        if (board[r][c] === 0) cells.push([r, c]);
+                    }
+                }
+                return cells;
+            }
+
+            const emptyCells = findEmptyCells();
+
+            function backtrack(pos) {
+                if (solutionCount >= 2) return; // short-circuit once non-unique
+                if (pos === emptyCells.length) {
+                    solutionCount++;
+                    return;
+                }
+                const [r, c] = emptyCells[pos];
+                for (let d = 1; d <= 4; d++) {
+                    if (isValid(r, c, d)) {
+                        board[r][c] = d;
+                        backtrack(pos + 1);
+                        board[r][c] = 0;
+                        if (solutionCount >= 2) return;
+                    }
+                }
+            }
+
+            backtrack(0);
+            return solutionCount === 1;
+        }
+
+        async function generateDuodoku(targetTier, useMinimalClues) {
+            const maxTries = 12;
+            let best = null; // { board, tier, dist }
+
+            for (let attempt = 0; attempt < maxTries; attempt++) {
+                showStatus(`Generating... (attempt ${attempt + 1}/${maxTries})`, 'generating');
+                await new Promise(resolve => setTimeout(resolve, 0));
+
+                const solutionBoard = Techniques.generateFilledBoard();
+                if (!solutionBoard) continue;
+
+                const result = useMinimalClues
+                    ? await digMinimalForTier(solutionBoard, targetTier)
+                    : await digTowardsTier(solutionBoard, targetTier);
+
+                const dist = Math.abs(result.tier - targetTier);
+                if (dist === 0) {
+                    return { board: result.board, tier: result.tier };
+                }
+                if (best === null || dist < best.dist) {
+                    best = { board: result.board, tier: result.tier, dist };
+                }
+            }
+
+            return best ? { board: best.board, tier: best.tier } : null;
         }
 
         async function generateByDifficulty() {
-            const targetDifficulty = parseInt(document.getElementById("targetDifficulty").value);
+            await waitForTechniques();
+            Techniques = window.DuoDokuTechniques;
+
+            const targetTier = parseInt(document.getElementById("targetDifficulty").value);
             const clueCountType = document.getElementById("clueCountType").value;
             const useMinimalClues = clueCountType === "minimal";
             const generateBtn = document.getElementById("generateDifficultyBtn");
-            
-            // Disable button during generation
+
             generateBtn.disabled = true;
             generateBtn.textContent = "Generating...";
-            
+
             showStatus("Starting generation...", 'generating');
-            
+
             try {
-                const result = await generateDuodoku(targetDifficulty, useMinimalClues);
-                const puzzleString = result.puzzle.flat().join('');
-                
-                const difficultyNames = {
-                    1: "Easy",
-                    2: "Medium", 
-                    3: "Hard",
-                    4: "Challenging"
-                };
-                
+                const result = await generateDuodoku(targetTier, useMinimalClues);
+
+                if (!result) {
+                    showStatus("Generation failed. Please try again.", 'error');
+                    return;
+                }
+
+                const puzzleString = boardToString(result.board);
                 const clueText = useMinimalClues ? " (minimal clues)" : "";
-                showStatus(`Generated ${difficultyNames[result.difficulty]} puzzle with ${countClues(result.puzzle)} clues${clueText}!`, 'success');
-                
-                // Navigate to puzzle after a short delay
+                showStatus(`Generated ${DIFFICULTY_NAMES[result.tier]} puzzle with ${countCluesFromString(puzzleString)} clues${clueText}!`, 'success');
+
                 setTimeout(() => {
                     const zoom = getZoomValue();
-                    window.location.href = "https://ricky295.github.io/duodokuplay.html?puzzle=" + 
+                    window.location.href = "https://ricky295.github.io/duodokuplay.html?puzzle=" +
                         encodeURIComponent(puzzleString) + "&zoom=" + encodeURIComponent(zoom);
                 }, 1500);
-                
+
             } catch (error) {
                 console.error("Generation failed:", error);
                 showStatus("Generation failed. Please try again.", 'error');
             } finally {
-                // Re-enable button
                 generateBtn.disabled = false;
                 generateBtn.textContent = "Generate Puzzle";
             }
         }
-        
+
         function printDuodokus() {
-            const currentClues = document.getElementById("clueRange").value;
+            // Print multiple puzzles at the currently selected difficulty's
+            // typical clue count (kept simple: uses a moderate default).
             let cluesString = "";
             for (let i = 0; i < 6; i++) {
-                cluesString += currentClues;
-                if (i < 5) {
-                    cluesString += ",";
-                }
+                cluesString += "30";
+                if (i < 5) cluesString += ",";
             }
             window.location.href = "https://ricky295.github.io/duodokuprintmultiple.html?clues=" + encodeURIComponent(cluesString);
         }
@@ -667,25 +714,13 @@
         function constructDuodoku() {
             window.location.href = "https://ricky295.github.io/duodokuconstructor";
         }
-        
-        // Initialize page
-        updateClueValue();
-        updateGenerationMode();
-        loadZoomPreference();
 
         // Zoom preference functions
         function getZoomValue() {
             const zoomSelect = document.getElementById("zoomInput");
             const customZoomInput = document.getElementById("customZoomInput");
-            
+
             if (zoomSelect.value === "auto") {
-                // Simplified formula from linear interpolation:
-                // zoom = 35 + (width - 768) * 15 / 1152
-                // Expanding: zoom = 35 + (width * 15 / 1152) - (768 * 15 / 1152)
-                // zoom = 35 + (width * 15 / 1152) - 10
-                // zoom = 25 + width * 15 / 1152
-                // Simplifying fraction: 15/1152 = 5/384
-                // Final formula: zoom = 25 + width * 5 / 384
                 const width = window.innerWidth;
                 const zoom = 25 + width * 5 / 384;
                 return Math.round(zoom);
@@ -700,7 +735,7 @@
             const zoomSelect = document.getElementById("zoomInput");
             const customZoomInput = document.getElementById("customZoomInput");
             const autoZoomInfo = document.getElementById("autoZoomInfo");
-            
+
             if (zoomSelect.value === "custom") {
                 customZoomInput.style.display = "block";
                 autoZoomInfo.style.display = "none";
@@ -719,10 +754,10 @@
             const customZoomInput = document.getElementById("customZoomInput");
             const autoZoomInfo = document.getElementById("autoZoomInfo");
             const savedZoom = localStorage.getItem('zoomPreference');
-            
+
             if (savedZoom) {
                 zoomSelect.value = savedZoom;
-                
+
                 if (savedZoom === "custom") {
                     customZoomInput.style.display = "block";
                     customZoomInput.value = localStorage.getItem('customZoomValue') || '50';
@@ -731,27 +766,28 @@
                     autoZoomInfo.textContent = `Current auto zoom: ${getZoomValue()} (based on ${window.innerWidth}px screen width)`;
                 }
             } else {
-                // Default to auto if no preference saved
                 zoomSelect.value = "auto";
                 autoZoomInfo.style.display = "block";
                 autoZoomInfo.textContent = `Current auto zoom: ${getZoomValue()} (based on ${window.innerWidth}px screen width)`;
             }
         }
 
+        // Initialize page
+        loadZoomPreference();
+
         // Theme toggle functionality
         const themeToggle = document.getElementById('themeToggle');
         const body = document.body;
-        
-        // Check for saved theme preference
+
         const savedTheme = localStorage.getItem('theme');
         if (savedTheme === 'light') {
             body.classList.add('light-mode');
             themeToggle.textContent = '☀️';
         }
-        
+
         themeToggle.addEventListener('click', function() {
             body.classList.toggle('light-mode');
-            
+
             if (body.classList.contains('light-mode')) {
                 themeToggle.textContent = '☀️';
                 localStorage.setItem('theme', 'light');
