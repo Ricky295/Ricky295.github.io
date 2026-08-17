@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <script src="duodokusolver.js"></script>
-  <script src="duodokudifficulties.js"></script>
+  <script type="module" src="duodokutecniques-bridge.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sufufu Puzzle Viewer</title>
@@ -490,23 +489,28 @@
       backdrop-filter: blur(10px);
     }
 
-    .difficulty-1 {
+    .difficulty-0 {
       background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
       color: white;
     }
 
-    .difficulty-2 {
+    .difficulty-1 {
       background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%);
       color: #2d3436;
     }
 
-    .difficulty-3 {
+    .difficulty-2 {
       background: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
       color: white;
     }
 
-    .difficulty-4 {
+    .difficulty-3 {
       background: linear-gradient(135deg, #c31432 0%, #240b36 100%);
+      color: white;
+    }
+
+    .difficulty-4 {
+      background: linear-gradient(135deg, #6a1b9a 0%, #240b36 100%);
       color: white;
     }
 
@@ -669,10 +673,54 @@
     let currentHighlightedDigit = null;
     let startTime = Date.now();
     let timerInterval;
-    let difficultyAnalyzer = null;
     let puzzleDifficulty = 'CALCULATING';
 
-    // Mock DuoDoKuGenerator class for compatibility
+    // duodokutecniques.js is an ES module (bridged onto window by
+    // duodokutecniques-bridge.js). Everything below waits for it before
+    // touching solving/difficulty/hint logic.
+    let Techniques = null;
+    function waitForTechniques() {
+      return new Promise((resolve) => {
+        if (window.DuoDokuTechniques) {
+          resolve(window.DuoDokuTechniques);
+          return;
+        }
+        window.addEventListener('duodokutechniques-ready', () => {
+          resolve(window.DuoDokuTechniques);
+        }, { once: true });
+      });
+    }
+
+    // Difficulty tiers, same scheme as duodokumain.html / sufufu_hint_overhaul.py:
+    // a puzzle's tier is the HARDEST technique its logical solve needed
+    // (index into Techniques.TECHNIQUE_KEYS), bucketed against these
+    // ceilings (Easy/Medium/Hard/Expert/Extreme).
+    const DIFFICULTY_NAMES = ['EASY', 'MEDIUM', 'HARD', 'EXPERT', 'EXTREME'];
+    const DIFFICULTY_CEILING_INDEX = [3, 7, 11, 13, 15];
+
+    function hardestTechniqueIndex(counts) {
+      const keys = Techniques.TECHNIQUE_KEYS;
+      let hardest = -1;
+      for (let i = 0; i < keys.length; i++) {
+        if (counts[keys[i]] > 0) hardest = i;
+      }
+      return hardest;
+    }
+
+    function tierForHardestIndex(hardest) {
+      for (let t = 0; t < DIFFICULTY_CEILING_INDEX.length; t++) {
+        if (hardest <= DIFFICULTY_CEILING_INDEX[t]) return t;
+      }
+      return DIFFICULTY_CEILING_INDEX.length - 1;
+    }
+
+    function gridToString(gridArray) {
+      return gridArray.map(row => row.join('')).join('');
+    }
+
+    // DuoDoKuGenerator.isNotDuplicated is still used by getCurrentCandidates
+    // to compute "what candidates are still legal here" - same constraint
+    // checks as before, kept local since it's a tiny grid-only check.
     class DuoDoKuGenerator {
       isNotDuplicated(row, col, value, grid) {
         // Check row constraint
@@ -714,6 +762,55 @@
       }
     }
 
+    // Backtracking solve to find the puzzle's actual unique solution, used
+    // by checkPuzzle. duodokutecniques.js's technique chain is pure logic
+    // and may not fully resolve every puzzle, so this brute-forces the
+    // real answer the same way generation verifies uniqueness.
+    function solveToCompletion(puzzleArray) {
+      const board = puzzleArray.map(row => [...row]);
+      const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+      function isValid(r, c, d) {
+        let rowCount = 0, colCount = 0, regionCount = 0;
+        for (let cc = 0; cc < 8; cc++) if (board[r][cc] === d) rowCount++;
+        if (rowCount >= 2) return false;
+        for (let rr = 0; rr < 8; rr++) if (board[rr][c] === d) colCount++;
+        if (colCount >= 2) return false;
+        for (const [rr, cc] of Techniques.getRegionIndices(r, c)) {
+          if (board[rr][cc] === d) regionCount++;
+        }
+        if (regionCount >= 2) return false;
+        for (const [dr, dc] of directions) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && board[nr][nc] === d) return false;
+        }
+        return true;
+      }
+
+      const emptyCells = [];
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          if (board[r][c] === 0) emptyCells.push([r, c]);
+        }
+      }
+
+      function backtrack(pos) {
+        if (pos === emptyCells.length) return true;
+        const [r, c] = emptyCells[pos];
+        for (let d = 1; d <= 4; d++) {
+          if (isValid(r, c, d)) {
+            board[r][c] = d;
+            if (backtrack(pos + 1)) return true;
+            board[r][c] = 0;
+          }
+        }
+        return false;
+      }
+
+      backtrack(0);
+      return board;
+    }
+
     function backToMain() {
       window.location.href = 'duodokumain.html';
     }
@@ -725,9 +822,12 @@
     }
 
     // Initialize the puzzle
-    function init() {
+    async function init() {
       initializeCandidates();
       renderPuzzle();
+
+      await waitForTechniques();
+      Techniques = window.DuoDokuTechniques;
       calculateDifficulty();
       
       // Set up event listeners
@@ -763,29 +863,38 @@
       }
     }
 
-    function calculateDifficulty() {
+    async function calculateDifficulty() {
       try {
+        await waitForTechniques();
+        Techniques = window.DuoDokuTechniques;
+
         const puzzleString = getPuzzleFromURL();
-        const puzzleArray = convertToArray(puzzleString);
-        
-        // Create a copy for difficulty analysis
-        const gridCopy = puzzleArray.map(row => [...row]);
-        const candidatesCopy = candidates.map(row => row.map(cell => [...cell]));
-        
-        difficultyAnalyzer = new duodokudifficulties();
-        difficultyAnalyzer.refreshCandidates(gridCopy, candidatesCopy);
-        
-        const difficulty = difficultyAnalyzer.solve(gridCopy, candidatesCopy);
-        puzzleDifficulty = difficulty;
-        
-        // Convert numeric difficulty to string for display
-        const difficultyNames = { 1: 'EASY', 2: 'MEDIUM', 3: 'HARD', 4: 'UNFAIR' };
-        const difficultyName = difficultyNames[difficulty] || difficulty;
-        
-        // Update the difficulty display
+
+        // Difficulty is rated off the puzzle AS GIVEN (its original clues),
+        // not the player's current progress - same as duodokumain.html.
+        const result = Techniques.solve(puzzleString);
+
+        let difficultyName;
+        let tier;
+        if (!result.solved) {
+          // The pure-logic chain couldn't fully resolve it (shouldn't
+          // normally happen for puzzles this app generates, but the puzzle
+          // may have been hand-built or pasted in via the constructor).
+          difficultyName = 'UNRATED';
+          tier = null;
+        } else {
+          const hardest = hardestTechniqueIndex(result.counts);
+          tier = tierForHardestIndex(hardest);
+          difficultyName = DIFFICULTY_NAMES[tier];
+        }
+
+        puzzleDifficulty = difficultyName;
+
         difficultyBadgeElement.textContent = `Difficulty: ${difficultyName}`;
-        difficultyBadgeElement.className = `difficulty-indicator difficulty-${difficulty}`;
-        
+        difficultyBadgeElement.className = tier !== null
+          ? `difficulty-indicator difficulty-${tier}`
+          : 'difficulty-indicator';
+
       } catch (error) {
         console.error('Error calculating difficulty:', error);
         difficultyBadgeElement.textContent = 'Difficulty: Unknown';
@@ -793,22 +902,26 @@
       }
     }
 
-    function getHint() {
+    async function getHint() {
       try {
-        // Create copies of current state
-        const gridCopy = grid.map(row => [...row]);
-        const candidatesCopy = getCurrentCandidates();
-        
-        // Create a new analyzer for hints
-        const hintAnalyzer = new duodokudifficulties();
-        hintAnalyzer.smartHint = true;
-        hintAnalyzer.refreshCandidates(gridCopy, candidatesCopy);
-        
-        // Try to get a step
-        const stepFound = hintAnalyzer.getStep(gridCopy, candidatesCopy);
-        
-        if (stepFound && hintAnalyzer.hintString) {
-          hintDisplayElement.textContent = hintAnalyzer.hintString;
+        await waitForTechniques();
+        Techniques = window.DuoDokuTechniques;
+
+        // Hints are based on the player's CURRENT grid (their progress so
+        // far), same behavior as before.
+        const currentString = gridToString(grid);
+        const step = Techniques.hint(currentString);
+
+        if (step) {
+          let message = `Try: ${step.label}`;
+          if (step.cell) {
+            const [r, c] = step.cell;
+            const value = step.board[r][c];
+            message += ` — row ${r + 1}, column ${c + 1} can be filled in.`;
+          } else {
+            message += ' — this narrows down candidates elsewhere on the board.';
+          }
+          hintDisplayElement.textContent = message;
           hintDisplayElement.style.display = 'block';
           feedbackElement.textContent = 'Hint provided above!';
           feedbackElement.style.color = '#0066cc';
@@ -818,7 +931,7 @@
           feedbackElement.textContent = 'No more hints available.';
           feedbackElement.style.color = '#ffc107';
         }
-        
+
       } catch (error) {
         console.error('Error getting hint:', error);
         hintDisplayElement.textContent = 'Error generating hint. Please try again.';
@@ -1266,15 +1379,15 @@
     }
 
     function checkPuzzle() {
-      const solver = new DuoDoKuSolver();
+      if (!Techniques) return; // techniques module still loading
+
       const userSolution = grid;
       const puzzleString = getPuzzleFromURL();
       const puzzleArray = convertToArray(puzzleString);
 
       if (puzzleArray.length === 0) return;
 
-      solver.enterPuzzle(puzzleArray);
-      const correctSolution = solver.solutions[0];
+      const correctSolution = solveToCompletion(puzzleArray);
 
       let left = 0;
       let incorrect = 0;
