@@ -17,6 +17,8 @@
     --mono: 'SF Mono', ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Consolas, monospace;
     --serif: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
     --sheet-font-size: 16px;
+    --text-font: 'AvenirNext-Medium', 'Avenir Next Medium', 'Avenir Next', 'Avenir', -apple-system, BlinkMacSystemFont, sans-serif;
+    --chord-font: 'AvenirNext-Bold', 'Avenir Next Bold', 'Avenir Next', 'Avenir', -apple-system, BlinkMacSystemFont, sans-serif;
   }
 
   *{box-sizing:border-box;}
@@ -123,8 +125,8 @@
     position:absolute;
     top:64px;
     left:230px;
-    width:20px;
-    height:36px;
+    width:26px;
+    height:44px;
     background:var(--panel, #10151c);
     border:1px solid var(--border);
     border-left:none;
@@ -184,7 +186,7 @@
   .viewer{
     width:100%;
     max-width:820px;
-    padding:36px 40px 140px;
+    padding:36px 18px 140px;
   }
 
   .empty-state{
@@ -261,7 +263,8 @@
 
   /* Chord sheet body */
   .sheet{
-    font-family:var(--sheet-font, var(--mono));
+    font-family:var(--sheet-font, var(--text-font));
+    font-weight:500;
     font-size:var(--sheet-font-size);
     line-height:1.9;
     white-space:pre-wrap;
@@ -283,6 +286,7 @@
   }
   .chord{
     color:var(--chord);
+    font-family:var(--chord-font);
     font-weight:700;
   }
   .chord sup{
@@ -312,6 +316,7 @@
     top:0;
     left:0;
     color:var(--chord);
+    font-family:var(--chord-font);
     font-weight:700;
     white-space:nowrap;
   }
@@ -605,7 +610,7 @@
   @media (max-width:720px){
     .sidebar{ display:none; }
     .sidebar-toggle{ display:none; }
-    .viewer{ padding:24px 18px 130px; }
+    .viewer{ padding:24px 10px 130px; }
     .song-title{ font-size:24px; }
     .settings-popover{ right:-10px; }
   }
@@ -658,7 +663,7 @@
 
   <div class="layout">
     <button class="sidebar-toggle" id="sidebarToggle" title="Toggle song list">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <div class="sidebar" id="sidebarPanel">
       <div class="sidebar-title">Songs</div>
@@ -836,7 +841,7 @@
   // 3. Pick a long random string, put it in the script's SHARED_SECRET
   //    property AND in PROXY_SECRET below. This is what stops strangers
   //    from using your proxy even though the URL itself is public-ish.
-  const PROXY_URL    = "https://script.google.com/macros/s/AKfycbwkEk1nweSFKefn-g0jDED5gO5mu0yALLPnRodpNbu6JogbSk2Q3bMj4oD6hNhrr2S3/exec";
+  const PROXY_URL    = "https://script.google.com/macros/s/AKfycbwSKwa9Eo5m124zkbhwD9Lqi1Ttk53EpYFqNazmL-iBqsNLoXjoFRHgT30eEs3Yv09G/exec";
   const PROXY_SECRET = "v90_PGMxzkqBpAqwNa8q8_EK2vIAuk0yF8Uz2oCX9WA";
 
   let githubOnline = false;      // true once a sync has succeeded this session
@@ -908,7 +913,12 @@
       currentIndex = songs.length ? 0 : -1;
       githubOnline = true;
       saveToStorage();
-      setGithubStatus('Synced ' + songs.length + ' song' + (songs.length === 1 ? '' : 's') + '.');
+      let statusMsg = 'Synced ' + songs.length + ' song' + (songs.length === 1 ? '' : 's') + '.';
+      if(typeof data.totalFilesFound === 'number' && data.totalFilesFound !== songs.length){
+        statusMsg += ' (' + data.totalFilesFound + ' file(s) found in repo, ' + (data.totalFilesFound - songs.length) + ' failed to load — see console)';
+        if(data.skipped && data.skipped.length) console.warn('[github-drive] skipped files:', data.skipped);
+      }
+      setGithubStatus(statusMsg);
       return true;
     }catch(err){
       githubOnline = false;
@@ -1159,12 +1169,26 @@
       if(isSpace){
         out += escapeHtml(chunk);
       } else {
-        // find chord(s) that fall within [start,end) or exactly at start
+        // find chord(s) that fall within [start,end) of this word
         const relevant = chords.filter(c => c.pos >= start && c.pos < end);
-        // also catch chord exactly at end of previous word attaching to this one if pos===start
         if(relevant.length){
-          const chordHtml = relevant.map(c => formatChordHTML(transposeChord(c.chord, transpose))).join(' ');
-          out += `<span class="cword"><span class="cchord">${chordHtml}</span>${escapeHtml(chunk)}</span>`;
+          // split the word into syllable segments at each chord's exact
+          // character offset, so the chord sits above the letter it
+          // precedes instead of snapping to the whole word's left edge
+          const cuts = [...new Set(relevant.map(c => c.pos))].sort((a,b) => a-b);
+          let cursor = start;
+          for(const cutPos of cuts){
+            if(cutPos > cursor){
+              out += escapeHtml(chunk.slice(cursor - start, cutPos - start));
+            }
+            const here = relevant.filter(c => c.pos === cutPos);
+            const chordHtml = here.map(c => formatChordHTML(transposeChord(c.chord, transpose))).join(' ');
+            const nextCut = cuts.find(p => p > cutPos);
+            const segEnd = nextCut !== undefined ? nextCut : end;
+            const segText = chunk.slice(cutPos - start, segEnd - start);
+            out += `<span class="cword"><span class="cchord">${chordHtml}</span>${escapeHtml(segText || '\u200b')}</span>`;
+            cursor = segEnd;
+          }
         } else {
           out += escapeHtml(chunk);
         }
