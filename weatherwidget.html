@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open-Meteo Universal Weather Widget</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
+    </style>
+</head>
+<body class="h-full bg-slate-900 text-slate-100 flex flex-col antialiased overflow-x-hidden">
+
+    <div id="app" class="flex-1 flex flex-col w-full h-full relative">
+        
+        <!-- ========================================== -->
+        <!-- GENERATOR VIEW (Shown when no URL params) -->
+        <!-- ========================================== -->
+        <div id="generator-view" class="flex-1 flex flex-col lg:flex-row overflow-y-auto hidden">
+            <!-- Left Panel: Form Controls -->
+            <div class="w-full lg:w-1/2 p-6 lg:p-10 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-800 bg-slate-900/50 backdrop-blur-md">
+                <div>
+                    <div class="flex items-center space-x-3 mb-6">
+                        <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
+                            <i class="fa-solid fa-cloud-sun text-lg"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold text-white tracking-tight">Open-Meteo Widget Studio</h1>
+                            <p class="text-xs text-slate-400">Design iframe widgets with advanced binary option encoding</p>
+                        </div>
+                    </div>
+
+                    <form id="widget-form" class="space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">City Name</label>
+                                <input type="text" id="cfg-city" value="Milan" placeholder="e.g. Milan, Tokyo, New York" 
+                                    class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Fallback Lat,Lon</label>
+                                <input type="text" id="cfg-latlon" value="45.4642,9.1900" placeholder="e.g. 45.46,9.19" 
+                                    class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Width (w)</label>
+                                <input type="text" id="cfg-w" value="100%" 
+                                    class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Height (h)</label>
+                                <input type="text" id="cfg-h" value="480px" 
+                                    class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Forecast Days (1-16)</label>
+                                <input type="number" id="cfg-days" min="1" max="16" value="7" 
+                                    class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Units</label>
+                                <select id="cfg-units" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                                    <option value="metric">Celsius (°C)</option>
+                                    <option value="imperial">Fahrenheit (°F)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-800/60 border border-slate-700/80 rounded-xl p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-bold text-blue-400 uppercase tracking-wider"><i class="fa-solid fa-binary mr-1.5"></i> Binary Encoded Options (`opts`)</span>
+                                <span id="computed-opts-badge" class="px-2 py-0.5 bg-blue-900/60 border border-blue-700 text-blue-300 rounded font-mono text-xs">opts=0</span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                                <label class="flex items-center space-x-2 text-slate-300 cursor-pointer select-none">
+                                    <input type="checkbox" id="opt-dark" checked class="rounded bg-slate-700 border-slate-600 text-blue-600 focus:ring-0">
+                                    <span>Dark Theme (bit 0)</span>
+                                </label>
+                                <label class="flex items-center space-x-2 text-slate-300 cursor-pointer select-none">
+                                    <input type="checkbox" id="opt-compact" class="rounded bg-slate-700 border-slate-600 text-blue-600 focus:ring-0">
+                                    <span>Compact Layout (bit 1)</span>
+                                </label>
+                                <label class="flex items-center space-x-2 text-slate-300 cursor-pointer select-none">
+                                    <input type="checkbox" id="opt-hourly" checked class="rounded bg-slate-700 border-slate-600 text-blue-600 focus:ring-0">
+                                    <span>Show Hourly (bit 2)</span>
+                                </label>
+                                <label class="flex items-center space-x-2 text-slate-300 cursor-pointer select-none">
+                                    <input type="checkbox" id="opt-details" checked class="rounded bg-slate-700 border-slate-600 text-blue-600 focus:ring-0">
+                                    <span>Show Details (Wind/Hum) (bit 3)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Theme Accent Color</label>
+                                <div class="flex items-center space-x-2">
+                                    <input type="color" id="cfg-color" value="#3b82f6" class="w-10 h-9 bg-slate-800 border border-slate-700 rounded-lg cursor-pointer p-1">
+                                    <input type="text" id="cfg-color-text" value="#3b82f6" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-white">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Border Radius</label>
+                                <select id="cfg-radius" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                                    <option value="0.75rem">Rounded (12px)</option>
+                                    <option value="1.5rem">Extra Rounded (24px)</option>
+                                    <option value="0px">Square (0px)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Generated Embed Code Section -->
+                <div class="mt-6 pt-4 border-t border-slate-800">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Embed Iframe Code</span>
+                        <button id="copy-code-btn" onclick="copyEmbedCode()" class="text-xs bg-blue-600 hover:bg-blue-500 text-white font-medium px-3 py-1.5 rounded-lg transition flex items-center space-x-1.5 shadow-md shadow-blue-600/20">
+                            <i class="fa-regular fa-copy"></i><span>Copy HTML</span>
+                        </button>
+                    </div>
+                    <textarea id="embed-code-output" readonly rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 font-mono text-xs text-blue-300 resize-none focus:outline-none"></textarea>
+                </div>
+            </div>
+
+            <!-- Right Panel: Live Interactive Preview -->
+            <div class="w-full lg:w-1/2 p-6 lg:p-10 flex flex-col items-center justify-center bg-slate-950/40 relative">
+                <div class="absolute top-4 left-6 text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center space-x-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Live Iframe Simulation Preview</span>
+                </div>
+                <div id="preview-container" class="w-full flex items-center justify-center transition-all duration-300 mt-6">
+                    <!-- Dynamic Preview Iframe Container -->
+                    <div id="iframe-wrapper" class="shadow-2xl overflow-hidden border border-slate-700/50 transition-all duration-300" style="width: 100%; max-width: 450px; height: 460px;">
+                        <iframe id="preview-iframe" src="about:blank" class="w-full h-full border-0"></iframe>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- WIDGET EMBED VIEW (Shown when attributes exist) -->
+        <!-- ========================================== -->
+        <div id="widget-view" class="flex-1 flex flex-col w-full h-full overflow-hidden hidden">
+            <!-- Widget Container rendered dynamically from URL query parameters -->
+            <div id="widget-root" class="flex-1 flex flex-col w-full h-full p-4 overflow-y-auto custom-scrollbar transition-all duration-300">
+                <!-- Content injected via JS -->
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Helper to parse URL search parameters
+        function getQueryParams() {
+            const params = new URLSearchParams(window.location.search);
+            const result = {};
+            for (const [key, value] of params.entries()) {
+                result[key.toLowerCase()] = value;
+            }
+            return result;
+        }
+
+        // Binary options helper (bitmask decoder/encoder)
+        // Bit 0: dark theme (1)
+        // Bit 1: compact layout (2)
+        // Bit 2: show hourly forecast (4)
+        // Bit 3: show detailed metrics like wind/humidity (8)
+        function decodeOpts(optsVal) {
+            const num = parseInt(optsVal, 10);
+            if (isNaN(num)) return { dark: true, compact: false, hourly: true, details: true }; // default
+            return {
+                dark: (num & 1) !== 0,
+                compact: (num & 2) !== 0,
+                hourly: (num & 4) !== 0,
+                details: (num & 8) !== 0
+            };
+        }
+
+        function encodeOpts() {
+            let val = 0;
+            if (document.getElementById('opt-dark').checked) val |= 1;
+            if (document.getElementById('opt-compact').checked) val |= 2;
+            if (document.getElementById('opt-hourly').checked) val |= 4;
+            if (document.getElementById('opt-details').checked) val |= 8;
+            return val;
+        }
+
+        // Weather Code Description & Icon Mapping
+        function getWeatherInfo(code) {
+            const map = {
+                0: { label: 'Clear Sky', icon: 'fa-sun text-amber-400' },
+                1: { label: 'Mainly Clear', icon: 'fa-cloud-sun text-amber-300' },
+                2: { label: 'Partly Cloudy', icon: 'fa-cloud-sun text-slate-300' },
+                3: { label: 'Overcast', icon: 'fa-cloud text-slate-400' },
+                45: { label: 'Foggy', icon: 'fa-smog text-slate-400' },
+                48: { label: 'Rime Fog', icon: 'fa-smog text-slate-400' },
+                51: { label: 'Light Drizzle', icon: 'fa-cloud-rain text-blue-300' },
+                53: { label: 'Drizzle', icon: 'fa-cloud-rain text-blue-400' },
+                55: { label: 'Dense Drizzle', icon: 'fa-cloud-showers-heavy text-blue-500' },
+                61: { label: 'Slight Rain', icon: 'fa-cloud-rain text-blue-400' },
+                63: { label: 'Moderate Rain', icon: 'fa-cloud-showers-heavy text-blue-500' },
+                65: { label: 'Heavy Rain', icon: 'fa-cloud-showers-heavy text-blue-600' },
+                71: { label: 'Slight Snow', icon: 'fa-snowflake text-sky-200' },
+                73: { label: 'Moderate Snow', icon: 'fa-snowflake text-sky-300' },
+                75: { label: 'Heavy Snow', icon: 'fa-snowflake text-sky-400' },
+                95: { label: 'Thunderstorm', icon: 'fa-cloud-bolt text-amber-500' }
+            };
+            return map[code] || { label: 'Fair', icon: 'fa-cloud text-slate-400' };
+        }
+
+        function formatDayName(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', { weekday: 'short' });
+        }
+
+        function formatHour(timeStr) {
+            const date = new Date(timeStr);
+            return date.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+        }
+
+        // Geocode city name to lat/lon using Open-Meteo Geocoding API
+        async function geocodeCity(cityName) {
+            try {
+                const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=en&format=json`);
+                const data = await res.json();
+                if (data && data.results && data.results.length > 0) {
+                    return {
+                        lat: data.results[0].latitude,
+                        lon: data.results[0].longitude,
+                        name: data.results[0].name,
+                        country: data.results[0].country || ''
+                    };
+                }
+            } catch (e) {
+                console.error("Geocoding failed:", e);
+            }
+            return null;
+        }
+
+        // Fetch weather from Open-Meteo API (supports up to 16 days)
+        async function fetchWeatherData(lat, lon, days = 7, units = 'metric') {
+            const tempUnit = units === 'imperial' ? 'fahrenheit' : 'celsius';
+            const windUnit = units === 'imperial' ? 'mph' : 'kmh';
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=${tempUnit}&wind_speed_unit=${windUnit}&forecast_days=${days}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("Failed to fetch weather data");
+            return await res.json();
+        }
+
+        async function renderWidget(params) {
+            const container = document.getElementById('widget-root');
+            
+            // Extract parameters with robust defaults (supporting up to 16 days forecast)
+            const cityQuery = params.city || '';
+            const latlonQuery = params.latlon || '45.4642,9.1900';
+            const days = Math.min(Math.max(parseInt(params.days || '7', 10), 1), 16);
+            const units = params.units || 'metric';
+            const opts = decodeOpts(params.opts);
+            const accentColor = params.color || '#3b82f6';
+            const borderRadius = params.radius || '0.75rem';
+
+            // Apply theme classes and ensure fluid adaptation for full-screen view or iframe embeds
+            if (opts.dark) {
+                container.className = "flex-1 flex flex-col w-full h-full p-4 overflow-y-auto custom-scrollbar bg-slate-900 text-slate-100";
+            } else {
+                container.className = "flex-1 flex flex-col w-full h-full p-4 overflow-y-auto custom-scrollbar bg-slate-50 text-slate-800";
+            }
+            container.style.borderRadius = borderRadius;
+
+            // Loading state
+            container.innerHTML = `
+                <div class="flex-1 flex flex-col items-center justify-center space-y-3 py-12">
+                    <div class="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" style="border-color: ${accentColor}; border-top-color: transparent;"></div>
+                    <p class="text-xs font-medium opacity-75">Fetching up to ${days}-day meteorological data...</p>
+                </div>
+            `;
+
+            let lat, lon, resolvedLocationName = cityQuery || 'Fallback Location';
+
+            // Resolve coordinates
+            if (cityQuery) {
+                const geo = await geocodeCity(cityQuery);
+                if (geo) {
+                    lat = geo.lat;
+                    lon = geo.lon;
+                    resolvedLocationName = `${geo.name}${geo.country ? ', ' + geo.country : ''}`;
+                } else {
+                    // Fallback to latlon if city search fails
+                    const parts = latlonQuery.split(',');
+                    lat = parseFloat(parts[0]) || 45.4642;
+                    lon = parseFloat(parts[1]) || 9.1900;
+                    resolvedLocationName = `Lat: ${lat}, Lon: ${lon} (City fallback)`;
+                }
+            } else {
+                const parts = latlonQuery.split(',');
+                lat = parseFloat(parts[0]) || 45.4642;
+                lon = parseFloat(parts[1]) || 9.1900;
+                resolvedLocationName = `Coordinates (${lat}, ${lon})`;
+            }
+
+            try {
+                const weather = await fetchWeatherData(lat, lon, days, units);
+                const current = weather.current;
+                const daily = weather.daily;
+                const hourly = weather.hourly;
+                const currentInfo = getWeatherInfo(current.weather_code);
+                const tempUnitSymbol = units === 'imperial' ? '°F' : '°C';
+                const speedUnitSymbol = units === 'imperial' ? 'mph' : 'km/h';
+
+                // Build HTML for widget
+                let html = `
+                    <div class="flex flex-col h-full justify-between space-y-4">
+                        <!-- Header / Location -->
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <i class="fa-solid fa-location-dot" style="color: ${accentColor};"></i>
+                                <h2 class="font-bold text-base tracking-tight truncate max-w-[200px]" title="${resolvedLocationName}">${resolvedLocationName}</h2>
+                            </div>
+                            <span class="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full" style="background-color: ${accentColor}22; color: ${accentColor};">Open-Meteo</span>
+                        </div>
+
+                        <!-- Current Weather Hero Card -->
+                        <div class="p-4 rounded-2xl relative overflow-hidden transition-all shadow-sm" style="background: ${opts.dark ? 'rgba(30, 41, 59, 0.7)' : 'rgba(255, 255, 255, 0.8)'}; border: 1px solid ${opts.dark ? 'rgba(51, 65, 85, 0.5)' : 'rgba(226, 232, 240, 0.8)'};">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="text-3xl lg:text-4xl font-extrabold tracking-tighter">${Math.round(current.temperature_2m)}<span class="text-xl font-normal opacity-75">${tempUnitSymbol}</span></div>
+                                    <div class="text-xs font-medium opacity-80 mt-0.5 flex items-center space-x-1">
+                                        <i class="fa-solid ${currentInfo.icon} mr-1"></i>
+                                        <span>${currentInfo.label}</span>
+                                    </div>
+                                </div>
+                                <div class="text-4xl lg:text-5xl">
+                                    <i class="fa-solid ${currentInfo.icon}"></i>
+                                </div>
+                            </div>
+                `;
+
+                // Details (Wind / Humidity) if enabled
+                if (opts.details) {
+                    html += `
+                        <div class="grid grid-cols-2 gap-2 mt-4 pt-3 border-t ${opts.dark ? 'border-slate-700/60' : 'border-slate-200/80'} text-xs">
+                            <div class="flex items-center space-x-2">
+                                <i class="fa-solid fa-droplet text-blue-400 opacity-80"></i>
+                                <span class="opacity-75">Humidity:</span>
+                                <span class="font-semibold">${current.relative_humidity_2m}%</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <i class="fa-solid fa-wind text-sky-400 opacity-80"></i>
+                                <span class="opacity-75">Wind:</span>
+                                <span class="font-semibold">${current.wind_speed_10m} ${speedUnitSymbol}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                html += `</div>`;
+
+                // Hourly Forecast (Next 6 hours) if enabled
+                if (opts.hourly && hourly && hourly.time) {
+                    const nowIndex = hourly.time.findIndex(t => new Date(t) >= new Date());
+                    const startIndex = nowIndex !== -1 ? nowIndex : 0;
+                    const nextHours = hourly.time.slice(startIndex, startIndex + 6);
+                    const nextTemps = hourly.temperature_2m.slice(startIndex, startIndex + 6);
+                    const nextCodes = hourly.weather_code.slice(startIndex, startIndex + 6);
+
+                    html += `
+                        <div>
+                            <div class="text-[11px] font-bold uppercase tracking-wider opacity-60 mb-2">Hourly Forecast</div>
+                            <div class="flex space-x-2 overflow-x-auto pb-1 custom-scrollbar">
+                    `;
+                    for (let i = 0; i < nextHours.length; i++) {
+                        const hInfo = getWeatherInfo(nextCodes[i]);
+                        html += `
+                            <div class="flex flex-col items-center justify-between p-2.5 rounded-xl min-w-[64px] text-center shrink-0" style="background: ${opts.dark ? 'rgba(30, 41, 59, 0.4)' : 'rgba(255, 255, 255, 0.5)'}; border: 1px solid ${opts.dark ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.5)'};">
+                                <span class="text-[10px] opacity-75">${formatHour(nextHours[i])}</span>
+                                <i class="fa-solid ${hInfo.icon} text-sm my-1.5"></i>
+                                <span class="text-xs font-bold">${Math.round(nextTemps[i])}°</span>
+                            </div>
+                        `;
+                    }
+                    html += `</div></div>`;
+                }
+
+                // Daily Forecast List
+                if (daily && daily.time) {
+                    html += `
+                        <div class="flex-1">
+                            <div class="text-[11px] font-bold uppercase tracking-wider opacity-60 mb-2">${days}-Day Forecast</div>
+                            <div class="space-y-1.5">
+                    `;
+                    for (let i = 0; i < daily.time.length; i++) {
+                        const dInfo = getWeatherInfo(daily.weather_code[i]);
+                        const maxT = Math.round(daily.temperature_2m_max[i]);
+                        const minT = Math.round(daily.temperature_2m_min[i]);
+                        const dayName = i === 0 ? 'Today' : formatDayName(daily.time[i]);
+
+                        html += `
+                            <div class="flex items-center justify-between p-2 rounded-xl transition-all" style="background: ${opts.dark ? 'rgba(30, 41, 59, 0.3)' : 'rgba(255, 255, 255, 0.4)'}; border: 1px solid ${opts.dark ? 'rgba(51, 65, 85, 0.2)' : 'rgba(226, 232, 240, 0.4)'};">
+                                <div class="flex items-center space-x-2.5 w-28">
+                                    <i class="fa-solid ${dInfo.icon} text-sm w-5 text-center"></i>
+                                    <span class="text-xs font-medium">${dayName}</span>
+                                </div>
+                                <div class="flex items-center space-x-2 text-xs">
+                                    <span class="opacity-60">${minT}°</span>
+                                    <div class="w-12 h-1.5 rounded-full overflow-hidden" style="background: ${opts.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}">
+                                        <div class="h-full rounded-full" style="width: 70%; background-color: ${accentColor};"></div>
+                                    </div>
+                                    <span class="font-bold">${maxT}°</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    html += `</div></div>`;
+                }
+
+                html += `
+                        <div class="text-[10px] text-center opacity-40 pt-1">
+                            Powered by Open-Meteo.com
+                        </div>
+                    </div>
+                `;
+
+                container.innerHTML = html;
+
+            } catch (err) {
+                container.innerHTML = `
+                    <div class="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-2">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-500 text-2xl"></i>
+                        <p class="text-xs font-semibold">Unable to load weather forecast.</p>
+                        <p class="text-[11px] opacity-60">${err.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function updateGenerator() {
+            const city = document.getElementById('cfg-city').value.trim();
+            const latlon = document.getElementById('cfg-latlon').value.trim();
+            const w = document.getElementById('cfg-w').value.trim() || '100%';
+            const h = document.getElementById('cfg-h').value.trim() || '480px';
+            const days = document.getElementById('cfg-days').value || '7';
+            const units = document.getElementById('cfg-units').value;
+            const color = document.getElementById('cfg-color').value;
+            const radius = document.getElementById('cfg-radius').value;
+            const optsVal = encodeOpts();
+
+            // Update opts badge
+            document.getElementById('computed-opts-badge').innerText = `opts=${optsVal}`;
+            document.getElementById('cfg-color-text').value = color;
+
+            // Build iframe URL pointing to self with query params
+            const currentUrl = window.location.origin + window.location.pathname;
+            const queryParams = new URLSearchParams();
+            if (city) queryParams.set('city', city);
+            if (latlon) queryParams.set('latlon', latlon);
+            queryParams.set('days', days);
+            queryParams.set('units', units);
+            queryParams.set('opts', optsVal);
+            queryParams.set('color', color);
+            queryParams.set('radius', radius);
+
+            const iframeSrc = `${currentUrl}?${queryParams.toString()}`;
+
+            // Generate Embed Code snippet
+            const embedCode = `<iframe src="${iframeSrc}" width="${w}" height="${h}" style="border:none;border-radius:${radius};overflow:hidden;" scrolling="no" allowtransparency="true"></iframe>`;
+            document.getElementById('embed-code-output').value = embedCode;
+
+            // Update preview iframe wrapper dimensions
+            const wrapper = document.getElementById('iframe-wrapper');
+            wrapper.style.width = w.includes('%') ? '100%' : w;
+            wrapper.style.height = h;
+
+            // Update iframe source for live preview
+            const iframe = document.getElementById('preview-iframe');
+            if (iframe.src !== iframeSrc) {
+                iframe.src = iframeSrc;
+            }
+        }
+
+        function copyEmbedCode() {
+            const textarea = document.getElementById('embed-code-output');
+            textarea.select();
+            document.execCommand('copy');
+            const btn = document.getElementById('copy-code-btn');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-check"></i><span>Copied!</span>`;
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+            }, 2000);
+        }
+
+        // Initialize application mode based on URL attributes presence
+        window.addEventListener('DOMContentLoaded', () => {
+            const params = getQueryParams();
+            const hasAttributes = Object.keys(params).length > 0;
+
+            if (hasAttributes) {
+                // Iframe Widget Mode
+                document.getElementById('generator-view').classList.add('hidden');
+                document.getElementById('widget-view').classList.remove('hidden');
+                renderWidget(params);
+            } else {
+                // Generator Mode
+                document.getElementById('widget-view').classList.add('hidden');
+                document.getElementById('generator-view').classList.remove('hidden');
+
+                // Attach event listeners to generator inputs
+                const formInputs = document.querySelectorAll('#widget-form input, #widget-form select');
+                formInputs.forEach(input => {
+                    input.addEventListener('input', updateGenerator);
+                    input.addEventListener('change', updateGenerator);
+                });
+
+                document.getElementById('cfg-color').addEventListener('input', (e) => {
+                    document.getElementById('cfg-color-text').value = e.target.value;
+                    updateGenerator();
+                });
+
+                // Initial run
+                updateGenerator();
+            }
+        });
+    </script>
+</body>
+</html>
