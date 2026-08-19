@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku Battle</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between font-sans select-none">
+
+    <!-- Header -->
+    <header class="w-full py-4 px-6 bg-slate-800/80 backdrop-blur border-b border-slate-700 flex justify-between items-center shadow-lg">
+        <div class="flex items-center space-x-3">
+            <div class="bg-indigo-600 p-2.5 rounded-xl shadow-md text-white font-bold text-xl flex items-center justify-center w-10 h-10">
+                <i class="fa-solid fa-chess-board"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-black tracking-tight bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Sudoku Battle</h1>
+                <p class="text-xs text-slate-400">Make the move that breaks the puzzle, you lose!</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-3">
+            <button id="rules-btn" class="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg transition text-slate-200">
+                <i class="fa-solid fa-circle-question mr-1.5"></i> Rules
+            </button>
+            <button id="reset-btn" class="px-3 py-1.5 text-xs font-medium bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded-lg transition">
+                <i class="fa-solid fa-rotate-right mr-1.5"></i> Restart
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-4xl w-full mx-auto p-4 md:p-6 flex flex-col items-center justify-center">
+
+        <!-- Setup Screen -->
+        <div id="setup-screen" class="w-full max-w-md bg-slate-800/90 border border-slate-700 rounded-2xl p-6 shadow-2xl backdrop-blur">
+            <h2 class="text-xl font-bold text-slate-100 mb-4 text-center">New Game Setup</h2>
+            
+            <div class="space-y-5">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Game Mode</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button type="button" data-mode="pve" class="mode-select-btn py-3 px-4 rounded-xl border border-indigo-500 bg-indigo-600/20 text-indigo-300 font-medium text-sm flex items-center justify-center space-x-2 transition">
+                            <i class="fa-solid fa-robot"></i> <span>Vs CPU</span>
+                        </button>
+                        <button type="button" data-mode="pvp" class="mode-select-btn py-3 px-4 rounded-xl border border-slate-700 bg-slate-700/50 text-slate-400 font-medium text-sm flex items-center justify-center space-x-2 transition">
+                            <i class="fa-solid fa-user-group"></i> <span>2 Player</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="cpu-settings" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">CPU Difficulty</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button type="button" data-diff="easy" class="diff-select-btn py-2.5 px-3 rounded-lg border border-slate-700 bg-slate-700/50 text-slate-300 text-xs font-medium transition">Easy (Random)</button>
+                            <button type="button" data-diff="medium" class="diff-select-btn py-2.5 px-3 rounded-lg border border-indigo-500 bg-indigo-600/20 text-indigo-300 text-xs font-medium transition">Medium (Box HS)</button>
+                            <button type="button" data-diff="hard" class="diff-select-btn py-2.5 px-3 rounded-lg border border-slate-700 bg-slate-700/50 text-slate-300 text-xs font-medium transition">Hard (Line HS)</button>
+                            <button type="button" data-diff="expert" class="diff-select-btn py-2.5 px-3 rounded-lg border border-slate-700 bg-slate-700/50 text-slate-300 text-xs font-medium transition">Expert (Naked Single)</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Who Goes First?</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button type="button" data-first="player" class="first-select-btn py-2 px-3 rounded-lg border border-indigo-500 bg-indigo-600/20 text-indigo-300 text-xs font-medium transition">Player (You)</button>
+                            <button type="button" data-first="cpu" class="first-select-btn py-2 px-3 rounded-lg border border-slate-700 bg-slate-700/50 text-slate-300 text-xs font-medium transition">CPU</button>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="start-game-btn" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition duration-200 mt-2">
+                    Start Battle
+                </button>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="w-full max-w-xl hidden flex flex-col items-center">
+            
+            <!-- Status & Player Turn Info -->
+            <div class="w-full flex justify-between items-center mb-4 bg-slate-800/80 px-4 py-3 rounded-2xl border border-slate-700 shadow-md">
+                <div id="player-1-box" class="flex items-center space-x-3 px-3 py-1.5 rounded-xl border border-indigo-500 bg-indigo-500/10 transition-all">
+                    <div class="w-3 h-3 rounded-full bg-indigo-500 animate-pulse"></div>
+                    <div>
+                        <div class="text-xs text-slate-400 font-semibold" id="p1-label">Player 1</div>
+                        <div class="text-sm font-bold text-indigo-300" id="p1-score">0 moves</div>
+                    </div>
+                </div>
+                
+                <div class="text-center">
+                    <div id="turn-indicator" class="text-sm font-bold text-slate-200">Your Turn</div>
+                    <div id="solutions-counter" class="text-[10px] text-emerald-400 font-medium">Valid puzzle states: Active</div>
+                </div>
+
+                <div id="player-2-box" class="flex items-center space-x-3 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800/40 opacity-70 transition-all">
+                    <div class="w-3 h-3 rounded-full bg-purple-500"></div>
+                    <div class="text-right">
+                        <div class="text-xs text-slate-400 font-semibold" id="p2-label">CPU (Medium)</div>
+                        <div class="text-sm font-bold text-purple-300" id="p2-score">0 moves</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sudoku Board -->
+            <div class="bg-slate-800 p-2 md:p-3 rounded-2xl border border-slate-700 shadow-2xl relative">
+                <div id="sudoku-grid" class="grid grid-cols-9 gap-0.5 bg-slate-900 border-2 border-slate-600 rounded-lg overflow-hidden">
+                    <!-- Cells generated by JS -->
+                </div>
+
+                <!-- CPU Thinking Overlay -->
+                <div id="cpu-thinking" class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center rounded-2xl hidden">
+                    <div class="bg-slate-800 border border-slate-700 px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3">
+                        <div class="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span class="text-sm font-medium text-indigo-300">CPU is thinking...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Number Pad -->
+            <div class="w-full mt-4 bg-slate-800/80 p-3 rounded-2xl border border-slate-700 shadow-md">
+                <div class="grid grid-cols-9 gap-1 md:gap-2" id="numpad">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Rules Modal -->
+    <div id="rules-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-slate-100 flex items-center">
+                    <i class="fa-solid fa-circle-question text-indigo-400 mr-2"></i> Sudoku Battle Rules
+                </h3>
+                <button id="close-rules" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="space-y-3 text-sm text-slate-300 leading-relaxed">
+                <p>1. <strong>Take Turns:</strong> Players take turns placing a digit (1-9) onto any empty cell on the standard 9×9 Sudoku grid.</p>
+                <p>2. <strong>The Losing Condition:</strong> Whoever makes a move that results in <strong>zero possible valid completions</strong> (i.e., breaks the puzzle or makes it unsolvable) <strong>loses the game immediately!</strong></p>
+                <p>3. <strong>CPU AI Levels:</strong></p>
+                <ul class="list-disc list-inside space-y-1 pl-2 text-xs text-slate-400">
+                    <li><strong>Easy:</strong> Plays random valid moves.</li>
+                    <li><strong>Medium:</strong> Prefers Box Hidden Singles; falls back to random.</li>
+                    <li><strong>Hard:</strong> Prefers Line (Row/Col) and Box Hidden Singles.</li>
+                    <li><strong>Expert:</strong> Also utilizes Naked Singles logic.</li>
+                </ul>
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button id="close-rules-btn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition">Got it</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="gameover-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center">
+            <div id="gameover-icon" class="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center text-3xl mx-auto mb-4 border border-rose-500/30">
+                <i class="fa-solid fa-skull"></i>
+            </div>
+            <h3 id="gameover-title" class="text-xl font-black text-slate-100 mb-1">Player 1 Lost!</h3>
+            <p id="gameover-desc" class="text-xs text-slate-400 mb-6">That move broke the puzzle's solvability.</p>
+            <button id="play-again-btn" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg transition">
+                Play Again
+            </button>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="py-3 text-center text-xs text-slate-500 border-t border-slate-800">
+        Sudoku Battle &bull; Strategic Puzzle Game
+    </footer>
+
+    <!-- Game Logic Script -->
+    <script>
+        // Game state variables
+        let gameMode = 'pve'; // 'pve' or 'pvp'
+        let cpuDiff = 'medium'; // 'easy', 'medium', 'hard', 'expert'
+        let cpuFirst = false;
+        
+        let board = Array(81).fill(0);
+        let currentPlayer = 1; // 1 or 2
+        let selectedCell = null; // index 0-80
+        let p1Score = 0;
+        let p2Score = 0;
+        let gameOver = false;
+        let isCpuThinking = false;
+
+        // UI Elements
+        const setupScreen = document.getElementById('setup-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const sudokuGrid = document.getElementById('sudoku-grid');
+        const numpad = document.getElementById('numpad');
+        const turnIndicator = document.getElementById('turn-indicator');
+        const solutionsCounter = document.getElementById('solutions-counter');
+        const p1Box = document.getElementById('player-1-box');
+        const p2Box = document.getElementById('player-2-box');
+        const p1ScoreEl = document.getElementById('p1-score');
+        const p2ScoreEl = document.getElementById('p2-score');
+        const p1Label = document.getElementById('p1-label');
+        const p2Label = document.getElementById('p2-label');
+        const cpuThinking = document.getElementById('cpu-thinking');
+
+        // Modals
+        const rulesModal = document.getElementById('rules-modal');
+        const gameoverModal = document.getElementById('gameover-modal');
+        const gameoverTitle = document.getElementById('gameover-title');
+        const gameoverDesc = document.getElementById('gameover-desc');
+        const gameoverIcon = document.getElementById('gameover-icon');
+
+        // Initialize setup options
+        document.querySelectorAll('.mode-select-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.mode-select-btn').forEach(b => {
+                    b.classList.remove('border-indigo-500', 'bg-indigo-600/20', 'text-indigo-300');
+                    b.classList.add('border-slate-700', 'bg-slate-700/50', 'text-slate-400');
+                });
+                btn.classList.add('border-indigo-500', 'bg-indigo-600/20', 'text-indigo-300');
+                btn.classList.remove('border-slate-700', 'bg-slate-700/50', 'text-slate-400');
+                
+                gameMode = btn.dataset.mode;
+                const cpuSettings = document.getElementById('cpu-settings');
+                if (gameMode === 'pvp') {
+                    cpuSettings.classList.add('hidden');
+                } else {
+                    cpuSettings.classList.remove('hidden');
+                }
+            });
+        });
+
+        document.querySelectorAll('.diff-select-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.diff-select-btn').forEach(b => {
+                    b.classList.remove('border-indigo-500', 'bg-indigo-600/20', 'text-indigo-300');
+                    b.classList.add('border-slate-700', 'bg-slate-700/50', 'text-slate-300');
+                });
+                btn.classList.add('border-indigo-500', 'bg-indigo-600/20', 'text-indigo-300');
+                btn.classList.remove('border-slate-700', 'bg-slate-700/50', 'text-slate-300');
+                cpuDiff = btn.dataset.diff;
+            });
+        });
+
+        document.querySelectorAll('.first-select-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.first-select-btn').forEach(b => {
+                    b.classList.remove('border-indigo-500', 'bg-indigo-600/20', 'text-indigo-300');
+                    b.classList.add('border-slate-700', 'bg-slate-700/50', 'text-slate-300');
+                });
+                btn.classList.add('border-indigo-500', 'bg-indigo-600/20', 'text-indigo-300');
+                btn.classList.remove('border-slate-700', 'bg-slate-700/50', 'text-slate-300');
+                cpuFirst = btn.dataset.first === 'cpu';
+            });
+        });
+
+        document.getElementById('start-game-btn').addEventListener('click', startGame);
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            gameScreen.classList.add('hidden');
+            setupScreen.classList.remove('hidden');
+        });
+        document.getElementById('play-again-btn').addEventListener('click', () => {
+            gameoverModal.classList.add('hidden');
+            setupScreen.classList.remove('hidden');
+            gameScreen.classList.add('hidden');
+        });
+
+        document.getElementById('rules-btn').addEventListener('click', () => rulesModal.classList.remove('hidden'));
+        document.getElementById('close-rules').addEventListener('click', () => rulesModal.classList.add('hidden'));
+        document.getElementById('close-rules-btn').addEventListener('click', () => rulesModal.classList.add('hidden'));
+
+        function startGame() {
+            setupScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+
+            board = Array(81).fill(0);
+            currentPlayer = 1;
+            selectedCell = null;
+            p1Score = 0;
+            p2Score = 0;
+            gameOver = false;
+            isCpuThinking = false;
+
+            p1Label.textContent = gameMode === 'pve' ? 'Player (You)' : 'Player 1';
+            p2Label.textContent = gameMode === 'pve' ? `CPU (${cpuDiff.charAt(0).toUpperCase() + cpuDiff.slice(1)})` : 'Player 2';
+
+            buildGridDOM();
+            buildNumpadDOM();
+            updateUI();
+
+            if (gameMode === 'pve' && cpuFirst) {
+                currentPlayer = 2;
+                updateUI();
+                triggerCpuTurn();
+            }
+        }
+
+        function buildGridDOM() {
+            sudokuGrid.innerHTML = '';
+            for (let i = 0; i < 81; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'w-9 h-9 md:w-11 md:h-11 bg-slate-800 flex items-center justify-center text-lg md:text-xl font-bold cursor-pointer transition-colors relative';
+                
+                // Add thicker borders for 3x3 box separation
+                const r = Math.floor(i / 9);
+                const c = i % 9;
+                let borderClasses = 'border-slate-700/60 ';
+                if (c % 3 === 2 && c !== 8) borderClasses += 'border-r-2 border-r-slate-500 ';
+                if (r % 3 === 2 && r !== 8) borderClasses += 'border-b-2 border-b-slate-500 ';
+                cell.className += ' border ' + borderClasses;
+
+                cell.dataset.index = i;
+                cell.addEventListener('click', () => onCellClick(i));
+                sudokuGrid.appendChild(cell);
+            }
+            renderBoard();
+        }
+
+        function buildNumpadDOM() {
+            numpad.innerHTML = '';
+            for (let n = 1; n <= 9; n++) {
+                const btn = document.createElement('button');
+                btn.className = 'py-2 md:py-2.5 bg-slate-700 hover:bg-slate-600 active:bg-indigo-600 rounded-lg text-slate-100 font-bold text-sm md:text-base shadow transition';
+                btn.textContent = n;
+                btn.addEventListener('click', () => makeMove(n));
+                numpad.appendChild(btn);
+            }
+            // Clear button
+            const clearBtn = document.createElement('button');
+            clearBtn.className = 'col-span-9 py-1.5 bg-slate-700/50 hover:bg-rose-500/20 text-rose-300 rounded-lg text-xs font-semibold transition mt-1';
+            clearBtn.innerHTML = '<i class="fa-solid fa-eraser mr-1"></i> Clear Selected';
+            clearBtn.addEventListener('click', () => makeMove(0));
+            numpad.appendChild(clearBtn);
+        }
+
+        function renderBoard() {
+            const cells = sudokuGrid.children;
+            for (let i = 0; i < 81; i++) {
+                const cell = cells[i];
+                const val = board[i];
+                cell.textContent = val === 0 ? '' : val;
+                
+                // Highlight states
+                cell.classList.remove('bg-indigo-950/70', 'ring-2', 'ring-indigo-500', 'bg-slate-800');
+                if (selectedCell === i) {
+                    cell.classList.add('bg-indigo-950/70', 'ring-2', 'ring-indigo-500', 'z-10');
+                } else {
+                    cell.classList.add('bg-slate-800');
+                }
+
+                if (val !== 0) {
+                    cell.classList.add('text-indigo-300');
+                } else {
+                    cell.classList.remove('text-indigo-300');
+                }
+            }
+        }
+
+        function updateUI() {
+            p1ScoreEl.textContent = `${p1Score} moves`;
+            p2ScoreEl.textContent = `${p2Score} moves`;
+
+            if (currentPlayer === 1) {
+                p1Box.className = 'flex items-center space-x-3 px-3 py-1.5 rounded-xl border border-indigo-500 bg-indigo-500/10 transition-all opacity-100 shadow-md';
+                p2Box.className = 'flex items-center space-x-3 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800/40 opacity-70 transition-all';
+                turnIndicator.textContent = gameMode === 'pve' ? "Your Turn" : "Player 1's Turn";
+                turnIndicator.className = 'text-sm font-bold text-indigo-400';
+            } else {
+                p2Box.className = 'flex items-center space-x-3 px-3 py-1.5 rounded-xl border border-purple-500 bg-purple-500/10 transition-all opacity-100 shadow-md';
+                p1Box.className = 'flex items-center space-x-3 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800/40 opacity-70 transition-all';
+                turnIndicator.textContent = gameMode === 'pve' ? `CPU's Turn` : "Player 2's Turn";
+                turnIndicator.className = 'text-sm font-bold text-purple-400';
+            }
+
+            // Quick check validity/solutions status count indication
+            const solCount = countSolutions(board, 2); // check up to 2 solutions
+            if (solCount === 0) {
+                solutionsCounter.textContent = "Status: 0 Solutions (Broken!)";
+                solutionsCounter.className = "text-[10px] text-rose-400 font-bold";
+            } else if (solCount === 1) {
+                solutionsCounter.textContent = "Status: Exactly 1 Solution";
+                solutionsCounter.className = "text-[10px] text-indigo-400 font-medium";
+            } else {
+                solutionsCounter.textContent = "Status: Multiple Solutions";
+                solutionsCounter.className = "text-[10px] text-emerald-400 font-medium";
+            }
+        }
+
+        function onCellClick(index) {
+            if (gameOver || isCpuThinking) return;
+            if (gameMode === 'pve' && currentPlayer === 2) return; // Not user's turn
+            
+            selectedCell = index;
+            renderBoard();
+        }
+
+        function makeMove(num) {
+            if (gameOver || selectedCell === null || isCpuThinking) return;
+            if (gameMode === 'pve' && currentPlayer === 2) return;
+
+            executeMove(selectedCell, num);
+        }
+
+        function executeMove(index, num) {
+            if (board[index] === num) return; // No change
+
+            const oldVal = board[index];
+            board[index] = num;
+
+            // Check if this move makes solutions count = 0
+            const solutions = countSolutions(board, 1);
+            
+            if (solutions === 0) {
+                // Current player made the number of solutions zero -> LOSES!
+                renderBoard();
+                triggerGameOver(currentPlayer);
+                return;
+            }
+
+            // Update stats
+            if (currentPlayer === 1) p1Score++;
+            else p2Score++;
+
+            selectedCell = null;
+            renderBoard();
+
+            // Switch turn
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
+            updateUI();
+
+            if (!gameOver && gameMode === 'pve' && currentPlayer === 2) {
+                triggerCpuTurn();
+            }
+        }
+
+        function triggerCpuTurn() {
+            isCpuThinking = true;
+            cpuThinking.classList.remove('hidden');
+
+            setTimeout(() => {
+                if (gameOver) return;
+                makeCpuMove();
+                isCpuThinking = false;
+                cpuThinking.classList.add('hidden');
+            }, 600 + Math.random() * 400);
+        }
+
+        // Sudoku Helpers & Solvers
+        function isValidPlacement(b, idx, num) {
+            if (num === 0) return true;
+            const r = Math.floor(idx / 9);
+            const c = idx % 9;
+
+            // Row & Col check
+            for (let i = 0; i < 9; i++) {
+                if (i !== c && b[r * 9 + i] === num) return false;
+                if (i !== r && b[i * 9 + c] === num) return false;
+            }
+
+            // Box check
+            const br = Math.floor(r / 3) * 3;
+            const bc = Math.floor(c / 3) * 3;
+            for (let dr = 0; dr < 3; dr++) {
+                for (let dc = 0; dc < 3; dc++) {
+                    const currIdx = (br + dr) * 9 + (bc + dc);
+                    if (currIdx !== idx && b[currIdx] === num) return false;
+                }
+            }
+            return true;
+        }
+
+        function getValidMovesForCell(b, idx) {
+            if (b[idx] !== 0) return [];
+            const valid = [];
+            for (let n = 1; n <= 9; n++) {
+                if (isValidPlacement(b, idx, n)) {
+                    // Temporarily place and check if it leaves >= 1 solution
+                    b[idx] = n;
+                    if (countSolutions(b, 1) > 0) {
+                        valid.push(n);
+                    }
+                    b[idx] = 0;
+                }
+            }
+            return valid;
+        }
+
+        // Count solutions up to a limit
+        function countSolutions(b, limit = 2) {
+            let count = 0;
+
+            function solve(currBoard) {
+                if (count >= limit) return;
+                
+                // Find empty cell with fewest possibilities (MRV heuristic for speed)
+                let bestIdx = -1;
+                let minOpts = 10;
+                let bestOpts = [];
+
+                for (let i = 0; i < 81; i++) {
+                    if (currBoard[i] === 0) {
+                        let opts = [];
+                        for (let n = 1; n <= 9; n++) {
+                            if (isValidPlacement(currBoard, i, n)) opts.push(n);
+                        }
+                        if (opts.length === 0) return; // Dead end
+                        if (opts.length < minOpts) {
+                            minOpts = opts.length;
+                            bestIdx = i;
+                            bestOpts = opts;
+                            if (minOpts === 1) break;
+                        }
+                    }
+                }
+
+                if (bestIdx === -1) {
+                    count++;
+                    return;
+                }
+
+                for (let opt of bestOpts) {
+                    currBoard[bestIdx] = opt;
+                    solve(currBoard);
+                    currBoard[bestIdx] = 0;
+                    if (count >= limit) return;
+                }
+            }
+
+            // Quick check if current board state already violates basic uniqueness constraints
+            if (!isBoardBasicallyValid(b)) return 0;
+
+            let boardCopy = [...b];
+            solve(boardCopy);
+            return count;
+        }
+
+        function isBoardBasicallyValid(b) {
+            // Check rows, cols, boxes for duplicate numbers
+            for (let i = 0; i < 9; i++) {
+                let rowSet = new Set();
+                let colSet = new Set();
+                let boxSet = new Set();
+                for (let j = 0; j < 9; j++) {
+                    let rVal = b[i * 9 + j];
+                    if (rVal !== 0) {
+                        if (rowSet.has(rVal)) return false;
+                        rowSet.add(rVal);
+                    }
+                    let cVal = b[j * 9 + i];
+                    if (cVal !== 0) {
+                        if (colSet.has(cVal)) return false;
+                        colSet.add(cVal);
+                    }
+                    let br = Math.floor(i / 3) * 3 + Math.floor(j / 3);
+                    let bc = (i % 3) * 3 + (j % 3);
+                    let bVal = b[br * 9 + bc];
+                    if (bVal !== 0) {
+                        if (boxSet.has(bVal)) return false;
+                        boxSet.add(bVal);
+                    }
+                }
+            }
+            return true;
+        }
+
+        // CPU Logic based on levels
+        function makeCpuMove() {
+            let emptyCells = [];
+            for (let i = 0; i < 81; i++) {
+                if (board[i] === 0) emptyCells.push(i);
+            }
+
+            if (emptyCells.length === 0) return;
+
+            let chosenMove = null; // {index, num}
+
+            // Helper to get all candidate moves that keep at least 1 solution
+            const getSafeMoves = () => {
+                let moves = [];
+                for (let idx of emptyCells) {
+                    for (let n = 1; n <= 9; n++) {
+                        if (isValidPlacement(board, idx, n)) {
+                            board[idx] = n;
+                            if (countSolutions(board, 1) > 0) {
+                                moves.push({ index: idx, num: n });
+                            }
+                            board[idx] = 0;
+                        }
+                    }
+                }
+                return moves;
+            };
+
+            const safeMoves = getSafeMoves();
+            if (safeMoves.length === 0) {
+                // No safe moves left, CPU is forced to make a losing move
+                let randIdx = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                let randNum = Math.floor(Math.random() * 9) + 1;
+                executeMove(randIdx, randNum);
+                return;
+            }
+
+            // AI Difficulty breakdown
+            if (cpuDiff === 'medium' || cpuDiff === 'hard' || cpuDiff === 'expert') {
+                // Try Box Hidden Single
+                chosenMove = findBoxHiddenSingle(safeMoves);
+            }
+
+            if (!chosenMove && (cpuDiff === 'hard' || cpuDiff === 'expert')) {
+                // Try Line Hidden Single
+                chosenMove = findLineHiddenSingle(safeMoves);
+            }
+
+            if (!chosenMove && cpuDiff === 'expert') {
+                // Try Naked Single
+                chosenMove = findNakedSingle(safeMoves);
+            }
+
+            // Fallback to random safe move (or any safe move)
+            if (!chosenMove) {
+                chosenMove = safeMoves[Math.floor(Math.random() * safeMoves.length)];
+            }
+
+            executeMove(chosenMove.index, chosenMove.num);
+        }
+
+        // Helper: Find Box Hidden Single from safe moves
+        function findBoxHiddenSingle(safeMoves) {
+            // Check each 3x3 box
+            for (let br = 0; br < 3; br++) {
+                for (let bc = 0; bc < 3; bc++) {
+                    let boxIndices = [];
+                    for (let dr = 0; dr < 3; dr++) {
+                        for (let dc = 0; dc < 3; dc++) {
+                            boxIndices.push((br * 3 + dr) * 9 + (bc * dc));
+                        }
+                    }
+                    // For each number 1-9, see if it can only go in one cell within this box among safe moves
+                    for (let n = 1; n <= 9; n++) {
+                        let matchingMoves = safeMoves.filter(m => boxIndices.includes(m.index) && m.num === n);
+                        if (matchingMoves.length === 1) {
+                            return matchingMoves[0];
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Helper: Find Line Hidden Single (Row or Col)
+        function findLineHiddenSingle(safeMoves) {
+            // Check rows
+            for (let r = 0; r < 9; r++) {
+                let rowIndices = [];
+                for (let c = 0; c < 9; c++) rowIndices.push(r * 9 + c);
+                for (let n = 1; n <= 9; n++) {
+                    let matchingMoves = safeMoves.filter(m => rowIndices.includes(m.index) && m.num === n);
+                    if (matchingMoves.length === 1) return matchingMoves[0];
+                }
+            }
+            // Check cols
+            for (let c = 0; c < 9; c++) {
+                let colIndices = [];
+                for (let r = 0; r < 9; r++) colIndices.push(r * 9 + c);
+                for (let n = 1; n <= 9; n++) {
+                    let matchingMoves = safeMoves.filter(m => colIndices.includes(m.index) && m.num === n);
+                    if (matchingMoves.length === 1) return matchingMoves[0];
+                }
+            }
+            return null;
+        }
+
+        // Helper: Find Naked Single (cell that only has 1 possible safe number overall)
+        function findNakedSingle(safeMoves) {
+            // Group safe moves by cell index
+            let cellMap = {};
+            for (let m of safeMoves) {
+                if (!cellMap[m.index]) cellMap[m.index] = [];
+                cellMap[m.index].push(m);
+            }
+            // Find a cell with exactly 1 safe number option
+            for (let idx in cellMap) {
+                if (cellMap[idx].length === 1) {
+                    return cellMap[idx][0];
+                }
+            }
+            return null;
+        }
+
+        function triggerGameOver(loserPlayer) {
+            gameOver = true;
+            let winner = loserPlayer === 1 ? 2 : 1;
+
+            if (gameMode === 'pve') {
+                if (loserPlayer === 1) {
+                    gameoverTitle.textContent = "You Lost!";
+                    gameoverDesc.textContent = "Your move resulted in zero valid solutions for the puzzle.";
+                    gameoverIcon.className = "w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center text-3xl mx-auto mb-4 border border-rose-500/30";
+                    gameoverIcon.innerHTML = '<i class="fa-solid fa-face-frown"></i>';
+                } else {
+                    gameoverTitle.textContent = "You Win! 🎉";
+                    gameoverDesc.textContent = "The CPU made a move that broke the puzzle's solvability!";
+                    gameoverIcon.className = "w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-3xl mx-auto mb-4 border border-emerald-500/30";
+                    gameoverIcon.innerHTML = '<i class="fa-solid fa-trophy"></i>';
+                }
+            } else {
+                gameoverTitle.textContent = `Player ${winner} Wins! 🎉`;
+                gameoverDesc.textContent = `Player ${loserPlayer} made a move that broke the puzzle's solvability!`;
+                gameoverIcon.className = "w-16 h-16 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-3xl mx-auto mb-4 border border-indigo-500/30";
+                gameoverIcon.innerHTML = '<i class="fa-solid fa-trophy"></i>';
+            }
+
+            gameoverModal.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
+
