@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PrintMaps Studio Pro</title>
+    <title>PrintMaps Studio Pro - Paper Themes Edition</title>
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- Leaflet JS -->
@@ -15,7 +15,7 @@
         .app-container { display: flex; flex: 1; height: 100vh; overflow: hidden; }
         
         /* Editor sidebar */
-        .sidebar { width: 420px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; padding: 20px; gap: 16px; z-index: 1000; overflow-y: auto; }
+        .sidebar { width: 420px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; padding: 20px; gap: 14px; z-index: 1000; overflow-y: auto; }
         .sidebar h1 { font-size: 1.25rem; font-weight: 700; color: #ffffff; }
         .sidebar p { font-size: 0.8125rem; color: #94a3b8; }
         
@@ -45,6 +45,8 @@
 
         #map { flex: 1; width: 100%; z-index: 1; }
 
+        .hidden-custom { display: none; }
+
         /* Clean Print Mode Overrides */
         body.clean-print-mode .sidebar { display: none !important; }
         body.clean-print-mode { background: #ffffff; }
@@ -59,7 +61,7 @@
         <aside class="sidebar">
             <div>
                 <h1>PrintMaps Studio Pro</h1>
-                <p>Build custom printable maps with advanced configuration.</p>
+                <p>Build custom printable maps with Paper and High Contrast styles.</p>
             </div>
 
             <!-- Title & Metadata -->
@@ -86,16 +88,26 @@
                 </div>
             </div>
 
-            <!-- Map Theme / Style Presets -->
+            <!-- Visual Map Theme & Custom Inputs -->
             <div class="section-title">Visual Map Theme</div>
             <div class="control-group">
                 <label>Tile Layer Style</label>
                 <select id="input-theme">
+                    <option value="paper">📄 Paper (Light, Gray borders)</option>
+                    <option value="paperHC">📑 Paper HC (High Contrast, Black borders)</option>
                     <option value="osm">Standard OpenStreetMap (Light)</option>
                     <option value="cartoVoyager">CartoDB Voyager (Clean Minimal)</option>
                     <option value="cartoDark">CartoDB Dark Matter (Dark Mode)</option>
-                    <option value="stamenWatercolor">Stamen Toner (High Contrast Mono)</option>
+                    <option value="custom">⚙️ Custom Tile URL / XYZ Provider</option>
                 </select>
+            </div>
+
+            <!-- Custom Theme Extra Fields (Appears only when "custom" is selected) -->
+            <div id="custom-theme-wrapper" class="control-group hidden-custom" style="background: #090d16; padding: 10px; border-radius: 6px; border: 1px dashed #475569;">
+                <label style="color: #38bdf8; margin-bottom: 2px;">Custom Tile Template URL</label>
+                <input type="text" id="input-custom-url" placeholder="https://{s}.tile.yourserver.com/{z}/{x}/{y}.png" style="margin-bottom: 8px;">
+                <label style="color: #38bdf8; margin-bottom: 2px;">Attribution Text</label>
+                <input type="text" id="input-custom-attr" placeholder="&copy; Custom Map Data">
             </div>
 
             <!-- Coordinates & GPS -->
@@ -155,8 +167,8 @@
 
                 <!-- Bottom Poster Footer -->
                 <div class="map-poster-footer">
-                    <span id="footer-theme-label">Theme: Standard OSM</span>
-                    <span>Data &copy; OpenStreetMap contributors</span>
+                    <span id="footer-theme-label">Theme: Paper</span>
+                    <span id="footer-attr-label">&copy; CARTO & OpenStreetMap</span>
                     <span id="footer-scale-label">Zoom Level: 13</span>
                 </div>
             </div>
@@ -173,9 +185,10 @@
         const pSubtitle = urlParams.get('subtitle');
         const pWidth = urlParams.get('width');
         const pHeight = urlParams.get('height');
-        const pTheme = urlParams.get('theme');
+        const pTheme = urlParams.get('theme') || 'paper';
+        const pCustomUrl = urlParams.get('customUrl');
+        const pCustomAttr = urlParams.get('customAttr');
         const pMarker = urlParams.get('marker');
-        const pScale = urlParams.get('scale');
 
         // Initial Values setup
         let lat = pLat ? parseFloat(pLat) : 41.9028;
@@ -185,9 +198,10 @@
         let subtitle = pSubtitle ? decodeURIComponent(pSubtitle) : "Geographic Visualization Series";
         let mapWidth = pWidth || "100%";
         let mapHeight = pHeight || "600px";
-        let themeKey = pTheme || "osm";
+        let themeKey = pTheme;
+        let customUrlVal = pCustomUrl ? decodeURIComponent(pCustomUrl) : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+        let customAttrVal = pCustomAttr ? decodeURIComponent(pCustomAttr) : '&copy; OpenStreetMap contributors';
         let showMarker = pMarker !== 'false';
-        let showScale = pScale !== 'false';
 
         // Apply clean mode if query params are present
         if (pLat && pLng) {
@@ -204,8 +218,14 @@
         document.getElementById('input-zoom').value = zoom;
         document.getElementById('zoom-val').innerText = zoom;
         document.getElementById('input-theme').value = themeKey;
+        document.getElementById('input-custom-url').value = customUrlVal;
+        document.getElementById('input-custom-attr').value = customAttrVal;
         document.getElementById('input-show-marker').checked = showMarker;
-        document.getElementById('input-show-scale').checked = showScale;
+
+        // Toggle custom box visibility on load
+        if (themeKey === 'custom') {
+            document.getElementById('custom-theme-wrapper').classList.remove('hidden-custom');
+        }
 
         // Apply display headers
         document.getElementById('poster-title-display').innerText = title;
@@ -218,6 +238,16 @@
 
         // Tile theme URL configurations
         const themes = {
+            paper: {
+                url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                attr: '&copy; CARTO & OpenStreetMap',
+                name: 'Paper'
+            },
+            paperHC: {
+                url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png',
+                attr: '&copy; CARTO & OpenStreetMap (High Contrast)',
+                name: 'Paper HC'
+            },
             osm: {
                 url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 attr: '&copy; OpenStreetMap contributors',
@@ -233,26 +263,27 @@
                 attr: '&copy; CARTO & OpenStreetMap',
                 name: 'CartoDB Dark Matter'
             },
-            stamenWatercolor: {
-                url: 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
-                attr: '&copy; OpenStreetMap France',
-                name: 'OSM France Crisp'
+            custom: {
+                url: customUrlVal,
+                attr: customAttrVal,
+                name: 'Custom Provider'
             }
         };
 
         // Initialize Leaflet Map
         const map = L.map('map', {
-            zoomControl: !pLat // Minimal layout hides zoom controls if clean view is locked
+            zoomControl: !pLat 
         }).setView([lat, lng], zoom);
 
         // Load active tile layer
-        let currentThemeConfig = themes[themeKey] || themes.osm;
+        let currentThemeConfig = themes[themeKey] || themes.paper;
         let tileLayer = L.tileLayer(currentThemeConfig.url, {
             maxZoom: 19,
             attribution: currentThemeConfig.attr
         }).addTo(map);
 
         document.getElementById('footer-theme-label').innerText = `Theme: ${currentThemeConfig.name}`;
+        document.getElementById('footer-attr-label').innerText = currentThemeConfig.attr;
         document.getElementById('footer-scale-label').innerText = `Zoom Level: ${zoom}`;
 
         // Add marker if enabled
@@ -313,14 +344,29 @@
                 map.setZoom(z);
             });
 
-            document.getElementById('input-theme').addEventListener('change', (e) => {
-                const cfg = themes[e.target.value];
-                if (cfg) {
-                    map.removeLayer(tileLayer);
-                    tileLayer = L.tileLayer(cfg.url, { maxZoom: 19, attribution: cfg.attr }).addTo(map);
-                    document.getElementById('footer-theme-label').innerText = `Theme: ${cfg.name}`;
+            // Theme change event handler
+            const applyThemeChange = () => {
+                const selectedKey = document.getElementById('input-theme').value;
+                const customWrapper = document.getElementById('custom-theme-wrapper');
+                
+                if (selectedKey === 'custom') {
+                    customWrapper.classList.remove('hidden-custom');
+                    themes.custom.url = document.getElementById('input-custom-url').value || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+                    themes.custom.attr = document.getElementById('input-custom-attr').value || '&copy; Custom Provider';
+                } else {
+                    customWrapper.classList.add('hidden-custom');
                 }
-            });
+
+                const cfg = themes[selectedKey] || themes.paper;
+                map.removeLayer(tileLayer);
+                tileLayer = L.tileLayer(cfg.url, { maxZoom: 19, attribution: cfg.attr }).addTo(map);
+                document.getElementById('footer-theme-label').innerText = `Theme: ${cfg.name}`;
+                document.getElementById('footer-attr-label').innerText = cfg.attr;
+            };
+
+            document.getElementById('input-theme').addEventListener('change', applyThemeChange);
+            document.getElementById('input-custom-url').addEventListener('input', applyThemeChange);
+            document.getElementById('input-custom-attr').addEventListener('input', applyThemeChange);
 
             document.getElementById('input-show-marker').addEventListener('change', (e) => {
                 if (e.target.checked) {
@@ -357,9 +403,11 @@
                 const wVal = encodeURIComponent(document.getElementById('input-width').value);
                 const hVal = encodeURIComponent(document.getElementById('input-height').value);
                 const tVal = encodeURIComponent(document.getElementById('input-theme').value);
+                const customUrlParam = encodeURIComponent(document.getElementById('input-custom-url').value);
+                const customAttrParam = encodeURIComponent(document.getElementById('input-custom-attr').value);
                 const mVal = document.getElementById('input-show-marker').checked;
 
-                const query = `?lat=${center.lat}&lng=${center.lng}&zoom=${currentZoom}&title=${titleVal}&subtitle=${subVal}&width=${wVal}&height=${hVal}&theme=${tVal}&marker=${mVal}`;
+                const query = `?lat=${center.lat}&lng=${center.lng}&zoom=${currentZoom}&title=${titleVal}&subtitle=${subVal}&width=${wVal}&height=${hVal}&theme=${tVal}&customUrl=${customUrlParam}&customAttr=${customAttrParam}&marker=${mVal}`;
                 window.location.href = `${window.location.pathname}${query}`;
             });
 
