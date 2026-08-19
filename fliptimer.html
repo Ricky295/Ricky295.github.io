@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flap Timer</title>
+<style>
+  :root{
+    --case: #1c1c1c;
+    --card: #2b2b2b;
+    --card-light: #343434;
+    --ink: #ece6d8;
+    --hinge: #050505;
+    --accent: #5a5348;
+    --alert-color: transparent;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    padding:0;
+    width:100%;
+    height:100%;
+    min-height:100vh;
+    min-height:100dvh;
+    background:#100f0e;
+    overflow:hidden;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+  }
+  #bg{
+    position:fixed;
+    inset:0;
+    background: radial-gradient(ellipse at center, #262422 0%, #100f0e 100%);
+    z-index:0;
+    transition: background-color 0.6s ease;
+  }
+  #bg.alerting{
+    background: radial-gradient(ellipse at center, var(--alert-color) 0%, #100f0e 75%);
+  }
+  #app{
+    position:relative;
+    z-index:1;
+    width:100%;
+    height:100vh;
+    height:100dvh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  #board{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap: 2vw;
+    width:94vw;
+    height:min(80vh, 27vw);
+  }
+  .group{
+    display:flex;
+    gap: 0.8vw;
+    height:100%;
+  }
+  .colon{
+    color:var(--accent);
+    font-size:min(9vw, 9vh);
+    font-weight:700;
+    line-height:1;
+    user-select:none;
+    display:flex;
+    align-items:center;
+    transition: color 0.6s ease;
+  }
+
+  /* ===== Digit card ===== */
+  .digit{
+    position:relative;
+    height:100%;
+    aspect-ratio: 0.68;
+    min-width:0;
+    flex-shrink:1;
+    border-radius: 0.8vh;
+    box-shadow:
+      0 2vh 4vh rgba(0,0,0,0.6),
+      0 0 0 6px #141414;
+    perspective: 1400px;
+    transition: box-shadow 0.6s ease;
+    container-type: size;
+    container-name: digitcard;
+  }
+  .half{
+    position:absolute;
+    left:0; right:0;
+    height:50%;
+    overflow:hidden;
+    background: linear-gradient(to bottom, var(--card-light), var(--card));
+  }
+  .half span{
+    position:absolute;
+    left:0; right:0;
+    height:200%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color: var(--ink);
+    font-size: min(68cqh, 92cqw);
+    font-weight:700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .static-top{ top:0; border-radius: 0.8vh 0.8vh 0 0; box-shadow: inset 0 0 0 1px #000; }
+  .static-top span{ top:0; }
+  .static-bottom{ bottom:0; border-radius: 0 0 0.8vh 0.8vh; box-shadow: inset 0 0 0 1px #000; }
+  .static-bottom span{ bottom:0; }
+
+  .flap-top{
+    top:0;
+    border-radius: 0.8vh 0.8vh 0 0;
+    transform-origin: bottom center;
+    backface-visibility: hidden;
+    z-index:6;
+    box-shadow: inset 0 0 0 1px #000;
+  }
+  .flap-top span{ top:0; }
+
+  .flap-bottom{
+    bottom:0;
+    border-radius: 0 0 0.8vh 0.8vh;
+    transform-origin: top center;
+    backface-visibility: hidden;
+    transform: rotateX(90deg);
+    z-index:5;
+    box-shadow: inset 0 0 0 1px #000;
+  }
+  .flap-bottom span{ bottom:0; }
+
+  .flap-top.animate{ animation: fallDown 0.32s cubic-bezier(.55,.05,.9,.5) forwards; }
+  .flap-bottom.animate{ animation: riseUp 0.28s cubic-bezier(.1,.5,.45,1) forwards; animation-delay: 0.30s; }
+  @keyframes fallDown{ 0%{transform:rotateX(0deg);} 100%{transform:rotateX(-90deg);} }
+  @keyframes riseUp{ 0%{transform:rotateX(90deg);} 100%{transform:rotateX(0deg);} }
+
+  .digit::after{
+    content:"";
+    position:absolute;
+    left:0; right:0; top:50%;
+    height:2px;
+    background: var(--hinge);
+    transform: translateY(-1px);
+    z-index:8;
+    pointer-events:none;
+  }
+
+  .flashing .digit{
+    animation: pulseAlert 1s ease-in-out infinite;
+  }
+  @keyframes pulseAlert{
+    0%,100%{ box-shadow: 0 2vh 4vh rgba(0,0,0,0.6), 0 0 0 6px #141414; }
+    50%{ box-shadow: 0 2vh 4vh var(--alert-color), 0 0 0 6px var(--alert-color); }
+  }
+
+  #hint{
+    position:fixed;
+    bottom:2.5vh;
+    left:0; right:0;
+    text-align:center;
+    color:var(--accent);
+    font-size:14px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    user-select:none;
+    z-index:2;
+  }
+  #hint b{ color:#8a8070; }
+
+  #status{
+    position:fixed;
+    top:2.5vh;
+    left:0; right:0;
+    text-align:center;
+    color:#4a453c;
+    font-size:12px;
+    letter-spacing:0.2em;
+    text-transform:uppercase;
+    user-select:none;
+    z-index:2;
+  }
+
+  #settingsBtn{
+    position:fixed;
+    top:2.5vh;
+    right:2.5vh;
+    z-index:20;
+    background:none;
+    border:1px solid #3a352c;
+    color:var(--accent);
+    font-size:11px;
+    letter-spacing:0.15em;
+    text-transform:uppercase;
+    padding:8px 14px;
+    border-radius:20px;
+    cursor:pointer;
+    font-family:inherit;
+    transition: all 0.2s ease;
+  }
+  #settingsBtn:hover{ color:#ece6d8; border-color:#8a8070; }
+
+  /* ===== Settings panel ===== */
+  #overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(8,7,6,0.75);
+    backdrop-filter: blur(4px);
+    z-index:30;
+    display:none;
+    align-items:center;
+    justify-content:center;
+  }
+  #overlay.open{ display:flex; }
+
+  #panel{
+    background:#1a1917;
+    border:1px solid #332f27;
+    border-radius:12px;
+    width:min(480px, 90vw);
+    max-height:85vh;
+    overflow-y:auto;
+    padding:28px 26px 22px;
+    color:#ece6d8;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+  #panel h2{
+    margin:0 0 4px;
+    font-size:18px;
+    letter-spacing:0.05em;
+    text-transform:uppercase;
+    font-weight:700;
+    color:#ece6d8;
+  }
+  #panel .sub{
+    margin:0 0 20px;
+    font-size:12.5px;
+    color:#7a7266;
+    line-height:1.5;
+  }
+
+  .rule{
+    background:#211f1b;
+    border:1px solid #332f27;
+    border-radius:8px;
+    padding:14px 16px;
+    margin-bottom:12px;
+  }
+  .rule-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:10px;
+    flex-wrap:wrap;
+  }
+  .rule-row:last-child{ margin-bottom:0; }
+  .rule label{
+    font-size:11px;
+    color:#8a8070;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    white-space:nowrap;
+  }
+  .rule input[type=number]{
+    width:60px;
+    background:#141311;
+    border:1px solid #3a352c;
+    color:#ece6d8;
+    border-radius:6px;
+    padding:6px 8px;
+    font-size:14px;
+    font-family:inherit;
+  }
+  .rule input[type=color]{
+    width:36px;
+    height:30px;
+    border:1px solid #3a352c;
+    border-radius:6px;
+    background:none;
+    padding:2px;
+    cursor:pointer;
+  }
+  .swatch-presets{
+    display:flex;
+    gap:6px;
+  }
+  .swatch{
+    width:22px; height:22px;
+    border-radius:50%;
+    cursor:pointer;
+    border:2px solid transparent;
+  }
+  .swatch.active{ border-color:#ece6d8; }
+
+  .toggle{
+    position:relative;
+    width:38px;
+    height:22px;
+    background:#3a352c;
+    border-radius:11px;
+    cursor:pointer;
+    flex-shrink:0;
+    transition: background 0.2s ease;
+  }
+  .toggle.on{ background:#7a9b76; }
+  .toggle::after{
+    content:"";
+    position:absolute;
+    top:2px; left:2px;
+    width:18px; height:18px;
+    background:#ece6d8;
+    border-radius:50%;
+    transition: transform 0.2s ease;
+  }
+  .toggle.on::after{ transform: translateX(16px); }
+
+  .rule-remove{
+    margin-left:auto;
+    background:none;
+    border:none;
+    color:#7a7266;
+    cursor:pointer;
+    font-size:16px;
+    line-height:1;
+    padding:2px 6px;
+  }
+  .rule-remove:hover{ color:#c15a4a; }
+
+  #addRule{
+    width:100%;
+    background:none;
+    border:1px dashed #3a352c;
+    color:#8a8070;
+    padding:10px;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:12.5px;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    font-family:inherit;
+    margin-top:4px;
+  }
+  #addRule:hover{ color:#ece6d8; border-color:#8a8070; }
+
+  #panelFooter{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    margin-top:20px;
+  }
+  #panelFooter button{
+    font-family:inherit;
+    font-size:12.5px;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    padding:9px 18px;
+    border-radius:20px;
+    cursor:pointer;
+    border:1px solid #3a352c;
+    background:none;
+    color:#8a8070;
+  }
+  #closePanel{ color:#ece6d8; border-color:#8a8070; }
+</style>
+</head>
+<body>
+
+<div id="bg"></div>
+
+<div id="app">
+  <div id="status">Set duration — press space to start</div>
+  <button id="settingsBtn">Alerts</button>
+
+  <div id="board">
+    <div class="group">
+      <div class="digit" id="m1"></div>
+      <div class="digit" id="m0"></div>
+    </div>
+    <div class="colon">:</div>
+    <div class="group">
+      <div class="digit" id="s1"></div>
+      <div class="digit" id="s0"></div>
+    </div>
+  </div>
+
+  <div id="hint"><b>&uarr;/&darr;</b> minutes &nbsp; <b>space</b> start/pause &nbsp; <b>r</b> reset</div>
+</div>
+
+<div id="overlay">
+  <div id="panel">
+    <h2>Alerts</h2>
+    <p class="sub">Trigger a color change and/or sound when the remaining time crosses a threshold. Rules are checked every second while running.</p>
+    <div id="rules"></div>
+    <button id="addRule">+ Add alert</button>
+    <div id="panelFooter">
+      <button id="closePanel">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= Digit / flap rendering ================= */
+const digits = {};
+
+function buildDigit(el){
+  el.innerHTML = `
+    <div class="half static-top"><span>0</span></div>
+    <div class="half static-bottom"><span>0</span></div>
+  `;
+  return {
+    el,
+    current: '0',
+    staticTop: el.querySelector('.static-top span'),
+    staticBottom: el.querySelector('.static-bottom span'),
+  };
+}
+['m1','m0','s1','s0'].forEach(id=>{
+  digits[id] = buildDigit(document.getElementById(id));
+});
+
+function setDigit(id, value){
+  const d = digits[id];
+  if (d.current === value) return;
+  const oldVal = d.current;
+  d.current = value;
+  const el = d.el;
+
+  d.staticTop.textContent = value;
+
+  const flapTop = document.createElement('div');
+  flapTop.className = 'half flap-top animate';
+  flapTop.innerHTML = `<span>${oldVal}</span>`;
+
+  const flapBottom = document.createElement('div');
+  flapBottom.className = 'half flap-bottom animate';
+  flapBottom.innerHTML = `<span>${value}</span>`;
+
+  el.appendChild(flapTop);
+  el.appendChild(flapBottom);
+
+  setTimeout(()=>{ d.staticBottom.textContent = value; }, 300);
+
+  flapBottom.addEventListener('animationend', ()=>{
+    flapTop.remove();
+    flapBottom.remove();
+  });
+}
+
+function render(totalSeconds){
+  const m = Math.floor(totalSeconds/60);
+  const s = totalSeconds%60;
+  const mm = String(Math.min(m,99)).padStart(2,'0');
+  const ss = String(s).padStart(2,'0');
+  setDigit('m1', mm[0]);
+  setDigit('m0', mm[1]);
+  setDigit('s1', ss[0]);
+  setDigit('s0', ss[1]);
+}
+
+/* ================= Timer state ================= */
+let durationMin = 10;
+let totalSeconds = durationMin*60;
+let running = false;
+let intervalId = null;
+const board = document.getElementById('board');
+const status = document.getElementById('status');
+const bg = document.getElementById('bg');
+const colon = document.querySelector('.colon');
+
+render(totalSeconds);
+
+function updateStatus(){
+  if (totalSeconds <= 0){
+    status.textContent = "Time's up";
+  } else if (running){
+    status.textContent = "Running — press space to pause";
+  } else {
+    status.textContent = "Paused — press space to resume, r to reset";
+  }
+}
+
+/* ================= Alerts ================= */
+// each rule: { id, minutes, color, sound }
+let alertRules = [];
+let firedRuleIds = new Set();
+let audioCtx = null;
+
+function beep(){
+  try{
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = audioCtx.currentTime;
+    for (let i=0;i<2;i++){
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, now + i*0.35);
+      gain.gain.exponentialRampToValueAtTime(0.3, now + i*0.35 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + i*0.35 + 0.28);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(now + i*0.35);
+      osc.stop(now + i*0.35 + 0.3);
+    }
+  }catch(e){}
+}
+
+function applyAlertColor(hex){
+  document.documentElement.style.setProperty('--alert-color', hex);
+  bg.classList.add('alerting');
+  board.classList.add('flashing');
+  colon.style.color = hex;
+}
+
+function clearAlertVisual(){
+  bg.classList.remove('alerting');
+  board.classList.remove('flashing');
+  colon.style.color = '';
+}
+
+function checkAlerts(){
+  const remainingMin = totalSeconds / 60;
+  const sorted = [...alertRules].sort((a,b)=>a.minutes-b.minutes);
+  let activeColorRule = null;
+
+  for (const rule of sorted){
+    if (remainingMin <= rule.minutes){
+      activeColorRule = rule;
+    }
+  }
+
+  if (activeColorRule){
+    applyAlertColor(activeColorRule.color);
+  } else {
+    clearAlertVisual();
+  }
+
+  for (const rule of sorted){
+    if (rule.sound && remainingMin <= rule.minutes && !firedRuleIds.has(rule.id)){
+      firedRuleIds.add(rule.id);
+      beep();
+    }
+  }
+}
+
+/* ================= Tick / controls ================= */
+function tick(){
+  totalSeconds--;
+  if (totalSeconds <= 0){
+    totalSeconds = 0;
+    render(0);
+    stop();
+    board.classList.add('flashing');
+    document.documentElement.style.setProperty('--alert-color', '#b3392c');
+    bg.classList.add('alerting');
+    colon.style.color = '#b3392c';
+    updateStatus();
+    return;
+  }
+  render(totalSeconds);
+  checkAlerts();
+}
+
+function start(){
+  if (running || totalSeconds<=0) return;
+  running = true;
+  intervalId = setInterval(tick, 1000);
+  updateStatus();
+}
+function stop(){
+  running = false;
+  clearInterval(intervalId);
+  updateStatus();
+}
+function reset(){
+  stop();
+  clearAlertVisual();
+  firedRuleIds = new Set();
+  totalSeconds = durationMin*60;
+  render(totalSeconds);
+  status.textContent = "Set duration — press space to start";
+}
+
+window.addEventListener('keydown', (e)=>{
+  if (document.getElementById('overlay').classList.contains('open')) return;
+  if (e.code === 'Space'){
+    e.preventDefault();
+    if (totalSeconds<=0) return;
+    running ? stop() : start();
+  } else if (e.key === 'ArrowUp'){
+    e.preventDefault();
+    if (running) return;
+    durationMin = Math.min(99, durationMin+1);
+    totalSeconds = durationMin*60;
+    clearAlertVisual();
+    firedRuleIds = new Set();
+    render(totalSeconds);
+  } else if (e.key === 'ArrowDown'){
+    e.preventDefault();
+    if (running) return;
+    durationMin = Math.max(1, durationMin-1);
+    totalSeconds = durationMin*60;
+    clearAlertVisual();
+    firedRuleIds = new Set();
+    render(totalSeconds);
+  } else if (e.key === 'r' || e.key === 'R'){
+    e.preventDefault();
+    reset();
+  }
+});
+
+/* ================= Settings panel ================= */
+const overlay = document.getElementById('overlay');
+const rulesContainer = document.getElementById('rules');
+const settingsBtn = document.getElementById('settingsBtn');
+const closePanel = document.getElementById('closePanel');
+const addRuleBtn = document.getElementById('addRule');
+
+const presetColors = ['#e3b23c', '#c15a4a', '#7a9b76', '#5c8fc9'];
+let ruleIdCounter = 1;
+
+function defaultRules(){
+  return [
+    { id: ruleIdCounter++, minutes: 5, color: '#e3b23c', sound: true },
+    { id: ruleIdCounter++, minutes: 1, color: '#c15a4a', sound: true },
+  ];
+}
+alertRules = defaultRules();
+
+function renderRules(){
+  rulesContainer.innerHTML = '';
+  alertRules
+    .slice()
+    .sort((a,b)=>b.minutes-a.minutes)
+    .forEach(rule=>{
+      const el = document.createElement('div');
+      el.className = 'rule';
+      el.innerHTML = `
+        <div class="rule-row">
+          <label>At</label>
+          <input type="number" min="1" max="98" value="${rule.minutes}" data-field="minutes" />
+          <label>min remaining</label>
+          <button class="rule-remove" title="Remove">&times;</button>
+        </div>
+        <div class="rule-row">
+          <label>Color</label>
+          <div class="swatch-presets">
+            ${presetColors.map(c=>`<span class="swatch" data-color="${c}" style="background:${c}"></span>`).join('')}
+          </div>
+          <input type="color" data-field="color" value="${rule.color}" />
+        </div>
+        <div class="rule-row">
+          <label>Sound</label>
+          <div class="toggle ${rule.sound ? 'on':''}" data-field="sound"></div>
+        </div>
+      `;
+
+      el.querySelectorAll('.swatch').forEach(sw=>{
+        if (sw.dataset.color.toLowerCase() === rule.color.toLowerCase()) sw.classList.add('active');
+        sw.addEventListener('click', ()=>{
+          rule.color = sw.dataset.color;
+          renderRules();
+        });
+      });
+
+      el.querySelector('input[data-field="minutes"]').addEventListener('input', (e)=>{
+        rule.minutes = Math.max(1, Math.min(98, Number(e.target.value) || 1));
+      });
+      el.querySelector('input[data-field="color"]').addEventListener('input', (e)=>{
+        rule.color = e.target.value;
+        renderRules();
+      });
+      el.querySelector('.toggle').addEventListener('click', ()=>{
+        rule.sound = !rule.sound;
+        renderRules();
+      });
+      el.querySelector('.rule-remove').addEventListener('click', ()=>{
+        alertRules = alertRules.filter(r=>r.id !== rule.id);
+        renderRules();
+      });
+
+      rulesContainer.appendChild(el);
+    });
+}
+renderRules();
+
+addRuleBtn.addEventListener('click', ()=>{
+  alertRules.push({ id: ruleIdCounter++, minutes: 3, color: '#e3b23c', sound: false });
+  renderRules();
+});
+
+settingsBtn.addEventListener('click', ()=>{
+  overlay.classList.add('open');
+});
+closePanel.addEventListener('click', ()=>{
+  overlay.classList.remove('open');
+  firedRuleIds = new Set();
+  checkAlerts();
+});
+overlay.addEventListener('click', (e)=>{
+  if (e.target === overlay){
+    overlay.classList.remove('open');
+    firedRuleIds = new Set();
+    checkAlerts();
+  }
+});
+</script>
+
+</body>
+</html>
