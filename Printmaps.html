@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrintMaps Studio Pro</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        .app-container { display: flex; flex: 1; height: 100vh; overflow: hidden; }
+        
+        /* Editor sidebar */
+        .sidebar { width: 420px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; padding: 20px; gap: 16px; z-index: 1000; overflow-y: auto; }
+        .sidebar h1 { font-size: 1.25rem; font-weight: 700; color: #ffffff; }
+        .sidebar p { font-size: 0.8125rem; color: #94a3b8; }
+        
+        .section-title { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #38bdf8; letter-spacing: 0.05em; margin-top: 4px; border-bottom: 1px solid #334155; padding-bottom: 4px; }
+        
+        .control-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .control-group { display: flex; flex-direction: column; gap: 4px; }
+        .control-group label { font-size: 0.75rem; font-weight: 500; color: #cbd5e1; }
+        .control-group input, .control-group select { padding: 8px 10px; background: #0f172a; border: 1px solid #475569; color: #fff; border-radius: 6px; font-size: 0.875rem; outline: none; transition: border-color 0.2s; }
+        .control-group input:focus, .control-group select:focus { border-color: #38bdf8; }
+        
+        .btn { background: #0284c7; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s; text-align: center; text-decoration: none; font-size: 0.875rem; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+        .btn:hover { background: #0369a1; }
+        .btn-secondary { background: #334155; color: #f8fafc; }
+        .btn-secondary:hover { background: #475569; }
+
+        /* Map viewport and dynamic print canvas sizing container */
+        .map-viewport { flex: 1; display: flex; flex-direction: column; background: #0f172a; position: relative; align-items: center; justify-content: center; padding: 16px; overflow: auto; }
+        
+        .print-canvas-frame { background: #ffffff; color: #1e293b; display: flex; flex-direction: column; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5); transition: all 0.3s ease; position: relative; }
+        
+        .map-poster-header { padding: 12px 16px; background: #ffffff; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: baseline; z-index: 10; }
+        .map-poster-header h2 { font-size: 1rem; font-weight: 700; color: #0f172a; }
+        .map-poster-header span { font-size: 0.7rem; color: #64748b; }
+
+        .map-poster-footer { padding: 8px 16px; background: #ffffff; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #64748b; z-index: 10; }
+
+        #map { flex: 1; width: 100%; z-index: 1; }
+
+        /* Clean Print Mode Overrides */
+        body.clean-print-mode .sidebar { display: none !important; }
+        body.clean-print-mode { background: #ffffff; }
+        body.clean-print-mode .map-viewport { padding: 0; background: #ffffff; }
+        body.clean-print-mode .print-canvas-frame { box-shadow: none; width: 100% !important; height: 100% !important; max-width: none; max-height: none; }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Editor Sidebar -->
+        <aside class="sidebar">
+            <div>
+                <h1>PrintMaps Studio Pro</h1>
+                <p>Build custom printable maps with advanced configuration.</p>
+            </div>
+
+            <!-- Title & Metadata -->
+            <div class="control-group">
+                <label>Map Poster Title</label>
+                <input type="text" id="input-title" value="My Custom Exploration Map">
+            </div>
+
+            <div class="control-group">
+                <label>Poster Subtitle / Location Tag</label>
+                <input type="text" id="input-subtitle" value="Geographic Visualization Series">
+            </div>
+
+            <!-- Dimensions -->
+            <div class="section-title">Canvas Dimensions</div>
+            <div class="control-grid">
+                <div class="control-group">
+                    <label>Width (px or %)</label>
+                    <input type="text" id="input-width" value="100%">
+                </div>
+                <div class="control-group">
+                    <label>Height (px)</label>
+                    <input type="text" id="input-height" value="600px">
+                </div>
+            </div>
+
+            <!-- Map Theme / Style Presets -->
+            <div class="section-title">Visual Map Theme</div>
+            <div class="control-group">
+                <label>Tile Layer Style</label>
+                <select id="input-theme">
+                    <option value="osm">Standard OpenStreetMap (Light)</option>
+                    <option value="cartoVoyager">CartoDB Voyager (Clean Minimal)</option>
+                    <option value="cartoDark">CartoDB Dark Matter (Dark Mode)</option>
+                    <option value="stamenWatercolor">Stamen Toner (High Contrast Mono)</option>
+                </select>
+            </div>
+
+            <!-- Coordinates & GPS -->
+            <div class="section-title">Coordinates & View</div>
+            <div class="control-grid">
+                <div class="control-group">
+                    <label>Latitude</label>
+                    <input type="number" step="0.0001" id="input-lat" value="41.9028">
+                </div>
+                <div class="control-group">
+                    <label>Longitude</label>
+                    <input type="number" step="0.0001" id="input-lng" value="12.4964">
+                </div>
+            </div>
+            <button id="btn-gps" class="btn btn-secondary">📍 Use My GPS Location</button>
+
+            <div class="control-group">
+                <label>Zoom Level (<span id="zoom-val">13</span>) [Range: 2 - 19]</label>
+                <input type="range" id="input-zoom" min="2" max="19" value="13">
+            </div>
+
+            <!-- Extra Toggles -->
+            <div class="section-title">Extras & Decor</div>
+            <div class="control-grid">
+                <div class="control-group" style="flex-direction: row; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="input-show-marker" checked style="width: auto;">
+                    <label style="margin: 0; cursor: pointer;" for="input-show-marker">Show Center Pin</label>
+                </div>
+                <div class="control-group" style="flex-direction: row; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="input-show-scale" checked style="width: auto;">
+                    <label style="margin: 0; cursor: pointer;" for="input-show-scale">Show Scale bar</label>
+                </div>
+            </div>
+
+            <hr style="border:0; border-top:1px solid #334155; margin-top: auto;">
+
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button id="btn-generate" class="btn">🚀 Generate Clean Print View</button>
+                <button id="btn-print" class="btn btn-secondary">🖨️ Open Native Browser Print</button>
+            </div>
+        </aside>
+
+        <!-- Map Viewport Container -->
+        <div class="map-viewport">
+            <div id="print-frame" class="print-canvas-frame" style="width: 100%; height: 600px;">
+                <!-- Top Poster Metadata Header -->
+                <div class="map-poster-header">
+                    <div>
+                        <h2 id="poster-title-display">My Custom Exploration Map</h2>
+                        <span id="poster-subtitle-display" style="font-size:0.75rem; color:#64748b;">Geographic Visualization Series</span>
+                    </div>
+                    <span id="poster-coords-display" style="font-family: monospace;">41.9028° N, 12.4964° E</span>
+                </div>
+
+                <!-- Leaflet Map Element -->
+                <div id="map"></div>
+
+                <!-- Bottom Poster Footer -->
+                <div class="map-poster-footer">
+                    <span id="footer-theme-label">Theme: Standard OSM</span>
+                    <span>Data &copy; OpenStreetMap contributors</span>
+                    <span id="footer-scale-label">Zoom Level: 13</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Parse URL Parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const pLat = urlParams.get('lat');
+        const pLng = urlParams.get('lng');
+        const pZoom = urlParams.get('zoom');
+        const pTitle = urlParams.get('title');
+        const pSubtitle = urlParams.get('subtitle');
+        const pWidth = urlParams.get('width');
+        const pHeight = urlParams.get('height');
+        const pTheme = urlParams.get('theme');
+        const pMarker = urlParams.get('marker');
+        const pScale = urlParams.get('scale');
+
+        // Initial Values setup
+        let lat = pLat ? parseFloat(pLat) : 41.9028;
+        let lng = pLng ? parseFloat(pLng) : 12.4964;
+        let zoom = pZoom ? parseInt(pZoom) : 13;
+        let title = pTitle ? decodeURIComponent(pTitle) : "My Custom Exploration Map";
+        let subtitle = pSubtitle ? decodeURIComponent(pSubtitle) : "Geographic Visualization Series";
+        let mapWidth = pWidth || "100%";
+        let mapHeight = pHeight || "600px";
+        let themeKey = pTheme || "osm";
+        let showMarker = pMarker !== 'false';
+        let showScale = pScale !== 'false';
+
+        // Apply clean mode if query params are present
+        if (pLat && pLng) {
+            document.body.classList.add('clean-print-mode');
+        }
+
+        // Apply configuration to DOM UI fields
+        document.getElementById('input-title').value = title;
+        document.getElementById('input-subtitle').value = subtitle;
+        document.getElementById('input-width').value = mapWidth;
+        document.getElementById('input-height').value = mapHeight;
+        document.getElementById('input-lat').value = lat;
+        document.getElementById('input-lng').value = lng;
+        document.getElementById('input-zoom').value = zoom;
+        document.getElementById('zoom-val').innerText = zoom;
+        document.getElementById('input-theme').value = themeKey;
+        document.getElementById('input-show-marker').checked = showMarker;
+        document.getElementById('input-show-scale').checked = showScale;
+
+        // Apply display headers
+        document.getElementById('poster-title-display').innerText = title;
+        document.getElementById('poster-subtitle-display').innerText = subtitle;
+
+        // Apply frame layout dimensions
+        const printFrame = document.getElementById('print-frame');
+        printFrame.style.width = mapWidth;
+        printFrame.style.height = mapHeight;
+
+        // Tile theme URL configurations
+        const themes = {
+            osm: {
+                url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                attr: '&copy; OpenStreetMap contributors',
+                name: 'Standard OSM'
+            },
+            cartoVoyager: {
+                url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                attr: '&copy; CARTO & OpenStreetMap',
+                name: 'CartoDB Voyager'
+            },
+            cartoDark: {
+                url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                attr: '&copy; CARTO & OpenStreetMap',
+                name: 'CartoDB Dark Matter'
+            },
+            stamenWatercolor: {
+                url: 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
+                attr: '&copy; OpenStreetMap France',
+                name: 'OSM France Crisp'
+            }
+        };
+
+        // Initialize Leaflet Map
+        const map = L.map('map', {
+            zoomControl: !pLat // Minimal layout hides zoom controls if clean view is locked
+        }).setView([lat, lng], zoom);
+
+        // Load active tile layer
+        let currentThemeConfig = themes[themeKey] || themes.osm;
+        let tileLayer = L.tileLayer(currentThemeConfig.url, {
+            maxZoom: 19,
+            attribution: currentThemeConfig.attr
+        }).addTo(map);
+
+        document.getElementById('footer-theme-label').innerText = `Theme: ${currentThemeConfig.name}`;
+        document.getElementById('footer-scale-label').innerText = `Zoom Level: ${zoom}`;
+
+        // Add marker if enabled
+        let marker = null;
+        if (showMarker) {
+            marker = L.marker([lat, lng]).addTo(map);
+        }
+
+        // Keep UI coordinates synced when map moves manually
+        map.on('move', () => {
+            const center = map.getCenter();
+            document.getElementById('input-lat').value = center.lat.toFixed(4);
+            document.getElementById('input-lng').value = center.lng.toFixed(4);
+            document.getElementById('poster-coords-display').innerText = `${center.lat.toFixed(4)}° N, ${center.lng.toFixed(4)}° E`;
+        });
+
+        map.on('zoom', () => {
+            const z = map.getZoom();
+            document.getElementById('input-zoom').value = z;
+            document.getElementById('zoom-val').innerText = z;
+            document.getElementById('footer-scale-label').innerText = `Zoom Level: ${z}`;
+        });
+
+        // Editor Bindings (Disabled in clean print mode)
+        if (!pLat) {
+            document.getElementById('input-title').addEventListener('input', (e) => {
+                document.getElementById('poster-title-display').innerText = e.target.value;
+            });
+            document.getElementById('input-subtitle').addEventListener('input', (e) => {
+                document.getElementById('poster-subtitle-display').innerText = e.target.value;
+            });
+
+            document.getElementById('input-width').addEventListener('input', (e) => {
+                printFrame.style.width = e.target.value;
+                map.invalidateSize();
+            });
+
+            document.getElementById('input-height').addEventListener('input', (e) => {
+                printFrame.style.height = e.target.value;
+                map.invalidateSize();
+            });
+
+            const updateMapViewFromInputs = () => {
+                const newLat = parseFloat(document.getElementById('input-lat').value);
+                const newLng = parseFloat(document.getElementById('input-lng').value);
+                if (!isNaN(newLat) && !isNaN(newLng)) {
+                    map.setView([newLat, newLng], map.getZoom());
+                    if (marker) marker.setLatLng([newLat, newLng]);
+                }
+            };
+
+            document.getElementById('input-lat').addEventListener('change', updateMapViewFromInputs);
+            document.getElementById('input-lng').addEventListener('change', updateMapViewFromInputs);
+
+            document.getElementById('input-zoom').addEventListener('input', (e) => {
+                const z = parseInt(e.target.value);
+                document.getElementById('zoom-val').innerText = z;
+                map.setZoom(z);
+            });
+
+            document.getElementById('input-theme').addEventListener('change', (e) => {
+                const cfg = themes[e.target.value];
+                if (cfg) {
+                    map.removeLayer(tileLayer);
+                    tileLayer = L.tileLayer(cfg.url, { maxZoom: 19, attribution: cfg.attr }).addTo(map);
+                    document.getElementById('footer-theme-label').innerText = `Theme: ${cfg.name}`;
+                }
+            });
+
+            document.getElementById('input-show-marker').addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    if (!marker) marker = L.marker(map.getCenter()).addTo(map);
+                } else {
+                    if (marker) { map.removeLayer(marker); marker = null; }
+                }
+            });
+
+            // GPS Geolocation Button integration
+            document.getElementById('btn-gps').addEventListener('click', () => {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition((pos) => {
+                        const gLat = pos.coords.latitude;
+                        const gLng = pos.coords.longitude;
+                        document.getElementById('input-lat').value = gLat.toFixed(4);
+                        document.getElementById('input-lng').value = gLng.toFixed(4);
+                        map.setView([gLat, gLng], 15);
+                        if (marker) marker.setLatLng([gLat, gLng]);
+                    }, (err) => {
+                        alert("Unable to retrieve your location via GPS.");
+                    });
+                } else {
+                    alert("Geolocation is not supported by your browser.");
+                }
+            });
+
+            // Generate clean print layout view with query parameters
+            document.getElementById('btn-generate').addEventListener('click', () => {
+                const center = map.getCenter();
+                const currentZoom = map.getZoom();
+                const titleVal = encodeURIComponent(document.getElementById('input-title').value);
+                const subVal = encodeURIComponent(document.getElementById('input-subtitle').value);
+                const wVal = encodeURIComponent(document.getElementById('input-width').value);
+                const hVal = encodeURIComponent(document.getElementById('input-height').value);
+                const tVal = encodeURIComponent(document.getElementById('input-theme').value);
+                const mVal = document.getElementById('input-show-marker').checked;
+
+                const query = `?lat=${center.lat}&lng=${center.lng}&zoom=${currentZoom}&title=${titleVal}&subtitle=${subVal}&width=${wVal}&height=${hVal}&theme=${tVal}&marker=${mVal}`;
+                window.location.href = `${window.location.pathname}${query}`;
+            });
+
+            document.getElementById('btn-print').addEventListener('click', () => {
+                window.print();
+            });
+        }
+    </script>
+</body>
+</html>
+
