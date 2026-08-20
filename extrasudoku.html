@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Extra Sudoku</title>
+<style>
+  :root {
+    --bg: #14161c;
+    --panel: #1c1f28;
+    --panel-alt: #232733;
+    --line-soft: #343a4a;
+    --line-hard: #6b7690;
+    --accent: #e0a85c;
+    --accent-dim: #7a5c33;
+    --link-glow: #d9634f;
+    --text: #e8e6df;
+    --text-dim: #8c92a4;
+    --given: #e8e6df;
+    --user: #7fb0d9;
+    --error: #d9634f;
+    --font-display: 'Spectral', Georgia, serif;
+    --font-ui: 'IBM Plex Sans', system-ui, sans-serif;
+    --font-num: 'IBM Plex Mono', monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 15% 10%, rgba(224,168,92,0.05), transparent 40%),
+      radial-gradient(circle at 85% 90%, rgba(217,99,79,0.05), transparent 40%);
+    color: var(--text);
+    font-family: var(--font-ui);
+    min-height: 100vh;
+    padding: 24px 16px 80px;
+  }
+
+  @font-face {
+    font-family: 'Spectral';
+    src: local('Georgia');
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 22px;
+  }
+
+  header h1 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 2.4rem;
+    letter-spacing: 0.01em;
+    margin: 0 0 4px;
+    color: var(--text);
+  }
+  header h1 .nine {
+    color: var(--accent);
+    font-style: italic;
+  }
+
+  header p {
+    color: var(--text-dim);
+    font-size: 0.92rem;
+    margin: 0;
+    letter-spacing: 0.02em;
+  }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
+    margin: 18px 0 26px;
+  }
+
+  select, button {
+    font-family: var(--font-ui);
+    font-size: 0.85rem;
+    background: var(--panel-alt);
+    color: var(--text);
+    border: 1px solid var(--line-soft);
+    padding: 9px 14px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  select:hover, button:hover { border-color: var(--accent-dim); }
+  button.primary {
+    background: linear-gradient(180deg, var(--accent), #c78a44);
+    color: #201203;
+    border: none;
+    font-weight: 600;
+  }
+  button.primary:hover { filter: brightness(1.08); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+
+  .status-bar {
+    text-align: center;
+    min-height: 22px;
+    font-size: 0.88rem;
+    color: var(--accent);
+    letter-spacing: 0.03em;
+    margin-bottom: 14px;
+    font-family: var(--font-num);
+  }
+
+  .status-bar.win { color: #8fd19e; font-weight: 600; }
+
+  /* ============ VIEW LAYOUT: nav rail + single active board ============ */
+
+  .board-area {
+    display: flex;
+    gap: 26px;
+    align-items: flex-start;
+    justify-content: center;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .nav-rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+    padding-top: 4px;
+  }
+
+  .nav-rail-label {
+    font-family: var(--font-num);
+    font-size: 0.62rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    opacity: 0.6;
+  }
+
+  .mini-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+    background: var(--line-hard);
+    padding: 2px;
+    border-radius: 4px;
+    width: 108px;
+  }
+
+  .mini-cell {
+    aspect-ratio: 1;
+    background: var(--panel-alt);
+    border-radius: 1px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-num);
+    font-size: 0.62rem;
+    color: var(--text-dim);
+    transition: background 0.12s, color 0.12s, transform 0.1s;
+    border: 1px solid transparent;
+  }
+  .mini-cell:hover { background: var(--panel); color: var(--text); transform: scale(1.04); }
+  .mini-cell.active {
+    background: rgba(224,168,92,0.22);
+    color: var(--accent);
+    border-color: var(--accent-dim);
+    font-weight: 600;
+  }
+
+  .m-button {
+    width: 108px;
+    height: 40px;
+    border-radius: 4px;
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1.15rem;
+    background: var(--panel-alt);
+    border: 1px solid var(--line-soft);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+  }
+  .m-button:hover { border-color: var(--accent-dim); color: var(--text); }
+  .m-button.active {
+    background: linear-gradient(180deg, var(--accent), #c78a44);
+    color: #201203;
+    border-color: transparent;
+  }
+
+  .board-stage {
+    flex: 1 1 auto;
+    max-width: 640px;
+    position: relative;
+  }
+
+  .board-title {
+    text-align: center;
+    font-family: var(--font-num);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  .board-title b { color: var(--accent); font-weight: 600; }
+
+  .sub-board {
+    background: var(--panel);
+    padding: 8px;
+    border-radius: 5px;
+    position: relative;
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,0.6);
+  }
+
+  .sub-board-grid {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    grid-template-rows: repeat(9, 1fr);
+    gap: 0;
+    aspect-ratio: 1;
+    background: var(--line-soft);
+    border: 1.5px solid var(--line-hard);
+  }
+
+  @media (max-width: 700px) {
+    .board-area { flex-direction: column; align-items: center; }
+    .nav-rail { flex-direction: row; padding-top: 0; }
+    .nav-rail-label { display: none; }
+    .mini-grid { width: 84px; }
+    .m-button { width: 84px; height: 34px; font-size: 1rem; }
+    .board-stage { max-width: 480px; width: 100%; }
+  }
+
+  .cell {
+    background: var(--panel);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-num);
+    font-size: clamp(0.85rem, 3.4vw, 1.5rem);
+    color: var(--user);
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    aspect-ratio: 1;
+    transition: background 0.1s;
+  }
+
+  .cell.given {
+    color: var(--given);
+    font-weight: 600;
+    cursor: default;
+  }
+
+  .cell.linked {
+    background: var(--panel-alt);
+  }
+
+  .cell.linked::after {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    border: 1px solid var(--link-glow);
+    opacity: 0.22;
+    pointer-events: none;
+  }
+
+  .cell.selected {
+    background: rgba(224,168,92,0.22) !important;
+  }
+
+  .cell.peer {
+    background: rgba(224,168,92,0.07);
+  }
+
+  .cell.same-value {
+    background: rgba(127,176,217,0.14);
+  }
+
+  .cell.error {
+    color: var(--error) !important;
+  }
+
+  .cell.hint-flash {
+    animation: flashHint 0.9s ease-out;
+  }
+  @keyframes flashHint {
+    0% { background: rgba(143,209,158,0.5); }
+    100% { background: transparent; }
+  }
+
+  /* thick lines for 3x3 boxes within each sub-board */
+  .cell.br { border-right: 1.5px solid var(--line-hard); }
+  .cell.bb { border-bottom: 1.5px solid var(--line-hard); }
+
+  .cell.notes {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    font-size: clamp(0.42rem, 1.3vw, 0.62rem);
+    color: var(--text-dim);
+  }
+  .cell.notes span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ============ NUMBER PAD ============ */
+
+  .numpad {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin: 22px auto 0;
+    flex-wrap: wrap;
+    max-width: 620px;
+  }
+  .numpad button {
+    width: 44px;
+    height: 44px;
+    font-size: 1.1rem;
+    font-family: var(--font-num);
+    padding: 0;
+  }
+  .numpad button.erase { font-size: 0.8rem; width: 60px; }
+  .numpad button.notemode.active {
+    background: var(--accent);
+    color: #201203;
+  }
+
+  .legend {
+    text-align: center;
+    margin-top: 30px;
+    color: var(--text-dim);
+    font-size: 0.78rem;
+    line-height: 1.7;
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .legend b { color: var(--accent); }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,10,14,0.75);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--line-soft);
+    border-radius: 6px;
+    padding: 34px 40px;
+    text-align: center;
+    max-width: 380px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+  }
+  .modal h2 {
+    font-family: var(--font-display);
+    color: var(--accent);
+    margin: 0 0 10px;
+    font-size: 1.8rem;
+  }
+  .modal p { color: var(--text-dim); margin: 0 0 20px; font-size: 0.9rem; }
+
+  .gen-progress {
+    text-align: center;
+    color: var(--text-dim);
+    font-family: var(--font-num);
+    font-size: 0.8rem;
+    margin-top: 6px;
+    min-height: 18px;
+  }
+
+  @media (max-width: 700px) {
+    header h1 { font-size: 1.7rem; }
+    .sub-board { padding: 4px; }
+  }
+
+  /* ============ CUSTOM CLUES MODAL ============ */
+  .custom-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    justify-content: center;
+    margin: 6px 0 4px;
+  }
+  .custom-row input[type="range"] {
+    width: 220px;
+    accent-color: var(--accent);
+  }
+  .custom-value {
+    font-family: var(--font-num);
+    color: var(--accent);
+    font-size: 1.1rem;
+    min-width: 34px;
+    text-align: center;
+  }
+
+  /* ============ HUD (timer / mistakes) ============ */
+  .hud {
+    display: flex;
+    justify-content: center;
+    gap: 22px;
+    margin-bottom: 14px;
+  }
+  .hud-item {
+    font-family: var(--font-num);
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
+  .hud-item:empty { display: none; }
+  .hud-item.mistake-warn { color: var(--error); }
+
+  /* ============ SETTINGS MODAL ============ */
+  .settings-modal { text-align: left; max-width: 420px; }
+  .settings-modal h2 { text-align: center; }
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 0.88rem;
+  }
+  .setting-row:last-of-type { border-bottom: none; }
+  .setting-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .setting-row-select select {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+  }
+  #settingsCloseBtn { display: block; margin: 18px auto 0; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Extra <span class="nine">Sudoku</span></h1>
+    <p>Nine boards, one master grid — each linked quadrant shared between them</p>
+  </header>
+
+  <div class="toolbar">
+    <select id="difficulty">
+      <option value="easy">Easy (15 master clues)</option>
+      <option value="medium" selected>Medium (10 master clues)</option>
+      <option value="hard">Hard (5 master clues)</option>
+      <option value="brutal">Brutal (0 master clues)</option>
+      <option value="custom">Custom&hellip;</option>
+    </select>
+    <button class="primary" id="newGameBtn">New Puzzle</button>
+    <button id="hintBtn">Hint</button>
+    <button id="checkBtn">Check</button>
+    <button id="eraseAllBtn">Clear My Entries</button>
+    <button id="settingsBtn">Settings</button>
+  </div>
+
+  <div class="hud">
+    <span class="hud-item" id="timerDisplay">00:00</span>
+    <span class="hud-item" id="mistakeDisplay"></span>
+  </div>
+
+  <div class="status-bar" id="statusBar">Press "New Puzzle" to begin.</div>
+  <div class="gen-progress" id="genProgress"></div>
+
+  <div class="board-area">
+    <div class="nav-rail">
+      <div class="nav-rail-label">Boards</div>
+      <div class="mini-grid" id="miniGrid"></div>
+      <button class="m-button" id="masterBtn" title="View master grid">M</button>
+    </div>
+    <div class="board-stage">
+      <div class="board-title" id="boardTitle">Master grid</div>
+      <div class="sub-board" id="superGrid"></div>
+    </div>
+  </div>
+
+  <div class="numpad" id="numpad"></div>
+
+  <div class="legend">
+    <p><b>How it works:</b> there are 9 sub-sudokus (S1–S9), plus one master sudoku overlaid across all
+    of them. Quadrant <i>i</i> of the master board is the <i>same</i> physical cells as quadrant <i>i</i>
+    of sub-board S<sub>i</sub> — shown with a subtle orange outline when you're viewing that sub-board.
+    Use the mini-grid on the left to jump into any sub-board, or press <b>M</b> to return to the master
+    grid. Every board, including the master, must independently follow standard sudoku rules, and the
+    puzzle is solved the moment the master board is complete. Clue counts are prioritized on the master
+    grid first — Easy leaves 15 master clues, Medium 10, Hard 5, and Brutal strips it to 0, filling in
+    only from what the sub-boards force. Pick Custom to set any master clue count from 0 to 81 yourself.</p>
+  </div>
+</div>
+
+<div class="modal-overlay" id="winModal">
+  <div class="modal">
+    <h2>Solved</h2>
+    <p id="winText">The master board is complete.</p>
+    <button class="primary" id="winClose">Continue</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="customModal">
+  <div class="modal">
+    <h2>Custom master clues</h2>
+    <p>Choose how many clues the master grid starts with, 0&ndash;81. Lower is harder.</p>
+    <div class="custom-row">
+      <input type="range" id="customSlider" min="0" max="81" value="10" step="1">
+      <span class="custom-value" id="customValue">10</span>
+    </div>
+    <button class="primary" id="customGoBtn">Generate</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal settings-modal">
+    <h2>Settings</h2>
+    <div class="setting-row">
+      <label for="setRegionHighlight">Highlight row / column / box</label>
+      <input type="checkbox" id="setRegionHighlight">
+    </div>
+    <div class="setting-row">
+      <label for="setNumberHighlight">Highlight matching numbers</label>
+      <input type="checkbox" id="setNumberHighlight">
+    </div>
+    <div class="setting-row">
+      <label for="setTimer">Show timer</label>
+      <input type="checkbox" id="setTimer">
+    </div>
+    <div class="setting-row setting-row-select">
+      <label for="setMistakeMode">Mistake counting</label>
+      <select id="setMistakeMode">
+        <option value="none">Don't count</option>
+        <option value="conflict">Only conflicts (row/col/box)</option>
+        <option value="solution">Different from solution</option>
+      </select>
+    </div>
+    <button class="primary" id="settingsCloseBtn">Done</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   SUDOKU CORE ENGINE
+   ============================================================ */
+
+const N = 9;
+
+function emptyGrid() {
+  return Array.from({length: N}, () => new Array(N).fill(0));
+}
+
+function cloneGrid(g) {
+  return g.map(row => row.slice());
+}
+
+// box index (0-8) for row r, col c
+function boxIndex(r, c) {
+  return Math.floor(r / 3) * 3 + Math.floor(c / 3);
+}
+
+// returns list of [r,c] for a given box index (0-8)
+function boxCells(idx) {
+  const br = Math.floor(idx / 3) * 3;
+  const bc = (idx % 3) * 3;
+  const cells = [];
+  for (let dr = 0; dr < 3; dr++)
+    for (let dc = 0; dc < 3; dc++)
+      cells.push([br + dr, bc + dc]);
+  return cells;
+}
+
+function isValidPlacement(grid, r, c, v) {
+  for (let i = 0; i < N; i++) {
+    if (i !== c && grid[r][i] === v) return false;
+    if (i !== r && grid[i][c] === v) return false;
+  }
+  const br = Math.floor(r / 3) * 3, bc = Math.floor(c / 3) * 3;
+  for (let dr = 0; dr < 3; dr++)
+    for (let dc = 0; dc < 3; dc++) {
+      const rr = br + dr, cc = bc + dc;
+      if ((rr !== r || cc !== c) && grid[rr][cc] === v) return false;
+    }
+  return true;
+}
+
+function shuffled(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Standard backtracking solver. Fills `grid` in place using given cell order.
+// If `countLimit` is provided, stops early once that many solutions found (for uniqueness checks).
+// `fixedMask[r][c]` = true means the cell must not be altered (pre-filled/fixed, used for linked quadrants).
+function solveGrid(grid, options = {}) {
+  const { countLimit = 1, onSolution = null } = options;
+  let solutions = 0;
+  const cells = [];
+  for (let r = 0; r < N; r++)
+    for (let c = 0; c < N; c++)
+      if (grid[r][c] === 0) cells.push([r, c]);
+
+  function backtrack(idx) {
+    if (solutions >= countLimit) return true;
+    if (idx === cells.length) {
+      solutions++;
+      if (onSolution) onSolution(grid);
+      return solutions >= countLimit;
+    }
+    const [r, c] = cells[idx];
+    for (const v of shuffled([1,2,3,4,5,6,7,8,9])) {
+      if (isValidPlacement(grid, r, c, v)) {
+        grid[r][c] = v;
+        if (backtrack(idx + 1)) return true;
+        grid[r][c] = 0;
+      }
+    }
+    return false;
+  }
+  backtrack(0);
+  return solutions;
+}
+
+// Deterministic-order solver used for counting solutions quickly (no shuffle, with MRV heuristic)
+function countSolutions(grid, limit = 2) {
+  const g = cloneGrid(grid);
+  let count = 0;
+
+  function findMRV() {
+    let best = null, bestOptions = null, bestLen = 10;
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        if (g[r][c] !== 0) continue;
+        const opts = [];
+        for (let v = 1; v <= 9; v++) if (isValidPlacement(g, r, c, v)) opts.push(v);
+        if (opts.length === 0) return { dead: true };
+        if (opts.length < bestLen) {
+          bestLen = opts.length;
+          best = [r, c];
+          bestOptions = opts;
+          if (bestLen === 1) return { cell: best, options: bestOptions };
+        }
+      }
+    }
+    if (!best) return { done: true };
+    return { cell: best, options: bestOptions };
+  }
+
+  function backtrack() {
+    if (count >= limit) return;
+    const res = findMRV();
+    if (res.dead) return;
+    if (res.done) { count++; return; }
+    const [r, c] = res.cell;
+    for (const v of res.options) {
+      g[r][c] = v;
+      backtrack();
+      g[r][c] = 0;
+      if (count >= limit) return;
+    }
+  }
+  backtrack();
+  return count;
+}
+
+// Generate a full valid random solved 9x9 grid
+function generateFullSolution() {
+  const g = emptyGrid();
+  solveGrid(g, { countLimit: 1 });
+  return g;
+}
+
+/* ============================================================
+   SUPER SUDOKU STRUCTURE
+   9 sub-boards S0..S8 (3x3 super-grid layout).
+   Master board M: quadrant i of M === quadrant i of S_i (same cell objects, by convention
+   we keep them numerically synced; boxCells(i) gives the 9 cells within a board for box i).
+   ============================================================ */
+
+function generateSuperSudoku(onProgress) {
+  // Step 1: generate master solution
+  const master = generateFullSolution();
+  onProgress && onProgress("Master board generated\u2026");
+
+  // Step 2: for each sub-board i, fix its quadrant i cells to match master's quadrant i,
+  // then solve the rest of that 9x9 board.
+  const subs = [];
+  for (let i = 0; i < 9; i++) {
+    const g = emptyGrid();
+    for (const [r, c] of boxCells(i)) {
+      g[r][c] = master[r][c];
+    }
+    const ok = solveGrid(g, { countLimit: 1 });
+    if (ok === 0) {
+      // Extremely rare with a fresh random master; caller should retry.
+      return null;
+    }
+    subs.push(g);
+    onProgress && onProgress(`Sub-board S${i + 1} solved\u2026`);
+  }
+
+  return { master, subs };
+}
+
+function generateSuperSudokuRetrying(onProgress, maxTries = 25) {
+  for (let t = 0; t < maxTries; t++) {
+    const res = generateSuperSudoku(onProgress);
+    if (res) return res;
+  }
+  throw new Error("Failed to generate a consistent super sudoku after many tries.");
+}
+
+/* ============================================================
+   PUZZLE STATE (clues) — which cells are given vs blank, across
+   master + 9 sub-boards, respecting the linked quadrants.
+   We represent "given-ness" per (board, r, c) where board 0 = master,
+   1..9 = sub-boards. But master cells and the corresponding sub-board's
+   linked quadrant cells are the SAME clue-cell physically (shared),
+   so a "given" flag is stored once per linked cell, and once per each
+   of the 8 non-linked quadrants of every sub-board.
+   ============================================================ */
+
+// unique cell identity list for a full super sudoku:
+// - for each sub-board i (0..8): 9 quadrants, but quadrant i is the "linked" quadrant shared with master.
+//   linked quadrant cells: identity = `L${i}:${r},${c}`  (this is ALSO master's quadrant i)
+//   other quadrant cells:  identity = `S${i}:${r},${c}`
+function buildCellIdentities(subs) {
+  // returns map boardIdx(0=master,1..9=sub) -> grid of identity strings
+  const ids = { master: emptyGrid().map(row => row.map(() => null)), subs: [] };
+  for (let i = 0; i < 9; i++) {
+    const grid = emptyGrid().map(row => row.map(() => null));
+    ids.subs.push(grid);
+  }
+  for (let i = 0; i < 9; i++) {
+    const linkedSet = new Set(boxCells(i).map(([r,c]) => `${r},${c}`));
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        const key = `${r},${c}`;
+        if (linkedSet.has(key)) {
+          const id = `L${i}:${r},${c}`;
+          ids.subs[i][r][c] = id;
+          ids.master[r][c] = id; // master's box i uses same identity
+        } else {
+          ids.subs[i][r][c] = `S${i}:${r},${c}`;
+        }
+      }
+    }
+  }
+  return ids;
+}
+
+function allCellIdentitiesWithValues(subs, master, ids) {
+  // returns Map identity -> value
+  const map = new Map();
+  for (let i = 0; i < 9; i++) {
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        const id = ids.subs[i][r][c];
+        if (!map.has(id)) map.set(id, subs[i][r][c]);
+      }
+    }
+  }
+  return map;
+}
+
+/* ============================================================
+   CLUE REMOVAL (puzzle carving)
+   Strategy per user's spec: prioritize removing from quadrants (i.e.
+   remove as much as possible from the "local-only" 8 quadrants of each
+   sub-board, and from linked quadrants too), while ensuring the WHOLE
+   system (master + 9 subs, all linked) still has a UNIQUE solution.
+
+   Because full multi-board uniqueness checking is combinatorially heavy,
+   we use a practical approach:
+     1. Build the identity graph (58 linked cells + 8*9*8=... local cells... )
+        Actually count: 9 sub-boards x 9 quadrants = 81 quadrant-slots,
+        9 of which are "linked" (shared with master) => 9 linked quadrants
+        total (72 cells), and 9*8=72 local-only quadrants (648 cells).
+        total unique cells = 72 + 648 = 720. (Matches 9 boards * 81 - 9*81 double count... )
+     2. Try removing clues in a randomized order, prioritizing local
+        (non-linked) cells first since removing those never affects other
+        boards. After each removal, verify:
+          a) the sub-board(s) containing that cell still has a unique solution
+             GIVEN the linked quadrant(s) are fixed as clues (fast, single board).
+          b) periodically verify the master board still resolves to a unique
+             solution given current linked clues (fast, single board, 9x9).
+     3. Stop when no more cells can be removed without breaking uniqueness,
+        or a target clue count is hit.
+   ============================================================ */
+
+// Each difficulty specifies a TARGET number of master-grid clues to carve down to
+// (masterTarget), plus how many full carving rounds / alternate-layout attempts to
+// spend trying to hit it. Master (linked) clues are always attempted first and most
+// aggressively, since the master clue count is what the difficulty label promises;
+// local-only clues are stripped afterwards on a best-effort basis for extra flavor,
+// but never at the cost of pushing the master board back above target.
+// masterTarget: null means "just carve as far as possible" (legacy/local-only mode).
+const DIFFICULTY_TARGETS = {
+  easy:    { rounds: 2, genAttempts: 1, masterTarget: 15, removalChance: 1.0 },
+  medium:  { rounds: 3, genAttempts: 1, masterTarget: 10, removalChance: 1.0 },
+  hard:    { rounds: 4, genAttempts: 2, masterTarget: 5,  removalChance: 1.0 },
+  brutal:  { rounds: 6, genAttempts: 4, masterTarget: 0,  removalChance: 1.0 },
+  custom:  { rounds: 6, genAttempts: 3, masterTarget: 10, removalChance: 1.0 },
+};
+
+function boardHasUniqueSolution(grid) {
+  return countSolutions(grid, 2) === 1;
+}
+
+function puzzleMasterViewOf(puzzleSubs) {
+  const m = emptyGrid();
+  for (let r = 0; r < 9; r++)
+    for (let c = 0; c < 9; c++)
+      m[r][c] = puzzleSubs[boxIndex(r, c)][r][c];
+  return m;
+}
+
+function idLocation(id) {
+  const i = parseInt(id.slice(1, id.indexOf(':')), 10);
+  const [r, c] = id.slice(id.indexOf(':') + 1).split(',').map(Number);
+  return { i, r, c };
+}
+
+function collectIdentities(ids) {
+  const localIds = [];
+  const linkedIds = [];
+  const seen = new Set();
+  for (let i = 0; i < 9; i++) {
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        const id = ids.subs[i][r][c];
+        if (seen.has(id)) continue;
+        seen.add(id);
+        if (id.startsWith('L')) linkedIds.push(id); else localIds.push(id);
+      }
+    }
+  }
+  return { localIds, linkedIds };
+}
+
+// One full randomized sweep over a given id list, reverting any removal that breaks
+// uniqueness. Returns count removed. When targetMasterClues is set and the ids being
+// swept are linked (master) clues, the sweep stops early once the master board has
+// been carved down to the target — we don't remove further than requested.
+//
+// Uniqueness is checked ONLY against the owning sub-board S_i, never against the master
+// board directly. We don't need the master board itself to be independently and
+// uniquely solvable — we only need every S_i to be uniquely solvable, since master
+// cell (r,c) IS sub-board S_boxIndex(r,c)'s cell (r,c). Once all 9 sub-boards are
+// pinned down uniquely, the master grid is fully and uniquely determined for free.
+// This also means master clues can legitimately go all the way to 0.
+function carveOnePass(puzzleSubs, order, removalChance, targetMasterClues) {
+  let removed = 0;
+  for (const id of order) {
+    if (removalChance < 1 && Math.random() > removalChance) continue;
+    if (targetMasterClues != null && id.startsWith('L')) {
+      const cur = countMasterClues(puzzleMasterViewOf(puzzleSubs));
+      if (cur <= targetMasterClues) continue;
+    }
+    const { i, r, c } = idLocation(id);
+    const orig = puzzleSubs[i][r][c];
+    if (orig === 0) continue;
+
+    puzzleSubs[i][r][c] = 0;
+    const ok = boardHasUniqueSolution(puzzleSubs[i]);
+    if (!ok) {
+      puzzleSubs[i][r][c] = orig;
+    } else {
+      removed++;
+    }
+  }
+  return removed;
+}
+
+// Carves a puzzle in two phases:
+//   1) Master-priority phase: repeatedly sweep ONLY the linked (master) clues, since
+//      the master clue count is the headline difficulty number. Runs until the target
+//      is hit or no more linked clues can be safely removed.
+//   2) Local phase: sweep the remaining local-only clues for extra sparsity/flavor,
+//      without touching the master board further.
+function carveToLocalMinimum(subs, ids, difficulty, onProgress, masterTargetOverride) {
+  const cfg = DIFFICULTY_TARGETS[difficulty] || DIFFICULTY_TARGETS.medium;
+  const rounds = cfg.rounds, removalChance = cfg.removalChance;
+  const masterTarget = masterTargetOverride != null ? masterTargetOverride : cfg.masterTarget;
+  const puzzleSubs = subs.map(g => cloneGrid(g));
+  const { localIds, linkedIds } = collectIdentities(ids);
+
+  // Phase 1: hammer the master (linked) clues down toward the target.
+  for (let round = 0; round < rounds; round++) {
+    onProgress && onProgress(`Carving master clues \u2014 pass ${round + 1}/${rounds}\u2026`);
+    const removed = carveOnePass(puzzleSubs, shuffled(linkedIds), removalChance, masterTarget);
+    const cur = countMasterClues(puzzleMasterViewOf(puzzleSubs));
+    if ((removed === 0 && removalChance >= 1) || cur <= masterTarget) break;
+  }
+
+  // Phase 2: mop up local-only clues for extra sparsity (doesn't affect master count).
+  for (let round = 0; round < rounds; round++) {
+    onProgress && onProgress(`Carving local clues \u2014 pass ${round + 1}/${rounds}\u2026`);
+    const removed = carveOnePass(puzzleSubs, shuffled(localIds), removalChance, null);
+    if (removed === 0 && removalChance >= 1) break;
+  }
+
+  return { puzzleSubs, masterView: puzzleMasterViewOf(puzzleSubs) };
+}
+
+function carvePuzzle(subs, master, ids, difficulty, onProgress, masterTargetOverride) {
+  const cfg = DIFFICULTY_TARGETS[difficulty] || DIFFICULTY_TARGETS.medium;
+  const genAttempts = cfg.genAttempts;
+  const masterTarget = masterTargetOverride != null ? masterTargetOverride : cfg.masterTarget;
+
+  // Try a few independent sub-board solution sets (regenerated around the same master)
+  // and keep whichever gets closest to (or below) the master clue target. We track which
+  // underlying solution grids ("subs") produced the best result, since the caller needs
+  // the matching solution for hints/validation, not the original.
+  let bestSubs = subs;
+  let best = carveToLocalMinimum(subs, ids, difficulty, onProgress, masterTarget);
+  let bestMasterClues = countMasterClues(best.masterView);
+
+  for (let attempt = 1; attempt < genAttempts && bestMasterClues > masterTarget; attempt++) {
+    onProgress && onProgress(`Trying alternate sub-board layout ${attempt + 1}/${genAttempts}\u2026`);
+    const regen = regenerateSubsForMaster(master);
+    if (!regen) continue;
+    const regenIds = buildCellIdentities(regen);
+    const candidate = carveToLocalMinimum(regen, regenIds, difficulty, onProgress, masterTarget);
+    const clues = countMasterClues(candidate.masterView);
+    if (clues < bestMasterClues) {
+      best = candidate;
+      bestMasterClues = clues;
+      bestSubs = regen;
+      ids.subs = regenIds.subs;
+      ids.master = regenIds.master;
+    }
+  }
+
+  return { ...best, solutionSubs: bestSubs };
+}
+
+// Re-solve all 9 sub-boards for the same fixed master (different random fill of the
+// non-linked cells each time), used to explore alternate carve outcomes.
+function regenerateSubsForMaster(master) {
+  const subs = [];
+  for (let i = 0; i < 9; i++) {
+    const g = emptyGrid();
+    for (const [r, c] of boxCells(i)) g[r][c] = master[r][c];
+    const ok = solveGrid(g, { countLimit: 1 });
+    if (ok === 0) return null;
+    subs.push(g);
+  }
+  return subs;
+}
+
+function countClues(puzzleSubs, ids) {
+  const seen = new Set();
+  let count = 0;
+  for (let i = 0; i < 9; i++) {
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        const id = ids.subs[i][r][c];
+        if (seen.has(id)) continue;
+        seen.add(id);
+        if (puzzleSubs[i][r][c] !== 0) count++;
+      }
+    }
+  }
+  return count;
+}
+
+function countMasterClues(masterView) {
+  let n = 0;
+  for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) if (masterView[r][c] !== 0) n++;
+  return n;
+}
+
+/* ============================================================
+   APP / UI STATE
+   ============================================================ */
+
+const state = {
+  solutionSubs: null,   // 9 x 9x9 solved sub-boards
+  solutionMaster: null, // 9x9 master solution
+  ids: null,
+  givenSubs: null,      // 9 x 9x9, 0 = not given
+  userSubs: null,       // 9 x 9x9, current user entries (0 = blank), for non-given cells
+  notesSubs: null,      // 9 x 9x9 x Set of pencil marks
+  selected: null,       // {i, r, c}
+  noteMode: false,
+  solved: false,
+  view: 'master',       // 'master' or 0..8 (sub-board index)
+  mistakes: 0,
+  timerSeconds: 0,
+  timerHandle: null,
+};
+
+const settings = {
+  regionHighlight: true,
+  numberHighlight: true,
+  showTimer: true,
+  mistakeMode: 'conflict', // 'none' | 'conflict' | 'solution'
+};
+
+function deepEmptyNotes() {
+  const arr = [];
+  for (let i = 0; i < 9; i++) {
+    const g = [];
+    for (let r = 0; r < 9; r++) {
+      const row = [];
+      for (let c = 0; c < 9; c++) row.push(new Set());
+      g.push(row);
+    }
+    arr.push(g);
+  }
+  return arr;
+}
+
+const superGridEl = document.getElementById('superGrid');
+const statusBar = document.getElementById('statusBar');
+const genProgress = document.getElementById('genProgress');
+const difficultySel = document.getElementById('difficulty');
+const numpadEl = document.getElementById('numpad');
+const miniGridEl = document.getElementById('miniGrid');
+const masterBtnEl = document.getElementById('masterBtn');
+const boardTitleEl = document.getElementById('boardTitle');
+
+// Resolve a (boardCoord) cell in the CURRENT VIEW to its real owning (i, r, c) in the
+// underlying data model. In master view, virtual (r,c) belongs to sub-board boxIndex(r,c)
+// (the linked-quadrant convention). In a sub-board view, it's just that board directly.
+function resolveCell(vr, vc) {
+  if (state.view === 'master') {
+    const i = boxIndex(vr, vc);
+    return { i, r: vr, c: vc };
+  }
+  return { i: state.view, r: vr, c: vc };
+}
+
+function buildMiniNav() {
+  miniGridEl.innerHTML = '';
+  for (let i = 0; i < 9; i++) {
+    const m = document.createElement('div');
+    m.className = 'mini-cell';
+    m.dataset.idx = i;
+    m.textContent = 'S' + (i + 1);
+    m.addEventListener('click', () => switchView(i));
+    miniGridEl.appendChild(m);
+  }
+  masterBtnEl.addEventListener('click', () => switchView('master'));
+  updateNavHighlight();
+}
+
+function updateNavHighlight() {
+  miniGridEl.querySelectorAll('.mini-cell').forEach(el => {
+    el.classList.toggle('active', state.view === +el.dataset.idx);
+  });
+  masterBtnEl.classList.toggle('active', state.view === 'master');
+  boardTitleEl.innerHTML = state.view === 'master'
+    ? 'Master grid'
+    : `Sub-board <b>S${state.view + 1}</b>`;
+}
+
+function switchView(view) {
+  state.view = view;
+  state.selected = null;
+  updateNavHighlight();
+  buildBoardDOM();
+  renderBoard();
+  renderSelection();
+}
+
+function buildBoardDOM() {
+  superGridEl.innerHTML = '';
+  const grid = document.createElement('div');
+  grid.className = 'sub-board-grid';
+
+  // In master view, "linked" highlighting marks each quadrant's own linked cells (i.e.
+  // every cell, since every master cell IS a linked cell) — so instead we skip that and
+  // rely on the box borders alone. In sub-board view we highlight the one linked quadrant.
+  const linkedSet = state.view === 'master'
+    ? null
+    : new Set(boxCells(state.view).map(([r, c]) => `${r},${c}`));
+
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.vr = r;
+      cell.dataset.vc = c;
+      if (linkedSet && linkedSet.has(`${r},${c}`)) cell.classList.add('linked');
+      if ((c + 1) % 3 === 0 && c !== 8) cell.classList.add('br');
+      if ((r + 1) % 3 === 0 && r !== 8) cell.classList.add('bb');
+      cell.addEventListener('click', () => selectCell(r, c));
+      grid.appendChild(cell);
+    }
+  }
+  superGridEl.appendChild(grid);
+}
+
+function buildDOM() {
+  buildMiniNav();
+  buildBoardDOM();
+
+  // number pad
+  numpadEl.innerHTML = '';
+  for (let v = 1; v <= 9; v++) {
+    const b = document.createElement('button');
+    b.textContent = v;
+    b.addEventListener('click', () => inputValue(v));
+    numpadEl.appendChild(b);
+  }
+  const erase = document.createElement('button');
+  erase.className = 'erase';
+  erase.textContent = 'Erase';
+  erase.addEventListener('click', () => inputValue(0));
+  numpadEl.appendChild(erase);
+
+  const noteBtn = document.createElement('button');
+  noteBtn.className = 'notemode';
+  noteBtn.textContent = 'Notes';
+  noteBtn.addEventListener('click', () => {
+    state.noteMode = !state.noteMode;
+    noteBtn.classList.toggle('active', state.noteMode);
+  });
+  numpadEl.appendChild(noteBtn);
+}
+
+function cellEl(vr, vc) {
+  return superGridEl.querySelector(`.cell[data-vr="${vr}"][data-vc="${vc}"]`);
+}
+
+function selectCell(vr, vc) {
+  if (state.solved) return;
+  state.selected = { vr, vc };
+  renderSelection();
+}
+
+function renderSelection() {
+  const all = superGridEl.querySelectorAll('.cell');
+  all.forEach(el => el.classList.remove('selected', 'peer', 'same-value'));
+  if (!state.selected) return;
+  const { vr, vc } = state.selected;
+  const { i, r, c } = resolveCell(vr, vc);
+  const isGiven = state.givenSubs[i][r][c] !== 0;
+  const val = isGiven ? state.givenSubs[i][r][c] : state.userSubs[i][r][c];
+
+  const self = cellEl(vr, vc);
+  if (self) self.classList.add('selected');
+
+  if (settings.regionHighlight) {
+    // peers within the current view: row, col, box
+    for (let cc = 0; cc < 9; cc++) {
+      const el = cellEl(vr, cc);
+      if (el && cc !== vc) el.classList.add('peer');
+    }
+    for (let rr = 0; rr < 9; rr++) {
+      const el = cellEl(rr, vc);
+      if (el && rr !== vr) el.classList.add('peer');
+    }
+    for (const [br, bc] of boxCells(boxIndex(vr, vc))) {
+      const el = cellEl(br, bc);
+      if (el && !(br === vr && bc === vc)) el.classList.add('peer');
+    }
+  }
+
+  if (settings.numberHighlight && val !== 0) {
+    superGridEl.querySelectorAll('.cell').forEach(el => {
+      const er = +el.dataset.vr, ec = +el.dataset.vc;
+      const { i: ei, r: eri, c: eci } = resolveCell(er, ec);
+      const g = state.givenSubs[ei][eri][eci] !== 0 ? state.givenSubs[ei][eri][eci] : state.userSubs[ei][eri][eci];
+      if (g === val) el.classList.add('same-value');
+    });
+  }
+}
+
+function currentValue(i, r, c) {
+  const given = state.givenSubs[i][r][c];
+  if (given !== 0) return given;
+  return state.userSubs[i][r][c];
+}
+
+function inputValue(v) {
+  if (!state.selected || state.solved) return;
+  const { vr, vc } = state.selected;
+  const { i, r, c } = resolveCell(vr, vc);
+  if (state.givenSubs[i][r][c] !== 0) return; // can't edit givens
+
+  if (state.noteMode && v !== 0) {
+    const notes = state.notesSubs[i][r][c];
+    if (notes.has(v)) notes.delete(v); else notes.add(v);
+    state.userSubs[i][r][c] = 0; // notes mode doesn't set a value
+  } else {
+    if (settings.mistakeMode === 'solution' && v !== 0 && state.solutionSubs) {
+      if (v !== state.solutionSubs[i][r][c]) registerMistake();
+    }
+    state.userSubs[i][r][c] = v;
+    state.notesSubs[i][r][c].clear();
+  }
+  renderBoard();
+  renderSelection();
+  if (settings.mistakeMode === 'conflict') {
+    // markErrors() (called inside renderBoard) already flags conflicting cells;
+    // count any NEW conflict created by this exact move.
+    const el = cellEl(vr, vc);
+    if (el && el.classList.contains('error')) registerMistake();
+  }
+  checkWin();
+}
+
+function registerMistake() {
+  state.mistakes++;
+  updateMistakeDisplay();
+}
+
+function updateMistakeDisplay() {
+  const el = document.getElementById('mistakeDisplay');
+  if (settings.mistakeMode === 'none') {
+    el.textContent = '';
+    return;
+  }
+  el.textContent = `Mistakes: ${state.mistakes}`;
+  el.classList.toggle('mistake-warn', state.mistakes > 0);
+}
+
+// if (i,r,c) sits in board i's linked quadrant (box i), and there's a "twin" concept via master,
+// nothing else to mirror because master IS this same identity — but if the SAME identity appears
+// in another sub-board... it doesn't; identities are unique to (linked quadrant i -> board i only).
+// So no mirroring needed beyond the cell itself. Kept as a no-op hook for clarity/extensibility.
+function mirrorLinkedCell(i, r, c, v) {
+  // no-op: each linked identity only lives in exactly one sub-board + the (implicit) master view
+}
+
+function getMasterView() {
+  const m = emptyGrid();
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const i = boxIndex(r, c);
+      m[r][c] = currentValue(i, r, c);
+    }
+  }
+  return m;
+}
+
+function boardGridFor(i) {
+  // For sub-board i, its own natural grid (givens + user entries).
+  const grid = emptyGrid();
+  for (let r = 0; r < 9; r++)
+    for (let c = 0; c < 9; c++)
+      grid[r][c] = currentValue(i, r, c);
+  return grid;
+}
+
+function renderBoard() {
+  for (let vr = 0; vr < 9; vr++) {
+    for (let vc = 0; vc < 9; vc++) {
+      const el = cellEl(vr, vc);
+      if (!el) continue;
+      el.classList.remove('given', 'error', 'notes');
+      el.innerHTML = '';
+
+      const { i, r, c } = resolveCell(vr, vc);
+      const given = state.givenSubs[i][r][c];
+      const userVal = state.userSubs[i][r][c];
+      const notes = state.notesSubs[i][r][c];
+
+      if (given !== 0) {
+        el.textContent = given;
+        el.classList.add('given');
+      } else if (userVal !== 0) {
+        el.textContent = userVal;
+      } else if (notes.size > 0) {
+        el.classList.add('notes');
+        for (let n = 1; n <= 9; n++) {
+          const s = document.createElement('span');
+          s.textContent = notes.has(n) ? n : '';
+          el.appendChild(s);
+        }
+      } else {
+        el.textContent = '';
+      }
+    }
+  }
+  markErrors();
+  renderMiniProgress();
+}
+
+function markErrors() {
+  superGridEl.querySelectorAll('.cell.error').forEach(el => el.classList.remove('error'));
+
+  // Determine the underlying grid of values for the CURRENT view (master or sub-board),
+  // then flag standard sudoku conflicts among filled (non-given) cells.
+  const grid = emptyGrid();
+  for (let vr = 0; vr < 9; vr++)
+    for (let vc = 0; vc < 9; vc++) {
+      const { i, r, c } = resolveCell(vr, vc);
+      grid[vr][vc] = currentValue(i, r, c);
+    }
+
+  for (let vr = 0; vr < 9; vr++) {
+    for (let vc = 0; vc < 9; vc++) {
+      const v = grid[vr][vc];
+      if (v === 0) continue;
+      let conflict = false;
+      for (let cc = 0; cc < 9; cc++) if (cc !== vc && grid[vr][cc] === v) conflict = true;
+      for (let rr = 0; rr < 9; rr++) if (rr !== vr && grid[rr][vc] === v) conflict = true;
+      for (const [br, bc] of boxCells(boxIndex(vr, vc))) {
+        if (!(br === vr && bc === vc) && grid[br][bc] === v) conflict = true;
+      }
+      if (conflict) {
+        const el = cellEl(vr, vc);
+        const { i, r, c } = resolveCell(vr, vc);
+        if (el && state.givenSubs[i][r][c] === 0) el.classList.add('error');
+      }
+    }
+  }
+}
+
+// Fills each mini-nav tile with its sub-board's completion fraction, purely as a
+// lightweight progress cue (not a full render of the tiny board).
+function renderMiniProgress() {
+  if (!state.givenSubs) return;
+  for (let i = 0; i < 9; i++) {
+    const grid = boardGridFor(i);
+    const filled = grid.flat().filter(v => v !== 0).length;
+    const el = miniGridEl.querySelector(`.mini-cell[data-idx="${i}"]`);
+    if (!el) continue;
+    el.title = `${filled}/81 filled`;
+  }
+}
+
+function checkWin() {
+  const m = getMasterView();
+  for (let r = 0; r < 9; r++)
+    for (let c = 0; c < 9; c++)
+      if (m[r][c] === 0) return false;
+
+  // full — verify validity
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const v = m[r][c];
+      for (let cc = 0; cc < 9; cc++) if (cc !== c && m[r][cc] === v) return false;
+      for (let rr = 0; rr < 9; rr++) if (rr !== r && m[rr][c] === v) return false;
+      for (const [br, bc] of boxCells(boxIndex(r, c))) {
+        if (!(br === r && bc === c) && m[br][bc] === v) return false;
+      }
+    }
+  }
+
+  state.solved = true;
+  stopTimer();
+  statusBar.textContent = 'Master board solved!';
+  statusBar.classList.add('win');
+  document.getElementById('winModal').classList.add('show');
+  return true;
+}
+
+/* ============================================================
+   GENERATION FLOW
+   ============================================================ */
+
+async function newGame(customTarget) {
+  const difficulty = difficultySel.value;
+
+  if (difficulty === 'custom' && customTarget == null) {
+    // open the modal to pick a target; actual generation happens from customGoBtn
+    document.getElementById('customModal').classList.add('show');
+    return;
+  }
+
+  document.getElementById('newGameBtn').disabled = true;
+  statusBar.textContent = '';
+  statusBar.classList.remove('win');
+  genProgress.textContent = 'Generating master solution\u2026';
+  state.solved = false;
+
+  // yield to browser so progress text paints
+  await new Promise(r => setTimeout(r, 30));
+
+  let result;
+  try {
+    result = await new Promise((resolve, reject) => {
+      setTimeout(() => {
+        try {
+          const gen = generateSuperSudokuRetrying((msg) => { genProgress.textContent = msg; });
+          resolve(gen);
+        } catch (e) { reject(e); }
+      }, 20);
+    });
+  } catch (e) {
+    genProgress.textContent = 'Generation failed, retrying\u2026';
+    document.getElementById('newGameBtn').disabled = false;
+    return;
+  }
+
+  const { master, subs } = result;
+  const ids = buildCellIdentities(subs);
+
+  genProgress.textContent = 'Carving clues \u2014 prioritizing the master grid\u2026';
+  await new Promise(r => setTimeout(r, 30));
+
+  const masterTarget = difficulty === 'custom' ? customTarget : undefined;
+
+  const carved = await new Promise((resolve) => {
+    setTimeout(() => {
+      const c = carvePuzzle(subs, master, ids, difficulty, (msg) => { genProgress.textContent = msg; }, masterTarget);
+      resolve(c);
+    }, 20);
+  });
+
+  state.solutionSubs = carved.solutionSubs;
+  state.solutionMaster = master;
+  state.ids = ids;
+  state.givenSubs = carved.puzzleSubs;
+  state.userSubs = carved.solutionSubs.map(() => emptyGrid());
+  state.notesSubs = deepEmptyNotes();
+  state.selected = null;
+  state.view = 'master';
+  state.mistakes = 0;
+  updateMistakeDisplay();
+  startTimer();
+
+  const totalClues = countClues(state.givenSubs, ids);
+  const masterClues = countMasterClues(carved.masterView);
+  const label = difficulty === 'custom' ? `custom (target ${customTarget})` : difficulty;
+  genProgress.textContent = `${totalClues} unique clues total \u2014 master board has ${masterClues} clues.`;
+  statusBar.textContent = `New ${label} puzzle ready. The master grid needs solving \u2014 use S1\u2013S9 to work each sub-board.`;
+
+  updateNavHighlight();
+  buildBoardDOM();
+  renderBoard();
+  document.getElementById('newGameBtn').disabled = false;
+}
+
+/* ============================================================
+   TIMER
+   ============================================================ */
+
+function formatTime(s) {
+  const m = Math.floor(s / 60).toString().padStart(2, '0');
+  const sec = (s % 60).toString().padStart(2, '0');
+  return `${m}:${sec}`;
+}
+
+function updateTimerDisplay() {
+  const el = document.getElementById('timerDisplay');
+  el.style.display = settings.showTimer ? '' : 'none';
+  el.textContent = formatTime(state.timerSeconds);
+}
+
+function startTimer() {
+  stopTimer();
+  state.timerSeconds = 0;
+  updateTimerDisplay();
+  state.timerHandle = setInterval(() => {
+    if (state.solved) return;
+    state.timerSeconds++;
+    updateTimerDisplay();
+  }, 1000);
+}
+
+function stopTimer() {
+  if (state.timerHandle) clearInterval(state.timerHandle);
+  state.timerHandle = null;
+}
+
+/* ============================================================
+   HINT / CHECK / CLEAR
+   ============================================================ */
+
+function giveHint() {
+  if (!state.selected) {
+    statusBar.textContent = 'Select a cell first, then press Hint.';
+    return;
+  }
+  const { vr, vc } = state.selected;
+  const { i, r, c } = resolveCell(vr, vc);
+  if (state.givenSubs[i][r][c] !== 0) {
+    statusBar.textContent = 'That cell is already given.';
+    return;
+  }
+  const correct = state.solutionSubs[i][r][c];
+  state.userSubs[i][r][c] = correct;
+  state.notesSubs[i][r][c].clear();
+  renderBoard();
+  renderSelection();
+  const el = cellEl(vr, vc);
+  if (el) {
+    el.classList.add('hint-flash');
+    setTimeout(() => el.classList.remove('hint-flash'), 900);
+  }
+  checkWin();
+}
+
+function checkPuzzle() {
+  let anyError = superGridEl.querySelector('.cell.error') !== null;
+  const m = getMasterView();
+  let filled = m.every(row => row.every(v => v !== 0));
+  if (anyError) {
+    statusBar.textContent = 'There are conflicting entries \u2014 check the highlighted cells.';
+    statusBar.classList.remove('win');
+  } else if (filled) {
+    checkWin();
+  } else {
+    statusBar.textContent = 'No conflicts so far. Keep going!';
+    statusBar.classList.remove('win');
+  }
+}
+
+function clearUserEntries() {
+  if (!state.userSubs) return;
+  state.userSubs = state.userSubs.map(() => emptyGrid());
+  state.notesSubs = deepEmptyNotes();
+  state.solved = false;
+  statusBar.classList.remove('win');
+  statusBar.textContent = 'Cleared your entries.';
+  renderBoard();
+}
+
+/* ============================================================
+   KEYBOARD SUPPORT
+   ============================================================ */
+
+document.addEventListener('keydown', (e) => {
+  if (!state.selected) return;
+  if (e.key >= '1' && e.key <= '9') {
+    inputValue(parseInt(e.key, 10));
+  } else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
+    inputValue(0);
+  } else if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+    e.preventDefault();
+    let { vr, vc } = state.selected;
+    if (e.key === 'ArrowUp') vr = Math.max(0, vr - 1);
+    if (e.key === 'ArrowDown') vr = Math.min(8, vr + 1);
+    if (e.key === 'ArrowLeft') vc = Math.max(0, vc - 1);
+    if (e.key === 'ArrowRight') vc = Math.min(8, vc + 1);
+    selectCell(vr, vc);
+  }
+});
+
+/* ============================================================
+   WIRE UP
+   ============================================================ */
+
+document.getElementById('newGameBtn').addEventListener('click', () => newGame());
+document.getElementById('hintBtn').addEventListener('click', giveHint);
+document.getElementById('checkBtn').addEventListener('click', checkPuzzle);
+document.getElementById('eraseAllBtn').addEventListener('click', clearUserEntries);
+document.getElementById('winClose').addEventListener('click', () => {
+  document.getElementById('winModal').classList.remove('show');
+});
+
+const customSlider = document.getElementById('customSlider');
+const customValue = document.getElementById('customValue');
+customSlider.addEventListener('input', () => {
+  customValue.textContent = customSlider.value;
+});
+document.getElementById('customGoBtn').addEventListener('click', () => {
+  document.getElementById('customModal').classList.remove('show');
+  newGame(parseInt(customSlider.value, 10));
+});
+
+/* ============================================================
+   SETTINGS
+   ============================================================ */
+
+const setRegionHighlight = document.getElementById('setRegionHighlight');
+const setNumberHighlight = document.getElementById('setNumberHighlight');
+const setTimerCheckbox = document.getElementById('setTimer');
+const setMistakeMode = document.getElementById('setMistakeMode');
+
+setRegionHighlight.checked = settings.regionHighlight;
+setNumberHighlight.checked = settings.numberHighlight;
+setTimerCheckbox.checked = settings.showTimer;
+setMistakeMode.value = settings.mistakeMode;
+
+document.getElementById('settingsBtn').addEventListener('click', () => {
+  document.getElementById('settingsModal').classList.add('show');
+});
+document.getElementById('settingsCloseBtn').addEventListener('click', () => {
+  document.getElementById('settingsModal').classList.remove('show');
+});
+
+setRegionHighlight.addEventListener('change', () => {
+  settings.regionHighlight = setRegionHighlight.checked;
+  renderSelection();
+});
+setNumberHighlight.addEventListener('change', () => {
+  settings.numberHighlight = setNumberHighlight.checked;
+  renderSelection();
+});
+setTimerCheckbox.addEventListener('change', () => {
+  settings.showTimer = setTimerCheckbox.checked;
+  updateTimerDisplay();
+});
+setMistakeMode.addEventListener('change', () => {
+  settings.mistakeMode = setMistakeMode.value;
+  state.mistakes = 0;
+  updateMistakeDisplay();
+});
+
+buildDOM();
+newGame();
+
+</script>
+</body>
+</html>
