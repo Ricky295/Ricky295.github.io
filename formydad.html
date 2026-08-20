@@ -270,14 +270,8 @@
     white-space:pre-wrap;
   }
   .section-label{
-    color:var(--text-dim);
-    font-size:11px;
-    text-transform:uppercase;
-    letter-spacing:0.09em;
-    margin:30px 0 8px;
-    font-family:-apple-system, BlinkMacSystemFont, sans-serif;
+    display:none;
   }
-  .section-label:first-child{ margin-top:0; }
   .line{
     margin:0 0 3px;
   }
@@ -1160,6 +1154,35 @@
     const wordRegex = /\S+|\s+/g;
     let match;
     let buffer = '';
+
+    // Find word boundaries up front so we can reassign chords that land
+    // inside whitespace runs (e.g. multiple chords stacked before a word,
+    // like "[Cmaj7]   [D/C]   I did...") to the next word instead of
+    // silently dropping them.
+    const words = [];
+    {
+      const wr = /\S+/g;
+      let wm;
+      while((wm = wr.exec(text)) !== null){
+        words.push({ start: wm.index, end: wm.index + wm[0].length });
+      }
+    }
+    function reassignPos(p){
+      // if p already falls inside a word, keep it
+      for(const w of words){
+        if(p >= w.start && p < w.end) return { pos: p, trailing: false };
+      }
+      // otherwise snap forward to the start of the next word
+      for(const w of words){
+        if(w.start >= p) return { pos: w.start, trailing: false };
+      }
+      return { pos: p, trailing: true }; // past the last word: render at line end
+    }
+    const adjustedChords = chords.map(c => {
+      const r = reassignPos(c.pos);
+      return { chord: c.chord, pos: r.pos, trailing: r.trailing };
+    });
+
     while((match = wordRegex.exec(text)) !== null){
       const chunk = match[0];
       const start = match.index;
@@ -1170,7 +1193,7 @@
         out += escapeHtml(chunk);
       } else {
         // find chord(s) that fall within [start,end) of this word
-        const relevant = chords.filter(c => c.pos >= start && c.pos < end);
+        const relevant = adjustedChords.filter(c => !c.trailing && c.pos >= start && c.pos < end);
         if(relevant.length){
           // split the word into syllable segments at each chord's exact
           // character offset, so the chord sits above the letter it
@@ -1194,8 +1217,8 @@
         }
       }
     }
-    // chords with pos === text.length (trailing chord, no following word)
-    const trailing = chords.filter(c => c.pos >= text.length);
+    // chords past the last word (no following word to attach to)
+    const trailing = adjustedChords.filter(c => c.trailing);
     if(trailing.length){
       const chordHtml = trailing.map(c => formatChordHTML(transposeChord(c.chord, transpose))).join(' ');
       out += `<span class="cword"><span class="cchord">${chordHtml}</span>&nbsp;</span>`;
