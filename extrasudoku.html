@@ -546,6 +546,10 @@
       <label for="setTimer">Show timer</label>
       <input type="checkbox" id="setTimer">
     </div>
+    <div class="setting-row">
+      <label for="setAutoCandidates">Auto-remove candidates on entry</label>
+      <input type="checkbox" id="setAutoCandidates">
+    </div>
     <div class="setting-row setting-row-select">
       <label for="setMistakeMode">Mistake counting</label>
       <select id="setMistakeMode">
@@ -1021,6 +1025,7 @@ const settings = {
   numberHighlight: true,
   showTimer: true,
   mistakeMode: 'conflict', // 'none' | 'conflict' | 'solution'
+  autoCandidates: true,
 };
 
 function deepEmptyNotes() {
@@ -1200,6 +1205,35 @@ function currentValue(i, r, c) {
   return state.userSubs[i][r][c];
 }
 
+// Remove digit v from the pencil-mark notes of every peer (same row, col, box) of
+// (i, r, c) within sub-board i. If that cell sits in board i's linked quadrant
+// (i.e. it's also a master-grid cell), also strip v from the notes of every peer
+// of (r, c) in the MASTER view — which means every other sub-board's linked cell
+// that shares that master row/col/box, since master (r,c) IS sub-board
+// boxIndex(r,c)'s own (r,c).
+function stripCandidatesFor(i, r, c, v) {
+  if (v === 0) return;
+
+  // Peers within the same sub-board.
+  for (let cc = 0; cc < 9; cc++) if (cc !== c) state.notesSubs[i][r][cc].delete(v);
+  for (let rr = 0; rr < 9; rr++) if (rr !== r) state.notesSubs[i][rr][c].delete(v);
+  for (const [br, bc] of boxCells(boxIndex(r, c))) {
+    if (!(br === r && bc === c)) state.notesSubs[i][br][bc].delete(v);
+  }
+
+  // If this cell is a linked (master) cell, also strip across the master view.
+  if (boxIndex(r, c) === i) {
+    const stripMasterPeer = (mr, mc) => {
+      if (mr === r && mc === c) return;
+      const owner = boxIndex(mr, mc);
+      state.notesSubs[owner][mr][mc].delete(v);
+    };
+    for (let cc = 0; cc < 9; cc++) if (cc !== c) stripMasterPeer(r, cc);
+    for (let rr = 0; rr < 9; rr++) if (rr !== r) stripMasterPeer(rr, c);
+    for (const [br, bc] of boxCells(boxIndex(r, c))) stripMasterPeer(br, bc);
+  }
+}
+
 function inputValue(v) {
   if (!state.selected || state.solved) return;
   const { vr, vc } = state.selected;
@@ -1216,6 +1250,7 @@ function inputValue(v) {
     }
     state.userSubs[i][r][c] = v;
     state.notesSubs[i][r][c].clear();
+    if (v !== 0 && settings.autoCandidates) stripCandidatesFor(i, r, c, v);
   }
   renderBoard();
   renderSelection();
@@ -1502,6 +1537,7 @@ function giveHint() {
   const correct = state.solutionSubs[i][r][c];
   state.userSubs[i][r][c] = correct;
   state.notesSubs[i][r][c].clear();
+  if (settings.autoCandidates) stripCandidatesFor(i, r, c, correct);
   renderBoard();
   renderSelection();
   const el = cellEl(vr, vc);
@@ -1588,11 +1624,13 @@ const setRegionHighlight = document.getElementById('setRegionHighlight');
 const setNumberHighlight = document.getElementById('setNumberHighlight');
 const setTimerCheckbox = document.getElementById('setTimer');
 const setMistakeMode = document.getElementById('setMistakeMode');
+const setAutoCandidates = document.getElementById('setAutoCandidates');
 
 setRegionHighlight.checked = settings.regionHighlight;
 setNumberHighlight.checked = settings.numberHighlight;
 setTimerCheckbox.checked = settings.showTimer;
 setMistakeMode.value = settings.mistakeMode;
+setAutoCandidates.checked = settings.autoCandidates;
 
 document.getElementById('settingsBtn').addEventListener('click', () => {
   document.getElementById('settingsModal').classList.add('show');
@@ -1617,6 +1655,9 @@ setMistakeMode.addEventListener('change', () => {
   settings.mistakeMode = setMistakeMode.value;
   state.mistakes = 0;
   updateMistakeDisplay();
+});
+setAutoCandidates.addEventListener('change', () => {
+  settings.autoCandidates = setAutoCandidates.checked;
 });
 
 buildDOM();
