@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WeatherReport — build your own weather chart</title>
+<style>
+  :root{
+    --paper:#F7F5F0;
+    --ink:#1C1B18;
+    --ink-soft:#5B584F;
+    --line:#D8D3C7;
+    --barometric:#3E5C6B;
+    --amber:#C87F2B;
+    --panel:#FFFFFF;
+    --panel-edge:#E3DFD3;
+    --sel:#C87F2B;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#EAE7DE;
+    color:var(--ink);
+    font-family:'Iowan Old Style','Georgia',serif;
+    height:100vh;
+    overflow:hidden;
+    background-image:
+      linear-gradient(#00000006 1px, transparent 1px),
+      linear-gradient(90deg, #00000006 1px, transparent 1px);
+    background-size:24px 24px;
+  }
+
+  /* ---- App shell ---- */
+  #app{ display:grid; grid-template-columns: 220px 1fr 260px; grid-template-rows: 52px 1fr; height:100vh; }
+
+  #topbar{
+    grid-column: 1 / 4;
+    display:flex; align-items:center; gap:18px;
+    padding:0 18px;
+    background:var(--ink);
+    color:var(--paper);
+    font-family:'Helvetica Neue',Arial,sans-serif;
+  }
+  #topbar .brand{ font-weight:700; letter-spacing:0.5px; font-size:15px; display:flex; align-items:center; gap:8px;}
+  #topbar .brand .dot{ width:8px;height:8px;border-radius:50%; background:var(--amber);}
+  #topbar .sep{ width:1px; height:22px; background:#ffffff22;}
+  #topbar select, #topbar input[type="text"]{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    background:#ffffff10; border:1px solid #ffffff30; color:var(--paper);
+    padding:6px 8px; font-size:12px; border-radius:2px;
+  }
+  #topbar label{ font-size:11px; color:#ffffffaa; text-transform:uppercase; letter-spacing:0.5px; margin-right:4px;}
+  #topbar .grow{ flex:1; }
+  #topbar button{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    background:transparent; border:1px solid #ffffff40; color:var(--paper);
+    padding:7px 14px; font-size:12px; border-radius:2px; cursor:pointer;
+    text-transform:uppercase; letter-spacing:0.5px;
+  }
+  #topbar button:hover{ background:#ffffff15; }
+  #topbar button.primary{ background:var(--amber); border-color:var(--amber); color:#231604; font-weight:700;}
+  #topbar button.primary:hover{ background:#d98a34; }
+
+  /* ---- Left: component palette ---- */
+  #palette{
+    background:#20201C;
+    color:var(--paper);
+    padding:16px 12px;
+    overflow-y:auto;
+    font-family:'Helvetica Neue',Arial,sans-serif;
+  }
+  #palette h3{
+    font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#ffffff70;
+    margin:18px 0 8px; font-weight:600;
+  }
+  #palette h3:first-child{ margin-top:2px; }
+  .palette-item{
+    display:flex; align-items:center; gap:10px;
+    padding:9px 10px; margin-bottom:6px;
+    background:#ffffff08; border:1px solid #ffffff14; border-radius:3px;
+    cursor:grab; font-size:12.5px;
+    transition:background 0.12s;
+  }
+  .palette-item:hover{ background:#ffffff16; border-color:#ffffff2a; }
+  .palette-item:active{ cursor:grabbing; }
+  .palette-item .ic{ width:16px; text-align:center; opacity:0.8; font-size:13px;}
+
+  /* ---- Center: canvas area ---- */
+  #canvas-wrap{
+    overflow:auto;
+    display:flex; align-items:flex-start; justify-content:center;
+    padding:40px;
+  }
+  #paper{
+    position:relative;
+    background:var(--paper);
+    box-shadow:0 2px 4px #00000018, 0 20px 40px -12px #00000030;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 27px, #00000004 27px, #00000004 28px);
+  }
+  #paper.dragover{ outline:2px dashed var(--barometric); outline-offset:-2px; }
+
+  .comp{
+    position:absolute;
+    cursor:move;
+    border:1px solid transparent;
+  }
+  .comp:hover{ border-color:#00000022; }
+  .comp.selected{ border:1px solid var(--sel); }
+  .comp.selected::after{
+    content:'';
+    position:absolute; inset:-1px;
+    border:1px dashed var(--sel);
+    pointer-events:none;
+  }
+  .resize-handle{
+    position:absolute; width:9px; height:9px;
+    background:var(--sel); border:1px solid #fff;
+    right:-5px; bottom:-5px; cursor:nwse-resize;
+    display:none;
+  }
+  .comp.selected .resize-handle{ display:block; }
+
+  .comp-inner{ width:100%; height:100%; overflow:hidden; }
+
+  /* text component */
+  .c-text{ padding:2px; line-height:1.35; outline:none; }
+
+  /* image placeholder */
+  .c-image{ background:#00000008; display:flex; align-items:center; justify-content:center; color:var(--ink-soft); font-size:11px; font-family:'Helvetica Neue',Arial,sans-serif; text-align:center; }
+  .c-image img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+  /* divider */
+  .c-divider{ background:var(--line); }
+
+  /* weather widgets */
+  .weatherwidget{ font-family:'Helvetica Neue',Arial,sans-serif; }
+  .ww-temp{ display:flex; flex-direction:column; justify-content:center; height:100%; }
+  .ww-temp .num{ font-family:'Iowan Old Style',Georgia,serif; font-weight:400; line-height:0.9; }
+  .ww-temp .lbl{ text-transform:uppercase; letter-spacing:1.5px; color:var(--ink-soft); margin-top:4px;}
+  .ww-condition{ display:flex; align-items:center; gap:10px; height:100%; }
+  .ww-condition .glyph{ font-size:2.2em; }
+  .ww-condition .desc{ display:flex; flex-direction:column; }
+  .ww-condition .desc .place{ font-weight:700; }
+  .ww-condition .desc .cond{ color:var(--ink-soft); font-size:0.85em; }
+  .ww-forecast{ display:flex; height:100%; gap:6px; }
+  .ww-day{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border-right:1px solid var(--line); font-size:0.85em; }
+  .ww-day:last-child{ border-right:none; }
+  .ww-day .d{ text-transform:uppercase; letter-spacing:0.5px; color:var(--ink-soft); font-size:0.75em; margin-bottom:4px;}
+  .ww-day .g{ font-size:1.5em; margin-bottom:2px;}
+  .ww-day .hi{ font-weight:700; }
+  .ww-day .lo{ color:var(--ink-soft); margin-left:3px; font-size:0.9em;}
+  .ww-detailgrid{ display:grid; grid-template-columns:1fr 1fr; height:100%; gap:1px; background:var(--line); }
+  .ww-detailcell{ background:var(--paper); display:flex; flex-direction:column; justify-content:center; padding:8px; }
+  .ww-detailcell .k{ text-transform:uppercase; letter-spacing:0.5px; font-size:0.68em; color:var(--ink-soft); }
+  .ww-detailcell .v{ font-size:1.3em; margin-top:2px; }
+  .ww-chart{ height:100%; width:100%; }
+  .ww-map{ height:100%; background:linear-gradient(135deg,#3E5C6B,#2A3F4A); display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.8em; }
+  .ww-isobar{ height:100%; width:100%; }
+
+  /* big conditions */
+  .ww-bigcond{ display:flex; flex-direction:column; justify-content:center; height:100%; gap:2px; }
+  .ww-bigcond .primary-num{ font-family:'Iowan Old Style',Georgia,serif; font-weight:400; line-height:0.9; }
+  .ww-bigcond .sub-line{ text-transform:uppercase; letter-spacing:1px; color:var(--ink-soft); font-size:0.22em; margin-top:6px; line-height:1.6; }
+
+  /* conditions strip */
+  .ww-condstrip{ display:flex; height:100%; gap:1px; overflow:hidden; }
+  .ww-condstrip .cs-item{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; border-right:1px solid var(--line); font-size:0.85em; padding:0 1px; }
+  .ww-condstrip .cs-item:last-child{ border-right:none; }
+  .ww-condstrip .t{ text-transform:uppercase; letter-spacing:0.3px; color:var(--ink-soft); font-size:0.68em; margin-bottom:3px; white-space:nowrap; }
+  .ww-condstrip .g{ font-size:1.4em; margin-bottom:2px;}
+  .ww-condstrip .hi{ font-weight:700; }
+  .ww-condstrip .lo{ color:var(--ink-soft); margin-left:2px; font-size:0.85em;}
+
+  /* combined chart */
+  .ww-combochart{ height:100%; width:100%; display:flex; flex-direction:column; }
+  .ww-combochart .cc-legend{ display:flex; gap:10px; flex-wrap:wrap; font-size:9.5px; text-transform:uppercase; letter-spacing:0.3px; color:var(--ink-soft); padding-bottom:3px; }
+  .ww-combochart .cc-legend span{ display:inline-flex; align-items:center; gap:3px; }
+  .ww-combochart .cc-legend i{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .ww-combochart .cc-svgwrap{ flex:1; min-height:0; }
+
+  /* ---- Right: inspector ---- */
+  #inspector{
+    background:#F1EEE6;
+    border-left:1px solid var(--panel-edge);
+    padding:16px;
+    overflow-y:auto;
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    font-size:12.5px;
+  }
+  #inspector h3{
+    font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--ink-soft);
+    margin:0 0 12px; font-weight:600; padding-bottom:8px; border-bottom:1px solid var(--panel-edge);
+  }
+  .field{ margin-bottom:12px; }
+  .field label{ display:block; font-size:10.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--ink-soft); margin-bottom:4px;}
+  .field input[type="text"], .field input[type="number"], .field select, .field textarea{
+    width:100%; padding:6px 8px; border:1px solid var(--panel-edge); border-radius:2px; font-size:12.5px;
+    font-family:'Helvetica Neue',Arial,sans-serif; background:#fff; color:var(--ink);
+  }
+  .field textarea{ resize:vertical; min-height:50px; font-family:'Iowan Old Style',Georgia,serif; }
+  .field input[type="color"]{ width:100%; height:28px; border:1px solid var(--panel-edge); padding:2px; border-radius:2px;}
+  .field-row{ display:flex; gap:8px; }
+  .field-row .field{ flex:1; }
+  .empty-hint{ color:var(--ink-soft); font-size:12px; line-height:1.5; padding-top:8px;}
+  .btn-danger{
+    width:100%; margin-top:6px; padding:8px; background:transparent; border:1px solid #A32D2D50;
+    color:#A32D2D; border-radius:2px; cursor:pointer; font-size:12px; text-transform:uppercase; letter-spacing:0.5px;
+  }
+  .btn-danger:hover{ background:#A32D2D10; }
+  .layer-select{ font-size:11px; }
+  .status-line{ font-size:11px; color:var(--ink-soft); margin-top:16px; padding-top:12px; border-top:1px solid var(--panel-edge); line-height:1.5;}
+  .status-line b{ color:var(--ink); }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="topbar">
+    <div class="brand"><span class="dot"></span> WeatherReport</div>
+    <div class="sep"></div>
+    <div>
+      <label>Location</label>
+      <input type="text" id="locationInput" placeholder="City name" value="Milan" style="width:140px;">
+    </div>
+    <div>
+      <label>Units</label>
+      <select id="unitsSelect">
+        <option value="celsius">°C, km/h</option>
+        <option value="fahrenheit">°F, mph</option>
+      </select>
+    </div>
+    <div>
+      <label>Paper</label>
+      <select id="paperSize">
+        <option value="A4">A4 (portrait)</option>
+        <option value="A4L">A4 (landscape)</option>
+        <option value="Letter">Letter (portrait)</option>
+        <option value="LetterL">Letter (landscape)</option>
+        <option value="A5">A5 (portrait)</option>
+        <option value="Square">Square</option>
+        <option value="Custom">Custom…</option>
+      </select>
+    </div>
+    <div id="customSizeFields" style="display:none;">
+      <label>W × H (mm)</label>
+      <div style="display:flex; gap:4px;">
+        <input type="text" id="customW" value="210" style="width:48px;">
+        <input type="text" id="customH" value="297" style="width:48px;">
+      </div>
+    </div>
+    <div class="grow"></div>
+    <button id="fetchBtn">Fetch weather ↻</button>
+    <button id="exportBtn" class="primary">Export PDF</button>
+  </div>
+
+  <div id="palette">
+    <h3>Structure</h3>
+    <div class="palette-item" draggable="true" data-type="text"><span class="ic">T</span> Text block</div>
+    <div class="palette-item" draggable="true" data-type="image"><span class="ic">▧</span> Image</div>
+    <div class="palette-item" draggable="true" data-type="divider"><span class="ic">—</span> Divider line</div>
+
+    <h3>Weather widgets</h3>
+    <div class="palette-item" draggable="true" data-type="ww-bigcond"><span class="ic">°</span> Big conditions</div>
+    <div class="palette-item" draggable="true" data-type="ww-condition"><span class="ic">☁</span> Condition summary</div>
+    <div class="palette-item" draggable="true" data-type="ww-condstrip"><span class="ic">▤</span> Conditions strip</div>
+    <div class="palette-item" draggable="true" data-type="ww-detailgrid"><span class="ic">▦</span> Detail grid</div>
+    <div class="palette-item" draggable="true" data-type="ww-combochart"><span class="ic">╱</span> Combined chart</div>
+    <div class="palette-item" draggable="true" data-type="ww-map"><span class="ic">◈</span> Location marker</div>
+  </div>
+
+  <div id="canvas-wrap">
+    <div id="paper"></div>
+  </div>
+
+  <div id="inspector">
+    <h3 id="inspectorTitle">Inspector</h3>
+    <div id="inspectorBody">
+      <p class="empty-hint">Drag a component from the left onto the paper, or click an existing component to edit it here.</p>
+    </div>
+    <div class="status-line" id="statusLine">No weather data loaded yet. Set a location and click "Fetch weather".</div>
+  </div>
+</div>
+
+<script>
+(function(){
+
+  /* ---------------- State ---------------- */
+  const MM_TO_PX = 3.7795275591; // 96dpi
+  const PAPER_SIZES = {
+    A4:      {w:210, h:297},
+    A4L:     {w:297, h:210},
+    Letter:  {w:215.9, h:279.4},
+    LetterL: {w:279.4, h:215.9},
+    A5:      {w:148, h:210},
+    Square:  {w:220, h:220}
+  };
+
+  let state = {
+    paper: 'A4',
+    customW: 210, customH: 297,
+    location: {name:'Milan', lat:45.4642, lon:9.1900},
+    units: 'celsius',
+    weather: null,
+    components: [],
+    nextId: 1,
+    selectedId: null
+  };
+
+  const paperEl = document.getElementById('paper');
+  const inspectorBody = document.getElementById('inspectorBody');
+  const inspectorTitle = document.getElementById('inspectorTitle');
+  const statusLine = document.getElementById('statusLine');
+
+  function applyPaperSize(){
+    let w, h;
+    if(state.paper === 'Custom'){
+      w = state.customW; h = state.customH;
+    } else {
+      w = PAPER_SIZES[state.paper].w; h = PAPER_SIZES[state.paper].h;
+    }
+    paperEl.style.width = (w * MM_TO_PX) + 'px';
+    paperEl.style.height = (h * MM_TO_PX) + 'px';
+  }
+  applyPaperSize();
+
+  document.getElementById('paperSize').addEventListener('change', e=>{
+    state.paper = e.target.value;
+    document.getElementById('customSizeFields').style.display = state.paper === 'Custom' ? 'block' : 'none';
+    applyPaperSize();
+  });
+  document.getElementById('customW').addEventListener('input', e=>{ state.customW = parseFloat(e.target.value)||210; applyPaperSize(); });
+  document.getElementById('customH').addEventListener('input', e=>{ state.customH = parseFloat(e.target.value)||297; applyPaperSize(); });
+  document.getElementById('unitsSelect').addEventListener('change', e=>{ state.units = e.target.value; if(state.weather) fetchWeather(); });
+
+  /* ---------------- Weather codes ---------------- */
+  const WMO = {
+    0:{d:'Clear sky', g:'☀'}, 1:{d:'Mostly clear', g:'🌤'}, 2:{d:'Partly cloudy', g:'⛅'}, 3:{d:'Overcast', g:'☁'},
+    45:{d:'Fog', g:'🌫'}, 48:{d:'Rime fog', g:'🌫'},
+    51:{d:'Light drizzle', g:'🌦'}, 53:{d:'Drizzle', g:'🌦'}, 55:{d:'Dense drizzle', g:'🌦'},
+    61:{d:'Light rain', g:'🌧'}, 63:{d:'Rain', g:'🌧'}, 65:{d:'Heavy rain', g:'🌧'},
+    71:{d:'Light snow', g:'🌨'}, 73:{d:'Snow', g:'🌨'}, 75:{d:'Heavy snow', g:'🌨'},
+    80:{d:'Rain showers', g:'🌦'}, 81:{d:'Rain showers', g:'🌦'}, 82:{d:'Violent showers', g:'⛈'},
+    95:{d:'Thunderstorm', g:'⛈'}, 96:{d:'Thunderstorm, hail', g:'⛈'}, 99:{d:'Severe thunderstorm', g:'⛈'}
+  };
+  function wmoInfo(code){ return WMO[code] || {d:'Unknown', g:'—'}; }
+
+  /* ---------------- Shared hourly attribute registry ---------------- */
+  // key -> {label, path (into hourly), unit(state), color}
+  function HOURLY_ATTRS(){
+    const u = state.units === 'fahrenheit';
+    return {
+      temperature_2m:        {label:'Temperature',    unit:u?'°F':'°C',  color:'#3E5C6B'},
+      apparent_temperature:  {label:'Feels like',      unit:u?'°F':'°C',  color:'#8A5A3E'},
+      relative_humidity_2m:  {label:'Humidity',        unit:'%',          color:'#3E7C6B'},
+      dew_point_2m:          {label:'Dew point',       unit:u?'°F':'°C',  color:'#5B6E8A'},
+      precipitation:         {label:'Precipitation',   unit:'mm',         color:'#2B6FC8'},
+      precipitation_probability:{label:'Precip. chance', unit:'%',        color:'#5B9BD8'},
+      pressure_msl:          {label:'Pressure (MSL)',  unit:'hPa',        color:'#C87F2B'},
+      surface_pressure:      {label:'Pressure (surf)', unit:'hPa',        color:'#B06A1E'},
+      cloud_cover:           {label:'Cloud cover',     unit:'%',          color:'#8A8A80'},
+      visibility:            {label:'Visibility',      unit:'m',          color:'#6B6B6B'},
+      wind_speed_10m:        {label:'Wind speed',      unit:u?'mph':'km/h', color:'#5C8A3E'},
+      wind_gusts_10m:        {label:'Wind gusts',      unit:u?'mph':'km/h', color:'#A3502D'},
+      wind_direction_10m:    {label:'Wind direction',  unit:'°',          color:'#7A5C8A'},
+      uv_index:              {label:'UV index',        unit:'',           color:'#C8942B'}
+    };
+  }
+  function hourlyLen(){ return state.weather && state.weather.hourly ? state.weather.hourly.time.length : 384; }
+  function hourlyValueAt(key, idx){
+    const w = state.weather;
+    if(!w || !w.hourly || !w.hourly[key]) return null;
+    return w.hourly[key][idx];
+  }
+  function fmtHourLabel(idx){
+    const w = state.weather;
+    if(!w || !w.hourly) return 'h+'+idx;
+    const dt = new Date(w.hourly.time[idx]);
+    return dt.toLocaleString(undefined,{weekday:'short', hour:'2-digit'});
+  }
+
+  /* ---------------- Geocoding + fetch ---------------- */
+  async function geocode(name){
+    const res = await fetch('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(name) + '&count=1');
+    const data = await res.json();
+    if(!data.results || !data.results.length) throw new Error('Location not found');
+    const r = data.results[0];
+    return {name: r.name + (r.admin1 ? ', ' + r.admin1 : '') + ', ' + r.country, lat:r.latitude, lon:r.longitude};
+  }
+
+  async function fetchWeather(){
+    statusLine.textContent = 'Fetching…';
+    try{
+      const locName = document.getElementById('locationInput').value.trim() || 'Milan';
+      const loc = await geocode(locName);
+      state.location = loc;
+
+      const tempUnit = state.units === 'fahrenheit' ? 'fahrenheit' : 'celsius';
+      const windUnit = state.units === 'fahrenheit' ? 'mph' : 'kmh';
+
+      const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + loc.lat + '&longitude=' + loc.lon +
+        '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,surface_pressure' +
+        '&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_probability_max' +
+        '&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,precipitation_probability,weather_code,pressure_msl,surface_pressure,cloud_cover,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index' +
+        '&temperature_unit=' + tempUnit + '&wind_speed_unit=' + windUnit + '&timezone=auto&forecast_days=16';
+
+      const res = await fetch(url);
+      const data = await res.json();
+      state.weather = data;
+      statusLine.innerHTML = 'Loaded: <b>' + loc.name + '</b><br>' + new Date().toLocaleString();
+      renderAllComponents();
+    }catch(err){
+      statusLine.textContent = 'Error: ' + err.message;
+    }
+  }
+  document.getElementById('fetchBtn').addEventListener('click', fetchWeather);
+
+  /* ---------------- Component model ---------------- */
+  function defaultSize(type){
+    switch(type){
+      case 'text': return {w:220, h:60};
+      case 'image': return {w:180, h:140};
+      case 'divider': return {w:300, h:2};
+      case 'ww-temp': return {w:180, h:110};
+      case 'ww-bigcond': return {w:220, h:130};
+      case 'ww-condition': return {w:260, h:80};
+      case 'ww-forecast': return {w:420, h:100};
+      case 'ww-condstrip': return {w:460, h:110};
+      case 'ww-detailgrid': return {w:260, h:120};
+      case 'ww-chart': return {w:400, h:160};
+      case 'ww-isobar': return {w:400, h:100};
+      case 'ww-combochart': return {w:460, h:200};
+      case 'ww-map': return {w:220, h:150};
+      default: return {w:160, h:80};
+    }
+  }
+
+  function defaultProps(type){
+    switch(type){
+      case 'text': return {text:'Edit this text…', fontSize:16, color:'#1C1B18', align:'left', weight:'400', font:'serif'};
+      case 'image': return {src:'', caption:'Image'};
+      case 'divider': return {color:'#D8D3C7', thickness:1};
+      case 'ww-temp': return {fontSize:64, color:'#1C1B18'};
+      case 'ww-bigcond': return {
+        fontSize:64, color:'#1C1B18', hourOffset:0,
+        fields:{temperature_2m:true, apparent_temperature:true, relative_humidity_2m:false, wind_speed_10m:false, pressure_msl:false, uv_index:false, precipitation_probability:false, cloud_cover:false}
+      };
+      case 'ww-condition': return {fontSize:16, color:'#1C1B18'};
+      case 'ww-forecast': return {days:5, fontSize:14, color:'#1C1B18'};
+      case 'ww-condstrip': return {mode:'daily', days:5, startHour:0, endHour:48, fontSize:14, color:'#1C1B18'};
+      case 'ww-detailgrid': return {fontSize:14, color:'#1C1B18'};
+      case 'ww-chart': return {color:'#3E5C6B'};
+      case 'ww-isobar': return {color:'#C87F2B'};
+      case 'ww-combochart': return {
+        attrs:{temperature_2m:true, pressure_msl:true, relative_humidity_2m:false, wind_speed_10m:false},
+        startHour:0, endHour:48, showXLines:true, showYLines:true
+      };
+      case 'ww-map': return {};
+      default: return {};
+    }
+  }
+
+  function createComponent(type, x, y){
+    const size = defaultSize(type);
+    const comp = {
+      id: state.nextId++,
+      type: type,
+      x: Math.max(0, x - size.w/2),
+      y: Math.max(0, y - size.h/2),
+      w: size.w, h: size.h,
+      props: defaultProps(type)
+    };
+    state.components.push(comp);
+    renderComponent(comp);
+    selectComponent(comp.id);
+  }
+
+  function renderAllComponents(){
+    state.components.forEach(c => updateComponentContent(c));
+  }
+
+  function svgLineChart(values, color, w, h){
+    if(!values || !values.length) return '<svg viewBox="0 0 100 40" style="width:100%;height:100%;"></svg>';
+    const min = Math.min(...values), max = Math.max(...values);
+    const range = (max - min) || 1;
+    const pts = values.map((v,i)=>{
+      const x = (i/(values.length-1)) * 100;
+      const y = 38 - ((v-min)/range) * 34;
+      return x.toFixed(1)+','+y.toFixed(1);
+    }).join(' ');
+    return '<svg viewBox="0 0 100 40" preserveAspectRatio="none" style="width:100%;height:100%;">' +
+      '<polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="1.2" vector-effect="non-scaling-stroke"/>' +
+      '</svg>';
+  }
+
+  // Multi-series chart: each series independently normalized 0..1 (own axis),
+  // so wildly different units (°C, hPa, %, km/h) can share one plot area.
+  // showXLines: vertical gridlines per day boundary. showYLines: horizontal gridlines at 0/25/50/75/100%.
+  function svgComboChart(series, startIdx, endIdx, showXLines, showYLines){
+    const n = Math.max(1, endIdx - startIdx);
+    const W = 300, H = 140, PAD = 4;
+    let defs = '';
+    let gridlines = '';
+    if(showYLines){
+      for(let g=0; g<=4; g++){
+        const y = PAD + (H-2*PAD) * (g/4);
+        gridlines += '<line x1="0" y1="'+y.toFixed(1)+'" x2="'+W+'" y2="'+y.toFixed(1)+'" stroke="#00000012" stroke-width="1" vector-effect="non-scaling-stroke"/>';
+      }
+    }
+    if(showXLines){
+      const w = state.weather;
+      if(w && w.hourly){
+        for(let i=startIdx;i<endIdx;i++){
+          const hourStr = w.hourly.time[i];
+          if(hourStr && hourStr.endsWith('T00:00')){
+            const x = ((i-startIdx)/n) * W;
+            gridlines += '<line x1="'+x.toFixed(1)+'" y1="0" x2="'+x.toFixed(1)+'" y2="'+H+'" stroke="#00000012" stroke-width="1" vector-effect="non-scaling-stroke"/>';
+          }
+        }
+      }
+    }
+    let lines = '';
+    series.forEach(s => {
+      const vals = s.values;
+      if(!vals || !vals.length) return;
+      const min = Math.min(...vals), max = Math.max(...vals);
+      const range = (max - min) || 1;
+      const pts = vals.map((v,i)=>{
+        const x = (i/(Math.max(1,vals.length-1))) * W;
+        const y = (H-PAD) - ((v-min)/range) * (H-2*PAD);
+        return x.toFixed(1)+','+y.toFixed(1);
+      }).join(' ');
+      lines += '<polyline points="'+pts+'" fill="none" stroke="'+s.color+'" stroke-width="1.6" vector-effect="non-scaling-stroke"/>';
+    });
+    return '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="width:100%;height:100%;">' + gridlines + lines + '</svg>';
+  }
+
+  function updateComponentContent(comp){
+    const el = document.getElementById('comp-' + comp.id);
+    if(!el) return;
+    const inner = el.querySelector('.comp-inner');
+    const p = comp.props;
+    const w = state.weather;
+    const unitSym = state.units === 'fahrenheit' ? '°F' : '°C';
+    const windSym = state.units === 'fahrenheit' ? 'mph' : 'km/h';
+
+    switch(comp.type){
+      case 'text':
+        inner.className = 'comp-inner c-text';
+        inner.contentEditable = 'true';
+        inner.style.fontSize = p.fontSize + 'px';
+        inner.style.color = p.color;
+        inner.style.textAlign = p.align;
+        inner.style.fontWeight = p.weight;
+        inner.style.fontFamily = p.font === 'sans' ? "'Helvetica Neue',Arial,sans-serif" : "'Iowan Old Style',Georgia,serif";
+        if(inner.textContent !== p.text && document.activeElement !== inner) inner.textContent = p.text;
+        break;
+      case 'image':
+        inner.className = 'comp-inner c-image';
+        inner.innerHTML = p.src ? '<img src="'+p.src+'">' : (p.caption || 'Drop an image URL in the inspector');
+        break;
+      case 'divider':
+        inner.className = 'comp-inner c-divider';
+        inner.style.background = p.color;
+        break;
+      case 'ww-temp': {
+        inner.className = 'comp-inner weatherwidget ww-temp';
+        const t = w ? Math.round(w.current.temperature_2m) : '—';
+        inner.innerHTML = '<div class="num" style="font-size:'+p.fontSize+'px;color:'+p.color+';">'+t+unitSym+'</div>' +
+          '<div class="lbl">'+(w ? 'feels like ' + Math.round(w.current.apparent_temperature) + unitSym : 'no data')+'</div>';
+        break;
+      }
+      case 'ww-bigcond': {
+        inner.className = 'comp-inner weatherwidget ww-bigcond';
+        if(!w || !w.hourly){ inner.innerHTML = '<div style="color:var(--ink-soft);font-size:12px;">no data</div>'; break; }
+        const attrs = HOURLY_ATTRS();
+        const idx = Math.min(Math.max(0, p.hourOffset || 0), hourlyLen() - 1);
+        const activeKeys = Object.keys(p.fields || {}).filter(k => p.fields[k]);
+        // primary = temperature if selected, else first active field
+        const primaryKey = p.fields.temperature_2m ? 'temperature_2m' : (activeKeys[0] || 'temperature_2m');
+        const primaryVal = hourlyValueAt(primaryKey, idx);
+        const primaryInfo = attrs[primaryKey];
+        let html = '<div class="primary-num" style="font-size:'+p.fontSize+'px;color:'+p.color+';">' +
+          (primaryVal!=null ? Math.round(primaryVal) : '—') + primaryInfo.unit + '</div>';
+        const subLines = activeKeys.filter(k => k !== primaryKey).map(k => {
+          const v = hourlyValueAt(k, idx);
+          const info = attrs[k];
+          return info.label + ': ' + (v!=null ? Math.round(v*10)/10 : '—') + info.unit;
+        });
+        if(idx > 0) subLines.unshift(fmtHourLabel(idx));
+        if(subLines.length) html += '<div class="sub-line" style="font-size:'+p.fontSize+'px;">' + subLines.join(' · ') + '</div>';
+        inner.innerHTML = html;
+        break;
+      }
+      case 'ww-condition': {
+        inner.className = 'comp-inner weatherwidget ww-condition';
+        const info = w ? wmoInfo(w.current.weather_code) : {d:'no data', g:'—'};
+        inner.innerHTML = '<div class="glyph">'+info.g+'</div><div class="desc">' +
+          '<div class="place" style="font-size:'+p.fontSize+'px;color:'+p.color+';">'+(w ? state.location.name : 'Location')+'</div>' +
+          '<div class="cond">'+info.d+'</div></div>';
+        break;
+      }
+      case 'ww-forecast': {
+        inner.className = 'comp-inner weatherwidget ww-forecast';
+        if(!w){ inner.innerHTML = '<div style="align-self:center;color:var(--ink-soft);font-size:12px;">no data</div>'; break; }
+        const n = Math.min(p.days || 5, w.daily.time.length);
+        let html = '';
+        for(let i=0;i<n;i++){
+          const dt = new Date(w.daily.time[i]);
+          const dname = dt.toLocaleDateString(undefined,{weekday:'short'});
+          const info = wmoInfo(w.daily.weather_code[i]);
+          html += '<div class="ww-day" style="font-size:'+p.fontSize+'px;color:'+p.color+';">' +
+            '<div class="d">'+dname+'</div><div class="g">'+info.g+'</div>' +
+            '<span><span class="hi">'+Math.round(w.daily.temperature_2m_max[i])+'°</span><span class="lo">'+Math.round(w.daily.temperature_2m_min[i])+'°</span></span></div>';
+        }
+        inner.innerHTML = html;
+        break;
+      }
+      case 'ww-condstrip': {
+        inner.className = 'comp-inner weatherwidget ww-condstrip';
+        if(!w){ inner.innerHTML = '<div style="align-self:center;color:var(--ink-soft);font-size:12px;">no data</div>'; break; }
+        let html = '';
+        if(p.mode === 'hourly'){
+          const start = Math.max(0, Math.min(p.startHour||0, hourlyLen()-1));
+          const end = Math.max(start+1, Math.min(p.endHour||48, hourlyLen()));
+          for(let i=start;i<end;i++){
+            const info = wmoInfo(w.hourly.weather_code[i]);
+            const t = w.hourly.temperature_2m[i];
+            html += '<div class="cs-item" style="font-size:'+p.fontSize+'px;color:'+p.color+';">' +
+              '<div class="t">'+fmtHourLabel(i)+'</div><div class="g">'+info.g+'</div>' +
+              '<span class="hi">'+Math.round(t)+'°</span></div>';
+          }
+        } else {
+          const n = Math.min(p.days || 5, w.daily.time.length);
+          for(let i=0;i<n;i++){
+            const dt = new Date(w.daily.time[i]);
+            const dname = dt.toLocaleDateString(undefined,{weekday:'short'});
+            const info = wmoInfo(w.daily.weather_code[i]);
+            html += '<div class="cs-item" style="font-size:'+p.fontSize+'px;color:'+p.color+';">' +
+              '<div class="t">'+dname+'</div><div class="g">'+info.g+'</div>' +
+              '<span><span class="hi">'+Math.round(w.daily.temperature_2m_max[i])+'°</span><span class="lo">'+Math.round(w.daily.temperature_2m_min[i])+'°</span></span></div>';
+          }
+        }
+        inner.innerHTML = html;
+        break;
+      }
+      case 'ww-detailgrid': {
+        inner.className = 'comp-inner weatherwidget ww-detailgrid';
+        if(!w){ inner.innerHTML = ''; break; }
+        const cells = [
+          {k:'Humidity', v: w.current.relative_humidity_2m + '%'},
+          {k:'Wind', v: Math.round(w.current.wind_speed_10m) + ' ' + windSym},
+          {k:'Pressure', v: Math.round(w.current.surface_pressure) + ' hPa'},
+          {k:'Sunset', v: new Date(w.daily.sunset[0]).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+        ];
+        inner.innerHTML = cells.map(c => '<div class="ww-detailcell" style="font-size:'+p.fontSize+'px;color:'+p.color+';"><div class="k">'+c.k+'</div><div class="v">'+c.v+'</div></div>').join('');
+        break;
+      }
+      case 'ww-chart': {
+        inner.className = 'comp-inner ww-chart';
+        const vals = w ? w.hourly.temperature_2m.slice(0,48) : [];
+        inner.innerHTML = svgLineChart(vals, p.color);
+        break;
+      }
+      case 'ww-isobar': {
+        inner.className = 'comp-inner ww-isobar';
+        const vals = w ? w.hourly.pressure_msl.slice(0,48) : [];
+        inner.innerHTML = svgLineChart(vals, p.color);
+        break;
+      }
+      case 'ww-combochart': {
+        inner.className = 'comp-inner weatherwidget ww-combochart';
+        if(!w || !w.hourly){ inner.innerHTML = '<div style="color:var(--ink-soft);font-size:12px;">no data</div>'; break; }
+        const attrs = HOURLY_ATTRS();
+        const activeKeys = Object.keys(p.attrs || {}).filter(k => p.attrs[k]);
+        const start = Math.max(0, Math.min(p.startHour||0, hourlyLen()-1));
+        const end = Math.max(start+1, Math.min(p.endHour||48, hourlyLen()));
+        const series = activeKeys.map(k => ({
+          key:k, color:attrs[k].color, label:attrs[k].label,
+          values:(w.hourly[k]||[]).slice(start,end)
+        }));
+        const legend = series.map(s => '<span><i style="background:'+s.color+';"></i>'+s.label+'</span>').join('');
+        inner.innerHTML = '<div class="cc-legend">'+legend+'</div>' +
+          '<div class="cc-svgwrap">'+svgComboChart(series, start, end, p.showXLines, p.showYLines)+'</div>';
+        break;
+      }
+      case 'ww-map': {
+        inner.className = 'comp-inner ww-map';
+        inner.innerHTML = w ? state.location.name + '<br>' + state.location.lat.toFixed(2) + ', ' + state.location.lon.toFixed(2) : 'no location';
+        break;
+      }
+    }
+  }
+
+  function renderComponent(comp){
+    const el = document.createElement('div');
+    el.className = 'comp';
+    el.id = 'comp-' + comp.id;
+    el.style.left = comp.x + 'px';
+    el.style.top = comp.y + 'px';
+    el.style.width = comp.w + 'px';
+    el.style.height = comp.h + 'px';
+    const inner = document.createElement('div');
+    inner.className = 'comp-inner';
+    el.appendChild(inner);
+    const handle = document.createElement('div');
+    handle.className = 'resize-handle';
+    el.appendChild(handle);
+    paperEl.appendChild(el);
+
+    updateComponentContent(comp);
+    attachDragMove(el, comp);
+    attachResize(handle, el, comp);
+
+    el.addEventListener('mousedown', (e) => { if(e.target !== handle) selectComponent(comp.id); });
+    inner.addEventListener('input', () => {
+      if(comp.type === 'text') comp.props.text = inner.textContent;
+    });
+    inner.addEventListener('mousedown', (e)=>{ if(comp.type==='text') e.stopPropagation(); });
+  }
+
+  function attachDragMove(el, comp){
+    let dragging = false, sx=0, sy=0, ox=0, oy=0;
+    el.addEventListener('mousedown', (e) => {
+      if(e.target.classList.contains('resize-handle')) return;
+      if(comp.type === 'text' && document.activeElement === el.querySelector('.comp-inner')) return;
+      dragging = true; sx = e.clientX; sy = e.clientY; ox = comp.x; oy = comp.y;
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+      if(!dragging) return;
+      comp.x = Math.max(0, ox + (e.clientX - sx));
+      comp.y = Math.max(0, oy + (e.clientY - sy));
+      el.style.left = comp.x + 'px';
+      el.style.top = comp.y + 'px';
+    });
+    window.addEventListener('mouseup', () => { dragging = false; });
+  }
+
+  function attachResize(handle, el, comp){
+    let resizing = false, sx=0, sy=0, ow=0, oh=0;
+    handle.addEventListener('mousedown', (e) => {
+      resizing = true; sx = e.clientX; sy = e.clientY; ow = comp.w; oh = comp.h;
+      e.preventDefault(); e.stopPropagation();
+    });
+    window.addEventListener('mousemove', (e) => {
+      if(!resizing) return;
+      comp.w = Math.max(30, ow + (e.clientX - sx));
+      comp.h = Math.max(20, oh + (e.clientY - sy));
+      el.style.width = comp.w + 'px';
+      el.style.height = comp.h + 'px';
+      updateComponentContent(comp);
+    });
+    window.addEventListener('mouseup', () => { resizing = false; });
+  }
+
+  function selectComponent(id){
+    state.selectedId = id;
+    document.querySelectorAll('.comp').forEach(e => e.classList.remove('selected'));
+    const el = document.getElementById('comp-' + id);
+    if(el) el.classList.add('selected');
+    renderInspector();
+  }
+
+  paperEl.addEventListener('mousedown', (e) => {
+    if(e.target === paperEl){ state.selectedId = null; document.querySelectorAll('.comp').forEach(x=>x.classList.remove('selected')); renderInspector(); }
+  });
+
+  /* ---------------- Drag from palette ---------------- */
+  document.querySelectorAll('.palette-item').forEach(item => {
+    item.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', item.dataset.type);
+    });
+  });
+  paperEl.addEventListener('dragover', (e) => { e.preventDefault(); paperEl.classList.add('dragover'); });
+  paperEl.addEventListener('dragleave', () => paperEl.classList.remove('dragover'));
+  paperEl.addEventListener('drop', (e) => {
+    e.preventDefault();
+    paperEl.classList.remove('dragover');
+    const type = e.dataTransfer.getData('text/plain');
+    if(!type) return;
+    const rect = paperEl.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    createComponent(type, x, y);
+  });
+
+  /* ---------------- Inspector ---------------- */
+  function field(label, inputHtml){
+    return '<div class="field"><label>'+label+'</label>'+inputHtml+'</div>';
+  }
+
+  // Renders a checkbox per attribute key, id="prefix"+key
+  function checkboxList(prefix, selected, attrRegistry){
+    let html = '<div style="display:flex;flex-direction:column;gap:4px;">';
+    Object.keys(attrRegistry).forEach(k => {
+      const checked = selected && selected[k];
+      html += '<label style="display:flex;align-items:center;gap:6px;font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;">' +
+        '<input type="checkbox" id="'+prefix+k+'" data-key="'+k+'" '+(checked?'checked':'')+'> ' + attrRegistry[k].label + '</label>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  // Same as checkboxList but styled as a compact dropdown-like multi-select box
+  function multiSelect(id, selected, attrRegistry){
+    let html = '<div id="'+id+'" style="display:flex;flex-direction:column;gap:4px;max-height:150px;overflow-y:auto;border:1px solid var(--panel-edge);border-radius:2px;padding:6px;background:#fff;">';
+    Object.keys(attrRegistry).forEach(k => {
+      const checked = selected && selected[k];
+      html += '<label style="display:flex;align-items:center;gap:6px;font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;">' +
+        '<input type="checkbox" class="ms-check" data-key="'+k+'" '+(checked?'checked':'')+'> <i style="width:8px;height:8px;border-radius:50%;background:'+attrRegistry[k].color+';display:inline-block;"></i> ' + attrRegistry[k].label + '</label>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function renderInspector(){
+    const comp = state.components.find(c => c.id === state.selectedId);
+    if(!comp){
+      inspectorTitle.textContent = 'Inspector';
+      inspectorBody.innerHTML = '<p class="empty-hint">Drag a component from the left onto the paper, or click an existing component to edit it here.</p>';
+      return;
+    }
+    inspectorTitle.textContent = labelFor(comp.type);
+    let html = '';
+    html += '<div class="field-row">' +
+      field('X', '<input type="number" id="fx" value="'+Math.round(comp.x)+'">') +
+      field('Y', '<input type="number" id="fy" value="'+Math.round(comp.y)+'">') +
+      '</div>';
+    html += '<div class="field-row">' +
+      field('Width', '<input type="number" id="fw" value="'+Math.round(comp.w)+'">') +
+      field('Height', '<input type="number" id="fh" value="'+Math.round(comp.h)+'">') +
+      '</div>';
+
+    const p = comp.props;
+    switch(comp.type){
+      case 'text':
+        html += field('Text', '<textarea id="ptext">'+escapeHtml(p.text)+'</textarea>');
+        html += '<div class="field-row">' +
+          field('Font size', '<input type="number" id="pfs" value="'+p.fontSize+'">') +
+          field('Color', '<input type="color" id="pcolor" value="'+p.color+'">') +
+          '</div>';
+        html += '<div class="field-row">' +
+          field('Align', '<select id="palign"><option value="left"'+(p.align==='left'?' selected':'')+'>Left</option><option value="center"'+(p.align==='center'?' selected':'')+'>Center</option><option value="right"'+(p.align==='right'?' selected':'')+'>Right</option></select>') +
+          field('Weight', '<select id="pweight"><option value="400"'+(p.weight==='400'?' selected':'')+'>Regular</option><option value="700"'+(p.weight==='700'?' selected':'')+'>Bold</option></select>') +
+          '</div>';
+        html += field('Typeface', '<select id="pfont"><option value="serif"'+(p.font==='serif'?' selected':'')+'>Serif</option><option value="sans"'+(p.font==='sans'?' selected':'')+'>Sans</option></select>');
+        break;
+      case 'image':
+        html += field('Image URL', '<input type="text" id="psrc" value="'+escapeHtml(p.src)+'" placeholder="https://…">');
+        html += field('Caption (if empty)', '<input type="text" id="pcaption" value="'+escapeHtml(p.caption)+'">');
+        break;
+      case 'divider':
+        html += field('Color', '<input type="color" id="pcolor" value="'+p.color+'">');
+        break;
+      case 'ww-temp':
+      case 'ww-condition':
+      case 'ww-forecast':
+      case 'ww-detailgrid':
+        html += '<div class="field-row">' +
+          field('Font size', '<input type="number" id="pfs" value="'+p.fontSize+'">') +
+          field('Color', '<input type="color" id="pcolor" value="'+p.color+'">') +
+          '</div>';
+        if(comp.type === 'ww-forecast'){
+          html += field('Days shown', '<input type="number" id="pdays" min="1" max="6" value="'+p.days+'">');
+        }
+        break;
+      case 'ww-chart':
+      case 'ww-isobar':
+        html += field('Line color', '<input type="color" id="pcolor" value="'+p.color+'">');
+        break;
+      case 'ww-bigcond': {
+        html += '<div class="field-row">' +
+          field('Font size', '<input type="number" id="pfs" value="'+p.fontSize+'">') +
+          field('Color', '<input type="color" id="pcolor" value="'+p.color+'">') +
+          '</div>';
+        html += field('Hours from now', '<input type="number" id="phour" min="0" max="'+(hourlyLen()-1)+'" value="'+(p.hourOffset||0)+'">');
+        html += field('Attributes to show', checkboxList('pfield-', p.fields, HOURLY_ATTRS()));
+        break;
+      }
+      case 'ww-condstrip': {
+        html += field('Mode', '<select id="pmode"><option value="daily"'+(p.mode==='daily'?' selected':'')+'>Daily forecast</option><option value="hourly"'+(p.mode==='hourly'?' selected':'')+'>Hourly forecast</option></select>');
+        html += '<div class="field-row">' +
+          field('Font size', '<input type="number" id="pfs" value="'+p.fontSize+'">') +
+          field('Color', '<input type="color" id="pcolor" value="'+p.color+'">') +
+          '</div>';
+        if(p.mode === 'hourly'){
+          html += '<div class="field-row">' +
+            field('Start (h from now)', '<input type="number" id="pstart" min="0" max="'+(hourlyLen()-1)+'" value="'+p.startHour+'">') +
+            field('End (h from now)', '<input type="number" id="pend" min="1" max="'+hourlyLen()+'" value="'+p.endHour+'">') +
+            '</div>';
+        } else {
+          html += field('Days shown', '<input type="number" id="pdays" min="1" max="16" value="'+p.days+'">');
+        }
+        break;
+      }
+      case 'ww-combochart': {
+        html += field('Attributes (multi-select)', multiSelect('pattrs', p.attrs, HOURLY_ATTRS()));
+        html += '<div class="field-row">' +
+          field('Start (h from now)', '<input type="number" id="pstart" min="0" max="'+(hourlyLen()-1)+'" value="'+p.startHour+'">') +
+          field('End (h from now)', '<input type="number" id="pend" min="1" max="'+hourlyLen()+'" value="'+p.endHour+'">') +
+          '</div>';
+        html += '<div class="field-row">' +
+          field('Y gridlines', '<select id="pshowy"><option value="1"'+(p.showYLines?' selected':'')+'>On</option><option value="0"'+(!p.showYLines?' selected':'')+'>Off</option></select>') +
+          field('X gridlines (days)', '<select id="pshowx"><option value="1"'+(p.showXLines?' selected':'')+'>On</option><option value="0"'+(!p.showXLines?' selected':'')+'>Off</option></select>') +
+          '</div>';
+        break;
+      }
+      case 'ww-map':
+        break;
+    }
+
+    html += '<button class="btn-danger" id="deleteComp">Delete component</button>';
+    inspectorBody.innerHTML = html;
+
+    // wire up
+    const bind = (id, cb) => { const e = document.getElementById(id); if(e) e.addEventListener('input', cb); };
+    bind('fx', e=>{ comp.x = parseFloat(e.target.value)||0; updatePos(comp); });
+    bind('fy', e=>{ comp.y = parseFloat(e.target.value)||0; updatePos(comp); });
+    bind('fw', e=>{ comp.w = parseFloat(e.target.value)||30; updatePos(comp); updateComponentContent(comp); });
+    bind('fh', e=>{ comp.h = parseFloat(e.target.value)||20; updatePos(comp); updateComponentContent(comp); });
+    bind('ptext', e=>{ p.text = e.target.value; updateComponentContent(comp); });
+    bind('pfs', e=>{ p.fontSize = parseFloat(e.target.value)||14; updateComponentContent(comp); });
+    bind('pcolor', e=>{ p.color = e.target.value; updateComponentContent(comp); });
+    bind('palign', e=>{ p.align = e.target.value; updateComponentContent(comp); });
+    bind('pweight', e=>{ p.weight = e.target.value; updateComponentContent(comp); });
+    bind('pfont', e=>{ p.font = e.target.value; updateComponentContent(comp); });
+    bind('psrc', e=>{ p.src = e.target.value; updateComponentContent(comp); });
+    bind('pcaption', e=>{ p.caption = e.target.value; updateComponentContent(comp); });
+    bind('pdays', e=>{ p.days = parseInt(e.target.value)||5; updateComponentContent(comp); });
+    bind('phour', e=>{ p.hourOffset = Math.max(0, parseInt(e.target.value)||0); updateComponentContent(comp); });
+    bind('pmode', e=>{ p.mode = e.target.value; renderInspector(); updateComponentContent(comp); });
+    bind('pstart', e=>{ p.startHour = Math.max(0, parseInt(e.target.value)||0); updateComponentContent(comp); });
+    bind('pend', e=>{ p.endHour = Math.max((p.startHour||0)+1, parseInt(e.target.value)||1); updateComponentContent(comp); });
+    bind('pshowx', e=>{ p.showXLines = e.target.value === '1'; updateComponentContent(comp); });
+    bind('pshowy', e=>{ p.showYLines = e.target.value === '1'; updateComponentContent(comp); });
+
+    // checkbox-based field toggles (ww-bigcond: id="pfield-<key>")
+    document.querySelectorAll('[id^="pfield-"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const key = cb.dataset.key;
+        p.fields[key] = cb.checked;
+        updateComponentContent(comp);
+      });
+    });
+    // multi-select checkboxes (ww-combochart: class="ms-check")
+    document.querySelectorAll('.ms-check').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const key = cb.dataset.key;
+        p.attrs[key] = cb.checked;
+        updateComponentContent(comp);
+      });
+    });
+
+    document.getElementById('deleteComp').addEventListener('click', () => {
+      state.components = state.components.filter(c => c.id !== comp.id);
+      const el = document.getElementById('comp-' + comp.id);
+      if(el) el.remove();
+      state.selectedId = null;
+      renderInspector();
+    });
+  }
+
+  function updatePos(comp){
+    const el = document.getElementById('comp-' + comp.id);
+    if(!el) return;
+    el.style.left = comp.x + 'px';
+    el.style.top = comp.y + 'px';
+    el.style.width = comp.w + 'px';
+    el.style.height = comp.h + 'px';
+  }
+
+  function labelFor(type){
+    const names = {
+      text:'Text block', image:'Image', divider:'Divider',
+      'ww-temp':'Big temperature', 'ww-bigcond':'Big conditions',
+      'ww-condition':'Condition summary', 'ww-forecast':'Forecast strip', 'ww-condstrip':'Conditions strip',
+      'ww-detailgrid':'Detail grid', 'ww-chart':'Temperature chart', 'ww-isobar':'Pressure trace',
+      'ww-combochart':'Combined chart', 'ww-map':'Location marker'
+    };
+    return names[type] || 'Component';
+  }
+
+  function escapeHtml(s){
+    return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ---------------- Export to PDF (print) ---------------- */
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    document.querySelectorAll('.comp').forEach(el => el.classList.remove('selected'));
+    const w = paperEl.style.width, h = paperEl.style.height;
+    const style = document.createElement('style');
+    style.id = 'print-style';
+    style.textContent = '@media print{ @page{ size:'+w+' '+h+'; margin:0; } body *{ visibility:hidden; } #paper, #paper *{ visibility:visible; } #paper{ position:absolute; left:0; top:0; box-shadow:none; } .resize-handle{ display:none !important; } }';
+    document.head.appendChild(style);
+    window.print();
+    setTimeout(() => style.remove(), 500);
+  });
+
+  /* ---------------- Init ---------------- */
+  fetchWeather();
+
+})();
+</script>
+</body>
+</html>
