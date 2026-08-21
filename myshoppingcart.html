@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyShoppingCart</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Font Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
+
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-200">
+                    <i class="fa-solid fa-cart-shopping text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-slate-900">MyShoppingCart</h1>
+                    <p class="text-xs text-slate-500">Smart wishlist & shopping manager</p>
+                </div>
+            </div>
+
+            <!-- Action buttons header -->
+        <div class="flex items-center gap-2 flex-wrap justify-center">
+            <button onclick="openExportModal()" class="px-3.5 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition flex items-center gap-1.5 shadow-sm">
+                <i class="fa-solid fa-code-merge text-indigo-600"></i> Export / Share link
+            </button>
+            <button onclick="openModal()" class="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition flex items-center gap-1.5 shadow-md shadow-indigo-100">
+                <i class="fa-solid fa-plus"></i> Add Item
+            </button>
+        </div>
+    </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-8 flex-grow w-full">
+    
+    <!-- Shared Cart Banner (Visible when viewing someone else's shared cart) -->
+    <div id="sharedBanner" class="hidden mb-6 bg-amber-50 border border-amber-200 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                <i class="fa-solid fa-eye"></i>
+            </div>
+            <div>
+                <h4 id="bannerTitle" class="text-sm font-bold text-amber-900">Viewing a Shared Shopping List (Read-Only)</h4>
+                <p id="bannerDesc" class="text-xs text-amber-700">You are browsing someone else's list. You can import individual items or merge them into your own cart!</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="mergeSharedCart()" class="px-3.5 py-2 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition shadow-sm">
+                <i class="fa-solid fa-file-arrow-down mr-1"></i> Merge All into My Cart
+            </button>
+            <button onclick="returnToMyCart()" class="px-3.5 py-2 text-xs font-semibold bg-white hover:bg-slate-50 text-amber-900 border border-amber-300 rounded-xl transition">
+                Back to My Cart
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats & Filter Section -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <!-- Total Estimated Cost Card -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Estimated</p>
+                    <h3 id="statTotalCost" class="text-2xl font-bold text-slate-900 mt-1">$0.00</h3>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-wallet"></i>
+                </div>
+            </div>
+
+            <!-- Total Items Card -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Items in List</p>
+                    <h3 id="statTotalItems" class="text-2xl font-bold text-slate-900 mt-1">0</h3>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-basket-shopping"></i>
+                </div>
+            </div>
+
+            <!-- Shop Filter Card -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
+                <label for="shopFilter" class="text-xs font-medium text-slate-500 uppercase tracking-wider block mb-1">Filter by Shop / Source</label>
+                <div class="relative">
+                    <select id="shopFilter" onchange="filterItems()" class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none">
+                        <option value="">All Shops & Locations</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toolbar / Search Bar -->
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="relative w-full sm:w-96">
+                <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                    <i class="fa-solid fa-search text-xs"></i>
+                </span>
+                <input type="text" id="searchInput" oninput="filterItems()" placeholder="Search items..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition">
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button onclick="clearAllItems()" class="px-3 py-2 text-xs font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition">
+                    <i class="fa-solid fa-trash-can mr-1"></i> Clear All
+                </button>
+            </div>
+        </div>
+
+        <div id="itemsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Items dynamically injected here -->
+        </div>
+
+        <!-- Empty State (hidden by default) -->
+        <div id="emptyState" class="hidden flex flex-col items-center justify-center py-16 text-center">
+            <div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 text-3xl mb-4">
+                <i class="fa-solid fa-cart-arrow-down"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-700">Your shopping cart is empty</h3>
+            <p class="text-sm text-slate-500 max-w-sm mt-1">Start adding items you wish to purchase, noting where to buy and how much they cost.</p>
+            <button onclick="openModal()" class="mt-4 px-4 py-2 bg-indigo-600 text-white font-medium text-sm rounded-xl shadow-md hover:bg-indigo-700 transition">
+                Add your first item
+            </button>
+        </div>
+
+    </main>
+
+    <footer class="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-400">
+        <p>MyShoppingCart &bull; LocalStorage Enabled &bull; Shared View & Merge Support</p>
+    </footer>
+
+    <div id="itemModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform scale-95 transition-transform duration-300" id="modalContent">
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 id="modalTitle" class="text-lg font-bold text-slate-900">Add New Item</h3>
+                <button onclick="closeModal()" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <form id="itemForm" onsubmit="saveItem(event)" class="p-6 space-y-4">
+                <input type="hidden" id="itemId">
+                
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Item Name</label>
+                    <input type="text" id="itemName" required placeholder="e.g., Wireless Noise-Cancelling Headphones" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Price ($)</label>
+                        <input type="number" step="0.01" min="0" id="itemPrice" required placeholder="0.00" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Quantity</label>
+                        <input type="number" min="1" id="itemQty" value="1" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Where to Buy (Website or Location)</label>
+                    <input type="text" id="itemShop" required list="shopSuggestions" placeholder="e.g., Amazon.com or Downtown Mall Store" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition">
+                    <datalist id="shopSuggestions">
+                        <!-- Populated dynamically -->
+                    </datalist>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Notes / Link URL (Optional)</label>
+                    <textarea id="itemNotes" rows="2" placeholder="Color, specifications, direct URL..." class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition resize-none"></textarea>
+                </div>
+
+                <div class="pt-2 flex items-center justify-end gap-3">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-5 py-2.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md shadow-indigo-100 transition">
+                        Save Item
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="exportModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden transform scale-95 transition-transform duration-300" id="exportModalContent">
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="text-lg font-bold text-slate-900">Export & Share Link</h3>
+                <button onclick="closeExportModal()" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Export Mode</label>
+                    <div class="flex gap-4 mb-2 text-xs font-medium text-slate-700">
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="radio" name="exportModeRadio" value="share" checked onchange="updateExportLinks()"> View Only (Read-Only)
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="radio" name="exportModeRadio" value="import" onchange="updateExportLinks()"> Direct Import (Auto-Merge)
+                        </label>
+                    </div>
+                    <textarea id="base64Payload" rows="3" class="w-full p-3 bg-slate-50 border border-slate-300 text-xs font-mono text-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Inspect External Link</label>
+                    <p class="text-xs text-slate-500 mb-2">Paste a shared link here to view or import someone else's list.</p>
+                    <div class="flex gap-2">
+                        <input type="text" id="importInputLink" placeholder="Paste shared link here..." class="w-full px-3 py-2 bg-slate-50 border border-slate-300 text-xs text-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                        <button onclick="previewSharedPayload()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xl transition shrink-0">
+                            Process Link
+                        </button>
+                    </div>
+                </div>
+
+                <div class="pt-2 flex items-center justify-end">
+                    <button onclick="copyPayload()" class="px-4 py-2.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md shadow-indigo-100 transition flex items-center gap-1.5">
+                        <i class="fa-regular fa-copy"></i> Copy Link to Clipboard
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 text-sm">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400"></i>
+        <span id="toastMsg">Action completed successfully!</span>
+    </div>
+
+    <script>
+        // LocalStorage Key
+        const STORAGE_KEY = 'my_shopping_cart_items_v1';
+
+        // State Management
+        let items = [];
+        let mySavedItems = []; // Stores user's personal items when viewing a shared link
+        let isSharedView = false;
+
+        // Save items to localStorage helper
+        function saveToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+            } catch (e) {
+                console.error("Error saving to localStorage", e);
+            }
+        }
+
+        // Check URL for shared cart hash or query param with ?action=share or ?action=import
+        function checkUrlImport() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                let encodedData = urlParams.get('cart');
+                let action = urlParams.get('action');
+                
+                if (!encodedData && window.location.hash.includes('cart=')) {
+                    const hashParams = new URLSearchParams(window.location.hash.replace('#', ''));
+                    encodedData = hashParams.get('cart');
+                    if (!action) action = hashParams.get('action');
+                }
+
+                if (encodedData) {
+                    const jsonString = decodeURIComponent(escape(atob(encodedData)));
+                    const importedItems = JSON.parse(jsonString);
+                    if (Array.isArray(importedItems)) {
+                        const stored = localStorage.getItem(STORAGE_KEY);
+                        mySavedItems = stored ? JSON.parse(stored) : [];
+
+                        if (action === 'import') {
+                            // Direct Import action: auto-merge into personal cart immediately
+                            let personalItems = [...mySavedItems];
+                            importedItems.forEach(sharedItem => {
+                                personalItems.push({
+                                    ...sharedItem,
+                                    id: 'item_' + Math.random().toString(36).substring(2, 9)
+                                });
+                            });
+                            items = personalItems;
+                            saveToStorage();
+                            window.history.replaceState({}, document.title, window.location.pathname);
+                            showToast('Successfully imported and merged items into your cart!', 'success');
+                        } else {
+                            // Default action='share' or unspecified: Read-only shared view
+                            items = importedItems;
+                            isSharedView = true;
+                            document.getElementById('bannerTitle').textContent = 'Viewing a Shared Shopping List (Read-Only)';
+                            document.getElementById('bannerDesc').textContent = "You are browsing someone else's list. You can merge them into your own cart!";
+                            document.getElementById('sharedBanner').classList.remove('hidden');
+                            showToast('Loaded shared shopping list (Read-Only)!', 'success');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Error parsing URL import data", e);
+            }
+        }
+
+        // Initialize App on load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadItems();
+            checkUrlImport();
+            render();
+        });
+
+        // Load items from localStorage
+        function loadItems() {
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored !== null) {
+                    items = JSON.parse(stored);
+                } else {
+                    items = [];
+                    saveToStorage();
+                }
+            } catch (e) {
+                console.error("Error loading from localStorage", e);
+                items = [];
+            }
+        }
+
+        // Render main UI
+        function render() {
+            renderItems();
+            updateStats();
+            updateShopFilters();
+        }
+
+        // Filter items based on search input and shop dropdown
+        function filterItems() {
+            renderItems();
+        }
+
+        // Render items grid
+        function renderItems() {
+            const container = document.getElementById('itemsContainer');
+            const emptyState = document.getElementById('emptyState');
+            const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
+            const selectedShop = document.getElementById('shopFilter').value;
+
+            const filtered = items.filter(item => {
+                const matchesSearch = item.name.toLowerCase().includes(searchQuery) || 
+                                      item.shop.toLowerCase().includes(searchQuery) ||
+                                      (item.notes && item.notes.toLowerCase().includes(searchQuery));
+                const matchesShop = !selectedShop || item.shop === selectedShop;
+                return matchesSearch && matchesShop;
+            });
+
+            if (items.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-full py-12 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
+                        <i class="fa-solid fa-filter-circle-xmark text-3xl mb-2"></i>
+                        <p class="text-sm">No items match your search or filter criteria.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filtered.map(item => {
+                const totalPrice = (item.price * item.qty).toFixed(2);
+                return `
+                    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition group">
+                        <div>
+                            <div class="flex items-start justify-between gap-2 mb-2">
+                                <h4 class="font-bold text-slate-900 text-base leading-snug">${escapeHtml(item.name)}</h4>
+                                ${!isSharedView ? `
+                                <div class="flex items-center gap-1 opacity-90 sm:opacity-0 group-hover:opacity-100 transition">
+                                    <button onclick="editItem('${item.id}')" title="Edit Item" class="w-8 h-8 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 flex items-center justify-center transition">
+                                        <i class="fa-solid fa-pen text-xs"></i>
+                                    </button>
+                                    <button onclick="deleteItem('${item.id}')" title="Delete Item" class="w-8 h-8 rounded-lg bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 flex items-center justify-center transition">
+                                        <i class="fa-solid fa-trash text-xs"></i>
+                                    </button>
+                                </div>` : `
+                                <span class="px-2 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-800 rounded-md">Shared</span>`}
+                            </div>
+                            
+                            <div class="space-y-1.5 mb-4">
+                                <div class="flex items-center gap-2 text-xs text-slate-600">
+                                    <i class="fa-solid fa-store text-indigo-500 w-4"></i>
+                                    <span class="font-medium truncate">${escapeHtml(item.shop)}</span>
+                                </div>
+                                <div class="flex items-center gap-2 text-xs text-slate-600">
+                                    <i class="fa-solid fa-tag text-emerald-500 w-4"></i>
+                                    <span>$${Number(item.price).toFixed(2)} each &bull; <strong class="text-slate-900">Qty: ${item.qty}</strong></span>
+                                </div>
+                                ${item.notes ? `
+                                <div class="flex items-start gap-2 text-xs text-slate-500 mt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                    <i class="fa-solid fa-note-sticky text-amber-500 w-4 mt-0.5"></i>
+                                    <p class="whitespace-pre-wrap break-words">${escapeHtml(item.notes)}</p>
+                                </div>` : ''}
+                            </div>
+                        </div>
+
+                        <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+                            <span class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Subtotal</span>
+                            <span class="text-lg font-extrabold text-slate-900">$${totalPrice}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Update statistics counters
+        function updateStats() {
+            const totalItemsCount = items.reduce((sum, item) => sum + Number(item.qty), 0);
+            const totalCostVal = items.reduce((sum, item) => sum + (Number(item.price) * Number(item.qty)), 0);
+
+            document.getElementById('statTotalItems').textContent = totalItemsCount;
+            document.getElementById('statTotalCost').textContent = `$${totalCostVal.toFixed(2)}`;
+        }
+
+        // Update shop dropdown filter and datalist options
+        function updateShopFilters() {
+            const shopFilter = document.getElementById('shopFilter');
+            const shopSuggestions = document.getElementById('shopSuggestions');
+            
+            const currentSelected = shopFilter.value;
+            const uniqueShops = [...new Set(items.map(i => i.shop))].sort();
+
+            shopFilter.innerHTML = `<option value="">All Shops & Locations</option>` + 
+                uniqueShops.map(shop => `<option value="${escapeHtml(shop)}"${shop === currentSelected ? ' selected' : ''}>${escapeHtml(shop)}</option>`).join('');
+
+            if (shopSuggestions) {
+                shopSuggestions.innerHTML = uniqueShops.map(shop => `<option value="${escapeHtml(shop)}">`).join('');
+            }
+        }
+
+        // Return to personal cart from shared view
+        function returnToMyCart() {
+            isSharedView = false;
+            document.getElementById('sharedBanner').classList.add('hidden');
+            items = mySavedItems;
+            window.history.replaceState({}, document.title, window.location.pathname);
+            render();
+        }
+
+        // Preview or process shared payload from input box in export modal
+        function previewSharedPayload() {
+            const val = document.getElementById('importInputLink').value.trim();
+            try {
+                let base64Data = val;
+                let action = 'share';
+                if (val.includes('cart=')) {
+                    if (val.includes('?')) {
+                        const urlObj = new URL(val.includes('http') ? val : 'http://localhost/' + val);
+                        base64Data = urlObj.searchParams.get('cart');
+                        action = urlObj.searchParams.get('action') || 'share';
+                    } else if (val.includes('#')) {
+                        const hashPart = val.split('#')[1];
+                        const params = new URLSearchParams(hashPart);
+                        base64Data = params.get('cart');
+                        action = params.get('action') || 'share';
+                    }
+                }
+
+                const jsonString = decodeURIComponent(escape(atob(base64Data)));
+                const importedItems = JSON.parse(jsonString);
+
+                if (Array.isArray(importedItems)) {
+                    if (!isSharedView) {
+                        mySavedItems = [...items];
+                    }
+
+                    if (action === 'import') {
+                        let personalItems = [...mySavedItems];
+                        importedItems.forEach(sharedItem => {
+                            personalItems.push({
+                                ...sharedItem,
+                                id: 'item_' + Math.random().toString(36).substring(2, 9)
+                            });
+                        });
+                        items = personalItems;
+                        saveToStorage();
+                        isSharedView = false;
+                        document.getElementById('sharedBanner').classList.add('hidden');
+                        closeExportModal();
+                        render();
+                        showToast('Successfully imported and merged items into your cart!', 'success');
+                    } else {
+                        items = importedItems;
+                        isSharedView = true;
+                        document.getElementById('bannerTitle').textContent = 'Viewing a Shared Shopping List (Read-Only)';
+                        document.getElementById('bannerDesc').textContent = "You are browsing someone else's list. You can merge them into your own cart!";
+                        document.getElementById('sharedBanner').classList.remove('hidden');
+                        closeExportModal();
+                        render();
+                        showToast('Viewing shared list in read-only mode!', 'success');
+                    }
+                } else {
+                    throw new Error('Invalid format');
+                }
+            } catch (e) {
+                showToast('Invalid link or payload provided.', 'error');
+            }
+        }
+
+        // Merge shared cart into personal cart
+        function mergeSharedCart() {
+            if (!isSharedView) return;
+            let personalItems = [...mySavedItems];
+            items.forEach(sharedItem => {
+                personalItems.push({
+                    ...sharedItem,
+                    id: 'item_' + Math.random().toString(36).substring(2, 9)
+                });
+            });
+            items = personalItems;
+            isSharedView = false;
+            document.getElementById('sharedBanner').classList.add('hidden');
+            saveToStorage();
+            render();
+            showToast('Successfully merged shared list into your cart!', 'success');
+        }
+
+        // Modal Controls
+        function openModal(itemToEdit = null) {
+            if (isSharedView) {
+                showToast('You are viewing a shared list. Switch back to your cart to add items.', 'error');
+                return;
+            }
+            const modal = document.getElementById('itemModal');
+            const modalContent = document.getElementById('modalContent');
+            const modalTitle = document.getElementById('modalTitle');
+            const form = document.getElementById('itemForm');
+
+            form.reset();
+            document.getElementById('itemId').value = '';
+
+            if (itemToEdit) {
+                modalTitle.textContent = 'Edit Item';
+                document.getElementById('itemId').value = itemToEdit.id;
+                document.getElementById('itemName').value = itemToEdit.name;
+                document.getElementById('itemPrice').value = itemToEdit.price;
+                document.getElementById('itemQty').value = itemToEdit.qty;
+                document.getElementById('itemShop').value = itemToEdit.shop;
+                document.getElementById('itemNotes').value = itemToEdit.notes || '';
+            } else {
+                modalTitle.textContent = 'Add New Item';
+            }
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modalContent.classList.remove('scale-95');
+                modalContent.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('itemModal');
+            const modalContent = document.getElementById('modalContent');
+            modal.classList.add('opacity-0');
+            modalContent.classList.remove('scale-100');
+            modalContent.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // Save Item (Create or Update)
+        function saveItem(e) {
+            e.preventDefault();
+            const id = document.getElementById('itemId').value;
+            const name = document.getElementById('itemName').value.trim();
+            const price = parseFloat(document.getElementById('itemPrice').value);
+            const qty = parseInt(document.getElementById('itemQty').value, 10);
+            const shop = document.getElementById('itemShop').value.trim();
+            const notes = document.getElementById('itemNotes').value.trim();
+
+            if (!name || isNaN(price) || isNaN(qty) || !shop) {
+                showToast('Please fill out all required fields correctly.', 'error');
+                return;
+            }
+
+            if (id) {
+                const index = items.findIndex(i => i.id === id);
+                if (index !== -1) {
+                    items[index] = { id, name, price, qty, shop, notes };
+                    showToast('Item successfully updated!', 'success');
+                }
+            } else {
+                const newItem = {
+                    id: 'item_' + Math.random().toString(36).substring(2, 9),
+                    name,
+                    price,
+                    qty,
+                    shop,
+                    notes
+                };
+                items.push(newItem);
+                showToast('Item added to your shopping cart!', 'success');
+            }
+
+            saveToStorage();
+            closeModal();
+            render();
+        }
+
+        // Edit item shortcut
+        function editItem(id) {
+            const item = items.find(i => i.id === id);
+            if (item) {
+                openModal(item);
+            }
+        }
+
+        // Delete item
+        function deleteItem(id) {
+            items = items.filter(i => i.id !== id);
+            saveToStorage();
+            render();
+            showToast('Item removed from cart.', 'success');
+        }
+
+        // Clear all items
+        function clearAllItems() {
+            if (isSharedView) {
+                showToast('Cannot clear items while viewing a shared list.', 'error');
+                return;
+            }
+            if (items.length === 0) return;
+            if (confirm('Are you sure you want to clear all items from your shopping cart?')) {
+                items = [];
+                saveToStorage();
+                render();
+                showToast('All items cleared.', 'success');
+            }
+        }
+
+        // Export Modal Controls
+        function openExportModal() {
+            const modal = document.getElementById('exportModal');
+            const modalContent = document.getElementById('exportModalContent');
+            
+            updateExportLinks();
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modalContent.classList.remove('scale-95');
+                modalContent.classList.add('scale-100');
+            }, 10);
+        }
+
+        function updateExportLinks() {
+            try {
+                const targetItems = isSharedView ? items : (items.length > 0 ? items : (loadItems(), items));
+                const jsonString = JSON.stringify(targetItems);
+                const base64Payload = btoa(unescape(encodeURIComponent(jsonString)));
+                
+                const exportMode = document.querySelector('input[name="exportModeRadio"]:checked').value;
+                const shareableLink = window.location.origin + window.location.pathname + `?cart=${base64Payload}&action=${exportMode}`;
+                
+                document.getElementById('base64Payload').value = shareableLink;
+            } catch (e) {
+                console.error("Error generating base64 export", e);
+                document.getElementById('base64Payload').value = "Error generating payload";
+            }
+        }
+
+        function closeExportModal() {
+            const modal = document.getElementById('exportModal');
+            const modalContent = document.getElementById('exportModalContent');
+            modal.classList.add('opacity-0');
+            modalContent.classList.remove('scale-100');
+            modalContent.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function copyPayload() {
+            const textarea = document.getElementById('base64Payload');
+            textarea.select();
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showToast('Shareable link copied to clipboard!', 'success');
+                } else {
+                    showToast('Failed to copy. Please select manually.', 'error');
+                }
+            } catch (err) {
+                showToast('Failed to copy to clipboard.', 'error');
+            }
+        }
+
+        // Toast Notification System
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMsg.textContent = message;
+            if (type === 'success') {
+                toastIcon.className = 'fa-solid fa-circle-check text-emerald-400';
+            } else {
+                toastIcon.className = 'fa-solid fa-triangle-exclamation text-amber-400';
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // Utility: Escape HTML to prevent XSS
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;")
+                      .replace(/</g, "&lt;")
+                      .replace(/>/g, "&gt;")
+                      .replace(/"/g, "&quot;")
+                      .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
