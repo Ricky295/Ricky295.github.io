@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#063743" />
+  <title>Shape Sudoku — Sizes & Levels</title>
+  <style>
+    :root {
+      --ink: #f5f4e9; --sea: #063743; --board: #072d37; --line: #d6c56c;
+      --tile-cell: clamp(22px, 4vw, 34px); --board-cell: 54px;
+      --ease-out: cubic-bezier(.23, 1, .32, 1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-width: 320px; color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", system-ui, sans-serif;
+      background: radial-gradient(circle at 9% 18%, rgba(139,220,141,.23) 0 3px, transparent 8px), radial-gradient(circle at 85% 10%, rgba(202,226,117,.19) 0 4px, transparent 10px), linear-gradient(145deg,#08788a,#005364 44%,#053a48 100%);
+    }
+    body::before { content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:.29; background-image:radial-gradient(rgba(255,255,255,.4) 1px,transparent 1px); background-size:56px 56px; }
+    button,select { font: inherit; }
+    button:focus-visible,select:focus-visible { outline: 3px solid white; outline-offset: 3px; }
+    .app { max-width:1140px; margin:0 auto; padding:18px clamp(14px,3vw,34px) 38px; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; gap:14px; padding-bottom:15px; border-bottom:1px solid rgba(203,232,223,.25); }
+    .brand { display:flex; align-items:center; gap:10px; font-size:.95rem; font-weight:900; letter-spacing:.08em; }
+    .brand-mark { display:grid; grid-template-columns:repeat(2,8px); grid-template-rows:repeat(2,8px); gap:2px; transform:rotate(-4deg); }
+    .brand-mark i { display:block; border-radius:1px; } .brand-mark i:nth-child(1){background:#f85dbf}.brand-mark i:nth-child(2){background:#9f88ff}.brand-mark i:nth-child(3){background:#ffb217}.brand-mark i:nth-child(4){background:#20c7bd}
+    .game-info { text-align:right; } .game-info b { display:block; font-size:.76rem; letter-spacing:.08em; text-transform:uppercase; color:#e9c658; } .game-info span { font-size:.75rem; color:rgba(245,244,233,.73); }
+    .hero { text-align:center; padding:24px 0 12px; } .eyebrow { margin:0 0 6px; color:#ecca5b; font-size:.72rem; font-weight:900; letter-spacing:.16em; text-transform:uppercase; }
+    h1 { margin:0; font-size:clamp(1.74rem,4.8vw,3rem); line-height:1; letter-spacing:-.045em; }
+    .subtitle { max-width:62ch; margin:11px auto 0; color:#d4e4dd; font-size:.91rem; line-height:1.5; } .subtitle strong { color:white; }
+    .setup { display:flex; justify-content:center; flex-wrap:wrap; gap:8px; margin:16px auto 7px; }
+    .setting { display:flex; align-items:center; gap:8px; padding:7px 10px 7px 12px; color:#e7f1ed; background:rgba(1,28,37,.5); border:1px solid rgba(207,229,219,.38); border-radius:7px; font-size:.74rem; font-weight:900; text-transform:uppercase; letter-spacing:.07em; }
+    .setting select { min-width:78px; padding:3px 18px 3px 5px; border:0; border-radius:3px; background:#dcece5; color:#16363d; font-size:.78rem; font-weight:900; }
+    .difficulty-note { max-width:620px; margin:8px auto 0; color:#cfe0d9; font-size:.75rem; line-height:1.4; }
+    .difficulty-note b { color:#fff1a1; }
+    .status { min-height:43px; display:flex; align-items:center; justify-content:center; max-width:700px; margin:13px auto 15px; padding:10px 14px; border:1px solid rgba(207,229,219,.36); border-radius:8px; background:rgba(1,28,37,.45); color:#e8f1eb; text-align:center; font-size:.86rem; font-weight:700; backdrop-filter:blur(4px); }
+    .status.good { background:rgba(28,114,78,.65); border-color:#a9e6ad; } .status.bad { background:rgba(143,41,69,.74); border-color:#ffbdc8; }
+    .tray-heading { display:flex; justify-content:center; align-items:center; gap:8px; margin:13px 0 8px; color:#dceae3; font-size:.72rem; font-weight:900; letter-spacing:.13em; text-transform:uppercase; }
+    .tray-heading::before,.tray-heading::after { content:""; width:min(14vw,100px); height:1px; background:rgba(220,234,227,.34); }
+    .tile-rack { display:flex; flex-wrap:wrap; justify-content:center; align-items:flex-start; gap:8px 10px; max-width:1000px; margin:0 auto; }
+    .piece { display:grid; grid-auto-flow:row; gap:1px; border:0; padding:4px; border-radius:5px; background:transparent; cursor:pointer; transition:transform 150ms var(--ease-out),filter 150ms ease,box-shadow 150ms ease,opacity 150ms ease; }
+    .piece:hover:not(.placed){transform:translateY(-2px);filter:brightness(1.12)} .piece:active:not(.placed){transform:scale(.97)} .piece.selected{box-shadow:0 0 0 3px white,0 0 0 6px #eac954;transform:translateY(-3px)} .piece.placed{opacity:.22;cursor:default;filter:grayscale(.6)}
+    .piece-cell { display:grid; place-items:center; width:var(--tile-cell); height:var(--tile-cell); color:white; font-size:calc(var(--tile-cell) * .56); font-weight:900; line-height:1; text-shadow:0 2px 0 rgba(0,0,0,.18); }
+    .board-zone { display:flex; flex-direction:column; align-items:center; padding:20px 0 8px; }
+    .board-frame { position:relative; padding:6px; border:3px solid rgba(164,226,216,.7); background:rgba(3,50,61,.76); box-shadow:0 0 0 6px rgba(2,48,58,.35),0 10px 25px rgba(0,0,0,.22); }
+    .board { position:relative; z-index:1; display:grid; }
+    .board-cell { position:relative; z-index:1; display:grid; place-items:center; min-width:0; min-height:0; padding:0; width:var(--board-cell); height:var(--board-cell); color:white; background:var(--board); font-size:calc(var(--board-cell) * .53); font-weight:900; line-height:1; text-shadow:0 2px 0 rgba(0,0,0,.3); cursor:pointer; transition:background 130ms ease,filter 130ms ease,transform 130ms var(--ease-out); }
+    .board-cell.empty:hover{background:#0b4a55}.board-cell.target{background:#10505b;animation:targetPulse 1.05s ease-in-out infinite alternate}.board-cell.target:hover{filter:brightness(1.23)}.board-cell.occupied{cursor:pointer}.board-cell.occupied:hover{filter:brightness(1.13)}.board-cell.invalid{animation:shake 250ms ease both;background:#9a2852}
+    .block-lines { position:absolute; z-index:2; left:6px; top:6px; pointer-events:none; }
+    .block-lines span { position:absolute; background:rgba(231,213,115,.72); box-shadow:0 0 4px rgba(0,0,0,.38); }
+    @keyframes targetPulse{from{box-shadow:inset 0 0 0 0 rgba(255,255,255,.05)}to{box-shadow:inset 0 0 0 2px rgba(255,255,255,.58)}} @keyframes shake{0%,100%{transform:translateX(0)}35%{transform:translateX(-3px)}70%{transform:translateX(3px)}}
+    .controls { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin:16px auto 7px; }
+    .control { border:1px solid rgba(218,237,228,.72); border-radius:7px; min-height:38px; padding:8px 13px; color:#f8f8ed; background:rgba(4,46,56,.68); cursor:pointer; font-size:.79rem; font-weight:900; transition:background 140ms ease,transform 140ms var(--ease-out),border-color 140ms ease; }
+    .control:hover{background:#0d6170;border-color:#fff3a8}.control:active{transform:scale(.97)}.control.primary{background:#e7b927;color:#182631;border-color:#ffe08d}.control.primary:hover{background:#ffc436}
+    .help { max-width:690px; margin:9px auto 0; color:rgba(235,245,239,.72); text-align:center; font-size:.75rem; line-height:1.48; }.help b{color:#fff5b2}
+    .credit { max-width:700px; margin:26px auto 0; padding-top:14px; border-top:1px solid rgba(207,229,219,.24); color:rgba(235,245,239,.69); text-align:center; font-size:.71rem; line-height:1.5; }.credit strong{color:#f6e798}
+    @media(max-width:560px){:root{--tile-cell:clamp(20px,7vw,28px)}.app{padding-inline:11px}.game-info span{display:none}.hero{padding-top:20px}.subtitle{font-size:.84rem}.tile-rack{gap:5px 6px}.piece{padding:2px}.board-zone{padding-top:18px}.controls{gap:6px}.control{min-height:36px;padding:7px 10px;font-size:.74rem}.setting{font-size:.68rem}.setting select{min-width:70px}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>SHAPE SUDOKU</div>
+      <div class="game-info"><b id="tile-count">tiles left</b><span id="rule-summary">Latin square · numbered shape tiles</span></div>
+    </header>
+    <section class="hero" aria-labelledby="title">
+      <p class="eyebrow">Place the pieces</p>
+      <h1 id="title">Make every row and column count.</h1>
+      <p class="subtitle" id="subtitle">The board tells you the <strong>shape layout</strong>. The tray gives you numbered pieces. Choose a piece, then tap a matching outline.</p>
+      <div class="setup" aria-label="Puzzle settings">
+        <label class="setting">Board <select id="size-select" aria-label="Board size"><option value="6">6 × 6</option><option value="7">7 × 7</option><option value="8">8 × 8</option><option value="9" selected>9 × 9</option></select></label>
+        <label class="setting">Level <select id="level-select" aria-label="Difficulty level"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select></label>
+      </div>
+      <p class="difficulty-note" id="difficulty-note"></p>
+    </section>
+    <div class="status" id="status" aria-live="polite">Pick a numbered shape from the tray, then tap a matching outline.</div>
+    <div class="tray-heading"><span>Number tiles</span></div><section class="tile-rack" id="rack-top" aria-label="First set of numbered shape tiles"></section>
+    <section class="board-zone" aria-label="Sudoku shape layout">
+      <div class="board-frame" id="board-frame"><div class="board" id="board" role="grid" aria-label="Shape Sudoku board"></div><div class="block-lines" id="block-lines" aria-hidden="true"></div></div>
+      <div class="controls"><button class="control" id="undo-btn">Undo last</button><button class="control" id="reset-btn">Reset board</button><button class="control" id="check-btn">Check placed tiles</button><button class="control primary" id="hint-btn">Place a hint</button><button class="control" id="solve-btn">Show solution</button><button class="control" id="new-btn">New layout</button></div>
+      <p class="help" id="help"><b>Tip:</b> select a tile, then choose a matching outline. Higher levels give fewer starters and more possible destinations for each piece.</p>
+    </section>
+    <div class="tray-heading"><span>More number tiles</span></div><section class="tile-rack" id="rack-bottom" aria-label="Second set of numbered shape tiles"></section>
+    <footer class="credit">Original <strong>Flow Fit Sudoku</strong> credited to <strong>Big Duck Games LLC</strong>. This is an independent fan-made shape puzzle and is not affiliated with or endorsed by Big Duck Games LLC.</footer>
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const DIGITS = count => Array.from({length: count}, (_, index) => index + 1);
+      const PALETTE = ['#e757a9','#9380ed','#ef9b3d','#11b7b1','#75b92f','#e9575b','#bcb19f','#d9a521','#438dd4','#a865c4','#42a779','#d87845'];
+      const TRIOMINOES = [ [[0,0],[0,1],[0,2]], [[0,0],[1,0],[2,0]], [[0,0],[1,0],[1,1]], [[0,0],[1,0],[1,-1]], [[0,0],[0,1],[1,0]], [[0,0],[0,1],[1,1]] ];
+      const DOMINOES = [ [[0,0],[0,1]], [[0,0],[1,0]] ];
+      const LEVELS = {
+        easy: { label:'Easy', starters:.18, guide:'valid', note:'<b>Easy:</b> some tiles begin in place. When you select a tile, only matching shapes that are currently valid will glow — there can still be several.' },
+        medium: { label:'Medium', starters:.08, guide:'shape', note:'<b>Medium:</b> only a few tiles begin in place. Matching shapes glow, but you decide which position works from the row and column numbers.' },
+        hard: { label:'Hard', starters:0, guide:'none', note:'<b>Hard:</b> no starter tiles and no glowing destinations. Match the geometry yourself, then rely on Latin-square logic.' }
+      };
+      const boardEl = document.getElementById('board'); const boardFrame = document.getElementById('board-frame'); const blockLines = document.getElementById('block-lines');
+      const rackTop = document.getElementById('rack-top'); const rackBottom = document.getElementById('rack-bottom'); const statusEl = document.getElementById('status'); const countEl = document.getElementById('tile-count');
+      const sizeSelect = document.getElementById('size-select'); const levelSelect = document.getElementById('level-select'); const ruleSummary = document.getElementById('rule-summary'); const subtitle = document.getElementById('subtitle'); const difficultyNote = document.getElementById('difficulty-note');
+      let state = {};
+      const clone = value => JSON.parse(JSON.stringify(value));
+      function shuffle(list) { const copy = list.slice(); for (let i = copy.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [copy[i],copy[j]] = [copy[j],copy[i]]; } return copy; }
+      function range(n) { return Array.from({length:n}, (_,i) => i); }
+      function normalise(cells) { const minRow = Math.min(...cells.map(cell=>cell.row)); const minCol = Math.min(...cells.map(cell=>cell.col)); return cells.map(cell=>({row:cell.row-minRow,col:cell.col-minCol})).sort((a,b)=>a.row-b.row||a.col-b.col); }
+      function shapeCode(cells) { return normalise(cells).map(cell=>`${cell.row},${cell.col}`).join('|'); }
+      function tilePlan(size) { if (size===7) return {tri:15,dom:2}; if (size===8) return {tri:20,dom:2}; return {tri:size*size/3,dom:0}; }
+      function randomLatinSquare(size) {
+        const digits = shuffle(DIGITS(size));
+        const rows = shuffle(range(size)); const cols = shuffle(range(size));
+        return rows.map(row => cols.map(col => digits[(row + col) % size]));
+      }
+      function makeTiling(size) {
+        const plan = tilePlan(size);
+        for (let attempt=0; attempt<80; attempt++) {
+          const filled = Array.from({length:size},()=>Array(size).fill(false)); const slots=[]; const remaining={...plan};
+          const firstEmpty = () => { for(let row=0;row<size;row++) for(let col=0;col<size;col++) if(!filled[row][col]) return {row,col}; return null; };
+          const fill = () => {
+            const anchor=firstEmpty(); if(!anchor) return remaining.tri===0&&remaining.dom===0;
+            const types=shuffle(['tri','dom'].filter(type=>remaining[type]>0));
+            for(const type of types) for(const offsets of shuffle(type==='tri'?TRIOMINOES:DOMINOES)) {
+              const cells=offsets.map(([dr,dc])=>({row:anchor.row+dr,col:anchor.col+dc}));
+              if(!cells.every(cell=>cell.row>=0&&cell.row<size&&cell.col>=0&&cell.col<size&&!filled[cell.row][cell.col])) continue;
+              cells.forEach(cell=>filled[cell.row][cell.col]=true); remaining[type]--; slots.push({id:slots.length,cells,code:shapeCode(cells),placedTileId:null,locked:false});
+              if(fill()) return true;
+              slots.pop(); remaining[type]++; cells.forEach(cell=>filled[cell.row][cell.col]=false);
+            }
+            return false;
+          };
+          if(fill()) return slots;
+        }
+        throw new Error('Unable to create this shape layout.');
+      }
+      function tileCellsAt(tile,slot) { const originRow=Math.min(...slot.cells.map(cell=>cell.row)); const originCol=Math.min(...slot.cells.map(cell=>cell.col)); return slot.normalised.map((cell,index)=>({row:originRow+cell.row,col:originCol+cell.col,value:tile.digits[index]})); }
+      function setStatus(message,tone='') { statusEl.textContent=message; statusEl.className='status'+(tone?' '+tone:''); }
+      function getTile(id){return state.tiles.find(tile=>tile.id===id)} function getSlot(id){return state.slots.find(slot=>slot.id===id)}
+      function sizeLayout() { const maxWidth=Math.max(288,Math.min(540,window.innerWidth-40)); const maxCell=Math.floor(maxWidth/state.size); const preferred=state.size<=6?60:state.size===7?57:state.size===8?55:54; const cell=Math.max(31,Math.min(preferred,maxCell)); document.documentElement.style.setProperty('--board-cell',cell+'px'); const extent=cell*state.size; boardEl.style.gridTemplateColumns=`repeat(${state.size}, ${cell}px)`; boardEl.style.gridTemplateRows=`repeat(${state.size}, ${cell}px)`; boardEl.style.width=extent+'px'; boardEl.style.height=extent+'px'; boardFrame.style.width=(extent+12)+'px'; boardFrame.style.height=(extent+12)+'px'; blockLines.style.width=extent+'px'; blockLines.style.height=extent+'px'; }
+      function setupGame() {
+        const size=Number(sizeSelect.value); const difficulty=LEVELS[levelSelect.value]; const solution=randomLatinSquare(size); const slots=makeTiling(size);
+        const codeOrder=[...new Set(slots.map(slot=>slot.code))]; const familyColour=new Map(codeOrder.map((code,index)=>[code,PALETTE[index%PALETTE.length]]));
+        slots.forEach(slot=>{slot.normalised=normalise(slot.cells);slot.color=familyColour.get(slot.code)});
+        const tiles=slots.map(slot=>({id:slot.id,code:slot.code,color:slot.color,cells:clone(slot.normalised),digits:slot.normalised.map((_,index)=>{const cell=tileCellsAt({digits:slot.normalised.map(()=>0)},slot)[index];return solution[cell.row][cell.col]}),correctSlotId:slot.id,placedSlotId:null,locked:false}));
+        state={size,difficulty,solution,slots,tiles:shuffle(tiles),board:Array.from({length:size},()=>Array(size).fill(0)),selectedTileId:null,history:[],invalidCells:new Set(),solved:false,starters:[]};
+        const starterCount=Math.min(tiles.length-1,Math.floor(tiles.length*difficulty.starters)); state.starters=shuffle(slots.map(slot=>slot.id)).slice(0,starterCount); populateStarters(); updateCopy(); sizeLayout(); setStatus(starterCount?`${starterCount} starter tile${starterCount===1?' is':'s are'} already in place. Choose a piece from the tray.`:'Pick a numbered shape from the tray, then tap a matching outline.'); render();
+      }
+      function populateStarters() { state.starters.forEach(slotId=>{const slot=getSlot(slotId),tile=getTile(slotId); tile.placedSlotId=slotId;tile.locked=true;slot.placedTileId=tile.id;slot.locked=true;tileCellsAt(tile,slot).forEach(item=>state.board[item.row][item.col]=item.value);}); }
+      function updateCopy(){const n=state.size;ruleSummary.textContent=`${n}×${n} · Latin square · digits 1–${n}`;subtitle.innerHTML=`The board tells you the <strong>shape layout</strong>. The tray gives you numbered pieces. Place tiles so every row and column contains 1–${n} exactly once.`;difficultyNote.innerHTML=state.difficulty.note;}
+      function tileDimensions(tile){return{rows:Math.max(...tile.cells.map(cell=>cell.row))+1,cols:Math.max(...tile.cells.map(cell=>cell.col))+1}}
+      function renderPiece(tile){const dims=tileDimensions(tile);const piece=document.createElement('button');piece.type='button';piece.className='piece'+(tile.id===state.selectedTileId?' selected':'')+(tile.placedSlotId!==null?' placed':'');piece.style.gridTemplateColumns=`repeat(${dims.cols}, var(--tile-cell))`;piece.style.gridTemplateRows=`repeat(${dims.rows}, var(--tile-cell))`;piece.setAttribute('aria-pressed',tile.id===state.selectedTileId?'true':'false');piece.setAttribute('aria-label',`Numbered ${tile.cells.length}-cell shape${tile.placedSlotId!==null?', already placed':''}`);tile.cells.forEach((cell,index)=>{const square=document.createElement('span');square.className='piece-cell';square.style.background=tile.color;square.style.gridColumn=cell.col+1;square.style.gridRow=cell.row+1;square.textContent=tile.digits[index];piece.appendChild(square)});piece.addEventListener('click',()=>selectTile(tile.id));return piece}
+      function borderStyle(row,col,slot){const line=`2px solid ${slot.color}`;const same=(r,c)=>r>=0&&r<state.size&&c>=0&&c<state.size&&state.slotAt[r][c]===slot.id;return{borderTop:same(row-1,col)?'1px solid transparent':line,borderBottom:same(row+1,col)?'1px solid transparent':line,borderLeft:same(row,col-1)?'1px solid transparent':line,borderRight:same(row,col+1)?'1px solid transparent':line}}
+      function matchesSlot(tile,slot){return tile.code===slot.code}
+      function renderBlockLines(){blockLines.innerHTML=''}
+      function render(){state.slotAt=Array.from({length:state.size},()=>Array(state.size).fill(null));state.slots.forEach(slot=>slot.cells.forEach(cell=>state.slotAt[cell.row][cell.col]=slot.id));sizeLayout();boardEl.innerHTML='';rackTop.innerHTML='';rackBottom.innerHTML='';const selected=state.selectedTileId===null?null:getTile(state.selectedTileId);for(let row=0;row<state.size;row++)for(let col=0;col<state.size;col++){const slot=getSlot(state.slotAt[row][col]),button=document.createElement('button'),value=state.board[row][col],candidate=selected&&slot.placedTileId===null&&matchesSlot(selected,slot),target=candidate&&(state.difficulty.guide==='shape'||(state.difficulty.guide==='valid'&&!violatesSudoku(tileCellsAt(selected,slot))));button.type='button';button.className='board-cell'+(value?' occupied':' empty')+(target?' target':'')+(state.invalidCells.has(`${row}-${col}`)?' invalid':'');Object.assign(button.style,borderStyle(row,col,slot));if(value)button.style.background=getTile(slot.placedTileId).color;button.textContent=value||'';button.setAttribute('role','gridcell');button.setAttribute('aria-label',`Row ${row+1}, column ${col+1}${value?', value '+value:', empty'}`);button.addEventListener('click',()=>onSlotClick(slot.id));boardEl.appendChild(button)}state.tiles.forEach((tile,index)=>(index<Math.ceil(state.tiles.length/2)?rackTop:rackBottom).appendChild(renderPiece(tile)));const left=state.tiles.length-state.tiles.filter(tile=>tile.placedSlotId!==null).length;countEl.textContent=`${left} tile${left===1?'':'s'} left`;renderBlockLines()}
+      function selectTile(id){const tile=getTile(id);if(tile.placedSlotId!==null||state.solved){setStatus(tile.locked?'That is a starter tile and stays on the board.':'That shape is already on the board. Tap the placed shape to take it back.');return}state.selectedTileId=state.selectedTileId===id?null:id;state.invalidCells.clear();const prompts={valid:'Shape selected. Valid matching outlines glow; use the row and column numbers to choose among them.',shape:'Shape selected. Matching shapes glow. Use the row and column numbers to find the right position.',none:'Shape selected. Find a same-colour, same-shape outline yourself, then check its row and column numbers.'};setStatus(state.selectedTileId===null?'Selection cleared. Pick a numbered shape when ready.':prompts[state.difficulty.guide]);render()}
+      function violatesSudoku(values){const proposed=new Map(values.map(item=>[`${item.row}-${item.col}`,item.value]));const get=(row,col)=>proposed.get(`${row}-${col}`)||state.board[row][col];for(const item of values){for(let i=0;i<state.size;i++){if(i!==item.col&&get(item.row,i)===item.value)return true;if(i!==item.row&&get(i,item.col)===item.value)return true}}return false}
+      function onSlotClick(slotId){const slot=getSlot(slotId);if(state.solved)return;if(slot.placedTileId!==null&&state.selectedTileId===null){removeTile(slot.placedTileId);return}if(slot.placedTileId!==null){setStatus('That outline is already filled. Clear the selection, then tap it to remove the tile.','bad');return}if(state.selectedTileId===null){setStatus('Pick a numbered shape first.');return}const tile=getTile(state.selectedTileId);if(!matchesSlot(tile,slot)){setStatus('That outline has a different shape. Try another outline with the same colour and geometry.','bad');return}const values=tileCellsAt(tile,slot);if(violatesSudoku(values)){state.invalidCells=new Set(slot.cells.map(cell=>`${cell.row}-${cell.col}`));setStatus('That placement repeats a digit in a row or column. Try another matching outline.','bad');render();setTimeout(()=>{state.invalidCells.clear();render()},360);return}placeTile(tile.id,slot.id,false)}
+      function placeTile(tileId,slotId,isHint){const tile=getTile(tileId),slot=getSlot(slotId);tileCellsAt(tile,slot).forEach(item=>state.board[item.row][item.col]=item.value);tile.placedSlotId=slotId;slot.placedTileId=tileId;if(!isHint)state.history.push({tileId,slotId});state.selectedTileId=null;state.invalidCells.clear();if(isCompleteAndValid()){state.solved=true;setStatus(`Puzzle solved — every row and column now contains 1–${state.size}.`,'good')}else setStatus(isHint?'A correct tile has been placed. Keep matching shapes and numbers.':'Placed. Choose another numbered shape.');render()}
+      function removeTile(tileId){const tile=getTile(tileId);if(tile.locked){setStatus('That starter tile cannot be removed.','bad');return}const slot=getSlot(tile.placedSlotId);tileCellsAt(tile,slot).forEach(item=>state.board[item.row][item.col]=0);slot.placedTileId=null;tile.placedSlotId=null;state.history=state.history.filter(entry=>entry.tileId!==tileId);setStatus('Shape removed. You can place it in another matching outline.');render()}
+      function undoLast(){if(!state.history.length){setStatus('There is no player placement to undo.');return}removeTile(state.history[state.history.length-1].tileId)}
+      function resetBoard(){state.slots.forEach(slot=>{slot.placedTileId=null;slot.locked=false});state.tiles.forEach(tile=>{tile.placedSlotId=null;tile.locked=false});state.board=Array.from({length:state.size},()=>Array(state.size).fill(0));state.history=[];state.selectedTileId=null;state.solved=false;populateStarters();setStatus('Board reset. Starter tiles are back in place.');render()}
+      function boardHasConflict(){const duplicate=cells=>{const nums=cells.map(([row,col])=>state.board[row][col]).filter(Boolean);return new Set(nums).size!==nums.length};for(let i=0;i<state.size;i++)if(duplicate(range(state.size).map(col=>[i,col]))||duplicate(range(state.size).map(row=>[row,i])))return true;return false}
+      function isCompleteAndValid(){return state.board.every(row=>row.every(Boolean))&&!boardHasConflict()}
+      function checkBoard(){if(!state.tiles.some(tile=>tile.placedSlotId!==null)){setStatus('No tiles are on the board yet. Start with any selected shape.');return}if(boardHasConflict())setStatus('There is a row or column conflict in the placed tiles.','bad');else if(isCompleteAndValid())setStatus('Everything is valid — you solved it!','good');else setStatus('All placed tiles are currently valid. Keep going.')}
+      function giveHint(){if(state.solved){setStatus('This board is already solved.','good');return}const pair=state.slots.find(slot=>{const tile=getTile(slot.id);return slot.placedTileId===null&&tile.placedSlotId===null});if(!pair){setStatus('No clean hint is available. Reset the board to use hints again.','bad');return}placeTile(pair.id,pair.id,true)}
+      function showSolution(){resetBoard();state.tiles.forEach(tile=>{if(tile.locked)return;const slot=getSlot(tile.correctSlotId);tileCellsAt(tile,slot).forEach(item=>state.board[item.row][item.col]=item.value);tile.placedSlotId=slot.id;slot.placedTileId=tile.id});state.solved=true;state.history=[];setStatus('Solution shown. Choose New layout for another puzzle.','good');render()}
+      sizeSelect.addEventListener('change',setupGame);levelSelect.addEventListener('change',setupGame);document.getElementById('undo-btn').addEventListener('click',undoLast);document.getElementById('reset-btn').addEventListener('click',resetBoard);document.getElementById('check-btn').addEventListener('click',checkBoard);document.getElementById('hint-btn').addEventListener('click',giveHint);document.getElementById('solve-btn').addEventListener('click',showSolution);document.getElementById('new-btn').addEventListener('click',setupGame);window.addEventListener('resize',()=>{if(state.size)render()});setupGame();
+    })();
+  </script>
+</body>
+</html>
