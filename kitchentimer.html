@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kitchen Timer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse-custom {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.02); }
+        }
+        .animate-pulse-custom {
+            animation: pulse-custom 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-orange-50/50 min-h-screen flex flex-col items-center p-4 sm:p-8 font-sans text-stone-800">
+
+    <div class="w-full max-w-5xl">
+        <header class="flex flex-col sm:flex-row items-center justify-between bg-white shadow-md rounded-2xl p-5 mb-8 border border-orange-100/60 gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center text-white text-xl shadow-md shadow-orange-500/20">🍳</div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-stone-800">Multi-Pot Kitchen Timer</h1>
+                    <p class="text-xs text-stone-500">Track multiple dishes simultaneously with ease</p>
+                </div>
+            </div>
+            <button onclick="addTimer()" class="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-medium py-2.5 px-5 rounded-xl shadow-md shadow-orange-600/20 transition flex items-center justify-center gap-2 text-sm">
+                <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                Add Another Pot
+            </button>
+        </header>
+
+        <div id="timersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+            <!-- Dynamic timers populate here -->
+        </div>
+    </div>
+
+    <script>
+        let timers = [
+            { id: 1, name: "Pasta Pot", totalSeconds: 300, initialSeconds: 300, isRunning: false, hasFinished: false, countdown: null, beepInterval: null }
+        ];
+
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playBeep() {
+            try {
+                initAudio();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
+                
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.3);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.3);
+            } catch (e) {
+                console.log("Audio alert playback blocked or unavailable");
+            }
+        }
+
+        function renderTimers() {
+            const grid = document.getElementById('timersGrid');
+            grid.innerHTML = '';
+
+            timers.forEach((t) => {
+                const m = Math.floor(t.totalSeconds / 60);
+                const s = t.totalSeconds % 60;
+                const timeString = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+                const isFinished = t.totalSeconds === 0 && !t.isRunning && t.hasFinished;
+
+                const card = document.createElement('div');
+                card.className = `bg-white shadow-lg rounded-2xl p-6 border ${isFinished ? 'border-red-400 bg-red-50/40' : 'border-stone-100'} transition-all duration-300 flex flex-col justify-between`;
+
+                card.innerHTML = `
+                    <div>
+                        <!-- Header with name input & delete button -->
+                        <div class="flex items-center justify-between mb-4">
+                            <input type="text" value="${t.name}" onchange="updateName(${t.id}, this.value)" class="font-bold text-stone-700 bg-stone-50 border border-stone-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 w-2/3 transition">
+                            ${timers.length > 1 ? `<button onclick="removeTimer(${t.id})" class="text-stone-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition" title="Remove Pot">
+                                <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                            </button>` : ''}
+                        </div>
+
+                        <!-- Quick presets -->
+                        <div class="grid grid-cols-4 gap-2 mb-4">
+                            <button onclick="setPreset(${t.id}, 1)" class="bg-stone-50 hover:bg-orange-500 hover:text-white text-stone-600 text-xs font-semibold py-2 rounded-xl border border-stone-200 transition">1m</button>
+                            <button onclick="setPreset(${t.id}, 3)" class="bg-stone-50 hover:bg-orange-500 hover:text-white text-stone-600 text-xs font-semibold py-2 rounded-xl border border-stone-200 transition">3m</button>
+                            <button onclick="setPreset(${t.id}, 5)" class="bg-stone-50 hover:bg-orange-500 hover:text-white text-stone-600 text-xs font-semibold py-2 rounded-xl border border-stone-200 transition">5m</button>
+                            <button onclick="setPreset(${t.id}, 10)" class="bg-stone-50 hover:bg-orange-500 hover:text-white text-stone-600 text-xs font-semibold py-2 rounded-xl border border-stone-200 transition">10m</button>
+                        </div>
+
+                        <!-- Time inputs (hidden when running) -->
+                        <div id="inputSection-${t.id}" class="flex justify-center items-center gap-2 mb-4 transition-all duration-300" style="${t.isRunning ? 'opacity: 0.3; pointer-events: none;' : 'opacity: 1; pointer-events: auto;'}">
+                            <div class="flex flex-col items-center">
+                                <input type="number" id="min-${t.id}" min="0" max="99" value="${Math.floor(t.initialSeconds / 60)}" oninput="syncInput(${t.id})" class="w-16 py-1.5 text-center text-lg font-bold bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500">
+                                <span class="text-[10px] text-stone-400 mt-1 font-medium uppercase">Min</span>
+                            </div>
+                            <span class="text-xl font-bold text-stone-300 pb-5">:</span>
+                            <div class="flex flex-col items-center">
+                                <input type="number" id="sec-${t.id}" min="0" max="59" value="${t.initialSeconds % 60}" oninput="syncInput(${t.id})" class="w-16 py-1.5 text-center text-lg font-bold bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500">
+                                <span class="text-[10px] text-stone-400 mt-1 font-medium uppercase">Sec</span>
+                            </div>
+                        </div>
+
+                        <!-- Active countdown display -->
+                        <div class="my-2 py-2 text-center">
+                            <div class="text-5xl font-black tracking-tight ${isFinished ? 'text-red-500 animate-pulse-custom' : 'text-stone-800'}">
+                                ${isFinished ? "Time's Up!" : timeString}
+                            </div>
+                            <div class="text-xs text-stone-400 mt-2 font-medium tracking-wide uppercase">
+                                ${isFinished ? 'Ready to serve!' : (t.isRunning ? 'Running...' : 'Paused / Ready')}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Control Action Buttons -->
+                    <div class="flex gap-2 mt-6">
+                        <button onclick="startTimer(${t.id})" class="flex-1 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-medium py-2.5 px-4 rounded-xl shadow-sm transition flex items-center justify-center gap-1.5 text-sm">
+                            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                            Start
+                        </button>
+                        <button onclick="pauseTimer(${t.id})" class="flex-1 bg-stone-100 hover:bg-stone-200 active:scale-95 text-stone-700 font-medium py-2.5 px-4 rounded-xl transition flex items-center justify-center gap-1.5 text-sm">
+                            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                            Pause
+                        </button>
+                        <button onclick="resetTimer(${t.id})" class="bg-stone-100 hover:bg-stone-200 active:scale-95 text-stone-600 font-medium py-2.5 px-3 rounded-xl transition" title="Reset">
+                            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+                        </button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function addTimer() {
+            const newId = timers.length > 0 ? Math.max(...timers.map(t => t.id)) + 1 : 1;
+            timers.push({
+                id: newId,
+                name: `Pot ${newId}`,
+                totalSeconds: 180,
+                initialSeconds: 180,
+                isRunning: false,
+                hasFinished: false,
+                countdown: null,
+                beepInterval: null
+            });
+            renderTimers();
+        }
+
+        function removeTimer(id) {
+            const t = timers.find(item => item.id === id);
+            if (t) {
+                clearInterval(t.countdown);
+                clearInterval(t.beepInterval);
+            }
+            timers = timers.filter(item => item.id !== id);
+            renderTimers();
+        }
+
+        function updateName(id, name) {
+            const t = timers.find(item => item.id === id);
+            if (t) t.name = name;
+        }
+
+        function setPreset(id, minutes) {
+            const t = timers.find(item => item.id === id);
+            if (!t) return;
+
+            pauseTimer(id);
+            t.initialSeconds = minutes * 60;
+            t.totalSeconds = t.initialSeconds;
+            t.hasFinished = false;
+            renderTimers();
+        }
+
+        function syncInput(id) {
+            const t = timers.find(item => item.id === id);
+            if (!t || t.isRunning) return;
+
+            const minInput = document.getElementById(`min-${id}`);
+            const secInput = document.getElementById(`sec-${id}`);
+            const m = parseInt(minInput.value) || 0;
+            const s = parseInt(secInput.value) || 0;
+
+            t.initialSeconds = (m * 60) + s;
+            t.totalSeconds = t.initialSeconds;
+            t.hasFinished = false;
+            renderTimers();
+        }
+
+        function startTimer(id) {
+            const t = timers.find(item => item.id === id);
+            if (!t || t.isRunning) return;
+
+            initAudio();
+
+            if (t.hasFinished || t.totalSeconds === 0) {
+                resetTimer(id);
+                return;
+            }
+
+            t.isRunning = t.initialSeconds > 0;
+            if (!t.isRunning) return;
+
+            renderTimers();
+
+            t.countdown = setInterval(() => {
+                if (t.totalSeconds > 0) {
+                    t.totalSeconds--;
+                    renderTimers();
+                } else {
+                    clearInterval(t.countdown);
+                    t.isRunning = false;
+                    t.hasFinished = true;
+                    renderTimers();
+                    
+                    playBeep();
+                    t.beepInterval = setInterval(playBeep, 1000);
+                }
+            }, 1000);
+        }
+
+        function pauseTimer(id) {
+            const t = timers.find(item => item.id === id);
+            if (!t) return;
+
+            clearInterval(t.countdown);
+            clearInterval(t.beepInterval);
+            t.isRunning = false;
+            renderTimers();
+        }
+
+        function resetTimer(id) {
+            const t = timers.find(item => item.id === id);
+            if (!t) return;
+
+            clearInterval(t.countdown);
+            clearInterval(t.beepInterval);
+            t.isRunning = false;
+            t.hasFinished = false;
+            t.totalSeconds = t.initialSeconds;
+            renderTimers();
+        }
+
+        window.onload = () => {
+            renderTimers();
+        };
+    </script>
+</body>
+</html>
