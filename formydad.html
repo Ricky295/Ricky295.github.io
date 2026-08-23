@@ -17,6 +17,8 @@
     --mono: 'SF Mono', ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Consolas, monospace;
     --serif: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
     --sheet-font-size: 16px;
+    --title-font-size: 30px;
+    --meta-font-size: 13px;
     --text-font: 'AvenirNext-Medium', 'Avenir Next Medium', 'Avenir Next', 'Avenir', -apple-system, BlinkMacSystemFont, sans-serif;
     --chord-font: 'AvenirNext-Bold', 'Avenir Next Bold', 'Avenir Next', 'Avenir', -apple-system, BlinkMacSystemFont, sans-serif;
   }
@@ -235,7 +237,7 @@
     gap:16px;
   }
   .song-title{
-    font-size:30px;
+    font-size:var(--title-font-size);
     font-weight:700;
     letter-spacing:0.2px;
     margin:0 0 4px;
@@ -253,7 +255,7 @@
     align-items:flex-end;
   }
   .meta-pill{
-    font-size:13px;
+    font-size:var(--meta-font-size);
     color:var(--accent);
   }
   .meta-row{
@@ -275,8 +277,17 @@
   .line{
     margin:0 0 3px;
   }
+  .line.blank-line{
+    height:0.6em;
+    line-height:0.6em;
+  }
   .line.chordline{
     margin-bottom:-2px;
+    white-space:pre;
+    font-variant-numeric:tabular-nums;
+  }
+  .line.chordline .bar{
+    color:var(--text);
   }
   .chord{
     color:var(--chord);
@@ -605,7 +616,7 @@
     .sidebar{ display:none; }
     .sidebar-toggle{ display:none; }
     .viewer{ padding:24px 10px 130px; }
-    .song-title{ font-size:24px; }
+    .song-title{ font-size:min(24px, var(--title-font-size)); }
     .settings-popover{ right:-10px; }
   }
 </style>
@@ -632,11 +643,23 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <div class="settings-popover" id="settingsPopover">
-          <div class="s-label">Font size</div>
+          <div class="s-label">Lyrics &amp; chords size</div>
           <div class="size-row">
             <button id="fontSizeDown" aria-label="Decrease font size">−</button>
             <span class="size-display" id="fontSizeVal">16px</span>
             <button id="fontSizeUp" aria-label="Increase font size">+</button>
+          </div>
+          <div class="s-label">Title size</div>
+          <div class="size-row">
+            <button id="titleSizeDown" aria-label="Decrease title size">−</button>
+            <span class="size-display" id="titleSizeVal">30px</span>
+            <button id="titleSizeUp" aria-label="Increase title size">+</button>
+          </div>
+          <div class="s-label">Key / tempo size</div>
+          <div class="size-row">
+            <button id="metaSizeDown" aria-label="Decrease meta size">−</button>
+            <span class="size-display" id="metaSizeVal">13px</span>
+            <button id="metaSizeUp" aria-label="Increase meta size">+</button>
           </div>
           <div class="s-label">Font</div>
           <div class="font-choice-row">
@@ -1118,7 +1141,7 @@
       if(section.label) html += `<div class="section-label">${escapeHtml(section.label)}</div>`;
       for(const line of section.lines){
         if(line.type === 'blank'){
-          html += `<div class="line">&nbsp;</div>`;
+          html += `<div class="line blank-line">&nbsp;</div>`;
         } else if(line.type === 'comment'){
           html += `<div class="comment-line">${escapeHtml(line.text)}</div>`;
         } else if(line.type === 'text'){
@@ -1136,12 +1159,36 @@
 
   function renderChordLyricLine(tokens){
     const { text, chords } = tokens;
-    if(!text.trim() && chords.length){
-      // chord-only line (like bar notation)
-      let out = '<div class="line chordline">';
-      let lastPos = 0;
+    // Bar/tab notation line: text is only "|", ".", spaces (no actual lyrics).
+    const isBarLine = /^[|.\s]*$/.test(text) && chords.length;
+    if(isBarLine){
+      // chord-only line (like bar notation): each chord sits exactly at the
+      // character position it was found at in the source (e.g. right after
+      // a "|"), rendered over the literal bar/dot text so alignment matches
+      // the original ChordPro spacing instead of a fixed offset.
+      // Attach each chord to the character immediately BEFORE its recorded
+      // position (i.e. the "|" it follows), so the chord's left-aligned
+      // label sits flush against the bar instead of floating one dot later.
+      const byPos = new Map();
       for(const c of chords){
-        out += formatChordHTML(transposeChord(c.chord, transpose)) === '' ? '' : `<span class="chord">${formatChordHTML(transposeChord(c.chord, transpose))}</span>&nbsp;&nbsp;&nbsp;`;
+        const anchor = Math.max(0, c.pos - 1);
+        const arr = byPos.get(anchor) || [];
+        arr.push(c.chord);
+        byPos.set(anchor, arr);
+      }
+      // Each character gets wrapped so a chord can be absolutely positioned
+      // above it without shoving later characters to the right (chords are
+      // often 2-3 chars wide but must sit over a single "|" or ".").
+      let out = '<div class="line chordline">';
+      for(let i = 0; i <= text.length; i++){
+        const ch = i < text.length ? text[i] : '\u00a0'; // trailing slot needs a char to anchor to
+        const chordHere = byPos.has(i) ? byPos.get(i).map(c => formatChordHTML(transposeChord(c, transpose))).join(' ') : '';
+        const displayCh = ch === '|' ? '<span class="bar">|</span>' : escapeHtml(ch);
+        if(chordHere){
+          out += `<span class="cword"><span class="cchord">${chordHere}</span>${displayCh}</span>`;
+        } else {
+          out += displayCh;
+        }
       }
       out += '</div>';
       return out;
@@ -1300,23 +1347,31 @@
   };
   const SETTINGS_KEY = 'chordsheet.display.v1';
   let fontSize = 16;
+  let titleSize = 30;
+  let metaSize = 13;
   let fontChoice = 'mono';
 
   const settingsToggle = document.getElementById('settingsToggle');
   const settingsPopover = document.getElementById('settingsPopover');
   const fontSizeVal = document.getElementById('fontSizeVal');
+  const titleSizeVal = document.getElementById('titleSizeVal');
+  const metaSizeVal = document.getElementById('metaSizeVal');
 
   function applyDisplaySettings(){
     document.documentElement.style.setProperty('--sheet-font-size', fontSize + 'px');
+    document.documentElement.style.setProperty('--title-font-size', titleSize + 'px');
+    document.documentElement.style.setProperty('--meta-font-size', metaSize + 'px');
     document.documentElement.style.setProperty('--sheet-font', FONT_MAP[fontChoice]);
     fontSizeVal.textContent = fontSize + 'px';
+    titleSizeVal.textContent = titleSize + 'px';
+    metaSizeVal.textContent = metaSize + 'px';
     document.querySelectorAll('.font-choice-row button').forEach(b => {
       b.classList.toggle('active', b.dataset.font === fontChoice);
     });
   }
 
   function saveDisplaySettings(){
-    try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({fontSize, fontChoice})); }
+    try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({fontSize, titleSize, metaSize, fontChoice})); }
     catch(err){ console.warn('Could not save display settings:', err); }
   }
 
@@ -1326,6 +1381,8 @@
       if(!raw) return;
       const parsed = JSON.parse(raw);
       if(parsed.fontSize) fontSize = parsed.fontSize;
+      if(parsed.titleSize) titleSize = parsed.titleSize;
+      if(parsed.metaSize) metaSize = parsed.metaSize;
       if(parsed.fontChoice) fontChoice = parsed.fontChoice;
     }catch(err){ /* ignore */ }
   }
@@ -1346,6 +1403,26 @@
   });
   document.getElementById('fontSizeDown').addEventListener('click', () => {
     fontSize = Math.max(fontSize - 1, 11);
+    applyDisplaySettings();
+    saveDisplaySettings();
+  });
+  document.getElementById('titleSizeUp').addEventListener('click', () => {
+    titleSize = Math.min(titleSize + 1, 48);
+    applyDisplaySettings();
+    saveDisplaySettings();
+  });
+  document.getElementById('titleSizeDown').addEventListener('click', () => {
+    titleSize = Math.max(titleSize - 1, 16);
+    applyDisplaySettings();
+    saveDisplaySettings();
+  });
+  document.getElementById('metaSizeUp').addEventListener('click', () => {
+    metaSize = Math.min(metaSize + 1, 22);
+    applyDisplaySettings();
+    saveDisplaySettings();
+  });
+  document.getElementById('metaSizeDown').addEventListener('click', () => {
+    metaSize = Math.max(metaSize - 1, 10);
     applyDisplaySettings();
     saveDisplaySettings();
   });
