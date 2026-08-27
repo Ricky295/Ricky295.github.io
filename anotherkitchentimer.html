@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Kitchen Timer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+    body {
+      font-family: 'Roboto', sans-serif;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Tactile Skeuomorphic Dial styling */
+    .dial-outer-shadow {
+      box-shadow: 
+        0 15px 35px rgba(0, 0, 0, 0.15),
+        0 5px 15px rgba(0, 0, 0, 0.08),
+        inset 0 2px 4px rgba(255, 255, 255, 0.8),
+        inset 0 -3px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .dark .dial-outer-shadow {
+      box-shadow: 
+        0 15px 35px rgba(0, 0, 0, 0.6),
+        0 5px 15px rgba(0, 0, 0, 0.4),
+        inset 0 1px 2px rgba(255, 255, 255, 0.15),
+        inset 0 -3px 8px rgba(0, 0, 0, 0.5);
+    }
+
+    .dial-knob-shadow {
+      box-shadow: 
+        0 8px 20px rgba(0, 0, 0, 0.2),
+        inset 0 3px 5px rgba(255, 255, 255, 0.9),
+        inset 0 -3px 5px rgba(0, 0, 0, 0.15);
+    }
+
+    .dark .dial-knob-shadow {
+      box-shadow: 
+        0 8px 20px rgba(0, 0, 0, 0.5),
+        inset 0 2px 3px rgba(255, 255, 255, 0.2),
+        inset 0 -3px 6px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Capsule Button Pill style */
+    .capsule-btn {
+      box-shadow: 
+        0 2px 5px rgba(0, 0, 0, 0.1),
+        inset 0 1px 1px rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(0, 0, 0, 0.12);
+    }
+
+    .dark .capsule-btn {
+      box-shadow: 
+        0 2px 5px rgba(0, 0, 0, 0.3),
+        inset 0 1px 1px rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .capsule-btn:active {
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
+      transform: translateY(1px);
+    }
+
+    /* Annotation Callout Boxes matching screenshot */
+    .annotation-box {
+      background-color: #616161;
+      color: #ffffff;
+      font-size: 0.75rem;
+      padding: 6px 10px;
+      border-radius: 6px;
+      position: absolute;
+      z-index: 40;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+      pointer-events: none;
+      line-height: 1.25;
+      text-align: left;
+      opacity: 0;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      transform: scale(0.95);
+    }
+    .annotation-box.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* Arrow pointers for callouts */
+    .annotation-box::after {
+      content: '';
+      position: absolute;
+      border-width: 6px;
+      border-style: solid;
+    }
+
+    /* Arrow right for 'Change name' */
+    .anno-right::after {
+      top: 50%;
+      right: -12px;
+      transform: translateY(-50%);
+      border-color: transparent transparent transparent #616161;
+    }
+    /* Arrow bottom for 'Tap Start/Stop' */
+    .anno-bottom::after {
+      bottom: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-color: #616161 transparent transparent transparent;
+    }
+    /* Arrow left for 'Presets' */
+    .anno-left::after {
+      top: 50%;
+      left: -12px;
+      transform: translateY(-50%);
+      border-color: transparent #616161 transparent transparent;
+    }
+    /* Arrow bottom for 'Add time' */
+    .anno-bottom-left::after {
+      bottom: -12px;
+      left: 30px;
+      border-color: #616161 transparent transparent transparent;
+    }
+    /* Arrow bottom for 'Setup alarm' */
+    .anno-bottom-right::after {
+      bottom: -12px;
+      right: 14px;
+      border-color: #616161 transparent transparent transparent;
+    }
+  </style>
+</head>
+<body class="bg-gray-200 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen flex items-center justify-center p-2 transition-colors duration-200">
+
+  <!-- Main Container -->
+  <div class="relative w-full max-w-md bg-gradient-to-b from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 rounded-3xl shadow-2xl border border-gray-300 dark:border-gray-700 overflow-hidden min-h-[680px] flex flex-col justify-between p-4">
+
+    <!-- Top Navigation Header -->
+    <header class="flex items-center justify-between px-2 pt-2 pb-4">
+      <div class="flex items-center space-x-3">
+        <button id="btnBack" class="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-xl p-2 rounded-full active:bg-gray-300 dark:active:bg-gray-700">
+          <i class="fa-solid fa-arrow-left"></i>
+        </button>
+        <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200">Kitchen timer</h1>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <button id="btnThemeToggle" class="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-xl p-2 rounded-full" title="Toggle theme">
+          <i id="themeIcon" class="fa-solid fa-moon"></i>
+        </button>
+        <button id="btnHelpToggle" class="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-xl p-2 rounded-full" title="Toggle screenshot instructions">
+          <i class="fa-solid fa-circle-question"></i>
+        </button>
+        <button id="btnMenu" class="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-xl p-2 rounded-full" title="Menu">
+          <i class="fa-solid fa-ellipsis-vertical"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Timer Header: Editable Name & Big Digital Clock -->
+    <div class="text-center relative my-1">
+      <div class="inline-flex items-center justify-center space-x-2 mb-1">
+        <span id="timerTitleDisplay" class="text-lg font-medium text-gray-700 dark:text-gray-200 cursor-pointer">Timer #1 🥳</span>
+        <button id="btnEditTitle" class="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center justify-center hover:bg-gray-400 dark:hover:bg-gray-600 transition">
+          <i class="fa-solid fa-pen text-xs"></i>
+        </button>
+      </div>
+
+      <!-- Screenshot Annotation 1: Change Name -->
+      <div id="annoChangeName" class="annotation-box anno-right" style="top: -2px; right: 8px;">
+        Change name
+      </div>
+
+      <!-- Large Digital Display -->
+      <div id="digitalDisplay" class="text-5xl font-bold tracking-tight text-gray-900 dark:text-white font-mono my-1 cursor-pointer" title="Click to manually enter time">
+        0:00
+      </div>
+    </div>
+
+    <!-- Analog Rotary Kitchen Timer Wheel Dial -->
+    <div class="relative flex justify-center items-center my-4">
+
+      <!-- Top Indicator Arrow -->
+      <div class="absolute -top-3 z-20 text-gray-600 dark:text-gray-400 text-sm">
+        <i class="fa-solid fa-caret-down"></i>
+      </div>
+
+      <!-- Screenshot Annotation 2: Tap Start/Stop -->
+      <div id="annoStartStop" class="annotation-box anno-bottom" style="top: 48px; left: 50%; transform: translateX(-50%);">
+        Tap: Start/Stop<br>Press: Reset
+      </div>
+
+      <!-- Screenshot Annotation 3: Presets & Widgets -->
+      <div id="annoPresets" class="annotation-box anno-left" style="top: 45%; left: 8px;">
+        Presets<br>Widgets<br>And your custom timers
+      </div>
+
+      <!-- Outer Dial Circle -->
+      <div id="dialContainer" class="relative w-72 h-72 rounded-full bg-gradient-to-b from-gray-100 via-gray-200 to-gray-300 dark:from-gray-700 dark:via-gray-800 dark:to-gray-900 dial-outer-shadow flex items-center justify-center cursor-grab active:cursor-grabbing select-none border border-gray-300 dark:border-gray-600">
+        
+        <!-- Rotating Face SVG containing tick marks and numbers -->
+        <svg id="dialSvg" class="w-full h-full rounded-full absolute inset-0 transition-transform duration-75 ease-out" viewBox="0 0 300 300">
+          <g id="dialGroup" transform="rotate(0 150 150)">
+            <!-- Outer Dial Ring -->
+            <circle cx="150" cy="150" r="145" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-300 dark:text-gray-600" />
+            <!-- Inner Ring baseline -->
+            <circle cx="150" cy="150" r="105" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-400 dark:text-gray-500" />
+
+            <!-- Dynamic Ticks and Labels inserted via Javascript -->
+            <g id="ticksGroup"></g>
+          </g>
+        </svg>
+
+        <!-- Center Knob Button (Start/Stop / Reset) -->
+        <button id="centerKnob" class="relative z-10 w-28 h-28 rounded-full bg-gradient-to-b from-gray-100 to-gray-300 dark:from-gray-700 dark:to-gray-800 dial-knob-shadow flex items-center justify-center text-gray-700 dark:text-gray-200 hover:scale-105 active:scale-95 transition-transform duration-150 border border-gray-300 dark:border-gray-600">
+          <i id="knobIcon" class="fa-solid fa-play text-3xl ml-1 text-gray-700 dark:text-gray-200"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Quick Add Pills & Multi-Timer Navigation Row -->
+    <div class="relative px-2 mb-2">
+      
+      <!-- Screenshot Annotation 4: Tap Add Time -->
+      <div id="annoAddTime" class="annotation-box anno-bottom-left" style="bottom: 58px; left: 60px;">
+        Tap: Add time<br>Press: Add and Start
+      </div>
+
+      <!-- Screenshot Annotation 5: Setup Alarm -->
+      <div id="annoSetupAlarm" class="annotation-box anno-bottom-right" style="bottom: 58px; right: 10px;">
+        Setup alarm
+      </div>
+
+      <div class="flex items-center justify-between space-x-2">
+        <!-- Previous Timer Switch -->
+        <button id="btnPrevTimer" class="p-3 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-2xl" title="Previous timer">
+          <i class="fa-solid fa-chevron-left"></i>
+        </button>
+
+        <!-- Quick Time Capsule Segmented Control -->
+        <div class="flex-1 flex bg-gray-300 dark:bg-gray-700/60 p-1 rounded-full capsule-btn divide-x divide-gray-300 dark:divide-gray-600">
+          <button class="btnQuickAdd flex-1 py-2 text-base font-semibold text-gray-800 dark:text-gray-100 hover:bg-white/40 dark:hover:bg-gray-600/50 rounded-l-full transition" data-seconds="30">+30s</button>
+          <button class="btnQuickAdd flex-1 py-2 text-base font-semibold text-gray-800 dark:text-gray-100 hover:bg-white/40 dark:hover:bg-gray-600/50 transition" data-seconds="60">+1m</button>
+          <button class="btnQuickAdd flex-1 py-2 text-base font-semibold text-gray-800 dark:text-gray-100 hover:bg-white/40 dark:hover:bg-gray-600/50 rounded-r-full transition" data-seconds="300">+5m</button>
+        </div>
+
+        <!-- Next Timer Switch -->
+        <button id="btnNextTimer" class="p-3 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-2xl" title="Next timer">
+          <i class="fa-solid fa-chevron-right"></i>
+        </button>
+      </div>
+
+      <!-- Action Row Icons (Keyboard Input & Sound/Alarm Settings) -->
+      <div class="flex items-center justify-between px-3 mt-4 text-gray-600 dark:text-gray-400">
+        <button id="btnKeypad" class="w-10 h-10 rounded-full bg-gray-300/70 dark:bg-gray-700/70 flex items-center justify-center hover:bg-gray-300 dark:hover:bg-gray-700 transition" title="Manual time entry">
+          <i class="fa-solid fa-keyboard text-base"></i>
+        </button>
+
+        <div class="flex items-center space-x-3 text-xs opacity-60">
+          <i class="fa-solid fa-volume-high"></i>
+          <i class="fa-solid fa-mobile-screen-button"></i>
+          <i class="fa-solid fa-rotate-left"></i>
+        </div>
+
+        <button id="btnSettings" class="w-10 h-10 rounded-full bg-gray-300/70 dark:bg-gray-700/70 flex items-center justify-center hover:bg-gray-300 dark:hover:bg-gray-700 transition" title="Alarm sound options">
+          <i class="fa-solid fa-gear text-base"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Manual Time Input Modal -->
+  <div id="modalInput" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-xs shadow-xl">
+      <h3 class="text-lg font-bold mb-4 text-gray-800 dark:text-gray-100">Set Timer Time</h3>
+      <div class="flex space-x-2 mb-4">
+        <div class="flex-1">
+          <label class="text-xs text-gray-500 font-medium">Minutes</label>
+          <input type="number" id="inputMinutes" min="0" max="99" value="0" class="w-full text-center text-2xl font-bold bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg py-2 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div class="flex-1">
+          <label class="text-xs text-gray-500 font-medium">Seconds</label>
+          <input type="number" id="inputSeconds" min="0" max="59" value="0" class="w-full text-center text-2xl font-bold bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg py-2 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+      </div>
+      <div class="flex space-x-2">
+        <button id="btnCancelInput" class="flex-1 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600">Cancel</button>
+        <button id="btnSaveInput" class="flex-1 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700">Set</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rename Modal -->
+  <div id="modalRename" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-xs shadow-xl">
+      <h3 class="text-lg font-bold mb-3 text-gray-800 dark:text-gray-100">Rename Timer</h3>
+      <input type="text" id="inputTimerTitle" class="w-full text-base bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg p-3 mb-4 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Timer name...">
+      <div class="flex space-x-2">
+        <button id="btnCancelRename" class="flex-1 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium rounded-lg">Cancel</button>
+        <button id="btnSaveRename" class="flex-1 py-2 bg-blue-600 text-white font-medium rounded-lg">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Application Logic -->
+  <script>
+    // State Management for Multi-Timers
+    const state = {
+      timers: [
+        { id: 1, name: "Timer #1 🥳", duration: 0, remaining: 0, isRunning: false },
+        { id: 2, name: "Pizza Timer 🍕", duration: 720, remaining: 720, isRunning: false },
+        { id: 3, name: "Tea Timer ☕", duration: 180, remaining: 180, isRunning: false }
+      ],
+      currentTimerIndex: 0,
+      showHelpAnnotations: true,
+      audioCtx: null
+    };
+
+    let intervalId = null;
+    let longPressTimer = null;
+    let isDragging = false;
+    let startAngle = 0;
+    let currentDialAngle = 0;
+
+    // DOM Elements
+    const dialSvg = document.getElementById('dialSvg');
+    const dialGroup = document.getElementById('dialGroup');
+    const ticksGroup = document.getElementById('ticksGroup');
+    const dialContainer = document.getElementById('dialContainer');
+    const centerKnob = document.getElementById('centerKnob');
+    const knobIcon = document.getElementById('knobIcon');
+    const digitalDisplay = document.getElementById('digitalDisplay');
+    const timerTitleDisplay = document.getElementById('timerTitleDisplay');
+
+    // Web Audio Sound Generator
+    function initAudio() {
+      if (!state.audioCtx) {
+        state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (state.audioCtx.state === 'suspended') {
+        state.audioCtx.resume();
+      }
+    }
+
+    function playTickSound() {
+      try {
+        if (!state.audioCtx) return;
+        const osc = state.audioCtx.createOscillator();
+        const gain = state.audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, state.audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.05, state.audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, state.audioCtx.currentTime + 0.03);
+        osc.connect(gain);
+        gain.connect(state.audioCtx.destination);
+        osc.start();
+        osc.stop(state.audioCtx.currentTime + 0.03);
+      } catch (e) {}
+    }
+
+    function playAlarmSound() {
+      try {
+        initAudio();
+        const now = state.audioCtx.currentTime;
+        for (let i = 0; i < 4; i++) {
+          const osc = state.audioCtx.createOscillator();
+          const gain = state.audioCtx.createGain();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(987.77, now + i * 0.25); // B5 note beep
+          gain.gain.setValueAtTime(0.2, now + i * 0.25);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.25 + 0.15);
+          osc.connect(gain);
+          gain.connect(state.audioCtx.destination);
+          osc.start(now + i * 0.25);
+          osc.stop(now + i * 0.25 + 0.15);
+        }
+      } catch (e) {}
+    }
+
+    // Render Dial Markings (0 to 60 minutes)
+    function generateDialTicks() {
+      ticksGroup.innerHTML = '';
+      const totalTicks = 60;
+      const center = 150;
+      const radiusOuter = 142;
+      const radiusMajor = 126;
+      const radiusMinor = 134;
+
+      for (let i = 0; i < totalTicks; i++) {
+        const angleDeg = i * 6; // 360 / 60 = 6 deg per tick
+        const angleRad = (angleDeg - 90) * (Math.PI / 180);
+        
+        const isMajor = i % 5 === 0;
+        const rInner = isMajor ? radiusMajor : radiusMinor;
+
+        const x1 = center + radiusOuter * Math.cos(angleRad);
+        const y1 = center + radiusOuter * Math.sin(angleRad);
+        const x2 = center + rInner * Math.cos(angleRad);
+        const y2 = center + rInner * Math.sin(angleRad);
+
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', x1);
+        line.setAttribute('y1', y1);
+        line.setAttribute('x2', x2);
+        line.setAttribute('y2', y2);
+        line.setAttribute('stroke', 'currentColor');
+        line.setAttribute('stroke-width', isMajor ? '2' : '1');
+        line.setAttribute('class', isMajor ? 'text-gray-700 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500');
+        ticksGroup.appendChild(line);
+
+        // Labels for Major Ticks (0, 5, 10, ... 55)
+        if (isMajor) {
+          const textRadius = 112;
+          const tx = center + textRadius * Math.cos(angleRad);
+          const ty = center + textRadius * Math.sin(angleRad) + 4; // slight vertical adjust
+
+          const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          text.setAttribute('x', tx);
+          text.setAttribute('y', ty);
+          text.setAttribute('text-anchor', 'middle');
+          text.setAttribute('font-size', '14');
+          text.setAttribute('font-weight', '500');
+          text.setAttribute('class', 'fill-gray-700 dark:fill-gray-200');
+          text.textContent = i;
+          ticksGroup.appendChild(text);
+        }
+      }
+    }
+
+    // Current active timer
+    function getActiveTimer() {
+      return state.timers[state.currentTimerIndex];
+    }
+
+    // Format Seconds into M:SS or MM:SS
+    function formatTime(totalSeconds) {
+      const mins = Math.floor(totalSeconds / 60);
+      const secs = totalSeconds % 60;
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    // Update UI View
+    function updateUI() {
+      const timer = getActiveTimer();
+      
+      // Update Title & Digital Display
+      timerTitleDisplay.textContent = timer.name;
+      digitalDisplay.textContent = formatTime(timer.remaining);
+
+      // Update Play/Pause Icon
+      if (timer.isRunning) {
+        knobIcon.className = "fa-solid fa-pause text-3xl text-gray-700 dark:text-gray-200";
+      } else {
+        knobIcon.className = "fa-solid fa-play text-3xl ml-1 text-gray-700 dark:text-gray-200";
+      }
+
+      // Sync Rotary Angle with Timer Seconds (360 degrees = 60 minutes = 3600s)
+      if (!isDragging) {
+        const degrees = (timer.remaining % 3600) * (360 / 3600);
+        currentDialAngle = degrees;
+        dialGroup.setAttribute('transform', `rotate(${-degrees} 150 150)`);
+      }
+    }
+
+    // Start / Stop Timer Loop
+    function toggleTimer() {
+      initAudio();
+      const timer = getActiveTimer();
+      if (timer.isRunning) {
+        timer.isRunning = false;
+        clearInterval(intervalId);
+      } else {
+        if (timer.remaining <= 0) return;
+        timer.isRunning = true;
+        intervalId = setInterval(() => {
+          if (timer.remaining > 0) {
+            timer.remaining--;
+            updateUI();
+          } else {
+            // Alarm complete
+            timer.isRunning = false;
+            clearInterval(intervalId);
+            playAlarmSound();
+            updateUI();
+          }
+        }, 1000);
+      }
+      updateUI();
+    }
+
+    function resetTimer() {
+      const timer = getActiveTimer();
+      timer.isRunning = false;
+      clearInterval(intervalId);
+      timer.remaining = timer.duration;
+      updateUI();
+    }
+
+    // Rotary Dial Interactive Touch / Drag Handling
+    function getAngleFromCenter(e) {
+      const rect = dialContainer.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+      const dx = clientX - cx;
+      const dy = clientY - cy;
+      let rad = Math.atan2(dy, dx);
+      let deg = rad * (180 / Math.PI) + 90; // Align 0 deg at top
+      if (deg < 0) deg += 360;
+      return deg;
+    }
+
+    function onDragStart(e) {
+      if (e.target.closest('#centerKnob')) return;
+      initAudio();
+      isDragging = true;
+      startAngle = getAngleFromCenter(e);
+      document.addEventListener('mousemove', onDragMove);
+      document.addEventListener('mouseup', onDragEnd);
+      document.addEventListener('touchmove', onDragMove, { passive: false });
+      document.addEventListener('touchend', onDragEnd);
+    }
+
+    function onDragMove(e) {
+      if (!isDragging) return;
+      if (e.preventDefault) e.preventDefault();
+
+      const timer = getActiveTimer();
+      const newAngle = getAngleFromCenter(e);
+      let diff = newAngle - startAngle;
+
+      // Wrap around 360 threshold
+      if (diff > 180) diff -= 360;
+      if (diff < -180) diff += 360;
+
+      currentDialAngle = (currentDialAngle + diff + 360) % 360;
+      startAngle = newAngle;
+
+      // Convert angle to minutes & seconds (360 deg = 60 minutes)
+      const minutesSet = (currentDialAngle / 360) * 60;
+      const newSeconds = Math.round(minutesSet * 60);
+
+      if (Math.abs(timer.remaining - newSeconds) >= 5) {
+        playTickSound();
+      }
+
+      timer.remaining = newSeconds;
+      timer.duration = newSeconds;
+
+      dialGroup.setAttribute('transform', `rotate(${-currentDialAngle} 150 150)`);
+      digitalDisplay.textContent = formatTime(timer.remaining);
+    }
+
+    function onDragEnd() {
+      if (!isDragging) return;
+      isDragging = false;
+      document.removeEventListener('mousemove', onDragMove);
+      document.removeEventListener('mouseup', onDragEnd);
+      document.removeEventListener('touchmove', onDragMove);
+      document.removeEventListener('touchend', onDragEnd);
+      updateUI();
+    }
+
+    // Event Listeners Initialization
+    function setupEvents() {
+      // Dial Drag Events
+      dialContainer.addEventListener('mousedown', onDragStart);
+      dialContainer.addEventListener('touchstart', onDragStart, { passive: false });
+
+      // Knob Click (Start/Stop) & Long Press (Reset)
+      centerKnob.addEventListener('click', () => {
+        toggleTimer();
+      });
+
+      centerKnob.addEventListener('mousedown', () => {
+        longPressTimer = setTimeout(() => {
+          resetTimer();
+        }, 800);
+      });
+      centerKnob.addEventListener('mouseup', () => clearTimeout(longPressTimer));
+      centerKnob.addEventListener('mouseleave', () => clearTimeout(longPressTimer));
+      centerKnob.addEventListener('touchstart', () => {
+        longPressTimer = setTimeout(() => {
+          resetTimer();
+        }, 800);
+      });
+      centerKnob.addEventListener('touchend', () => clearTimeout(longPressTimer));
+
+      // Quick Add Pills
+      document.querySelectorAll('.btnQuickAdd').forEach(btn => {
+        btn.addEventListener('click', () => {
+          initAudio();
+          const timer = getActiveTimer();
+          const secs = parseInt(btn.dataset.seconds, 10);
+          timer.remaining += secs;
+          timer.duration = Math.max(timer.duration, timer.remaining);
+          updateUI();
+        });
+      });
+
+      // Switch Timers (< and >)
+      document.getElementById('btnPrevTimer').addEventListener('click', () => {
+        state.currentTimerIndex = (state.currentTimerIndex - 1 + state.timers.length) % state.timers.length;
+        updateUI();
+      });
+      document.getElementById('btnNextTimer').addEventListener('click', () => {
+        state.currentTimerIndex = (state.currentTimerIndex + 1) % state.timers.length;
+        updateUI();
+      });
+
+      // Screenshots Annotation Help Toggle Button
+      document.getElementById('btnHelpToggle').addEventListener('click', () => {
+        state.showHelpAnnotations = !state.showHelpAnnotations;
+        toggleAnnotations(state.showHelpAnnotations);
+      });
+
+      // Dark / Light Theme Toggle
+      document.getElementById('btnThemeToggle').addEventListener('click', () => {
+        document.documentElement.classList.toggle('dark');
+        const icon = document.getElementById('themeIcon');
+        if (document.documentElement.classList.contains('dark')) {
+          icon.className = 'fa-solid fa-sun';
+        } else {
+          icon.className = 'fa-solid fa-moon';
+        }
+      });
+
+      // Manual Keypad Time Input Modal
+      const modalInput = document.getElementById('modalInput');
+      const inputMinutes = document.getElementById('inputMinutes');
+      const inputSeconds = document.getElementById('inputSeconds');
+
+      document.getElementById('btnKeypad').addEventListener('click', () => {
+        const timer = getActiveTimer();
+        inputMinutes.value = Math.floor(timer.remaining / 60);
+        inputSeconds.value = timer.remaining % 60;
+        modalInput.classList.remove('hidden');
+      });
+
+      document.getElementById('digitalDisplay').addEventListener('click', () => {
+        document.getElementById('btnKeypad').click();
+      });
+
+      document.getElementById('btnCancelInput').addEventListener('click', () => {
+        modalInput.classList.add('hidden');
+      });
+
+      document.getElementById('btnSaveInput').addEventListener('click', () => {
+        const timer = getActiveTimer();
+        const mins = parseInt(inputMinutes.value, 10) || 0;
+        const secs = parseInt(inputSeconds.value, 10) || 0;
+        timer.remaining = mins * 60 + secs;
+        timer.duration = timer.remaining;
+        modalInput.classList.add('hidden');
+        updateUI();
+      });
+
+      // Rename Timer Modal
+      const modalRename = document.getElementById('modalRename');
+      const inputTimerTitle = document.getElementById('inputTimerTitle');
+
+      document.getElementById('btnEditTitle').addEventListener('click', () => {
+        const timer = getActiveTimer();
+        inputTimerTitle.value = timer.name;
+        modalRename.classList.remove('hidden');
+      });
+
+      document.getElementById('btnCancelRename').addEventListener('click', () => {
+        modalRename.classList.add('hidden');
+      });
+
+      document.getElementById('btnSaveRename').addEventListener('click', () => {
+        const timer = getActiveTimer();
+        if (inputTimerTitle.value.trim()) {
+          timer.name = inputTimerTitle.value.trim();
+        }
+        modalRename.classList.add('hidden');
+        updateUI();
+      });
+
+      // Sound Settings trigger
+      document.getElementById('btnSettings').addEventListener('click', () => {
+        playAlarmSound();
+      });
+    }
+
+    // Toggle Screenshot Callout Annotations
+    function toggleAnnotations(show) {
+      const boxes = [
+        'annoChangeName', 'annoStartStop', 'annoPresets', 'annoAddTime', 'annoSetupAlarm'
+      ];
+      boxes.forEach(id => {
+        const el = document.getElementById(id);
+        if (show) el.classList.add('visible');
+        else el.classList.remove('visible');
+      });
+    }
+
+    // Initialize App
+    window.addEventListener('DOMContentLoaded', () => {
+      generateDialTicks();
+      setupEvents();
+      updateUI();
+      // Initially show screenshot guide notes matching image
+      toggleAnnotations(true);
+    });
+  </script>
+</body>
+</html>
