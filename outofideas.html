@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>I'm out of ideas.</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;600;800&family=Press+Start+2P&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+        }
+        .font-mono-code {
+            font-family: 'Fira Code', monospace;
+        }
+        .font-pixel {
+            font-family: 'Press Start 2P', monospace;
+        }
+
+        /* Scanline effect for unlocked mode */
+        .scanlines {
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%, 
+                rgba(0, 0, 0, 0.25) 50%
+            ), linear-gradient(
+                90deg,
+                rgba(255, 0, 0, 0.03),
+                rgba(0, 255, 0, 0.01),
+                rgba(0, 0, 255, 0.03)
+            );
+            background-size: 100% 4px, 6px 100%;
+            pointer-events: none;
+        }
+
+        /* Glitch Animation */
+        @keyframes glitch {
+            0% { transform: translate(0); }
+            20% { transform: translate(-3px, 3px); }
+            40% { transform: translate(-3px, -3px); }
+            60% { transform: translate(3px, 3px); }
+            80% { transform: translate(3px, -3px); }
+            100% { transform: translate(0); }
+        }
+        .glitch-active {
+            animation: glitch 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) both infinite;
+        }
+
+        /* Subtle glowing pulse */
+        @keyframes subtle-pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.8; }
+        }
+        .pulse-subtle {
+            animation: subtle-pulse 3s infinite ease-in-out;
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #06b6d4;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen overflow-x-hidden flex flex-col justify-between transition-colors duration-700">
+
+    <!-- CANVAS BACKGROUND FOR PARTICLES / UNLOCKED MODE -->
+    <canvas id="bg-canvas" class="fixed inset-0 pointer-events-none z-0 opacity-40"></canvas>
+
+    <!-- SCANLINE OVERLAY (Active when unlocked) -->
+    <div id="scanline-overlay" class="fixed inset-0 z-50 scanlines opacity-0 transition-opacity duration-1000"></div>
+
+    <!-- AUDIO SYSTEM ENABLER MODAL / SECRET SENSORS -->
+    <div id="top-bar" class="relative z-10 w-full p-4 flex justify-between items-center text-xs text-slate-500 font-mono-code border-b border-slate-900/60">
+        <div class="flex items-center space-x-2">
+            <span class="w-2 h-2 rounded-full bg-slate-700" id="status-dot"></span>
+            <span id="status-text">STATUS: IDLE // NO IDEA AVAILABLE</span>
+        </div>
+        <div class="flex items-center space-x-4">
+            <button id="sound-toggle" class="hover:text-cyan-400 transition-colors flex items-center gap-1">
+                <i class="fa-solid fa-volume-xmark" id="sound-icon"></i>
+                <span id="sound-text">AUDIO: OFF</span>
+            </button>
+            <span class="text-slate-700">|</span>
+            <span id="click-counter" class="cursor-help" title="Just a totally useless click counter...">CLICKS: 0</span>
+        </div>
+    </div>
+
+    <!-- MAIN SURFACE CONTAINER -->
+    <main id="main-container" class="relative z-10 flex-1 flex flex-col items-center justify-center p-6 text-center max-w-4xl mx-auto w-full">
+
+        <!-- SURFACE SURFACE: "BORING PAGE" -->
+        <div id="surface-view" class="space-y-8 transition-all duration-700">
+            <!-- Title with secret period -->
+            <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-slate-200">
+                I'm out of ideas<span id="secret-period" class="cursor-pointer hover:text-cyan-400 transition-colors inline-block px-1">.</span>
+            </h1>
+
+            <p class="text-slate-400 text-lg sm:text-xl max-w-lg mx-auto font-light leading-relaxed">
+                There is nothing to see here. The creator hit a writer's block. 
+                Feel free to close this tab and go do something productive.
+            </p>
+
+            <!-- Boring Interactive Elements -->
+            <div class="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
+                <button id="btn-generate" class="px-6 py-3 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 font-medium hover:bg-slate-800 hover:border-slate-700 transition-all active:scale-95 shadow-lg">
+                    <i class="fa-solid fa-dice mr-2 text-slate-500"></i> Generate "Idea"
+                </button>
+                <button id="btn-useless" class="px-6 py-3 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 font-medium hover:bg-slate-800 hover:text-slate-200 transition-all active:scale-95">
+                    Do Nothing
+                </button>
+            </div>
+
+            <!-- Output box for bad ideas -->
+            <div id="idea-output" class="min-h-[60px] flex items-center justify-center text-sm font-mono-code text-cyan-400/80 bg-slate-900/40 border border-slate-900 rounded-lg p-4 max-w-md mx-auto opacity-0 transition-opacity">
+                <!-- Dynamic text -->
+            </div>
+
+            <!-- Subtle secret visual hints -->
+            <div class="pt-12 flex justify-center items-center gap-6 text-slate-700 text-xs font-mono-code">
+                <span id="hint-1" class="hover:text-slate-500 cursor-pointer transition-colors">ERR_NO_SPARK</span>
+                <span>•</span>
+                <span id="hint-2" class="hover:text-slate-500 cursor-pointer transition-colors">TRY_LOOKING_CLOSER</span>
+                <span>•</span>
+                <span id="hint-3" class="hover:text-slate-500 cursor-pointer transition-colors">KEY: [C-U-R-I-O-U-S]</span>
+            </div>
+        </div>
+
+        <!-- UNLOCKED LAYER: "THE ARCHIVE OF LOST IDEAS" (Hidden initially) -->
+        <div id="secret-view" class="hidden w-full flex-col items-center space-y-6 text-left transition-all duration-700">
+            
+            <!-- Terminal Header -->
+            <div class="w-full bg-slate-900/90 border border-cyan-500/30 rounded-t-xl p-3 flex justify-between items-center backdrop-blur shadow-2xl">
+                <div class="flex items-center space-x-2">
+                    <div class="w-3 h-3 rounded-full bg-red-500/80 cursor-pointer" id="term-close"></div>
+                    <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                    <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+                    <span class="text-xs font-mono-code text-cyan-400 ml-2 flex items-center gap-2">
+                        <i class="fa-solid fa-terminal"></i> THE_ARCHIVE_OF_LOST_IDEAS v2.5.0
+                    </span>
+                </div>
+                <span class="text-xs font-mono-code text-slate-500">CURIOSITY_LEVEL: <span id="curiosity-score" class="text-yellow-400 font-bold">100%</span></span>
+            </div>
+
+            <!-- Dashboard Content Container -->
+            <div class="w-full bg-slate-950/80 border-x border-b border-cyan-500/20 rounded-b-xl p-4 sm:p-6 backdrop-blur space-y-6 shadow-2xl">
+                
+                <!-- Secret Narrative Intro -->
+                <div class="p-4 rounded-lg bg-cyan-950/20 border border-cyan-800/40 text-cyan-200 text-sm font-mono-code leading-relaxed space-y-2">
+                    <p class="text-cyan-400 font-bold flex items-center gap-2">
+                        <i class="fa-solid fa-unlock-keyhole"></i> RESTRICTED ACCESS GRANTED
+                    </p>
+                    <p>
+                        Congratulations, explorer. You refused to accept a blank page. 
+                        Welcome to the subterranean lab where unformed concepts, forgotten games, and stray algorithms reside.
+                    </p>
+                </div>
+
+                <!-- Interactive Tabs -->
+                <div class="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
+                    <button id="tab-synth" class="tab-btn px-4 py-2 rounded-lg text-xs font-mono-code bg-cyan-950 text-cyan-300 border border-cyan-700/50 flex items-center gap-2">
+                        <i class="fa-solid fa-vial"></i> Idea Synthesizer
+                    </button>
+                    <button id="tab-constellation" class="tab-btn px-4 py-2 rounded-lg text-xs font-mono-code bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-circle-nodes"></i> Thought Network
+                    </button>
+                    <button id="tab-minigame" class="tab-btn px-4 py-2 rounded-lg text-xs font-mono-code bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-gamepad"></i> Mini-Arcade: Idea Catcher
+                    </button>
+                    <button id="tab-console" class="tab-btn px-4 py-2 rounded-lg text-xs font-mono-code bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-code"></i> AI Log Terminal
+                    </button>
+                </div>
+
+                <!-- TAB 1: IDEA SYNTHESIZER -->
+                <div id="view-synth" class="tab-view space-y-4">
+                    <p class="text-xs font-mono-code text-slate-400">
+                        Combine 2 or 3 dormant concepts to generate a synthesized prototype story/game idea:
+                    </p>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" id="concept-pool">
+                        <!-- Concept Badges Dynamic -->
+                    </div>
+
+                    <div class="p-4 rounded-lg bg-slate-900/60 border border-slate-800 space-y-3">
+                        <div class="flex justify-between items-center text-xs font-mono-code text-slate-400">
+                            <span>Selected Elements:</span>
+                            <button id="btn-clear-synth" class="text-red-400 hover:underline">Clear</button>
+                        </div>
+                        <div id="selected-elements" class="flex flex-wrap gap-2 min-h-[36px] items-center p-2 rounded bg-slate-950 border border-slate-900">
+                            <span class="text-slate-600 text-xs italic font-mono-code">Click elements above to combine...</span>
+                        </div>
+                        <button id="btn-fuse" class="w-full py-2.5 rounded bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs font-mono-code uppercase tracking-wider transition-all disabled:opacity-50" disabled>
+                            <i class="fa-solid fa-bolt mr-1"></i> Synthesize Concept
+                        </button>
+                    </div>
+
+                    <div id="synth-result" class="hidden p-4 rounded-lg bg-slate-900 border border-cyan-500/30 space-y-2 animate-fade-in">
+                        <h4 id="synth-title" class="text-cyan-300 font-bold text-sm font-mono-code"></h4>
+                        <p id="synth-desc" class="text-slate-300 text-xs leading-relaxed"></p>
+                        <div class="flex justify-between items-center pt-2 text-[10px] font-mono-code text-slate-500">
+                            <span id="synth-genre"></span>
+                            <span class="text-yellow-400/80" id="synth-feasibility"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: THOUGHT NETWORK (Constellation Graph Canvas) -->
+                <div id="view-constellation" class="tab-view hidden space-y-3">
+                    <div class="flex justify-between items-center text-xs font-mono-code text-slate-400">
+                        <span>Interactive Concept Map (Click nodes to inspect)</span>
+                        <span id="node-count" class="text-cyan-400">Nodes: 12</span>
+                    </div>
+                    <div class="relative w-full h-64 sm:h-80 bg-slate-950 rounded-lg border border-slate-800 overflow-hidden">
+                        <canvas id="graph-canvas" class="w-full h-full cursor-crosshair"></canvas>
+                        <div id="node-tooltip" class="absolute hidden p-2 rounded bg-slate-900/90 border border-cyan-500/50 text-xs font-mono-code text-cyan-200 pointer-events-none shadow-lg"></div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: MINI ARCADE (Idea Catcher Game) -->
+                <div id="view-minigame" class="tab-view hidden space-y-4">
+                    <div class="flex justify-between items-center text-xs font-mono-code">
+                        <span class="text-slate-400">Catch falling spark thoughts! Avoid blue screen errors!</span>
+                        <span class="text-yellow-400 font-bold">SCORE: <span id="game-score">0</span></span>
+                    </div>
+                    <div class="relative w-full h-64 sm:h-72 bg-slate-950 rounded-lg border border-slate-800 overflow-hidden flex flex-col justify-between" id="game-container">
+                        <canvas id="game-canvas" class="w-full h-full"></canvas>
+                        <div id="game-start-overlay" class="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center space-y-3 p-4">
+                            <i class="fa-solid fa-gamepad text-4xl text-cyan-400 animate-bounce"></i>
+                            <h3 class="text-sm font-mono-code font-bold text-slate-200">MICRO-GAME: SPARK CATCHER</h3>
+                            <p class="text-xs text-slate-400 text-center max-w-xs">Move your paddle with mouse or finger to collect glowing ideas before they hit the ground.</p>
+                            <button id="btn-start-game" class="px-6 py-2 rounded bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs font-mono-code uppercase tracking-wider transition-all">
+                                Launch Game
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: TERMINAL LOGS -->
+                <div id="view-console" class="tab-view hidden space-y-3">
+                    <div class="w-full h-64 bg-slate-950 rounded-lg border border-slate-800 p-3 font-mono-code text-xs text-green-400 overflow-y-auto space-y-1.5" id="terminal-logs">
+                        <p class="text-slate-500">[SYSTEM INIT] Boot sequence verified.</p>
+                        <p class="text-slate-500">[LOG 001] User breached surface illusion layer.</p>
+                        <p class="text-cyan-400">> Type <span class="text-yellow-300">help</span> for available commands, or <span class="text-yellow-300">quote</span> for secret wisdom.</p>
+                    </div>
+                    <form id="terminal-form" class="flex gap-2">
+                        <span class="text-cyan-400 font-mono-code py-2 text-xs">&gt;</span>
+                        <input type="text" id="terminal-input" class="flex-1 bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono-code text-slate-100 focus:outline-none focus:border-cyan-500" placeholder="Enter command..." autocomplete="off">
+                        <button type="submit" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-mono-code text-slate-200 rounded">Execute</button>
+                    </form>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="relative z-10 p-4 text-center text-xs font-mono-code text-slate-600">
+        <span>Designed for the curious.</span>
+        <span class="mx-2">•</span>
+        <button id="btn-hint-modal" class="hover:text-cyan-400 underline transition-colors">Stuck? Need a clue?</button>
+    </footer>
+
+    <!-- CLUE MODAL -->
+    <div id="hint-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="font-mono-code font-bold text-cyan-400 text-sm flex items-center gap-2">
+                    <i class="fa-regular fa-lightbulb"></i> Secret Triggers Guide
+                </h3>
+                <button id="close-hint-modal" class="text-slate-500 hover:text-slate-300">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="text-xs text-slate-300 space-y-3 font-mono-code leading-relaxed">
+                <p>If you're wondering how to unlock the hidden layer, try one of these secrets:</p>
+                <ul class="list-disc pl-4 space-y-2 text-slate-400">
+                    <li><strong class="text-slate-200">Click the Period:</strong> Click the full stop at the end of "I'm out of ideas." 5 times fast.</li>
+                    <li><strong class="text-slate-200">Keyboard Secrets:</strong> Type the word <span class="text-yellow-400 font-bold">curious</span> or <span class="text-yellow-400 font-bold">idea</span> anywhere on the keyboard.</li>
+                    <li><strong class="text-slate-200">Konami Code:</strong> <kbd class="px-1 bg-slate-800 rounded">↑</kbd> <kbd class="px-1 bg-slate-800 rounded">↑</kbd> <kbd class="px-1 bg-slate-800 rounded">↓</kbd> <kbd class="px-1 bg-slate-800 rounded">↓</kbd> <kbd class="px-1 bg-slate-800 rounded">←</kbd> <kbd class="px-1 bg-slate-800 rounded">→</kbd> <kbd class="px-1 bg-slate-800 rounded">←</kbd> <kbd class="px-1 bg-slate-800 rounded">→</kbd> <kbd class="px-1 bg-slate-800 rounded">B</kbd> <kbd class="px-1 bg-slate-800 rounded">A</kbd></li>
+                    <li><strong class="text-slate-200">Over-clicker:</strong> Click the "Do Nothing" or "Generate Idea" button 10 times in a row.</li>
+                </ul>
+            </div>
+            <button id="btn-force-unlock" class="w-full py-2 bg-cyan-950 hover:bg-cyan-900 border border-cyan-700/50 text-cyan-300 font-mono-code text-xs rounded transition-colors">
+                Emergency Override (Unlock Now)
+            </button>
+        </div>
+    </div>
+
+    <!-- AUDIO & LOGIC SCRIPT -->
+    <script>
+        // --- AUDIO SYNTHESIZER (Web Audio API) ---
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+                this.enabled = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+                this.enabled = true;
+            }
+
+            playClick() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(200, this.ctx.currentTime + 0.05);
+                gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.05);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.05);
+            }
+
+            playGlitch() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(800, this.ctx.currentTime + 0.1);
+                osc.frequency.linearRampToValueAtTime(100, this.ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.25);
+            }
+
+            playUnlock() {
+                if (!this.enabled || !this.ctx) return;
+                const notes = [261.63, 329.63, 392.00, 523.25, 659.25];
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.08);
+                    gain.gain.setValueAtTime(0.15, this.ctx.currentTime + idx * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.08 + 0.3);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + idx * 0.08);
+                    osc.stop(this.ctx.currentTime + idx * 0.08 + 0.3);
+                });
+            }
+        }
+
+        const sfx = new SoundFX();
+
+        // --- STATE MANAGEMENT ---
+        let state = {
+            clickCount: 0,
+            unlocked: false,
+            periodClicks: 0,
+            typedBuffer: '',
+            selectedConcepts: [],
+            score: 0,
+            gameRunning: false
+        };
+
+        // --- DOM ELEMENTS ---
+        const elements = {
+            clickCounter: document.getElementById('click-counter'),
+            btnGenerate: document.getElementById('btn-generate'),
+            btnUseless: document.getElementById('btn-useless'),
+            ideaOutput: document.getElementById('idea-output'),
+            secretPeriod: document.getElementById('secret-period'),
+            surfaceView: document.getElementById('surface-view'),
+            secretView: document.getElementById('secret-view'),
+            scanlineOverlay: document.getElementById('scanline-overlay'),
+            statusDot: document.getElementById('status-dot'),
+            statusText: document.getElementById('status-text'),
+            soundToggle: document.getElementById('sound-toggle'),
+            soundIcon: document.getElementById('sound-icon'),
+            soundText: document.getElementById('sound-text'),
+            hintModal: document.getElementById('hint-modal'),
+            btnHintModal: document.getElementById('btn-hint-modal'),
+            closeHintModal: document.getElementById('close-hint-modal'),
+            btnForceUnlock: document.getElementById('btn-force-unlock'),
+            conceptPool: document.getElementById('concept-pool'),
+            selectedElements: document.getElementById('selected-elements'),
+            btnFuse: document.getElementById('btn-fuse'),
+            btnClearSynth: document.getElementById('btn-clear-synth'),
+            synthResult: document.getElementById('synth-result'),
+            synthTitle: document.getElementById('synth-title'),
+            synthDesc: document.getElementById('synth-desc'),
+            synthGenre: document.getElementById('synth-genre'),
+            synthFeasibility: document.getElementById('synth-feasibility'),
+            terminalLogs: document.getElementById('terminal-logs'),
+            terminalForm: document.getElementById('terminal-form'),
+            terminalInput: document.getElementById('terminal-input'),
+            termClose: document.getElementById('term-close')
+        };
+
+        // Bad / Unhelpful surface ideas list
+        const boringIdeas = [
+            "Drink a glass of water, but slowly.",
+            "Stare at a wall and count 1,000 specs of dust.",
+            "Try to blink with only your left eye for 3 minutes.",
+            "Invent a language that only uses the word 'meow'.",
+            "Calculate how many seconds you've been sitting here.",
+            "Reorganize your desktop icons in alphabetical order.",
+            "Write a poem dedicated to a slice of whole wheat bread.",
+            "Try typing your name using only your elbow."
+        ];
+
+        // --- BACKGROUND CANVAS PARTICLES ---
+        const bgCanvas = document.getElementById('bg-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        let particles = [];
+
+        function resizeCanvas() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * bgCanvas.width;
+                this.y = Math.random() * bgCanvas.height;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.size = Math.random() * 2 + 1;
+                this.alpha = Math.random() * 0.5 + 0.1;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                if (this.x < 0 || this.x > bgCanvas.width || this.y < 0 || this.y > bgCanvas.height) {
+                    this.reset();
+                }
+            }
+            draw() {
+                bgCtx.fillStyle = state.unlocked ? `rgba(6, 182, 212, ${this.alpha})` : `rgba(148, 163, 184, ${this.alpha})`;
+                bgCtx.beginPath();
+                bgCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                bgCtx.fill();
+            }
+        }
+
+        for (let i = 0; i < 60; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateBg() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            requestAnimationFrame(animateBg);
+        }
+        animateBg();
+
+        // --- INTERACTION HELPER FUNCTIONS ---
+        function incrementClicks() {
+            state.clickCount++;
+            elements.clickCounter.textContent = `CLICKS: ${state.clickCount}`;
+            sfx.playClick();
+
+            if (state.clickCount >= 10 && !state.unlocked) {
+                triggerUnlock("PERSISTENT_CLICKER");
+            }
+        }
+
+        // Toggle Audio System
+        elements.soundToggle.addEventListener('click', () => {
+            sfx.init();
+            if (sfx.enabled) {
+                elements.soundIcon.className = "fa-solid fa-volume-high text-cyan-400";
+                elements.soundText.textContent = "AUDIO: ON";
+                elements.soundText.classList.add("text-cyan-400");
+                sfx.playClick();
+            }
+        });
+
+        // Surface Buttons Logic
+        elements.btnGenerate.addEventListener('click', () => {
+            incrementClicks();
+            const randomIdea = boringIdeas[Math.floor(Math.random() * boringIdeas.length)];
+            elements.ideaOutput.textContent = `"${randomIdea}"`;
+            elements.ideaOutput.style.opacity = '1';
+        });
+
+        elements.btnUseless.addEventListener('click', () => {
+            incrementClicks();
+            elements.ideaOutput.textContent = '"You did nothing. Outstanding move."';
+            elements.ideaOutput.style.opacity = '1';
+        });
+
+        // --- SECRET UNLOCK TRIGGERS ---
+
+        // Trigger 1: Secret Period Multi-click
+        elements.secretPeriod.addEventListener('click', (e) => {
+            e.stopPropagation();
+            state.periodClicks++;
+            sfx.playGlitch();
+
+            elements.secretPeriod.classList.add("glitch-active");
+            setTimeout(() => elements.secretPeriod.classList.remove("glitch-active"), 200);
+
+            if (state.periodClicks >= 5 && !state.unlocked) {
+                triggerUnlock("DOT_BREACH");
+            }
+        });
+
+        // Trigger 2: Keyboard Secret Buffer (e.g., typing 'curious', 'idea', or Konami Code)
+        const konamiCode = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
+        let konamiIndex = 0;
+
+        window.addEventListener('keydown', (e) => {
+            sfx.init();
+
+            // Konami code check
+            if (e.key === konamiCode[konamiIndex] || e.key === konamiCode[konamiIndex].toLowerCase()) {
+                konamiIndex++;
+                if (konamiIndex === konamiCode.length) {
+                    triggerUnlock("KONAMI_PROTOCOL");
+                    konamiIndex = 0;
+                }
+            } else {
+                konamiIndex = 0;
+            }
+
+            // Word buffer check
+            state.typedBuffer += e.key.toLowerCase();
+            if (state.typedBuffer.length > 20) {
+                state.typedBuffer = state.typedBuffer.slice(-20);
+            }
+
+            if (!state.unlocked) {
+                if (state.typedBuffer.includes('curious') || state.typedBuffer.includes('idea') || state.typedBuffer.includes('secret')) {
+                    triggerUnlock("KEYBOARD_CURIOSITY");
+                }
+            }
+        });
+
+        // UNLOCK FUNCTION
+        function triggerUnlock(source) {
+            if (state.unlocked) return;
+            state.unlocked = true;
+
+            sfx.playGlitch();
+            document.body.classList.add("glitch-active");
+
+            setTimeout(() => {
+                document.body.classList.remove("glitch-active");
+                sfx.playUnlock();
+
+                // Visual Transitions
+                elements.surfaceView.classList.add("hidden");
+                elements.secretView.classList.remove("hidden");
+                elements.secretView.classList.add("flex");
+                elements.scanlineOverlay.style.opacity = '1';
+                elements.statusDot.className = "w-2 h-2 rounded-full bg-cyan-400 animate-ping";
+                elements.statusText.textContent = `STATUS: UNLOCKED // SOURCE: ${source}`;
+                elements.statusText.classList.add("text-cyan-400");
+
+                logTerminal(`[SYSTEM BREACH] Secret layer unlocked via trigger: ${source}`);
+                logTerminal(`[WELCOME] System initialized. Select a tool tab above.`);
+
+                initSynthTab();
+                initGraphCanvas();
+            }, 500);
+        }
+
+        // Modal triggers
+        elements.btnHintModal.addEventListener('click', () => {
+            elements.hintModal.classList.remove("hidden");
+            elements.hintModal.classList.add("flex");
+            sfx.playClick();
+        });
+        elements.closeHintModal.addEventListener('click', () => {
+            elements.hintModal.classList.add("hidden");
+            elements.hintModal.classList.remove("flex");
+        });
+        elements.btnForceUnlock.addEventListener('click', () => {
+            elements.hintModal.classList.add("hidden");
+            elements.hintModal.classList.remove("flex");
+            triggerUnlock("OVERRIDE_KEY");
+        });
+
+        elements.termClose.addEventListener('click', () => {
+            // Relock or minimize secret view
+            state.unlocked = false;
+            elements.secretView.classList.add("hidden");
+            elements.secretView.classList.remove("flex");
+            elements.surfaceView.classList.remove("hidden");
+            elements.scanlineOverlay.style.opacity = '0';
+            elements.statusDot.className = "w-2 h-2 rounded-full bg-slate-700";
+            elements.statusText.textContent = "STATUS: IDLE // NO IDEA AVAILABLE";
+            elements.statusText.classList.remove("text-cyan-400");
+            sfx.playClick();
+        });
+
+        // --- TAB SWITCHING LOGIC ---
+        const tabs = {
+            synth: document.getElementById('tab-synth'),
+            constellation: document.getElementById('tab-constellation'),
+            minigame: document.getElementById('tab-minigame'),
+            console: document.getElementById('tab-console')
+        };
+        const views = {
+            synth: document.getElementById('view-synth'),
+            constellation: document.getElementById('view-constellation'),
+            minigame: document.getElementById('view-minigame'),
+            console: document.getElementById('view-console')
+        };
+
+        Object.keys(tabs).forEach(key => {
+            tabs[key].addEventListener('click', () => {
+                sfx.playClick();
+                Object.keys(tabs).forEach(k => {
+                    tabs[k].className = "tab-btn px-4 py-2 rounded-lg text-xs font-mono-code bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800 flex items-center gap-2";
+                    views[k].classList.add("hidden");
+                });
+                tabs[key].className = "tab-btn px-4 py-2 rounded-lg text-xs font-mono-code bg-cyan-950 text-cyan-300 border border-cyan-700/50 flex items-center gap-2";
+                views[key].classList.remove("hidden");
+
+                if (key === 'constellation') initGraphCanvas();
+                if (key === 'minigame') initGameCanvas();
+            });
+        });
+
+        // --- TAB 1: IDEA SYNTHESIZER ---
+        const conceptPoolData = [
+            { id: 'quantum', label: 'Quantum Physics', icon: 'fa-atom' },
+            { id: 'duck', label: 'Rubber Duck', icon: 'fa-duck' },
+            { id: 'cyber', label: 'Cyberpunk', icon: 'fa-microchip' },
+            { id: 'coffee', label: 'Infinite Coffee', icon: 'fa-mug-hot' },
+            { id: 'time', label: 'Time Loop', icon: 'fa-clock' },
+            { id: 'cats', label: 'Sentient Cats', icon: 'fa-cat' },
+            { id: 'dungeon', label: 'Procedural Dungeon', icon: 'fa-dungeon' },
+            { id: 'synthwave', label: '80s Synthwave', icon: 'fa-compact-disc' }
+        ];
+
+        function initSynthTab() {
+            elements.conceptPool.innerHTML = '';
+            conceptPoolData.forEach(c => {
+                const badge = document.createElement('button');
+                badge.className = "p-2.5 rounded bg-slate-900 border border-slate-800 hover:border-cyan-500/50 text-slate-300 hover:text-cyan-300 text-xs font-mono-code flex items-center gap-2 transition-all active:scale-95";
+                badge.innerHTML = `<i class="fa-solid ${c.icon} text-cyan-500"></i> ${c.label}`;
+                badge.addEventListener('click', () => selectConcept(c));
+                elements.conceptPool.appendChild(badge);
+            });
+        }
+
+        function selectConcept(concept) {
+            sfx.playClick();
+            if (state.selectedConcepts.length >= 3) return;
+            if (state.selectedConcepts.find(c => c.id === concept.id)) return;
+
+            state.selectedConcepts.push(concept);
+            updateSelectedUI();
+        }
+
+        function updateSelectedUI() {
+            elements.selectedElements.innerHTML = '';
+            if (state.selectedConcepts.length === 0) {
+                elements.selectedElements.innerHTML = '<span class="text-slate-600 text-xs italic font-mono-code">Click elements above to combine...</span>';
+                elements.btnFuse.disabled = true;
+                return;
+            }
+
+            state.selectedConcepts.forEach(c => {
+                const tag = document.createElement('span');
+                tag.className = "px-2.5 py-1 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 text-xs font-mono-code flex items-center gap-1.5";
+                tag.innerHTML = `${c.label} <i class="fa-solid fa-xmark text-slate-400 hover:text-red-400 cursor-pointer ml-1"></i>`;
+                tag.querySelector('i').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    state.selectedConcepts = state.selectedConcepts.filter(x => x.id !== c.id);
+                    updateSelectedUI();
+                });
+                elements.selectedElements.appendChild(tag);
+            });
+
+            elements.btnFuse.disabled = state.selectedConcepts.length < 2;
+        }
+
+        elements.btnClearSynth.addEventListener('click', () => {
+            state.selectedConcepts = [];
+            updateSelectedUI();
+            elements.synthResult.classList.add("hidden");
+        });
+
+        elements.btnFuse.addEventListener('click', () => {
+            sfx.playUnlock();
+            const names = state.selectedConcepts.map(c => c.label).join(' + ');
+            
+            // Dynamic Idea Generation Engine
+            const Titles = [
+                "Project Chrono-Quack", "Operation Caffeinated Singularity", "Neon Whisker Protocol",
+                "Quantum Roast", "Subterranean Cyber-Dungeon", "Synthesized Reality Engine"
+            ];
+            const Descriptions = [
+                `A narrative game where you play as a ${names} trying to prevent the breakdown of reality inside a simulated coffee machine.`,
+                `A fast-paced puzzle platformer featuring ${names}. Manipulate gravity using retro synth beats while solving existential paradoxes.`,
+                `A rogue-like RPG centered on ${names}. Every choice branches into an alternate dimension where rubber ducks hold sovereign authority.`
+            ];
+
+            elements.synthTitle.textContent = Titles[Math.floor(Math.random() * Titles.length)];
+            elements.synthDesc.textContent = Descriptions[Math.floor(Math.random() * Descriptions.length)];
+            elements.synthGenre.textContent = `GENRE: ${state.selectedConcepts[0].label} / EXPERIMENTAL`;
+            elements.synthFeasibility.textContent = `FEASIBILITY: ${(Math.random() * 40 + 60).toFixed(1)}%`;
+
+            elements.synthResult.classList.remove("hidden");
+        });
+
+        // --- TAB 2: THOUGHT NETWORK (CONSTELLATION CANVAS) ---
+        const graphCanvas = document.getElementById('graph-canvas');
+        const graphCtx = graphCanvas.getContext('2d');
+        const tooltip = document.getElementById('node-tooltip');
+
+        let nodes = [
+            { id: 1, label: 'Game Dev', x: 100, y: 100, info: 'Unfinished prototype #402' },
+            { id: 2, label: 'AI Dreams', x: 250, y: 80, info: 'Synthetic thoughts log' },
+            { id: 3, label: 'ARG Secret', x: 200, y: 220, info: 'Hidden beneath the surface' },
+            { id: 4, label: 'Synthwave', x: 380, y: 160, info: 'Retro-futuristic beats' },
+            { id: 5, label: 'Coffee', x: 80, y: 240, info: 'Fuel of curiosity' },
+            { id: 6, label: 'EUREKA!', x: 320, y: 260, info: 'The spark of invention' }
+        ];
+
+        let connections = [
+            [1, 2], [2, 4], [1, 3], [3, 5], [3, 6], [4, 6]
+        ];
+
+        function initGraphCanvas() {
+            const rect = graphCanvas.getBoundingClientRect();
+            graphCanvas.width = rect.width;
+            graphCanvas.height = rect.height;
+            drawGraph();
+        }
+
+        function drawGraph() {
+            graphCtx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+
+            // Draw Connections
+            graphCtx.strokeStyle = 'rgba(6, 182, 212, 0.2)';
+            graphCtx.lineWidth = 1.5;
+            connections.forEach(([n1, n2]) => {
+                const nodeA = nodes.find(n => n.id === n1);
+                const nodeB = nodes.find(n => n.id === n2);
+                if (nodeA && nodeB) {
+                    graphCtx.beginPath();
+                    graphCtx.moveTo(nodeA.x, nodeA.y);
+                    graphCtx.lineTo(nodeB.x, nodeB.y);
+                    graphCtx.stroke();
+                }
+            });
+
+            // Draw Nodes
+            nodes.forEach(node => {
+                graphCtx.fillStyle = '#06b6d4';
+                graphCtx.shadowColor = '#06b6d4';
+                graphCtx.shadowBlur = 10;
+                graphCtx.beginPath();
+                graphCtx.arc(node.x, node.y, 8, 0, Math.PI * 2);
+                graphCtx.fill();
+                graphCtx.shadowBlur = 0;
+
+                graphCtx.fillStyle = '#94a3b8';
+                graphCtx.font = '10px "Fira Code", monospace';
+                graphCtx.fillText(node.label, node.x + 12, node.y + 4);
+            });
+        }
+
+        graphCanvas.addEventListener('mousemove', (e) => {
+            const rect = graphCanvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            let hovered = null;
+            nodes.forEach(node => {
+                const dist = Math.hypot(node.x - mouseX, node.y - mouseY);
+                if (dist < 12) hovered = node;
+            });
+
+            if (hovered) {
+                tooltip.style.left = `${hovered.x + 15}px`;
+                tooltip.style.top = `${hovered.y - 10}px`;
+                tooltip.innerHTML = `<strong>${hovered.label}</strong><br/>${hovered.info}`;
+                tooltip.classList.remove('hidden');
+                graphCanvas.style.cursor = 'pointer';
+            } else {
+                tooltip.classList.add('hidden');
+                graphCanvas.style.cursor = 'crosshair';
+            }
+        });
+
+        // --- TAB 3: MINI ARCADE (SPARK CATCHER GAME) ---
+        const gameCanvas = document.getElementById('game-canvas');
+        const gameCtx = gameCanvas.getContext('2d');
+        const gameStartOverlay = document.getElementById('game-start-overlay');
+        const btnStartGame = document.getElementById('btn-start-game');
+        const scoreDisplay = document.getElementById('game-score');
+
+        let paddle = { x: 0, width: 80, height: 10 };
+        let sparks = [];
+        let gameAnimFrame = null;
+
+        function initGameCanvas() {
+            const rect = gameCanvas.getBoundingClientRect();
+            gameCanvas.width = rect.width;
+            gameCanvas.height = rect.height;
+            paddle.x = gameCanvas.width / 2 - paddle.width / 2;
+        }
+
+        btnStartGame.addEventListener('click', () => {
+            gameStartOverlay.classList.add('hidden');
+            state.score = 0;
+            scoreDisplay.textContent = state.score;
+            state.gameRunning = true;
+            sparks = [];
+            initGameCanvas();
+            runGameLoop();
+        });
+
+        gameCanvas.addEventListener('mousemove', (e) => {
+            const rect = gameCanvas.getBoundingClientRect();
+            paddle.x = e.clientX - rect.left - paddle.width / 2;
+        });
+
+        // Touch support for paddle
+        gameCanvas.addEventListener('touchmove', (e) => {
+            const rect = gameCanvas.getBoundingClientRect();
+            if (e.touches.length > 0) {
+                paddle.x = e.touches[0].clientX - rect.left - paddle.width / 2;
+            }
+        });
+
+        function runGameLoop() {
+            if (!state.gameRunning) return;
+
+            gameCtx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+            // Spawn Spark
+            if (Math.random() < 0.04) {
+                sparks.push({
+                    x: Math.random() * (gameCanvas.width - 15),
+                    y: 0,
+                    speed: Math.random() * 2 + 2,
+                    radius: Math.random() * 4 + 3
+                });
+            }
+
+            // Draw Paddle
+            gameCtx.fillStyle = '#06b6d4';
+            gameCtx.shadowColor = '#06b6d4';
+            gameCtx.shadowBlur = 12;
+            gameCtx.fillRect(paddle.x, gameCanvas.height - 20, paddle.width, paddle.height);
+            gameCtx.shadowBlur = 0;
+
+            // Update & Draw Sparks
+            for (let i = sparks.length - 1; i >= 0; i--) {
+                let s = sparks[i];
+                s.y += s.speed;
+
+                gameCtx.fillStyle = '#facc15';
+                gameCtx.beginPath();
+                gameCtx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+                gameCtx.fill();
+
+                // Collision with Paddle
+                if (s.y >= gameCanvas.height - 25 && s.y <= gameCanvas.height - 10 && s.x >= paddle.x && s.x <= paddle.x + paddle.width) {
+                    sparks.splice(i, 1);
+                    state.score += 10;
+                    scoreDisplay.textContent = state.score;
+                    sfx.playClick();
+                } else if (s.y > gameCanvas.height) {
+                    sparks.splice(i, 1);
+                }
+            }
+
+            gameAnimFrame = requestAnimationFrame(runGameLoop);
+        }
+
+        // --- TAB 4: TERMINAL CONSOLE LOGS ---
+        function logTerminal(msg) {
+            const p = document.createElement('p');
+            p.textContent = msg;
+            elements.terminalLogs.appendChild(p);
+            elements.terminalLogs.scrollTop = elements.terminalLogs.scrollHeight;
+        }
+
+        elements.terminalForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const cmd = elements.terminalInput.value.trim().toLowerCase();
+            if (!cmd) return;
+
+            logTerminal(`> ${cmd}`);
+            elements.terminalInput.value = '';
+
+            sfx.playClick();
+
+            switch (cmd) {
+                case 'help':
+                    logTerminal('Available commands: help, quote, stats, clear, unlock, secrets');
+                    break;
+                case 'quote':
+                    logTerminal('"Curiosity is the wick in the candle of learning." - William Arthur Ward');
+                    break;
+                case 'stats':
+                    logTerminal(`Total Surface Clicks: ${state.clickCount} | Curiosity Level: MAX`);
+                    break;
+                case 'secrets':
+                    logTerminal('Triggers: Konami Code, Multi-Click Period, Typed Words, Force Override.');
+                    break;
+                case 'clear':
+                    elements.terminalLogs.innerHTML = '';
+                    break;
+                default:
+                    logTerminal(`Command not recognized: "${cmd}". Type "help" for a list.`);
+            }
+        });
+    </script>
+</body>
+</html>
