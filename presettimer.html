@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Preset Timer</title>
+<style>
+  :root {
+    --bg: #14110f;
+    --disc: #201c19;
+    --disc-edge: #0a0908;
+    --amber: #ffb04a;
+    --amber-dim: #4a3520;
+    --amber-off: #35302b;
+    --text-dim: #7a7168;
+    --text: #e8e2d8;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: radial-gradient(ellipse at 50% 20%, #201a15 0%, var(--bg) 65%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Courier New', monospace;
+    color: var(--text);
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+  }
+  .readout-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .readout {
+    font-size: 42px;
+    letter-spacing: 4px;
+    color: var(--amber);
+    text-shadow: 0 0 18px rgba(255,176,74,0.45);
+    min-width: 200px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .state-label {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .dial-holder {
+    position: relative;
+    width: 320px;
+    height: 320px;
+  }
+  .bezel {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 35% 30%, #2b2622, #0d0b09 75%);
+    box-shadow:
+      inset 0 2px 6px rgba(255,255,255,0.06),
+      inset 0 -8px 20px rgba(0,0,0,0.7),
+      0 10px 30px rgba(0,0,0,0.6);
+  }
+  /* Rotating outer ring: the grippable textured surface, no numbers/LEDs on it */
+  .disc {
+    position: absolute;
+    top: 22px; left: 22px; right: 22px; bottom: 22px;
+    border-radius: 50%;
+    background:
+      repeating-conic-gradient(from 0deg, #262019 0deg 2deg, #1c1712 2deg 30deg);
+    box-shadow:
+      inset 0 4px 10px rgba(0,0,0,0.6),
+      inset 0 -2px 6px rgba(255,255,255,0.04),
+      0 2px 4px rgba(0,0,0,0.5);
+    cursor: grab;
+    transition: transform 0.05s linear;
+  }
+  .disc:active { cursor: grabbing; }
+  .disc.settling { transition: transform 0.25s cubic-bezier(.2,.8,.2,1); }
+  .disc.locked { cursor: default; }
+  /* Small grip notch on the rotating ring so turning motion is visible */
+  .disc::after {
+    content: '';
+    position: absolute;
+    top: 8px; left: 50%;
+    width: 6px; height: 6px;
+    margin-left: -3px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    box-shadow: inset 0 1px 1px rgba(0,0,0,0.6);
+  }
+  .center-cap {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 92px; height: 92px;
+    transform: translate(-50%,-50%);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #3a332c, #14100d 80%);
+    box-shadow:
+      inset 0 2px 4px rgba(255,255,255,0.08),
+      inset 0 -4px 10px rgba(0,0,0,0.7),
+      0 3px 8px rgba(0,0,0,0.5);
+    pointer-events: none;
+  }
+  .indicator {
+    position: absolute;
+    top: 6px; left: 50%;
+    width: 2px; height: 16px;
+    background: var(--text-dim);
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: 3;
+  }
+  /* Fixed layer holding LEDs + numbers — never rotates */
+  .led-ring {
+    position: absolute;
+    top: 22px; left: 22px; right: 22px; bottom: 22px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .led-tick {
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    top: 50%; left: 50%;
+    margin-top: -22px; margin-left: -22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    pointer-events: none;
+  }
+  .led {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--amber-off);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+    transition: background 0.15s, box-shadow 0.15s;
+  }
+  .led.steady {
+    background: var(--amber);
+    box-shadow: 0 0 8px 2px rgba(255,176,74,0.7), inset 0 0 2px rgba(0,0,0,0.3);
+  }
+  .led.blink {
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink {
+    0%, 49% { background: var(--amber); box-shadow: 0 0 10px 3px rgba(255,176,74,0.85); }
+    50%, 100% { background: var(--amber-off); box-shadow: none; }
+  }
+  .led-num {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+  }
+  .led-num.active { color: var(--amber); }
+  .hint {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-align: center;
+    max-width: 260px;
+    line-height: 1.6;
+  }
+  .reset-btn {
+    background: none;
+    border: 1px solid var(--text-dim);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 10px;
+    letter-spacing: 2px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .reset-btn:hover {
+    color: var(--amber);
+    border-color: var(--amber);
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="readout-block">
+    <div class="readout" id="readout">05:00</div>
+    <div class="state-label" id="stateLabel">SET</div>
+  </div>
+
+  <div class="dial-holder">
+    <div class="bezel"></div>
+    <div class="indicator"></div>
+    <div class="disc" id="disc"></div>
+    <div class="led-ring" id="ledLayer"></div>
+    <div class="center-cap"></div>
+  </div>
+
+  <div class="hint">ROTATE DISC TO SET DURATION &nbsp;·&nbsp; PRESS TO START / PAUSE</div>
+  <button class="reset-btn" id="resetBtn">RESET</button>
+</div>
+
+<script>
+const PRESETS = [1,3,5,10,15,20,25,30,45,60,90,120];
+const N = PRESETS.length;
+const disc = document.getElementById('disc');
+const ledLayer = document.getElementById('ledLayer');
+const readout = document.getElementById('readout');
+const stateLabel = document.getElementById('stateLabel');
+const resetBtn = document.getElementById('resetBtn');
+
+let presetIndex = 4; // default 15 min
+let rotation = presetIndex * (360 / N);
+let running = false;
+let paused = false;
+let totalSeconds = PRESETS[presetIndex] * 60;
+let remainingSeconds = totalSeconds;
+let intervalId = null;
+
+// Build LED ticks around the circle
+const ledEls = [];
+for (let i = 0; i < N; i++) {
+  const angle = (360 / N) * i; // degrees, 0 = top
+  const tick = document.createElement('div');
+  tick.className = 'led-tick';
+  tick.style.transform = `rotate(${angle}deg) translateY(-118px) rotate(${-angle}deg)`;
+
+  const led = document.createElement('div');
+  led.className = 'led';
+  const num = document.createElement('div');
+  num.className = 'led-num';
+  num.textContent = PRESETS[i];
+
+  tick.appendChild(led);
+  tick.appendChild(num);
+  ledLayer.appendChild(tick);
+  ledEls.push({ led, num });
+}
+
+function formatTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function updateLEDsSetMode() {
+  // steady on all presets up to and including the selected one
+  ledEls.forEach((el, i) => {
+    el.led.className = 'led';
+    el.num.classList.remove('active');
+    if (i <= presetIndex) {
+      el.led.classList.add('steady');
+      el.num.classList.add('active');
+    }
+  });
+}
+
+function updateLEDsRunning() {
+  const remainMin = remainingSeconds / 60;
+  // find the smallest preset >= remainMin -> that one blinks; all smaller ones are steady
+  let blinkIdx = -1;
+  for (let i = 0; i < N; i++) {
+    if (PRESETS[i] >= remainMin - 1e-9) { blinkIdx = i; break; }
+  }
+  if (blinkIdx === -1) blinkIdx = N - 1;
+
+  ledEls.forEach((el, i) => {
+    el.led.className = 'led';
+    el.num.classList.remove('active');
+    if (i < blinkIdx) {
+      el.led.classList.add('steady');
+      el.num.classList.add('active');
+    } else if (i === blinkIdx) {
+      el.led.classList.add('blink');
+      el.num.classList.add('active');
+    }
+  });
+}
+
+function refreshDisplay() {
+  if (running) {
+    readout.textContent = formatTime(remainingSeconds);
+    updateLEDsRunning();
+  } else {
+    readout.textContent = formatTime(totalSeconds);
+    updateLEDsSetMode();
+  }
+}
+
+function setPresetIndex(idx, animate) {
+  presetIndex = ((idx % N) + N) % N;
+  totalSeconds = PRESETS[presetIndex] * 60;
+  remainingSeconds = totalSeconds;
+  const targetRotation = presetIndex * (360 / N);
+  if (animate) {
+    disc.classList.add('settling');
+  }
+  rotation = targetRotation;
+  disc.style.transform = `rotate(${rotation}deg)`;
+  refreshDisplay();
+}
+
+// ---- Rotation drag handling ----
+let dragging = false;
+let dragStartAngle = 0;
+let rotationAtDragStart = 0;
+
+function getAngleFromCenter(clientX, clientY) {
+  const rect = disc.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const dx = clientX - cx;
+  const dy = clientY - cy;
+  return Math.atan2(dy, dx) * (180 / Math.PI); // -180..180, 0 = right
+}
+
+function startDrag(clientX, clientY) {
+  if (running) return; // lock rotation entirely while running or paused
+  dragging = true;
+  disc.classList.remove('settling');
+  dragStartAngle = getAngleFromCenter(clientX, clientY);
+  rotationAtDragStart = rotation;
+}
+
+function moveDrag(clientX, clientY) {
+  if (!dragging) return;
+  const currentAngle = getAngleFromCenter(clientX, clientY);
+  let delta = currentAngle - dragStartAngle;
+  rotation = rotationAtDragStart + delta;
+  disc.style.transform = `rotate(${rotation}deg)`;
+
+  // determine nearest preset index for live LED feedback
+  const step = 360 / N;
+  const normalized = ((rotation % 360) + 360) % 360;
+  const idx = Math.round(normalized / step) % N;
+  if (idx !== presetIndex) {
+    presetIndex = idx;
+    totalSeconds = PRESETS[presetIndex] * 60;
+    remainingSeconds = totalSeconds;
+    updateLEDsSetMode();
+    readout.textContent = formatTime(totalSeconds);
+  }
+}
+
+function endDrag() {
+  if (!dragging) return;
+  dragging = false;
+  // snap to nearest preset
+  const step = 360 / N;
+  const targetRotation = presetIndex * step;
+  disc.classList.add('settling');
+  rotation = targetRotation;
+  disc.style.transform = `rotate(${rotation}deg)`;
+}
+
+disc.addEventListener('mousedown', (e) => { startDrag(e.clientX, e.clientY); e.preventDefault(); });
+window.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
+window.addEventListener('mouseup', () => endDrag());
+
+disc.addEventListener('touchstart', (e) => {
+  const t = e.touches[0];
+  startDrag(t.clientX, t.clientY);
+}, { passive: true });
+window.addEventListener('touchmove', (e) => {
+  if (!dragging) return;
+  const t = e.touches[0];
+  moveDrag(t.clientX, t.clientY);
+  e.preventDefault();
+}, { passive: false });
+window.addEventListener('touchend', () => endDrag());
+
+// ---- Click to start/pause (distinguish from drag) ----
+let pointerDownPos = null;
+let movedDuringPress = false;
+
+disc.addEventListener('mousedown', (e) => {
+  pointerDownPos = { x: e.clientX, y: e.clientY };
+  movedDuringPress = false;
+});
+window.addEventListener('mousemove', (e) => {
+  if (pointerDownPos) {
+    const dx = e.clientX - pointerDownPos.x;
+    const dy = e.clientY - pointerDownPos.y;
+    if (Math.sqrt(dx*dx + dy*dy) > 6) movedDuringPress = true;
+  }
+});
+window.addEventListener('mouseup', (e) => {
+  if (pointerDownPos && !movedDuringPress) {
+    toggleStartPause();
+  }
+  pointerDownPos = null;
+});
+
+disc.addEventListener('touchstart', (e) => {
+  const t = e.touches[0];
+  pointerDownPos = { x: t.clientX, y: t.clientY };
+  movedDuringPress = false;
+}, { passive: true });
+window.addEventListener('touchmove', (e) => {
+  if (pointerDownPos) {
+    const t = e.touches[0];
+    const dx = t.clientX - pointerDownPos.x;
+    const dy = t.clientY - pointerDownPos.y;
+    if (Math.sqrt(dx*dx + dy*dy) > 6) movedDuringPress = true;
+  }
+}, { passive: true });
+window.addEventListener('touchend', () => {
+  if (pointerDownPos && !movedDuringPress) {
+    toggleStartPause();
+  }
+  pointerDownPos = null;
+});
+
+function toggleStartPause() {
+  if (!running) {
+    // start
+    running = true;
+    paused = false;
+    disc.classList.add('locked');
+    stateLabel.textContent = 'RUNNING';
+    tick();
+    intervalId = setInterval(tick, 1000);
+  } else if (!paused) {
+    // pause
+    paused = true;
+    stateLabel.textContent = 'PAUSED';
+    clearInterval(intervalId);
+  } else {
+    // resume
+    paused = false;
+    stateLabel.textContent = 'RUNNING';
+    intervalId = setInterval(tick, 1000);
+  }
+}
+
+function tick() {
+  if (remainingSeconds <= 0) {
+    clearInterval(intervalId);
+    running = false;
+    paused = false;
+    disc.classList.remove('locked');
+    stateLabel.textContent = 'DONE';
+    refreshDisplay();
+    // flash all LEDs briefly to signal completion
+    let flashes = 0;
+    const flashInterval = setInterval(() => {
+      ledEls.forEach(el => el.led.classList.toggle('steady'));
+      flashes++;
+      if (flashes >= 6) {
+        clearInterval(flashInterval);
+        refreshDisplay();
+      }
+    }, 250);
+    return;
+  }
+  remainingSeconds--;
+  refreshDisplay();
+}
+
+resetBtn.addEventListener('click', () => {
+  clearInterval(intervalId);
+  running = false;
+  paused = false;
+  disc.classList.remove('locked');
+  stateLabel.textContent = 'SET';
+  remainingSeconds = totalSeconds;
+  refreshDisplay();
+});
+
+// init
+setPresetIndex(presetIndex, false);
+stateLabel.textContent = 'SET';
+</script>
+
+</body>
+</html>
