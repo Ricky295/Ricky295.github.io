@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WeatherReport — build your own weather chart</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{
     --paper:#F7F5F0;
@@ -56,8 +58,10 @@
     background:transparent; border:1px solid #ffffff40; color:var(--paper);
     padding:7px 14px; font-size:12px; border-radius:2px; cursor:pointer;
     text-transform:uppercase; letter-spacing:0.5px;
+    white-space:nowrap;
   }
   #topbar button:hover{ background:#ffffff15; }
+  #topbar button:disabled{ opacity:0.5; cursor:default; }
   #topbar button.primary{ background:var(--amber); border-color:var(--amber); color:#231604; font-weight:700;}
   #topbar button.primary:hover{ background:#d98a34; }
 
@@ -99,6 +103,7 @@
       repeating-linear-gradient(0deg, transparent, transparent 27px, #00000004 27px, #00000004 28px);
   }
   #paper.dragover{ outline:2px dashed var(--barometric); outline-offset:-2px; }
+  #paper.exporting{ box-shadow:none; background-image:none; }
 
   .comp{
     position:absolute;
@@ -129,6 +134,20 @@
   /* image placeholder */
   .c-image{ background:#00000008; display:flex; align-items:center; justify-content:center; color:var(--ink-soft); font-size:11px; font-family:'Helvetica Neue',Arial,sans-serif; text-align:center; }
   .c-image img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+  /* link/upload segmented switch (inspector) */
+  .seg-switch{ display:flex; border:1px solid var(--panel-edge); border-radius:3px; overflow:hidden; }
+  .seg-btn{
+    flex:1; font-family:'Helvetica Neue',Arial,sans-serif; font-size:11.5px;
+    background:var(--panel); border:none; padding:6px 8px; cursor:pointer; color:var(--ink-soft);
+    border-right:1px solid var(--panel-edge);
+  }
+  .seg-btn:last-child{ border-right:none; }
+  .seg-btn.active{ background:var(--sel); color:#fff; }
+  .seg-btn:hover:not(.active){ background:#00000008; }
+  .upload-hint{ font-size:11px; color:var(--ink-soft); font-family:'Helvetica Neue',Arial,sans-serif; margin-top:4px; }
+  .axis-block{ border-top:1px solid var(--panel-edge); margin-top:10px; padding-top:8px; }
+  .axis-block-title{ font-size:11px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:6px; font-family:'Helvetica Neue',Arial,sans-serif; }
 
   /* divider */
   .c-divider{ background:var(--line); }
@@ -162,6 +181,12 @@
   .ww-bigcond{ display:flex; flex-direction:column; justify-content:center; height:100%; gap:2px; }
   .ww-bigcond .primary-num{ font-family:'Iowan Old Style',Georgia,serif; font-weight:400; line-height:0.9; }
   .ww-bigcond .sub-line{ text-transform:uppercase; letter-spacing:1px; color:var(--ink-soft); font-size:0.22em; margin-top:6px; line-height:1.6; }
+  /* stacked: one attribute per line */
+  .ww-bigcond .sub-stack{ text-transform:uppercase; letter-spacing:1px; color:var(--ink-soft); font-size:0.22em; margin-top:6px; line-height:1.7; display:flex; flex-direction:column; }
+  .ww-bigcond .sub-stack div{ white-space:nowrap; }
+  /* grid: two-column layout of attributes */
+  .ww-bigcond .sub-grid{ text-transform:uppercase; letter-spacing:0.5px; color:var(--ink-soft); font-size:0.2em; margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:4px 14px; }
+  .ww-bigcond .sub-grid div{ white-space:nowrap; }
 
   /* conditions strip */
   .ww-condstrip{ display:flex; height:100%; gap:1px; overflow:hidden; }
@@ -177,7 +202,10 @@
   .ww-combochart .cc-legend{ display:flex; gap:10px; flex-wrap:wrap; font-size:9.5px; text-transform:uppercase; letter-spacing:0.3px; color:var(--ink-soft); padding-bottom:3px; }
   .ww-combochart .cc-legend span{ display:inline-flex; align-items:center; gap:3px; }
   .ww-combochart .cc-legend i{ width:8px; height:8px; border-radius:50%; display:inline-block; }
-  .ww-combochart .cc-svgwrap{ flex:1; min-height:0; }
+  .ww-combochart .cc-svgwrap{ flex:1; min-height:0; position:relative; }
+  .ww-combochart .cc-ylabels{ position:absolute; left:0; top:0; height:100%; display:flex; flex-direction:column; justify-content:space-between; font-size:8.5px; color:var(--ink-soft); pointer-events:none; }
+  .ww-combochart .cc-ylabels .grp{ display:flex; flex-direction:column; gap:1px; }
+  .ww-combochart .cc-xlabels{ display:flex; justify-content:space-between; font-size:8.5px; color:var(--ink-soft); padding-top:2px; }
 
   /* ---- Right: inspector ---- */
   #inspector{
@@ -211,6 +239,23 @@
   .layer-select{ font-size:11px; }
   .status-line{ font-size:11px; color:var(--ink-soft); margin-top:16px; padding-top:12px; border-top:1px solid var(--panel-edge); line-height:1.5;}
   .status-line b{ color:var(--ink); }
+
+  /* export overlay */
+  #exportOverlay{
+    position:fixed; inset:0; background:#00000060; display:none;
+    align-items:center; justify-content:center; z-index:999;
+    font-family:'Helvetica Neue',Arial,sans-serif;
+  }
+  #exportOverlay.active{ display:flex; }
+  #exportOverlay .box{
+    background:#20201C; color:var(--paper); padding:18px 26px; border-radius:4px;
+    font-size:13px; letter-spacing:0.3px; display:flex; align-items:center; gap:12px;
+  }
+  #exportOverlay .spinner{
+    width:14px; height:14px; border-radius:50%; border:2px solid #ffffff30; border-top-color:var(--amber);
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -251,6 +296,10 @@
     </div>
     <div class="grow"></div>
     <button id="fetchBtn">Fetch weather ↻</button>
+    <button id="saveBtn">Save layout</button>
+    <button id="loadBtn">Load layout</button>
+    <input type="file" id="loadFileInput" accept="application/json" style="display:none;">
+    <button id="printBtn">Print</button>
     <button id="exportBtn" class="primary">Export PDF</button>
   </div>
 
@@ -282,6 +331,8 @@
   </div>
 </div>
 
+<div id="exportOverlay"><div class="box"><div class="spinner"></div><span id="exportOverlayText">Rendering PDF…</span></div></div>
+
 <script>
 (function(){
 
@@ -311,6 +362,8 @@
   const inspectorBody = document.getElementById('inspectorBody');
   const inspectorTitle = document.getElementById('inspectorTitle');
   const statusLine = document.getElementById('statusLine');
+  const exportOverlay = document.getElementById('exportOverlay');
+  const exportOverlayText = document.getElementById('exportOverlayText');
 
   function applyPaperSize(){
     let w, h;
@@ -372,11 +425,37 @@
     if(!w || !w.hourly || !w.hourly[key]) return null;
     return w.hourly[key][idx];
   }
+  // The API's hourly array always starts at midnight of the fetch day, not
+  // at the current hour. Every "hours from now" field in the inspector is
+  // meant to be relative to the actual current hour, so find the array
+  // index for the current hour and use that as the base offset. Without
+  // this, "0 hours from now" silently meant "midnight today" instead of
+  // "now" — on a Wednesday evening the strip would start at Wed 12 AM
+  // instead of the next real Thu/Fri/Sat.
+  // Uses the *current* hour (rounds down), not the next upcoming one —
+  // rounding up would show e.g. 10 PM as "now" at 9:53 PM.
+  // Picks the first hourly slot at or after the current moment (ceiling, not
+  // floor) — e.g. at 9:55 PM this returns the 10 PM slot, not 9 PM, since a
+  // reading from 55 minutes ago is stale and shouldn't be shown as "now".
+  function nowHourIndex(){
+    const w = state.weather;
+    if(!w || !w.hourly || !w.hourly.time || !w.hourly.time.length) return 0;
+    const now = Date.now();
+    for(let i=0;i<w.hourly.time.length;i++){
+      if(new Date(w.hourly.time[i]).getTime() >= now) return i;
+    }
+    return w.hourly.time.length - 1;
+  }
   function fmtHourLabel(idx){
     const w = state.weather;
     if(!w || !w.hourly) return 'h+'+idx;
     const dt = new Date(w.hourly.time[idx]);
-    return dt.toLocaleString(undefined,{weekday:'short', hour:'2-digit'});
+    // Force hour12 explicitly: some engines otherwise disagree between the
+    // weekday and hour sub-formatters at midnight (e.g. showing "Tue 12AM"
+    // for what is actually Wed 12AM), because the implicit hour cycle used
+    // for the hour digit can be resolved differently from the one used to
+    // decide which day's weekday to print.
+    return dt.toLocaleString(undefined,{weekday:'short', hour:'2-digit', hour12:true});
   }
 
   /* ---------------- Geocoding + fetch ---------------- */
@@ -438,22 +517,23 @@
   function defaultProps(type){
     switch(type){
       case 'text': return {text:'Edit this text…', fontSize:16, color:'#1C1B18', align:'left', weight:'400', font:'serif'};
-      case 'image': return {src:'', caption:'Image'};
+      case 'image': return {src:'', caption:'Image', srcMode:'link'};
       case 'divider': return {color:'#D8D3C7', thickness:1};
       case 'ww-temp': return {fontSize:64, color:'#1C1B18'};
       case 'ww-bigcond': return {
-        fontSize:64, color:'#1C1B18', hourOffset:0,
+        fontSize:64, color:'#1C1B18', hourOffset:0, layout:'inline',
         fields:{temperature_2m:true, apparent_temperature:true, relative_humidity_2m:false, wind_speed_10m:false, pressure_msl:false, uv_index:false, precipitation_probability:false, cloud_cover:false}
       };
       case 'ww-condition': return {fontSize:16, color:'#1C1B18'};
       case 'ww-forecast': return {days:5, fontSize:14, color:'#1C1B18'};
-      case 'ww-condstrip': return {mode:'daily', days:5, startHour:0, endHour:48, fontSize:14, color:'#1C1B18'};
+      case 'ww-condstrip': return {mode:'daily', days:5, startHour:0, endHour:48, step:1, fontSize:14, color:'#1C1B18'};
       case 'ww-detailgrid': return {fontSize:14, color:'#1C1B18'};
       case 'ww-chart': return {color:'#3E5C6B'};
       case 'ww-isobar': return {color:'#C87F2B'};
       case 'ww-combochart': return {
         attrs:{temperature_2m:true, pressure_msl:true, relative_humidity_2m:false, wind_speed_10m:false},
-        startHour:0, endHour:48, showXLines:true, showYLines:true
+        startHour:0, endHour:48, showXLines:true, showYLines:true,
+        showXLabels:true, showYLabels:true, axis:{}
       };
       case 'ww-map': return {};
       default: return {};
@@ -496,43 +576,101 @@
   // Multi-series chart: each series independently normalized 0..1 (own axis),
   // so wildly different units (°C, hPa, %, km/h) can share one plot area.
   // showXLines: vertical gridlines per day boundary. showYLines: horizontal gridlines at 0/25/50/75/100%.
-  function svgComboChart(series, startIdx, endIdx, showXLines, showYLines){
+  // showYLabels: prints each series' min/max value (in its own color) at the left edge.
+  // showXLabels: prints a day-of-week label under each day boundary gridline.
+  function svgComboChart(series, startIdx, endIdx, showXLines, showYLines, showYLabels, showXLabels, axisOverrides){
     const n = Math.max(1, endIdx - startIdx);
-    const W = 300, H = 140, PAD = 4;
-    let defs = '';
+    axisOverrides = axisOverrides || {};
+    // Left/right axis: first two active series each get their own labeled
+    // axis rail; any further series still draw but borrow the left scale.
+    const leftSeries = series[0] || null;
+    const rightSeries = series.length > 1 ? series[1] : null;
+    const LEFT_MARGIN = showYLabels ? 32 : 0;
+    const RIGHT_MARGIN = (showYLabels && rightSeries) ? 32 : 0;
+    const BOTTOM_MARGIN = showXLabels ? 12 : 0;
+    const plotW = 300, plotH = 140, PAD = 4;
+    const W = plotW + LEFT_MARGIN + RIGHT_MARGIN, H = plotH + BOTTOM_MARGIN;
+    const plotLeft = LEFT_MARGIN, plotRight = LEFT_MARGIN + plotW;
+
+    function rangeFor(s){
+      if(!s) return {min:0, max:1};
+      const ov = axisOverrides[s.key];
+      if(ov && ov.mode === 'manual' && isFinite(ov.min) && isFinite(ov.max) && ov.max > ov.min){
+        return {min:ov.min, max:ov.max};
+      }
+      const vals = s.values;
+      if(!vals || !vals.length) return {min:0, max:1};
+      const min = Math.min(...vals), max = Math.max(...vals);
+      return min === max ? {min:min-1, max:max+1} : {min, max};
+    }
+    const leftRange = rangeFor(leftSeries);
+    const rightRange = rangeFor(rightSeries);
+
     let gridlines = '';
     if(showYLines){
       for(let g=0; g<=4; g++){
-        const y = PAD + (H-2*PAD) * (g/4);
-        gridlines += '<line x1="0" y1="'+y.toFixed(1)+'" x2="'+W+'" y2="'+y.toFixed(1)+'" stroke="#00000012" stroke-width="1" vector-effect="non-scaling-stroke"/>';
+        const y = PAD + (plotH-2*PAD) * (g/4);
+        gridlines += '<line x1="'+plotLeft+'" y1="'+y.toFixed(1)+'" x2="'+plotRight+'" y2="'+y.toFixed(1)+'" stroke="#00000012" stroke-width="1" vector-effect="non-scaling-stroke"/>';
       }
     }
-    if(showXLines){
+    let dayBoundaries = [];
+    if(showXLines || showXLabels){
       const w = state.weather;
       if(w && w.hourly){
         for(let i=startIdx;i<endIdx;i++){
           const hourStr = w.hourly.time[i];
           if(hourStr && hourStr.endsWith('T00:00')){
-            const x = ((i-startIdx)/n) * W;
-            gridlines += '<line x1="'+x.toFixed(1)+'" y1="0" x2="'+x.toFixed(1)+'" y2="'+H+'" stroke="#00000012" stroke-width="1" vector-effect="non-scaling-stroke"/>';
+            const x = plotLeft + ((i-startIdx)/n) * plotW;
+            dayBoundaries.push({x, idx:i});
+            if(showXLines) gridlines += '<line x1="'+x.toFixed(1)+'" y1="0" x2="'+x.toFixed(1)+'" y2="'+plotH+'" stroke="#00000012" stroke-width="1" vector-effect="non-scaling-stroke"/>';
           }
         }
       }
     }
     let lines = '';
-    series.forEach(s => {
+    series.forEach((s, si) => {
       const vals = s.values;
       if(!vals || !vals.length) return;
-      const min = Math.min(...vals), max = Math.max(...vals);
-      const range = (max - min) || 1;
+      // Series 0 uses the left axis, series 1 uses the right axis, any
+      // further series fall back to sharing the left axis/scale.
+      const range = si === 1 ? rightRange : leftRange;
+      const span = (range.max - range.min) || 1;
       const pts = vals.map((v,i)=>{
-        const x = (i/(Math.max(1,vals.length-1))) * W;
-        const y = (H-PAD) - ((v-min)/range) * (H-2*PAD);
+        const x = plotLeft + (i/(Math.max(1,vals.length-1))) * plotW;
+        const y = (plotH-PAD) - ((v-range.min)/span) * (plotH-2*PAD);
         return x.toFixed(1)+','+y.toFixed(1);
       }).join(' ');
       lines += '<polyline points="'+pts+'" fill="none" stroke="'+s.color+'" stroke-width="1.6" vector-effect="non-scaling-stroke"/>';
     });
-    return '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="width:100%;height:100%;">' + gridlines + lines + '</svg>';
+    let ylabels = '';
+    if(showYLabels){
+      const rounded = v => Math.round(v*10)/10;
+      const steps = 4;
+      if(leftSeries){
+        for(let g=0; g<=steps; g++){
+          const val = leftRange.min + (leftRange.max-leftRange.min) * (g/steps);
+          const y = (plotH-PAD) - (plotH-2*PAD)*(g/steps);
+          ylabels += '<text x="'+(plotLeft-4)+'" y="'+(y+3).toFixed(1)+'" font-size="7.5" text-anchor="end" fill="'+leftSeries.color+'">'+rounded(val)+'</text>';
+        }
+      }
+      if(rightSeries){
+        for(let g=0; g<=steps; g++){
+          const val = rightRange.min + (rightRange.max-rightRange.min) * (g/steps);
+          const y = (plotH-PAD) - (plotH-2*PAD)*(g/steps);
+          ylabels += '<text x="'+(plotRight+4)+'" y="'+(y+3).toFixed(1)+'" font-size="7.5" text-anchor="start" fill="'+rightSeries.color+'">'+rounded(val)+'</text>';
+        }
+      }
+    }
+    let xlabels = '';
+    if(showXLabels && dayBoundaries.length){
+      const w = state.weather;
+      dayBoundaries.forEach(b => {
+        const dt = new Date(w.hourly.time[b.idx]);
+        const label = dt.toLocaleDateString(undefined,{weekday:'short'});
+        xlabels += '<text x="'+b.x.toFixed(1)+'" y="'+(plotH+10)+'" font-size="8" text-anchor="middle" fill="#5B584F">'+label+'</text>';
+      });
+    }
+    return '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="width:100%;height:100%;">' + gridlines + lines + ylabels + xlabels + '</svg>';
   }
 
   function updateComponentContent(comp){
@@ -557,7 +695,12 @@
         break;
       case 'image':
         inner.className = 'comp-inner c-image';
-        inner.innerHTML = p.src ? '<img src="'+p.src+'">' : (p.caption || 'Drop an image URL in the inspector');
+        if(p.src){
+          const isData = p.src.indexOf('data:') === 0;
+          inner.innerHTML = '<img src="'+p.src+'"'+(isData ? '' : ' crossorigin="anonymous"')+'>';
+        } else {
+          inner.innerHTML = p.caption || 'Drop an image URL or upload a file in the inspector';
+        }
         break;
       case 'divider':
         inner.className = 'comp-inner c-divider';
@@ -574,7 +717,7 @@
         inner.className = 'comp-inner weatherwidget ww-bigcond';
         if(!w || !w.hourly){ inner.innerHTML = '<div style="color:var(--ink-soft);font-size:12px;">no data</div>'; break; }
         const attrs = HOURLY_ATTRS();
-        const idx = Math.min(Math.max(0, p.hourOffset || 0), hourlyLen() - 1);
+        const idx = Math.min(Math.max(0, nowHourIndex() + (p.hourOffset || 0)), hourlyLen() - 1);
         const activeKeys = Object.keys(p.fields || {}).filter(k => p.fields[k]);
         // primary = temperature if selected, else first active field
         const primaryKey = p.fields.temperature_2m ? 'temperature_2m' : (activeKeys[0] || 'temperature_2m');
@@ -582,13 +725,29 @@
         const primaryInfo = attrs[primaryKey];
         let html = '<div class="primary-num" style="font-size:'+p.fontSize+'px;color:'+p.color+';">' +
           (primaryVal!=null ? Math.round(primaryVal) : '—') + primaryInfo.unit + '</div>';
-        const subLines = activeKeys.filter(k => k !== primaryKey).map(k => {
+        const subItems = activeKeys.filter(k => k !== primaryKey).map(k => {
           const v = hourlyValueAt(k, idx);
           const info = attrs[k];
           return info.label + ': ' + (v!=null ? Math.round(v*10)/10 : '—') + info.unit;
         });
-        if(idx > 0) subLines.unshift(fmtHourLabel(idx));
-        if(subLines.length) html += '<div class="sub-line" style="font-size:'+p.fontSize+'px;">' + subLines.join(' · ') + '</div>';
+        // Only show a timestamp when the user has actually offset away from
+        // "now" (hourOffset !== 0). Previously this checked idx > 0, which
+        // used to mean "no offset applied" back when idx was the offset
+        // itself — but idx is now an absolute array position (base + offset),
+        // so it's almost never 0, and "current conditions" was wrongly
+        // getting labeled with today's literal hour, e.g. "MER, 10 PM".
+        const timeLabel = (p.hourOffset || 0) !== 0 ? fmtHourLabel(idx) : null;
+        const layout = p.layout || 'inline';
+        if(layout === 'stacked'){
+          const lines = timeLabel ? [timeLabel, ...subItems] : subItems;
+          if(lines.length) html += '<div class="sub-stack" style="font-size:'+p.fontSize+'px;">' + lines.map(l=>'<div>'+l+'</div>').join('') + '</div>';
+        } else if(layout === 'grid'){
+          const cells = timeLabel ? [timeLabel, ...subItems] : subItems;
+          if(cells.length) html += '<div class="sub-grid" style="font-size:'+p.fontSize+'px;">' + cells.map(l=>'<div>'+l+'</div>').join('') + '</div>';
+        } else {
+          const lines = timeLabel ? [timeLabel, ...subItems] : subItems;
+          if(lines.length) html += '<div class="sub-line" style="font-size:'+p.fontSize+'px;">' + lines.join(' · ') + '</div>';
+        }
         inner.innerHTML = html;
         break;
       }
@@ -621,9 +780,11 @@
         if(!w){ inner.innerHTML = '<div style="align-self:center;color:var(--ink-soft);font-size:12px;">no data</div>'; break; }
         let html = '';
         if(p.mode === 'hourly'){
-          const start = Math.max(0, Math.min(p.startHour||0, hourlyLen()-1));
-          const end = Math.max(start+1, Math.min(p.endHour||48, hourlyLen()));
-          for(let i=start;i<end;i++){
+          const base = nowHourIndex();
+          const start = Math.max(0, Math.min(base + (p.startHour||0), hourlyLen()-1));
+          const end = Math.max(start+1, Math.min(base + (p.endHour||48), hourlyLen()));
+          const step = Math.max(1, p.step || 1);
+          for(let i=start;i<end;i+=step){
             const info = wmoInfo(w.hourly.weather_code[i]);
             const t = w.hourly.temperature_2m[i];
             html += '<div class="cs-item" style="font-size:'+p.fontSize+'px;color:'+p.color+';">' +
@@ -658,13 +819,15 @@
       }
       case 'ww-chart': {
         inner.className = 'comp-inner ww-chart';
-        const vals = w ? w.hourly.temperature_2m.slice(0,48) : [];
+        const base = nowHourIndex();
+        const vals = w ? w.hourly.temperature_2m.slice(base, base+48) : [];
         inner.innerHTML = svgLineChart(vals, p.color);
         break;
       }
       case 'ww-isobar': {
         inner.className = 'comp-inner ww-isobar';
-        const vals = w ? w.hourly.pressure_msl.slice(0,48) : [];
+        const base = nowHourIndex();
+        const vals = w ? w.hourly.pressure_msl.slice(base, base+48) : [];
         inner.innerHTML = svgLineChart(vals, p.color);
         break;
       }
@@ -673,15 +836,19 @@
         if(!w || !w.hourly){ inner.innerHTML = '<div style="color:var(--ink-soft);font-size:12px;">no data</div>'; break; }
         const attrs = HOURLY_ATTRS();
         const activeKeys = Object.keys(p.attrs || {}).filter(k => p.attrs[k]);
-        const start = Math.max(0, Math.min(p.startHour||0, hourlyLen()-1));
-        const end = Math.max(start+1, Math.min(p.endHour||48, hourlyLen()));
+        const base = nowHourIndex();
+        const start = Math.max(0, Math.min(base + (p.startHour||0), hourlyLen()-1));
+        const end = Math.max(start+1, Math.min(base + (p.endHour||48), hourlyLen()));
         const series = activeKeys.map(k => ({
-          key:k, color:attrs[k].color, label:attrs[k].label,
+          key:k, color:attrs[k].color, label:attrs[k].label, unit:attrs[k].unit,
           values:(w.hourly[k]||[]).slice(start,end)
         }));
-        const legend = series.map(s => '<span><i style="background:'+s.color+';"></i>'+s.label+'</span>').join('');
+        const legend = series.map((s,si) => {
+          const axisTag = si === 0 ? ' (L axis)' : (si === 1 ? ' (R axis)' : '');
+          return '<span><i style="background:'+s.color+';"></i>'+s.label+' ('+s.unit+')'+axisTag+'</span>';
+        }).join('');
         inner.innerHTML = '<div class="cc-legend">'+legend+'</div>' +
-          '<div class="cc-svgwrap">'+svgComboChart(series, start, end, p.showXLines, p.showYLines)+'</div>';
+          '<div class="cc-svgwrap">'+svgComboChart(series, start, end, p.showXLines, p.showYLines, p.showYLabels, p.showXLabels, p.axis)+'</div>';
         break;
       }
       case 'ww-map': {
@@ -846,10 +1013,23 @@
           '</div>';
         html += field('Typeface', '<select id="pfont"><option value="serif"'+(p.font==='serif'?' selected':'')+'>Serif</option><option value="sans"'+(p.font==='sans'?' selected':'')+'>Sans</option></select>');
         break;
-      case 'image':
-        html += field('Image URL', '<input type="text" id="psrc" value="'+escapeHtml(p.src)+'" placeholder="https://…">');
+      case 'image': {
+        const mode = p.srcMode || 'link';
+        html += field('Source', '<div class="seg-switch">' +
+          '<button type="button" class="seg-btn'+(mode==='link'?' active':'')+'" id="pmodeLink">Link</button>' +
+          '<button type="button" class="seg-btn'+(mode==='upload'?' active':'')+'" id="pmodeUpload">Upload</button>' +
+          '</div>');
+        if(mode === 'upload'){
+          html += field('Image file', '<input type="file" id="pfile" accept="image/*">');
+          if(p.src && p.src.indexOf('data:') === 0){
+            html += '<div class="upload-hint">Image loaded (' + Math.round(p.src.length/1024) + ' KB).</div>';
+          }
+        } else {
+          html += field('Image URL', '<input type="text" id="psrc" value="'+escapeHtml(p.srcMode==='upload'?'':p.src)+'" placeholder="https://…">');
+        }
         html += field('Caption (if empty)', '<input type="text" id="pcaption" value="'+escapeHtml(p.caption)+'">');
         break;
+      }
       case 'divider':
         html += field('Color', '<input type="color" id="pcolor" value="'+p.color+'">');
         break;
@@ -875,6 +1055,11 @@
           field('Color', '<input type="color" id="pcolor" value="'+p.color+'">') +
           '</div>';
         html += field('Hours from now', '<input type="number" id="phour" min="0" max="'+(hourlyLen()-1)+'" value="'+(p.hourOffset||0)+'">');
+        html += field('Sub-details layout', '<select id="playout">' +
+          '<option value="inline"'+((p.layout||'inline')==='inline'?' selected':'')+'>Inline (dot-separated)</option>' +
+          '<option value="stacked"'+(p.layout==='stacked'?' selected':'')+'>Stacked (one per line)</option>' +
+          '<option value="grid"'+(p.layout==='grid'?' selected':'')+'>Grid (two columns)</option>' +
+          '</select>');
         html += field('Attributes to show', checkboxList('pfield-', p.fields, HOURLY_ATTRS()));
         break;
       }
@@ -889,6 +1074,11 @@
             field('Start (h from now)', '<input type="number" id="pstart" min="0" max="'+(hourlyLen()-1)+'" value="'+p.startHour+'">') +
             field('End (h from now)', '<input type="number" id="pend" min="1" max="'+hourlyLen()+'" value="'+p.endHour+'">') +
             '</div>';
+          html += field('Interval', '<select id="pstep">' +
+            '<option value="1"'+((p.step||1)===1?' selected':'')+'>Every hour</option>' +
+            '<option value="3"'+((p.step||1)===3?' selected':'')+'>Every 3 hours</option>' +
+            '<option value="6"'+((p.step||1)===6?' selected':'')+'>Every 6 hours</option>' +
+            '</select>');
         } else {
           html += field('Days shown', '<input type="number" id="pdays" min="1" max="16" value="'+p.days+'">');
         }
@@ -904,6 +1094,34 @@
           field('Y gridlines', '<select id="pshowy"><option value="1"'+(p.showYLines?' selected':'')+'>On</option><option value="0"'+(!p.showYLines?' selected':'')+'>Off</option></select>') +
           field('X gridlines (days)', '<select id="pshowx"><option value="1"'+(p.showXLines?' selected':'')+'>On</option><option value="0"'+(!p.showXLines?' selected':'')+'>Off</option></select>') +
           '</div>';
+        html += '<div class="field-row">' +
+          field('Y-axis value labels', '<select id="pshowylabels"><option value="1"'+(p.showYLabels?' selected':'')+'>On</option><option value="0"'+(!p.showYLabels?' selected':'')+'>Off</option></select>') +
+          field('X-axis day labels', '<select id="pshowxlabels"><option value="1"'+(p.showXLabels?' selected':'')+'>On</option><option value="0"'+(!p.showXLabels?' selected':'')+'>Off</option></select>') +
+          '</div>';
+        // Axis range controls: the first two active attributes each get their
+        // own labeled axis rail (left / right). Let each be pinned to a
+        // manual min/max instead of auto-scaling to whatever's in view.
+        const attrsAll = HOURLY_ATTRS();
+        const activeKeys = Object.keys(p.attrs||{}).filter(k => p.attrs[k]);
+        p.axis = p.axis || {};
+        const axisLabel = ['Left axis', 'Right axis'];
+        activeKeys.slice(0,2).forEach((key, idx) => {
+          const info = attrsAll[key];
+          const ov = p.axis[key] || {mode:'auto', min:0, max:100};
+          html += '<div class="axis-block">';
+          html += '<div class="axis-block-title">'+axisLabel[idx]+' — '+info.label+' ('+info.unit+')</div>';
+          html += field('Scale', '<select id="paxismode-'+key+'" data-key="'+key+'"><option value="auto"'+(ov.mode==='auto'?' selected':'')+'>Auto</option><option value="manual"'+(ov.mode==='manual'?' selected':'')+'>Manual</option></select>');
+          if(ov.mode === 'manual'){
+            html += '<div class="field-row">' +
+              field('Min', '<input type="number" id="paxismin-'+key+'" data-key="'+key+'" value="'+ov.min+'">') +
+              field('Max', '<input type="number" id="paxismax-'+key+'" data-key="'+key+'" value="'+ov.max+'">') +
+              '</div>';
+          }
+          html += '</div>';
+        });
+        if(activeKeys.length > 2){
+          html += '<div class="upload-hint">Additional attributes beyond the first two share the left axis scale.</div>';
+        }
         break;
       }
       case 'ww-map':
@@ -926,14 +1144,82 @@
     bind('pweight', e=>{ p.weight = e.target.value; updateComponentContent(comp); });
     bind('pfont', e=>{ p.font = e.target.value; updateComponentContent(comp); });
     bind('psrc', e=>{ p.src = e.target.value; updateComponentContent(comp); });
+    // Link/Upload switch for image components
+    const modeLinkBtn = document.getElementById('pmodeLink');
+    const modeUploadBtn = document.getElementById('pmodeUpload');
+    if(modeLinkBtn) modeLinkBtn.addEventListener('click', () => {
+      if(p.srcMode === 'link') return;
+      p.srcMode = 'link';
+      p.src = '';
+      updateComponentContent(comp);
+      renderInspector();
+    });
+    if(modeUploadBtn) modeUploadBtn.addEventListener('click', () => {
+      if(p.srcMode === 'upload') return;
+      p.srcMode = 'upload';
+      p.src = '';
+      updateComponentContent(comp);
+      renderInspector();
+    });
+    const fileInput = document.getElementById('pfile');
+    if(fileInput) fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if(!file) return;
+      if(file.size > 8 * 1024 * 1024){
+        statusLine.textContent = 'Image too large (max 8MB).';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        p.src = reader.result;
+        updateComponentContent(comp);
+        renderInspector();
+      };
+      reader.onerror = () => { statusLine.textContent = 'Could not read image file.'; };
+      reader.readAsDataURL(file);
+    });
     bind('pcaption', e=>{ p.caption = e.target.value; updateComponentContent(comp); });
     bind('pdays', e=>{ p.days = parseInt(e.target.value)||5; updateComponentContent(comp); });
     bind('phour', e=>{ p.hourOffset = Math.max(0, parseInt(e.target.value)||0); updateComponentContent(comp); });
+    bind('playout', e=>{ p.layout = e.target.value; updateComponentContent(comp); });
     bind('pmode', e=>{ p.mode = e.target.value; renderInspector(); updateComponentContent(comp); });
     bind('pstart', e=>{ p.startHour = Math.max(0, parseInt(e.target.value)||0); updateComponentContent(comp); });
     bind('pend', e=>{ p.endHour = Math.max((p.startHour||0)+1, parseInt(e.target.value)||1); updateComponentContent(comp); });
+    bind('pstep', e=>{ p.step = parseInt(e.target.value)||1; updateComponentContent(comp); });
     bind('pshowx', e=>{ p.showXLines = e.target.value === '1'; updateComponentContent(comp); });
     bind('pshowy', e=>{ p.showYLines = e.target.value === '1'; updateComponentContent(comp); });
+    bind('pshowylabels', e=>{ p.showYLabels = e.target.value === '1'; updateComponentContent(comp); });
+    bind('pshowxlabels', e=>{ p.showXLabels = e.target.value === '1'; updateComponentContent(comp); });
+
+    // combochart per-axis scale controls (ids: paxismode-<key>, paxismin-<key>, paxismax-<key>)
+    document.querySelectorAll('[id^="paxismode-"]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const key = sel.dataset.key;
+        p.axis = p.axis || {};
+        const prev = p.axis[key] || {min:0, max:100};
+        p.axis[key] = {mode: sel.value, min: prev.min, max: prev.max};
+        updateComponentContent(comp);
+        renderInspector();
+      });
+    });
+    document.querySelectorAll('[id^="paxismin-"]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const key = inp.dataset.key;
+        p.axis = p.axis || {};
+        p.axis[key] = p.axis[key] || {mode:'manual', min:0, max:100};
+        p.axis[key].min = parseFloat(inp.value);
+        updateComponentContent(comp);
+      });
+    });
+    document.querySelectorAll('[id^="paxismax-"]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const key = inp.dataset.key;
+        p.axis = p.axis || {};
+        p.axis[key] = p.axis[key] || {mode:'manual', min:0, max:100};
+        p.axis[key].max = parseFloat(inp.value);
+        updateComponentContent(comp);
+      });
+    });
 
     // checkbox-based field toggles (ww-bigcond: id="pfield-<key>")
     document.querySelectorAll('[id^="pfield-"]').forEach(cb => {
@@ -985,8 +1271,8 @@
     return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  /* ---------------- Export to PDF (print) ---------------- */
-  document.getElementById('exportBtn').addEventListener('click', () => {
+  /* ---------------- Print (browser dialog) ---------------- */
+  document.getElementById('printBtn').addEventListener('click', () => {
     document.querySelectorAll('.comp').forEach(el => el.classList.remove('selected'));
     const w = paperEl.style.width, h = paperEl.style.height;
     const style = document.createElement('style');
@@ -995,6 +1281,129 @@
     document.head.appendChild(style);
     window.print();
     setTimeout(() => style.remove(), 500);
+  });
+
+  /* ---------------- Export to PDF (actual file, via html2canvas + jsPDF) ---------------- */
+  function currentPaperMM(){
+    if(state.paper === 'Custom') return {w:state.customW, h:state.customH};
+    return PAPER_SIZES[state.paper];
+  }
+
+  async function exportToPdf(){
+    if(typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined'){
+      statusLine.textContent = 'Error: PDF libraries failed to load (check network access).';
+      return;
+    }
+    const exportBtn = document.getElementById('exportBtn');
+    exportBtn.disabled = true;
+    exportOverlay.classList.add('active');
+    exportOverlayText.textContent = 'Rendering PDF…';
+
+    const prevSelected = state.selectedId;
+    state.selectedId = null;
+    document.querySelectorAll('.comp').forEach(el => el.classList.remove('selected'));
+    paperEl.classList.add('exporting');
+
+    try{
+      // Render at a fixed high resolution regardless of on-screen zoom, so the
+      // PDF is crisp no matter how the browser window is sized.
+      const targetDPI = 200;
+      const scale = targetDPI / 96;
+
+      const canvas = await html2canvas(paperEl, {
+        scale: scale,
+        useCORS: true,
+        backgroundColor: '#F7F5F0',
+        logging: false
+      });
+
+      exportOverlayText.textContent = 'Building file…';
+
+      const mm = currentPaperMM();
+      const orientation = mm.w > mm.h ? 'landscape' : 'portrait';
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation, unit:'mm', format:[mm.w, mm.h] });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      pdf.addImage(imgData, 'JPEG', 0, 0, mm.w, mm.h);
+
+      const fname = 'weatherreport-' + (state.location.name || 'report').split(',')[0].trim().replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '.pdf';
+      pdf.save(fname);
+    }catch(err){
+      statusLine.textContent = 'Export error: ' + err.message;
+    }finally{
+      paperEl.classList.remove('exporting');
+      state.selectedId = prevSelected;
+      if(prevSelected){
+        const el = document.getElementById('comp-' + prevSelected);
+        if(el) el.classList.add('selected');
+      }
+      exportOverlay.classList.remove('active');
+      exportBtn.disabled = false;
+    }
+  }
+  document.getElementById('exportBtn').addEventListener('click', exportToPdf);
+
+  /* ---------------- Save / Load layout (JSON) ---------------- */
+  function serializeLayout(){
+    return {
+      version: 1,
+      paper: state.paper, customW: state.customW, customH: state.customH,
+      location: state.location, units: state.units,
+      components: state.components,
+      nextId: state.nextId
+    };
+  }
+
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    const data = JSON.stringify(serializeLayout(), null, 2);
+    const blob = new Blob([data], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'weatherreport-layout.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  const loadFileInput = document.getElementById('loadFileInput');
+  document.getElementById('loadBtn').addEventListener('click', () => loadFileInput.click());
+  loadFileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try{
+        const data = JSON.parse(reader.result);
+        // clear existing
+        state.components.forEach(c => { const el = document.getElementById('comp-'+c.id); if(el) el.remove(); });
+        state.paper = data.paper || 'A4';
+        state.customW = data.customW || 210;
+        state.customH = data.customH || 297;
+        state.location = data.location || state.location;
+        state.units = data.units || 'celsius';
+        state.components = data.components || [];
+        state.nextId = data.nextId || (state.components.reduce((m,c)=>Math.max(m,c.id),0)+1);
+        state.selectedId = null;
+
+        document.getElementById('paperSize').value = state.paper;
+        document.getElementById('customSizeFields').style.display = state.paper === 'Custom' ? 'block' : 'none';
+        document.getElementById('customW').value = state.customW;
+        document.getElementById('customH').value = state.customH;
+        document.getElementById('unitsSelect').value = state.units;
+        document.getElementById('locationInput').value = (state.location.name||'').split(',')[0];
+        applyPaperSize();
+
+        state.components.forEach(c => renderComponent(c));
+        renderInspector();
+        statusLine.textContent = 'Layout loaded from file.';
+        if(state.location) fetchWeather();
+      }catch(err){
+        statusLine.textContent = 'Load error: ' + err.message;
+      }
+    };
+    reader.readAsText(file);
+    loadFileInput.value = '';
   });
 
   /* ---------------- Init ---------------- */
