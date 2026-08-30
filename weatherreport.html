@@ -45,6 +45,8 @@
   }
   #topbar .brand{ font-weight:700; letter-spacing:0.5px; font-size:15px; display:flex; align-items:center; gap:8px;}
   #topbar .brand .dot{ width:8px;height:8px;border-radius:50%; background:var(--amber);}
+  #topbar .brand .brand-text{ display:flex; flex-direction:column; line-height:1.1; }
+  #topbar .brand .brand-sub{ font-weight:400; letter-spacing:1px; text-transform:uppercase; font-size:9px; color:#ffffff85; margin-top:1px; }
   #topbar .sep{ width:1px; height:22px; background:#ffffff22;}
   #topbar select, #topbar input[type="text"]{
     font-family:'Helvetica Neue',Arial,sans-serif;
@@ -177,6 +179,30 @@
   .ww-map{ height:100%; background:linear-gradient(135deg,#3E5C6B,#2A3F4A); display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.8em; }
   .ww-isobar{ height:100%; width:100%; }
 
+  /* forecast list (daily / hourly) */
+  .ww-dailylist{ display:flex; flex-direction:column; height:100%; overflow:hidden; }
+  .ww-dailylist .dl-row{
+    display:flex; align-items:center; gap:10px; flex:1; min-height:0;
+    border-bottom:1px solid var(--line); padding:0 4px;
+  }
+  .ww-dailylist .dl-row:last-child{ border-bottom:none; }
+  .ww-dailylist .dl-day{ display:flex; flex-direction:column; width:2.6em; flex:0 0 auto; line-height:1.15; }
+  .ww-dailylist .dl-dname{ font-size:0.62em; letter-spacing:0.4px; color:var(--ink-soft); }
+  .ww-dailylist .dl-dnum{ font-weight:700; font-size:1em; }
+  .ww-dailylist .dl-glyph{ flex:0 0 auto; font-size:1.5em; width:1.4em; text-align:center; }
+  .ww-dailylist .dl-pop{
+    flex:0 0 auto; width:3em; font-size:0.8em; color:var(--ink-soft);
+    display:flex; align-items:center; gap:2px;
+  }
+  .ww-dailylist .dl-drop{ font-size:0.95em; filter:grayscale(1) opacity(0.65); }
+  .ww-dailylist .dl-lo{ flex:0 0 auto; width:2.2em; text-align:right; color:var(--ink-soft); font-size:0.85em; }
+  .ww-dailylist .dl-hi{ flex:0 0 auto; width:2.2em; text-align:right; font-weight:700; font-size:0.9em; }
+  .ww-dailylist .dl-track{
+    flex:1; min-width:20px; height:6px; background:var(--dl-track-color, #E4E1D8);
+    border-radius:3px; position:relative;
+  }
+  .ww-dailylist .dl-bar{ position:absolute; top:0; bottom:0; border-radius:3px; }
+
   /* big conditions */
   .ww-bigcond{ display:flex; flex-direction:column; justify-content:center; height:100%; gap:2px; }
   .ww-bigcond .primary-num{ font-family:'Iowan Old Style',Georgia,serif; font-weight:400; line-height:0.9; }
@@ -262,7 +288,7 @@
 
 <div id="app">
   <div id="topbar">
-    <div class="brand"><span class="dot"></span> WeatherReport</div>
+    <div class="brand"><span class="dot"></span><span class="brand-text">WeatherReport<span class="brand-sub">Print</span></span></div>
     <div class="sep"></div>
     <div>
       <label>Location</label>
@@ -294,6 +320,12 @@
         <input type="text" id="customH" value="297" style="width:48px;">
       </div>
     </div>
+    <div>
+      <label title="Rescale every component's position, size, and font when the paper size changes">
+        <input type="checkbox" id="autoAdaptToggle" checked style="vertical-align:middle;">
+        Auto-adapt
+      </label>
+    </div>
     <div class="grow"></div>
     <button id="fetchBtn">Fetch weather ↻</button>
     <button id="saveBtn">Save layout</button>
@@ -316,6 +348,7 @@
     <div class="palette-item" draggable="true" data-type="ww-detailgrid"><span class="ic">▦</span> Detail grid</div>
     <div class="palette-item" draggable="true" data-type="ww-combochart"><span class="ic">╱</span> Combined chart</div>
     <div class="palette-item" draggable="true" data-type="ww-map"><span class="ic">◈</span> Location marker</div>
+    <div class="palette-item" draggable="true" data-type="ww-dailylist"><span class="ic">☰</span> Forecast list</div>
   </div>
 
   <div id="canvas-wrap">
@@ -365,6 +398,11 @@
   const exportOverlay = document.getElementById('exportOverlay');
   const exportOverlayText = document.getElementById('exportOverlayText');
 
+  function currentPaperDims(){
+    if(state.paper === 'Custom') return {w:state.customW, h:state.customH};
+    return PAPER_SIZES[state.paper];
+  }
+
   function applyPaperSize(){
     let w, h;
     if(state.paper === 'Custom'){
@@ -377,13 +415,63 @@
   }
   applyPaperSize();
 
+  // Rescales every component's position, size, and font-related props by a
+  // single uniform factor (new paper diagonal / old paper diagonal), so a
+  // layout built for one paper size lands in the same relative spot on a
+  // different size instead of staying pinned to its old mm coordinates.
+  function scaleComponentsInPlace(scale){
+    if(!scale || scale === 1) return;
+    state.components.forEach(c => {
+      c.x = c.x * scale;
+      c.y = c.y * scale;
+      c.w = c.w * scale;
+      c.h = c.h * scale;
+      const p = c.props || {};
+      if(typeof p.fontSize === 'number') p.fontSize = p.fontSize * scale;
+      if(typeof p.thickness === 'number') p.thickness = Math.max(1, p.thickness * scale);
+      const el = document.getElementById('comp-' + c.id);
+      if(el){
+        el.style.left = c.x + 'px';
+        el.style.top = c.y + 'px';
+        el.style.width = c.w + 'px';
+        el.style.height = c.h + 'px';
+      }
+    });
+    renderAllComponents();
+    renderInspector();
+  }
+
+  function changeScreenSize(oldDims, newDims){
+    const autoAdapt = document.getElementById('autoAdaptToggle').checked;
+    if(autoAdapt){
+      const oldDiag = Math.hypot(oldDims.w, oldDims.h);
+      const newDiag = Math.hypot(newDims.w, newDims.h);
+      const scale = newDiag / oldDiag;
+      applyPaperSize();
+      scaleComponentsInPlace(scale);
+      statusLine.textContent = 'Layout auto-adapted to new paper size (×' + scale.toFixed(2) + ').';
+    } else {
+      applyPaperSize();
+    }
+  }
+
   document.getElementById('paperSize').addEventListener('change', e=>{
+    const oldDims = currentPaperDims();
+    const newDims = e.target.value === 'Custom' ? {w:state.customW, h:state.customH} : PAPER_SIZES[e.target.value];
     state.paper = e.target.value;
     document.getElementById('customSizeFields').style.display = state.paper === 'Custom' ? 'block' : 'none';
-    applyPaperSize();
+    changeScreenSize(oldDims, newDims);
   });
-  document.getElementById('customW').addEventListener('input', e=>{ state.customW = parseFloat(e.target.value)||210; applyPaperSize(); });
-  document.getElementById('customH').addEventListener('input', e=>{ state.customH = parseFloat(e.target.value)||297; applyPaperSize(); });
+  document.getElementById('customW').addEventListener('input', e=>{
+    const oldDims = currentPaperDims();
+    state.customW = parseFloat(e.target.value)||210;
+    changeScreenSize(oldDims, {w:state.customW, h:state.customH});
+  });
+  document.getElementById('customH').addEventListener('input', e=>{
+    const oldDims = currentPaperDims();
+    state.customH = parseFloat(e.target.value)||297;
+    changeScreenSize(oldDims, {w:state.customW, h:state.customH});
+  });
   document.getElementById('unitsSelect').addEventListener('change', e=>{ state.units = e.target.value; if(state.weather) fetchWeather(); });
 
   /* ---------------- Weather codes ---------------- */
@@ -510,6 +598,7 @@
       case 'ww-isobar': return {w:400, h:100};
       case 'ww-combochart': return {w:460, h:200};
       case 'ww-map': return {w:220, h:150};
+      case 'ww-dailylist': return {w:380, h:340};
       default: return {w:160, h:80};
     }
   }
@@ -536,6 +625,7 @@
         showXLabels:true, showYLabels:true, axis:{}
       };
       case 'ww-map': return {};
+      case 'ww-dailylist': return {mode:'daily', days:6, hours:12, hourStep:1, fields:{date:true, icon:true, precip:true, lo:true, bar:true, hi:true}, fontSize:14, color:'#1C1B18', barColor:'#EB9B4A', trackColor:'#E4E1D8'};
       default: return {};
     }
   }
@@ -856,6 +946,77 @@
         inner.innerHTML = w ? state.location.name + '<br>' + state.location.lat.toFixed(2) + ', ' + state.location.lon.toFixed(2) : 'no location';
         break;
       }
+      case 'ww-dailylist': {
+        inner.className = 'comp-inner weatherwidget ww-dailylist';
+        if(!w || !w.daily){ inner.innerHTML = '<div style="color:var(--ink-soft);font-size:12px;">no data</div>'; break; }
+        let html = '';
+        const f = Object.assign({date:true, icon:true, precip:true, lo:true, bar:true, hi:true}, p.fields||{});
+        if(p.mode === 'hourly'){
+          if(!w.hourly){ inner.innerHTML = '<div style="color:var(--ink-soft);font-size:12px;">no data</div>'; break; }
+          const base = nowHourIndex();
+          const step = p.hourStep || 1;
+          const count = p.hours || 12;
+          const idxs = [];
+          for(let i=0; idxs.length<count; i++){
+            const idx = base + i*step;
+            if(idx >= w.hourly.time.length) break;
+            idxs.push(idx);
+          }
+          let rangeMin = Infinity, rangeMax = -Infinity;
+          idxs.forEach(idx => {
+            const t = w.hourly.temperature_2m[idx];
+            rangeMin = Math.min(rangeMin, t);
+            rangeMax = Math.max(rangeMax, t);
+          });
+          const span = Math.max(1, rangeMax - rangeMin);
+          idxs.forEach((idx, i) => {
+            const dt = new Date(w.hourly.time[idx]);
+            const hname = (i === 0) ? 'NOW' : dt.toLocaleTimeString(undefined,{hour:'numeric'}).replace(' ','').toUpperCase();
+            const hsub = dt.toLocaleTimeString(undefined,{hour12:true,hour:'numeric'}).match(/AM|PM/) ? dt.toLocaleTimeString(undefined,{hour12:true}).split(' ')[1] : '';
+            const info = wmoInfo(w.hourly.weather_code[idx]);
+            const temp = w.hourly.temperature_2m[idx];
+            const pop = (w.hourly.precipitation_probability[idx] != null) ? Math.round(w.hourly.precipitation_probability[idx]) : 0;
+            const pct = ((temp - rangeMin) / span) * 100;
+            html += '<div class="dl-row" style="font-size:'+p.fontSize+'px;color:'+p.color+';">' +
+              (f.date ? '<div class="dl-day"><span class="dl-dname">'+hname+'</span><span class="dl-dnum" style="font-size:0.55em;">'+hsub+'</span></div>' : '') +
+              (f.icon ? '<div class="dl-glyph">'+info.g+'</div>' : '') +
+              (f.precip ? '<div class="dl-pop"><span class="dl-drop">💧</span>'+pop+'%</div>' : '') +
+              (f.lo ? '<div class="dl-lo"></div>' : '') +
+              (f.bar ? '<div class="dl-track"><div class="dl-bar" style="left:'+Math.max(0,pct-4)+'%;width:8%;background:'+p.barColor+';"></div></div>' : '') +
+              (f.hi ? '<div class="dl-hi">'+Math.round(temp)+'°</div>' : '') +
+              '</div>';
+          });
+        } else {
+          const n = Math.min(p.days || 6, w.daily.time.length);
+          let rangeMin = Infinity, rangeMax = -Infinity;
+          for(let i=0;i<n;i++){
+            rangeMin = Math.min(rangeMin, w.daily.temperature_2m_min[i]);
+            rangeMax = Math.max(rangeMax, w.daily.temperature_2m_max[i]);
+          }
+          const span = Math.max(1, rangeMax - rangeMin);
+          for(let i=0;i<n;i++){
+            const dt = new Date(w.daily.time[i]);
+            const dname = dt.toLocaleDateString(undefined,{weekday:'short'}).toUpperCase();
+            const dnum = dt.getDate();
+            const info = wmoInfo(w.daily.weather_code[i]);
+            const lo = w.daily.temperature_2m_min[i], hi = w.daily.temperature_2m_max[i];
+            const pop = (w.daily.precipitation_probability_max[i] != null) ? Math.round(w.daily.precipitation_probability_max[i]) : 0;
+            const leftPct = ((lo - rangeMin) / span) * 100;
+            const widthPct = Math.max(4, ((hi - lo) / span) * 100);
+            html += '<div class="dl-row" style="font-size:'+p.fontSize+'px;color:'+p.color+';">' +
+              (f.date ? '<div class="dl-day"><span class="dl-dname">'+dname+'</span><span class="dl-dnum">'+dnum+'</span></div>' : '') +
+              (f.icon ? '<div class="dl-glyph">'+info.g+'</div>' : '') +
+              (f.precip ? '<div class="dl-pop"><span class="dl-drop">💧</span>'+pop+'%</div>' : '') +
+              (f.lo ? '<div class="dl-lo">'+Math.round(lo)+'°</div>' : '') +
+              (f.bar ? '<div class="dl-track"><div class="dl-bar" style="left:'+leftPct+'%;width:'+widthPct+'%;background:'+p.barColor+';"></div></div>' : '') +
+              (f.hi ? '<div class="dl-hi">'+Math.round(hi)+'°</div>' : '') +
+              '</div>';
+          }
+        }
+        inner.innerHTML = html;
+        inner.style.setProperty('--dl-track-color', p.trackColor);
+        break;
+      }
     }
   }
 
@@ -1126,6 +1287,38 @@
       }
       case 'ww-map':
         break;
+      case 'ww-dailylist': {
+        html += field('Mode', '<select id="pmode"><option value="daily"'+(p.mode!=='hourly'?' selected':'')+'>Daily forecast</option><option value="hourly"'+(p.mode==='hourly'?' selected':'')+'>Hourly forecast</option></select>');
+        html += '<div class="field-row">' +
+          field('Font size', '<input type="number" id="pfs" value="'+p.fontSize+'">') +
+          field('Text color', '<input type="color" id="pcolor" value="'+p.color+'">') +
+          '</div>';
+        html += '<div class="field-row">' +
+          field('Bar color', '<input type="color" id="pbarcolor" value="'+(p.barColor||'#EB9B4A')+'">') +
+          field('Track color', '<input type="color" id="ptrackcolor" value="'+(p.trackColor||'#E4E1D8')+'">') +
+          '</div>';
+        if(p.mode === 'hourly'){
+          html += '<div class="field-row">' +
+            field('Interval', '<select id="phourstep"><option value="1"'+((p.hourStep||1)===1?' selected':'')+'>Every hour</option><option value="3"'+(p.hourStep===3?' selected':'')+'>Every 3 hours</option><option value="6"'+(p.hourStep===6?' selected':'')+'>Every 6 hours</option></select>') +
+            field('Hours shown', '<input type="number" id="phours" min="1" max="'+hourlyLen()+'" value="'+(p.hours||12)+'">') +
+            '</div>';
+        } else {
+          html += field('Days shown', '<input type="number" id="pdays" min="1" max="16" value="'+p.days+'">');
+        }
+        const flds = Object.assign({date:true, icon:true, precip:true, lo:true, bar:true, hi:true}, p.fields||{});
+        const fieldLabels = p.mode === 'hourly'
+          ? {date:'Time', icon:'Icon', precip:'Precip %', lo:'(unused)', bar:'Marker', hi:'Temp'}
+          : {date:'Date', icon:'Icon', precip:'Precip %', lo:'Low', bar:'Range bar', hi:'High'};
+        html += '<div class="axis-block"><div class="axis-block-title">Columns shown</div>';
+        Object.keys(fieldLabels).forEach(key => {
+          if(p.mode === 'hourly' && key === 'lo') return;
+          html += '<label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:5px;">' +
+            '<input type="checkbox" class="pfield" data-field="'+key+'"'+(flds[key]?' checked':'')+'> '+fieldLabels[key]+
+            '</label>';
+        });
+        html += '</div>';
+        break;
+      }
     }
 
     html += '<button class="btn-danger" id="deleteComp">Delete component</button>';
@@ -1180,6 +1373,17 @@
     });
     bind('pcaption', e=>{ p.caption = e.target.value; updateComponentContent(comp); });
     bind('pdays', e=>{ p.days = parseInt(e.target.value)||5; updateComponentContent(comp); });
+    bind('phours', e=>{ p.hours = parseInt(e.target.value)||12; updateComponentContent(comp); });
+    bind('phourstep', e=>{ p.hourStep = parseInt(e.target.value)||1; updateComponentContent(comp); });
+    bind('pbarcolor', e=>{ p.barColor = e.target.value; updateComponentContent(comp); });
+    bind('ptrackcolor', e=>{ p.trackColor = e.target.value; updateComponentContent(comp); });
+    document.querySelectorAll('.pfield').forEach(cb => {
+      cb.addEventListener('change', () => {
+        p.fields = p.fields || {};
+        p.fields[cb.dataset.field] = cb.checked;
+        updateComponentContent(comp);
+      });
+    });
     bind('phour', e=>{ p.hourOffset = Math.max(0, parseInt(e.target.value)||0); updateComponentContent(comp); });
     bind('playout', e=>{ p.layout = e.target.value; updateComponentContent(comp); });
     bind('pmode', e=>{ p.mode = e.target.value; renderInspector(); updateComponentContent(comp); });
@@ -1262,7 +1466,7 @@
       'ww-temp':'Big temperature', 'ww-bigcond':'Big conditions',
       'ww-condition':'Condition summary', 'ww-forecast':'Forecast strip', 'ww-condstrip':'Conditions strip',
       'ww-detailgrid':'Detail grid', 'ww-chart':'Temperature chart', 'ww-isobar':'Pressure trace',
-      'ww-combochart':'Combined chart', 'ww-map':'Location marker'
+      'ww-combochart':'Combined chart', 'ww-map':'Location marker', 'ww-dailylist':'Forecast list'
     };
     return names[type] || 'Component';
   }
