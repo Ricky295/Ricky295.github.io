@@ -199,6 +199,29 @@
   .ww-condstrip .hi{ font-weight:700; }
   .ww-condstrip .lo{ color:var(--ink-soft); margin-left:2px; font-size:0.85em;}
 
+  .ww-dailylist{ display:flex; flex-direction:column; height:100%; overflow:hidden; }
+  .ww-dailylist .dl-row{
+    flex:1; min-height:0; display:flex; align-items:center; gap:10px;
+    border-bottom:1px solid var(--line); padding:4px 2px;
+  }
+  .ww-dailylist .dl-row:last-child{ border-bottom:none; }
+  .ww-dailylist .dl-day{ display:flex; flex-direction:column; width:2.6em; flex:0 0 auto; line-height:1.15; }
+  .ww-dailylist .dl-dname{ font-size:0.62em; letter-spacing:0.4px; color:var(--ink-soft); }
+  .ww-dailylist .dl-dnum{ font-weight:700; font-size:1em; }
+  .ww-dailylist .dl-glyph{ flex:0 0 auto; font-size:1.5em; width:1.4em; text-align:center; }
+  .ww-dailylist .dl-pop{
+    flex:0 0 auto; width:3.4em; display:flex; align-items:center; gap:4px;
+    color:var(--ink-soft); font-size:0.78em;
+  }
+  .ww-dailylist .dl-drop{ font-size:0.95em; filter:grayscale(1) opacity(0.65); }
+  .ww-dailylist .dl-lo{ flex:0 0 auto; width:2.2em; text-align:right; color:var(--ink-soft); font-size:0.85em; }
+  .ww-dailylist .dl-hi{ flex:0 0 auto; width:2.2em; text-align:right; font-weight:700; font-size:0.9em; }
+  .ww-dailylist .dl-track{
+    flex:1 1 auto; position:relative; height:5px; border-radius:3px;
+    background:var(--dl-track-color, #E4E1D8); margin:0 4px;
+  }
+  .ww-dailylist .dl-bar{ position:absolute; top:0; bottom:0; border-radius:3px; }
+
   /* combined chart */
   .ww-combochart{ height:100%; width:100%; display:flex; flex-direction:column; }
   .ww-combochart .cc-legend{ display:flex; gap:10px; flex-wrap:wrap; font-size:9.5px; text-transform:uppercase; letter-spacing:0.3px; color:var(--ink-soft); padding-bottom:3px; }
@@ -312,6 +335,35 @@
     cursor:pointer; font-size:12px; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap;
   }
   .share-link-row button:hover{ background:#d98a34; }
+  .modal-panel-wide{ width:min(760px, 92vw); }
+  .datasource-body{ padding:16px 20px 20px; overflow-y:auto; max-height:70vh; }
+  .ds-provider{
+    border:1px solid var(--panel-edge); border-radius:6px; padding:14px 16px; margin-bottom:10px; background:#fff;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .ds-provider.active{ border-color:var(--sel); box-shadow:0 0 0 1px var(--sel) inset; }
+  .ds-provider-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .ds-provider-name{ display:flex; align-items:center; gap:8px; font-weight:700; font-size:14px; }
+  .ds-badge{
+    font-size:9.5px; text-transform:uppercase; letter-spacing:0.5px; padding:2px 7px; border-radius:10px;
+    background:#3E7C5518; color:#3E7C55; font-weight:700;
+  }
+  .ds-badge.needs-key{ background:#A32D2D14; color:#A32D2D; }
+  .ds-select-btn{
+    border:1px solid var(--sel); background:transparent; color:var(--sel); border-radius:3px;
+    padding:5px 12px; font-size:11.5px; cursor:pointer; text-transform:uppercase; letter-spacing:0.4px;
+  }
+  .ds-select-btn:hover{ background:#EB9B4A15; }
+  .ds-select-btn.is-active{ background:var(--sel); color:#fff; }
+  .ds-pros{ margin:0; padding-left:18px; font-size:12px; color:var(--ink-soft); line-height:1.6; }
+  .ds-key-row{ display:flex; gap:8px; margin-top:2px; align-items:center; }
+  .ds-key-row input{
+    flex:1; padding:7px 9px; border:1px solid var(--panel-edge); border-radius:3px;
+    font-family:'Helvetica Neue',Arial,sans-serif; font-size:12px; background:#fdfcfa; color:var(--ink);
+  }
+  .ds-key-row a{ font-size:11px; color:var(--sel); white-space:nowrap; }
+  .ds-key-status{ font-size:11px; color:var(--ink-soft); }
+  .ds-key-status.ok{ color:#3E7C55; }
   .share-link-row button.copied{ background:#3E7C55; }
   .share-link-edit-hint{ margin-top:16px; padding-top:14px; border-top:1px solid var(--panel-edge); }
 
@@ -350,7 +402,7 @@
       </select>
     </div>
     <div>
-      <label>Paper</label>
+      <label>Screen size</label>
       <select id="paperSize">
         <optgroup label="Screens">
           <option value="HD">1080p (1920×1080)</option>
@@ -382,7 +434,14 @@
         <input type="text" id="customH" value="1080" style="width:56px;">
       </div>
     </div>
+    <div>
+      <label title="Rescale every component's position, size, and font when the screen size changes">
+        <input type="checkbox" id="autoAdaptToggle" checked style="vertical-align:middle;">
+        Auto-adapt layout
+      </label>
+    </div>
     <div class="grow"></div>
+    <button id="dataSourceBtn">Data source: <span id="dataSourceLabel">Open-Meteo</span></button>
     <button id="fetchBtn">Fetch weather ↻</button>
     <button id="galleryBtn">My reports</button>
     <button id="saveBtn">Save layout</button>
@@ -403,6 +462,7 @@
     <div class="palette-item" draggable="true" data-type="ww-bigcond"><span class="ic">°</span> Big conditions</div>
     <div class="palette-item" draggable="true" data-type="ww-condition"><span class="ic">☁</span> Condition summary</div>
     <div class="palette-item" draggable="true" data-type="ww-condstrip"><span class="ic">▤</span> Conditions strip</div>
+    <div class="palette-item" draggable="true" data-type="ww-dailylist"><span class="ic">☰</span> Forecast list</div>
     <div class="palette-item" draggable="true" data-type="ww-detailgrid"><span class="ic">▦</span> Detail grid</div>
     <div class="palette-item" draggable="true" data-type="ww-combochart"><span class="ic">╱</span> Combined chart</div>
     <div class="palette-item" draggable="true" data-type="ww-map"><span class="ic">◈</span> Location marker</div>
@@ -422,6 +482,16 @@
 </div>
 
 <div id="exportOverlay"><div class="box"><div class="spinner"></div><span id="exportOverlayText">Rendering PDF…</span></div></div>
+
+<div id="dataSourceOverlay" class="modal-overlay">
+  <div class="modal-panel modal-panel-wide">
+    <div class="modal-header">
+      <h2>Weather data source</h2>
+      <button id="dataSourceCloseBtn" class="modal-close">✕</button>
+    </div>
+    <div id="dataSourceBody" class="datasource-body"></div>
+  </div>
+</div>
 
 <div id="galleryOverlay" class="modal-overlay">
   <div class="modal-panel">
@@ -493,6 +563,7 @@
     customW: 1920, customH: 1080,
     location: {name:'Milan', lat:45.4642, lon:9.1900},
     units: 'celsius',
+    provider: 'openmeteo',
     weather: null,
     components: [],
     nextId: 1,
@@ -506,6 +577,11 @@
   const exportOverlay = document.getElementById('exportOverlay');
   const exportOverlayText = document.getElementById('exportOverlayText');
 
+  function currentPaperDims(){
+    if(state.paper === 'Custom') return {w:state.customW, h:state.customH};
+    return PAPER_SIZES[state.paper];
+  }
+
   function applyPaperSize(){
     let w, h;
     if(state.paper === 'Custom'){
@@ -518,13 +594,41 @@
   }
   applyPaperSize();
 
+  function changeScreenSize(oldDims, newDims){
+    const autoAdapt = document.getElementById('autoAdaptToggle').checked;
+    if(autoAdapt){
+      // Uniform scale from the diagonal (not width or height alone), so
+      // switching between aspect ratios — e.g. landscape 1080p to portrait
+      // phone wallpaper — still produces one sensible factor instead of
+      // stretching x and y differently.
+      const oldDiag = Math.hypot(oldDims.w, oldDims.h);
+      const newDiag = Math.hypot(newDims.w, newDims.h);
+      const scale = newDiag / oldDiag;
+      applyPaperSize();
+      scaleComponentsInPlace(scale);
+      statusLine.textContent = 'Layout auto-adapted to new screen size (×' + scale.toFixed(2) + ').';
+    } else {
+      applyPaperSize();
+    }
+  }
+
   document.getElementById('paperSize').addEventListener('change', e=>{
+    const oldDims = currentPaperDims();
+    const newDims = e.target.value === 'Custom' ? {w:state.customW, h:state.customH} : PAPER_SIZES[e.target.value];
     state.paper = e.target.value;
     document.getElementById('customSizeFields').style.display = state.paper === 'Custom' ? 'block' : 'none';
-    applyPaperSize();
+    changeScreenSize(oldDims, newDims);
   });
-  document.getElementById('customW').addEventListener('input', e=>{ state.customW = parseFloat(e.target.value)||1920; applyPaperSize(); });
-  document.getElementById('customH').addEventListener('input', e=>{ state.customH = parseFloat(e.target.value)||1080; applyPaperSize(); });
+  document.getElementById('customW').addEventListener('input', e=>{
+    const oldDims = currentPaperDims();
+    state.customW = parseFloat(e.target.value)||1920;
+    changeScreenSize(oldDims, {w:state.customW, h:state.customH});
+  });
+  document.getElementById('customH').addEventListener('input', e=>{
+    const oldDims = currentPaperDims();
+    state.customH = parseFloat(e.target.value)||1080;
+    changeScreenSize(oldDims, {w:state.customW, h:state.customH});
+  });
   document.getElementById('unitsSelect').addEventListener('change', e=>{ state.units = e.target.value; if(state.weather) fetchWeather(); });
 
   /* ---------------- Weather codes ---------------- */
@@ -599,41 +703,434 @@
     return dt.toLocaleString(undefined,{weekday:'short', hour:'2-digit', hour12:true});
   }
 
-  /* ---------------- Geocoding + fetch ---------------- */
+  /* ---------------- Weather providers ---------------- */
+  // Every provider's fetch() returns data reshaped into Open-Meteo's own
+  // response shape (current / daily[] / hourly[] with WMO weather codes),
+  // since that's the shape the whole rendering layer below already expects.
+  // This keeps renderComponent/wmoInfo/etc. provider-agnostic.
+
+  function toWmoFromOwm(owmId, isDay){
+    // OpenWeatherMap condition codes -> nearest WMO code.
+    if(owmId === 800) return 0;
+    if(owmId === 801) return 1;
+    if(owmId === 802) return 2;
+    if(owmId === 803 || owmId === 804) return 3;
+    if(owmId >= 200 && owmId < 300) return 95;
+    if(owmId >= 300 && owmId < 400) return 51;
+    if(owmId >= 500 && owmId < 505) return 61;
+    if(owmId >= 505 && owmId < 600) return 65;
+    if(owmId >= 600 && owmId < 700) return 71;
+    if(owmId >= 700 && owmId < 800) return 45;
+    return 3;
+  }
+  function toWmoFromWeatherApiCode(code){
+    // WeatherAPI.com condition codes -> nearest WMO code (coarse mapping).
+    const map = {1000:0,1003:2,1006:3,1009:3,1030:45,1135:45,1147:48,
+      1063:51,1150:51,1153:51,1180:61,1183:61,1186:63,1189:63,1192:65,1195:65,1240:80,1243:81,1246:82,
+      1066:71,1210:71,1213:71,1216:73,1219:73,1222:75,1225:75,1255:71,1258:73,
+      1087:95,1273:95,1276:96,1279:95,1282:96};
+    return map[code] !== undefined ? map[code] : 3;
+  }
+  function toWmoFromTomorrowCode(code){
+    // Tomorrow.io weather codes -> nearest WMO code (coarse mapping).
+    if(code === 1000) return 0;
+    if(code === 1100) return 1;
+    if(code === 1101) return 2;
+    if(code === 1102 || code === 1001) return 3;
+    if(code === 2000 || code === 2100) return 45;
+    if([4000,4200].includes(code)) return 51;
+    if([4001,4201].includes(code)) return 63;
+    if(code === 4002 || code === 4211 || code === 4213) return 65;
+    if([5000,5100].includes(code)) return 71;
+    if(code === 5001 || code === 5101) return 75;
+    if([8000].includes(code)) return 95;
+    return 3;
+  }
+
+  const PROVIDERS = {
+    openmeteo: {
+      name: 'Open-Meteo',
+      needsKey: false,
+      keyLabel: null,
+      signupUrl: 'https://open-meteo.com/',
+      pros: [
+        'No API key or signup required — works instantly',
+        'Very generous free non-commercial limit (~10,000 calls/day)',
+        'Open-source, no rate-limit surprises, blends several national weather models',
+        'Only real trade-off: no built-in air-quality or severe-weather alerts'
+      ],
+      async geocode(name){
+        const res = await fetch('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(name) + '&count=1');
+        const data = await res.json();
+        if(!data.results || !data.results.length) throw new Error('Location not found');
+        const r = data.results[0];
+        return {name: r.name + (r.admin1 ? ', ' + r.admin1 : '') + ', ' + r.country, lat:r.latitude, lon:r.longitude};
+      },
+      async fetch(loc, units){
+        const tempUnit = units === 'fahrenheit' ? 'fahrenheit' : 'celsius';
+        const windUnit = units === 'fahrenheit' ? 'mph' : 'kmh';
+        const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + loc.lat + '&longitude=' + loc.lon +
+          '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,surface_pressure' +
+          '&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_probability_max' +
+          '&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,precipitation_probability,weather_code,pressure_msl,surface_pressure,cloud_cover,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index' +
+          '&temperature_unit=' + tempUnit + '&wind_speed_unit=' + windUnit + '&timezone=auto&forecast_days=16';
+        const res = await fetch(url);
+        if(!res.ok) throw new Error('Open-Meteo request failed (' + res.status + ')');
+        return res.json();
+      }
+    },
+
+    openweathermap: {
+      name: 'OpenWeatherMap',
+      needsKey: true,
+      keyLabel: 'API key',
+      signupUrl: 'https://home.openweathermap.org/users/sign_up',
+      pros: [
+        'Huge free allowance on the classic endpoints (~1M calls/month, 60/min)',
+        'Very widely used — lots of tutorials, libraries, and community support',
+        'Also offers maps, air pollution, and historical data if you need them later',
+        'Forecast is 3-hour-step / 5-day on the free classic endpoint (no free hourly-for-16-days like Open-Meteo)'
+      ],
+      async geocode(name, apiKey){
+        const res = await fetch('https://api.openweathermap.org/geo/1.0/direct?q=' + encodeURIComponent(name) + '&limit=1&appid=' + encodeURIComponent(apiKey));
+        const data = await res.json();
+        if(!data || !data.length) throw new Error('Location not found');
+        const r = data[0];
+        return {name: r.name + (r.state ? ', ' + r.state : '') + ', ' + r.country, lat:r.lat, lon:r.lon};
+      },
+      async fetch(loc, units, apiKey){
+        const u = units === 'fahrenheit' ? 'imperial' : 'metric';
+        const curUrl = 'https://api.openweathermap.org/data/2.5/weather?lat=' + loc.lat + '&lon=' + loc.lon + '&units=' + u + '&appid=' + encodeURIComponent(apiKey);
+        const fcUrl = 'https://api.openweathermap.org/data/2.5/forecast?lat=' + loc.lat + '&lon=' + loc.lon + '&units=' + u + '&appid=' + encodeURIComponent(apiKey);
+        const [curRes, fcRes] = await Promise.all([fetch(curUrl), fetch(fcUrl)]);
+        if(!curRes.ok) throw new Error('OpenWeatherMap request failed (' + curRes.status + ') — check your API key');
+        if(!fcRes.ok) throw new Error('OpenWeatherMap forecast request failed (' + fcRes.status + ')');
+        const cur = await curRes.json();
+        const fc = await fcRes.json();
+
+        // 3-hourly list -> our hourly[] arrays (repeat each slot 3x so charts
+        // relying on an hourly cadence still draw sensibly), and derive a
+        // daily min/max summary by grouping on calendar day.
+        const hourly = {time:[], temperature_2m:[], apparent_temperature:[], relative_humidity_2m:[],
+          dew_point_2m:[], precipitation:[], precipitation_probability:[], weather_code:[], pressure_msl:[],
+          surface_pressure:[], cloud_cover:[], visibility:[], wind_speed_10m:[], wind_gusts_10m:[], wind_direction_10m:[], uv_index:[]};
+        const byDay = {};
+        (fc.list||[]).forEach(item => {
+          const t = new Date(item.dt*1000).toISOString();
+          hourly.time.push(t);
+          hourly.temperature_2m.push(item.main.temp);
+          hourly.apparent_temperature.push(item.main.feels_like);
+          hourly.relative_humidity_2m.push(item.main.humidity);
+          hourly.dew_point_2m.push(null);
+          hourly.precipitation.push((item.rain && item.rain['3h']) || (item.snow && item.snow['3h']) || 0);
+          hourly.precipitation_probability.push(Math.round((item.pop||0)*100));
+          hourly.weather_code.push(toWmoFromOwm(item.weather[0].id));
+          hourly.pressure_msl.push(item.main.sea_level || item.main.pressure);
+          hourly.surface_pressure.push(item.main.grnd_level || item.main.pressure);
+          hourly.cloud_cover.push(item.clouds ? item.clouds.all : null);
+          hourly.visibility.push(item.visibility || null);
+          hourly.wind_speed_10m.push(item.wind.speed);
+          hourly.wind_gusts_10m.push(item.wind.gust || item.wind.speed);
+          hourly.wind_direction_10m.push(item.wind.deg);
+          hourly.uv_index.push(null);
+          const dayKey = t.slice(0,10);
+          if(!byDay[dayKey]) byDay[dayKey] = {min:item.main.temp_min, max:item.main.temp_max, codes:[], pop:[]};
+          byDay[dayKey].min = Math.min(byDay[dayKey].min, item.main.temp_min);
+          byDay[dayKey].max = Math.max(byDay[dayKey].max, item.main.temp_max);
+          byDay[dayKey].codes.push(item.weather[0].id);
+          byDay[dayKey].pop.push(item.pop||0);
+        });
+        const dayKeys = Object.keys(byDay).sort();
+        const daily = {time:[], weather_code:[], temperature_2m_max:[], temperature_2m_min:[], sunrise:[], sunset:[], precipitation_probability_max:[]};
+        dayKeys.forEach(k => {
+          const d = byDay[k];
+          daily.time.push(k);
+          const midday = d.codes[Math.floor(d.codes.length/2)];
+          daily.weather_code.push(toWmoFromOwm(midday));
+          daily.temperature_2m_max.push(d.max);
+          daily.temperature_2m_min.push(d.min);
+          daily.sunrise.push(new Date(cur.sys.sunrise*1000).toISOString());
+          daily.sunset.push(new Date(cur.sys.sunset*1000).toISOString());
+          daily.precipitation_probability_max.push(Math.round(Math.max.apply(null, d.pop)*100));
+        });
+
+        return {
+          current: {
+            temperature_2m: cur.main.temp,
+            apparent_temperature: cur.main.feels_like,
+            relative_humidity_2m: cur.main.humidity,
+            weather_code: toWmoFromOwm(cur.weather[0].id),
+            wind_speed_10m: cur.wind.speed,
+            surface_pressure: cur.main.pressure
+          },
+          daily, hourly
+        };
+      }
+    },
+
+    weatherapi: {
+      name: 'WeatherAPI.com',
+      needsKey: true,
+      keyLabel: 'API key',
+      signupUrl: 'https://www.weatherapi.com/signup.aspx',
+      pros: [
+        'Most generous key-based free tier of the paid-style providers (~1M calls/month)',
+        'Single request returns current + hourly + daily together (no need for 2 calls)',
+        'Includes astronomy data (sunrise/sunset) and air quality on the free tier',
+        'Free tier forecast horizon is shorter (3 days) than Open-Meteo\'s 16'
+      ],
+      async geocode(name, apiKey){
+        const res = await fetch('https://api.weatherapi.com/v1/search.json?key=' + encodeURIComponent(apiKey) + '&q=' + encodeURIComponent(name));
+        const data = await res.json();
+        if(!data || !data.length) throw new Error('Location not found');
+        const r = data[0];
+        return {name: r.name + (r.region ? ', ' + r.region : '') + ', ' + r.country, lat:r.lat, lon:r.lon};
+      },
+      async fetch(loc, units, apiKey){
+        const url = 'https://api.weatherapi.com/v1/forecast.json?key=' + encodeURIComponent(apiKey) +
+          '&q=' + loc.lat + ',' + loc.lon + '&days=3&aqi=no&alerts=no';
+        const res = await fetch(url);
+        if(!res.ok) throw new Error('WeatherAPI.com request failed (' + res.status + ') — check your API key');
+        const data = await res.json();
+        const isF = units === 'fahrenheit';
+
+        const hourly = {time:[], temperature_2m:[], apparent_temperature:[], relative_humidity_2m:[],
+          dew_point_2m:[], precipitation:[], precipitation_probability:[], weather_code:[], pressure_msl:[],
+          surface_pressure:[], cloud_cover:[], visibility:[], wind_speed_10m:[], wind_gusts_10m:[], wind_direction_10m:[], uv_index:[]};
+        const daily = {time:[], weather_code:[], temperature_2m_max:[], temperature_2m_min:[], sunrise:[], sunset:[], precipitation_probability_max:[]};
+
+        (data.forecast.forecastday||[]).forEach(day => {
+          daily.time.push(day.date);
+          daily.weather_code.push(toWmoFromWeatherApiCode(day.day.condition.code));
+          daily.temperature_2m_max.push(isF ? day.day.maxtemp_f : day.day.maxtemp_c);
+          daily.temperature_2m_min.push(isF ? day.day.mintemp_f : day.day.mintemp_c);
+          daily.sunrise.push(day.date + 'T' + to24h(day.astro.sunrise));
+          daily.sunset.push(day.date + 'T' + to24h(day.astro.sunset));
+          daily.precipitation_probability_max.push(Math.max.apply(null, day.hour.map(h=>h.chance_of_rain||0)));
+          day.hour.forEach(h => {
+            hourly.time.push(h.time.replace(' ', 'T'));
+            hourly.temperature_2m.push(isF ? h.temp_f : h.temp_c);
+            hourly.apparent_temperature.push(isF ? h.feelslike_f : h.feelslike_c);
+            hourly.relative_humidity_2m.push(h.humidity);
+            hourly.dew_point_2m.push(isF ? h.dewpoint_f : h.dewpoint_c);
+            hourly.precipitation.push(isF ? h.precip_in : h.precip_mm);
+            hourly.precipitation_probability.push(h.chance_of_rain);
+            hourly.weather_code.push(toWmoFromWeatherApiCode(h.condition.code));
+            hourly.pressure_msl.push(h.pressure_mb);
+            hourly.surface_pressure.push(h.pressure_mb);
+            hourly.cloud_cover.push(h.cloud);
+            hourly.visibility.push(isF ? h.vis_miles : h.vis_km);
+            hourly.wind_speed_10m.push(isF ? h.wind_mph : h.wind_kph);
+            hourly.wind_gusts_10m.push(isF ? h.gust_mph : h.gust_kph);
+            hourly.wind_direction_10m.push(h.wind_degree);
+            hourly.uv_index.push(h.uv);
+          });
+        });
+
+        return {
+          current: {
+            temperature_2m: isF ? data.current.temp_f : data.current.temp_c,
+            apparent_temperature: isF ? data.current.feelslike_f : data.current.feelslike_c,
+            relative_humidity_2m: data.current.humidity,
+            weather_code: toWmoFromWeatherApiCode(data.current.condition.code),
+            wind_speed_10m: isF ? data.current.wind_mph : data.current.wind_kph,
+            surface_pressure: data.current.pressure_mb
+          },
+          daily, hourly
+        };
+      }
+    },
+
+    tomorrowio: {
+      name: 'Tomorrow.io',
+      needsKey: true,
+      keyLabel: 'API key',
+      signupUrl: 'https://app.tomorrow.io/signup',
+      pros: [
+        'Hyperlocal, minute-level precipitation nowcasting where available',
+        'Rich data layers (60+) beyond the basics — pollen, fire index, road risk, etc.',
+        'Good for short-range accuracy in populated areas',
+        'Smallest free allowance here (500 calls/day, 3/sec, 25/hour) — easiest to rate-limit'
+      ],
+      async geocode(name){
+        // Tomorrow.io has no geocoder of its own; reuse Open-Meteo's free one.
+        const res = await fetch('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(name) + '&count=1');
+        const data = await res.json();
+        if(!data.results || !data.results.length) throw new Error('Location not found');
+        const r = data.results[0];
+        return {name: r.name + (r.admin1 ? ', ' + r.admin1 : '') + ', ' + r.country, lat:r.latitude, lon:r.longitude};
+      },
+      async fetch(loc, units, apiKey){
+        const u = units === 'fahrenheit' ? 'imperial' : 'metric';
+        const url = 'https://api.tomorrow.io/v4/weather/forecast?location=' + loc.lat + ',' + loc.lon + '&units=' + u + '&apikey=' + encodeURIComponent(apiKey);
+        const res = await fetch(url);
+        if(!res.ok) throw new Error('Tomorrow.io request failed (' + res.status + ') — check your API key');
+        const data = await res.json();
+
+        const hourly = {time:[], temperature_2m:[], apparent_temperature:[], relative_humidity_2m:[],
+          dew_point_2m:[], precipitation:[], precipitation_probability:[], weather_code:[], pressure_msl:[],
+          surface_pressure:[], cloud_cover:[], visibility:[], wind_speed_10m:[], wind_gusts_10m:[], wind_direction_10m:[], uv_index:[]};
+        (data.timelines.hourly||[]).forEach(h => {
+          const v = h.values;
+          hourly.time.push(h.time);
+          hourly.temperature_2m.push(v.temperature);
+          hourly.apparent_temperature.push(v.temperatureApparent);
+          hourly.relative_humidity_2m.push(v.humidity);
+          hourly.dew_point_2m.push(v.dewPoint);
+          hourly.precipitation.push(v.precipitationIntensity);
+          hourly.precipitation_probability.push(v.precipitationProbability);
+          hourly.weather_code.push(toWmoFromTomorrowCode(v.weatherCode));
+          hourly.pressure_msl.push(v.pressureSeaLevel);
+          hourly.surface_pressure.push(v.pressureSurfaceLevel);
+          hourly.cloud_cover.push(v.cloudCover);
+          hourly.visibility.push(v.visibility);
+          hourly.wind_speed_10m.push(v.windSpeed);
+          hourly.wind_gusts_10m.push(v.windGust);
+          hourly.wind_direction_10m.push(v.windDirection);
+          hourly.uv_index.push(v.uvIndex);
+        });
+
+        const byDay = {};
+        (data.timelines.daily||[]).forEach(d => {
+          const dayKey = d.time.slice(0,10);
+          byDay[dayKey] = d.values;
+        });
+        const dayKeys = Object.keys(byDay).sort();
+        const daily = {time:[], weather_code:[], temperature_2m_max:[], temperature_2m_min:[], sunrise:[], sunset:[], precipitation_probability_max:[]};
+        dayKeys.forEach(k => {
+          const v = byDay[k];
+          daily.time.push(k);
+          daily.weather_code.push(toWmoFromTomorrowCode(v.weatherCodeMax || v.weatherCodeMin));
+          daily.temperature_2m_max.push(v.temperatureMax);
+          daily.temperature_2m_min.push(v.temperatureMin);
+          daily.sunrise.push(v.sunriseTime || (k+'T06:00:00Z'));
+          daily.sunset.push(v.sunsetTime || (k+'T18:00:00Z'));
+          daily.precipitation_probability_max.push(v.precipitationProbabilityMax || 0);
+        });
+
+        const cur = data.timelines.hourly && data.timelines.hourly[0] ? data.timelines.hourly[0].values : {};
+        return {
+          current: {
+            temperature_2m: cur.temperature,
+            apparent_temperature: cur.temperatureApparent,
+            relative_humidity_2m: cur.humidity,
+            weather_code: toWmoFromTomorrowCode(cur.weatherCode),
+            wind_speed_10m: cur.windSpeed,
+            surface_pressure: cur.pressureSurfaceLevel
+          },
+          daily, hourly
+        };
+      }
+    }
+  };
+
+  function to24h(t){
+    // WeatherAPI astro times look like "06:32 AM" -> "06:32:00"
+    const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(t.trim());
+    if(!m) return '00:00:00';
+    let h = parseInt(m[1],10);
+    if(/pm/i.test(m[3]) && h !== 12) h += 12;
+    if(/am/i.test(m[3]) && h === 12) h = 0;
+    return String(h).padStart(2,'0') + ':' + m[2] + ':00';
+  }
+
+  const API_KEY_STORAGE_PREFIX = 'weatherreport:apikey:';
+  function getStoredApiKey(providerId){ return localStorage.getItem(API_KEY_STORAGE_PREFIX + providerId) || ''; }
+  function setStoredApiKey(providerId, key){
+    if(key) localStorage.setItem(API_KEY_STORAGE_PREFIX + providerId, key);
+    else localStorage.removeItem(API_KEY_STORAGE_PREFIX + providerId);
+  }
+
   async function geocode(name){
-    const res = await fetch('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(name) + '&count=1');
-    const data = await res.json();
-    if(!data.results || !data.results.length) throw new Error('Location not found');
-    const r = data.results[0];
-    return {name: r.name + (r.admin1 ? ', ' + r.admin1 : '') + ', ' + r.country, lat:r.latitude, lon:r.longitude};
+    const provider = PROVIDERS[state.provider] || PROVIDERS.openmeteo;
+    const apiKey = getStoredApiKey(state.provider);
+    if(provider.needsKey && !apiKey) throw new Error(provider.name + ' needs an API key — set one via "Data source"');
+    return provider.geocode(name, apiKey);
   }
 
   async function fetchWeather(){
     statusLine.textContent = 'Fetching…';
     try{
+      const provider = PROVIDERS[state.provider] || PROVIDERS.openmeteo;
+      const apiKey = getStoredApiKey(state.provider);
+      if(provider.needsKey && !apiKey) throw new Error(provider.name + ' needs an API key — set one via "Data source"');
+
       const locName = document.getElementById('locationInput').value.trim() || 'Milan';
       const loc = await geocode(locName);
       state.location = loc;
 
-      const tempUnit = state.units === 'fahrenheit' ? 'fahrenheit' : 'celsius';
-      const windUnit = state.units === 'fahrenheit' ? 'mph' : 'kmh';
-
-      const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + loc.lat + '&longitude=' + loc.lon +
-        '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,surface_pressure' +
-        '&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_probability_max' +
-        '&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,precipitation_probability,weather_code,pressure_msl,surface_pressure,cloud_cover,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index' +
-        '&temperature_unit=' + tempUnit + '&wind_speed_unit=' + windUnit + '&timezone=auto&forecast_days=16';
-
-      const res = await fetch(url);
-      const data = await res.json();
+      const data = await provider.fetch(loc, state.units, apiKey);
       state.weather = data;
-      statusLine.innerHTML = 'Loaded: <b>' + loc.name + '</b><br>' + new Date().toLocaleString();
+      statusLine.innerHTML = 'Loaded via <b>' + provider.name + '</b>: <b>' + loc.name + '</b><br>' + new Date().toLocaleString();
       renderAllComponents();
     }catch(err){
       statusLine.textContent = 'Error: ' + err.message;
     }
   }
   document.getElementById('fetchBtn').addEventListener('click', fetchWeather);
+
+  /* ---------------- Data source picker modal ---------------- */
+  const dataSourceOverlay = document.getElementById('dataSourceOverlay');
+  const dataSourceBody = document.getElementById('dataSourceBody');
+  const dataSourceLabel = document.getElementById('dataSourceLabel');
+
+  function renderDataSourceModal(){
+    dataSourceLabel.textContent = PROVIDERS[state.provider].name;
+    let html = '';
+    Object.keys(PROVIDERS).forEach(id => {
+      const p = PROVIDERS[id];
+      const isActive = state.provider === id;
+      const storedKey = p.needsKey ? getStoredApiKey(id) : '';
+      html += '<div class="ds-provider' + (isActive?' active':'') + '" data-provider="' + id + '">' +
+        '<div class="ds-provider-head">' +
+          '<div class="ds-provider-name">' + escapeHtml(p.name) +
+            (p.needsKey ? '<span class="ds-badge needs-key">API key</span>' : '<span class="ds-badge">No key needed</span>') +
+          '</div>' +
+          '<button class="ds-select-btn' + (isActive?' is-active':'') + '" data-select="' + id + '">' + (isActive ? 'In use ✓' : 'Use this') + '</button>' +
+        '</div>' +
+        '<ul class="ds-pros">' + p.pros.map(x => '<li>' + escapeHtml(x) + '</li>').join('') + '</ul>';
+      if(p.needsKey){
+        html += '<div class="ds-key-row">' +
+          '<input type="password" class="ds-key-input" data-key-for="' + id + '" placeholder="' + escapeHtml(p.keyLabel) + '" value="' + escapeHtml(storedKey) + '">' +
+          '<a href="' + p.signupUrl + '" target="_blank" rel="noopener">Get a key ↗</a>' +
+          '</div>' +
+          '<div class="ds-key-status' + (storedKey ? ' ok' : '') + '" data-status-for="' + id + '">' + (storedKey ? 'Key saved in this browser ✓' : 'No key saved yet') + '</div>';
+      }
+      html += '</div>';
+    });
+    dataSourceBody.innerHTML = html;
+
+    dataSourceBody.querySelectorAll('.ds-key-input').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const id = inp.getAttribute('data-key-for');
+        setStoredApiKey(id, inp.value.trim());
+        const status = dataSourceBody.querySelector('[data-status-for="'+id+'"]');
+        if(status){
+          status.textContent = inp.value.trim() ? 'Key saved in this browser ✓' : 'No key saved yet';
+          status.classList.toggle('ok', !!inp.value.trim());
+        }
+      });
+    });
+    dataSourceBody.querySelectorAll('[data-select]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-select');
+        const p = PROVIDERS[id];
+        if(p.needsKey && !getStoredApiKey(id)){
+          statusLine.textContent = p.name + ' needs an API key first — paste one in above and switch again.';
+          return;
+        }
+        state.provider = id;
+        dataSourceOverlay.classList.remove('active');
+        renderDataSourceModal();
+        fetchWeather();
+      });
+    });
+  }
+  document.getElementById('dataSourceBtn').addEventListener('click', () => {
+    renderDataSourceModal();
+    dataSourceOverlay.classList.add('active');
+  });
+  document.getElementById('dataSourceCloseBtn').addEventListener('click', () => dataSourceOverlay.classList.remove('active'));
 
   /* ---------------- Component model ---------------- */
   function defaultSize(type){
@@ -646,6 +1143,7 @@
       case 'ww-condition': return {w:260, h:80};
       case 'ww-forecast': return {w:420, h:100};
       case 'ww-condstrip': return {w:460, h:110};
+      case 'ww-dailylist': return {w:380, h:340};
       case 'ww-detailgrid': return {w:260, h:120};
       case 'ww-chart': return {w:400, h:160};
       case 'ww-isobar': return {w:400, h:100};
@@ -668,6 +1166,7 @@
       case 'ww-condition': return {fontSize:16, condFontSize:13, glyphSize:36, color:'#1C1B18'};
       case 'ww-forecast': return {days:5, fontSize:14, color:'#1C1B18'};
       case 'ww-condstrip': return {mode:'daily', days:5, startHour:0, endHour:48, step:1, fontSize:14, color:'#1C1B18'};
+      case 'ww-dailylist': return {mode:'daily', days:6, hours:12, hourStep:1, fields:{date:true, icon:true, precip:true, lo:true, bar:true, hi:true}, fontSize:14, color:'#1C1B18', barColor:'#EB9B4A', trackColor:'#E4E1D8'};
       case 'ww-detailgrid': return {fontSize:14, color:'#1C1B18'};
       case 'ww-chart': return {color:'#3E5C6B'};
       case 'ww-isobar': return {color:'#C87F2B'};
@@ -698,6 +1197,34 @@
 
   function renderAllComponents(){
     state.components.forEach(c => updateComponentContent(c));
+  }
+
+  // Rescales every component's position, size, and font-related props by a
+  // single uniform factor (new resolution / old resolution), so a layout
+  // built for one screen size lands in the same relative spot — same idea
+  // as scaling an SVG — on a different size instead of staying pinned to
+  // its old pixel coordinates.
+  function scaleComponentsInPlace(scale){
+    if(!scale || scale === 1) return;
+    state.components.forEach(c => {
+      c.x = c.x * scale;
+      c.y = c.y * scale;
+      c.w = c.w * scale;
+      c.h = c.h * scale;
+      const p = c.props || {};
+      if(typeof p.fontSize === 'number') p.fontSize = p.fontSize * scale;
+      if(typeof p.condFontSize === 'number') p.condFontSize = p.condFontSize * scale;
+      if(typeof p.glyphSize === 'number') p.glyphSize = p.glyphSize * scale;
+      if(typeof p.thickness === 'number') p.thickness = Math.max(1, p.thickness * scale);
+      const el = document.getElementById('comp-' + c.id);
+      if(el){
+        el.style.left = c.x + 'px';
+        el.style.top = c.y + 'px';
+        el.style.width = c.w + 'px';
+        el.style.height = c.h + 'px';
+      }
+    });
+    renderInspector();
   }
 
   function svgLineChart(values, color, w, h){
@@ -944,6 +1471,85 @@
           }
         }
         inner.innerHTML = html;
+        break;
+      }
+      case 'ww-dailylist': {
+        inner.className = 'comp-inner weatherwidget ww-dailylist';
+        if(!w || !w.daily){ inner.innerHTML = '<div style="color:var(--ink-soft);font-size:12px;">no data</div>'; break; }
+        let html = '';
+        const f = Object.assign({date:true, icon:true, precip:true, lo:true, bar:true, hi:true}, p.fields||{});
+        if(p.mode === 'hourly'){
+          if(!w.hourly){ inner.innerHTML = '<div style="color:var(--ink-soft);font-size:12px;">no data</div>'; break; }
+          const base = nowHourIndex();
+          const step = p.hourStep || 1;
+          const count = p.hours || 12;
+          // Build the list of actual hourly indices first (respecting the
+          // step), so range/rendering below works off real positions rather
+          // than assuming a dense 1-hour cadence.
+          const idxs = [];
+          for(let i=0; idxs.length<count; i++){
+            const idx = base + i*step;
+            if(idx >= w.hourly.time.length) break;
+            idxs.push(idx);
+          }
+          // Bars are drawn relative to the coldest and warmest hour across
+          // the visible window, matching the daily mode's left/right logic.
+          let rangeMin = Infinity, rangeMax = -Infinity;
+          idxs.forEach(idx => {
+            const t = w.hourly.temperature_2m[idx];
+            rangeMin = Math.min(rangeMin, t);
+            rangeMax = Math.max(rangeMax, t);
+          });
+          const span = Math.max(1, rangeMax - rangeMin);
+          idxs.forEach((idx, i) => {
+            const dt = new Date(w.hourly.time[idx]);
+            const hname = (i === 0) ? 'NOW' : dt.toLocaleTimeString(undefined,{hour:'numeric'}).replace(' ','').toUpperCase();
+            const hsub = dt.toLocaleTimeString(undefined,{hour12:true,hour:'numeric'}).match(/AM|PM/) ? dt.toLocaleTimeString(undefined,{hour12:true}).split(' ')[1] : '';
+            const info = wmoInfo(w.hourly.weather_code[idx]);
+            const temp = w.hourly.temperature_2m[idx];
+            const pop = (w.hourly.precipitation_probability[idx] != null) ? Math.round(w.hourly.precipitation_probability[idx]) : 0;
+            const pct = ((temp - rangeMin) / span) * 100;
+            html += '<div class="dl-row" style="font-size:'+p.fontSize+'px;color:'+p.color+';">' +
+              (f.date ? '<div class="dl-day"><span class="dl-dname">'+hname+'</span><span class="dl-dnum" style="font-size:0.55em;">'+hsub+'</span></div>' : '') +
+              (f.icon ? '<div class="dl-glyph">'+info.g+'</div>' : '') +
+              (f.precip ? '<div class="dl-pop"><span class="dl-drop">💧</span>'+pop+'%</div>' : '') +
+              (f.lo ? '<div class="dl-lo"></div>' : '') +
+              (f.bar ? '<div class="dl-track"><div class="dl-bar" style="left:'+Math.max(0,pct-4)+'%;width:8%;background:'+p.barColor+';"></div></div>' : '') +
+              (f.hi ? '<div class="dl-hi">'+Math.round(temp)+'°</div>' : '') +
+              '</div>';
+          });
+        } else {
+          const n = Math.min(p.days || 6, w.daily.time.length);
+          // Bars are drawn relative to the coldest low and hottest high across
+          // the whole visible range, so a cool day's bar sits further left and
+          // a hot day's bar sits further right — same idea as the reference.
+          let rangeMin = Infinity, rangeMax = -Infinity;
+          for(let i=0;i<n;i++){
+            rangeMin = Math.min(rangeMin, w.daily.temperature_2m_min[i]);
+            rangeMax = Math.max(rangeMax, w.daily.temperature_2m_max[i]);
+          }
+          const span = Math.max(1, rangeMax - rangeMin);
+          for(let i=0;i<n;i++){
+            const dt = new Date(w.daily.time[i]);
+            const dname = dt.toLocaleDateString(undefined,{weekday:'short'}).toUpperCase();
+            const dnum = dt.getDate();
+            const info = wmoInfo(w.daily.weather_code[i]);
+            const lo = w.daily.temperature_2m_min[i], hi = w.daily.temperature_2m_max[i];
+            const pop = (w.daily.precipitation_probability_max[i] != null) ? Math.round(w.daily.precipitation_probability_max[i]) : 0;
+            const leftPct = ((lo - rangeMin) / span) * 100;
+            const widthPct = Math.max(4, ((hi - lo) / span) * 100);
+            html += '<div class="dl-row" style="font-size:'+p.fontSize+'px;color:'+p.color+';">' +
+              (f.date ? '<div class="dl-day"><span class="dl-dname">'+dname+'</span><span class="dl-dnum">'+dnum+'</span></div>' : '') +
+              (f.icon ? '<div class="dl-glyph">'+info.g+'</div>' : '') +
+              (f.precip ? '<div class="dl-pop"><span class="dl-drop">💧</span>'+pop+'%</div>' : '') +
+              (f.lo ? '<div class="dl-lo">'+Math.round(lo)+'°</div>' : '') +
+              (f.bar ? '<div class="dl-track"><div class="dl-bar" style="left:'+leftPct+'%;width:'+widthPct+'%;background:'+p.barColor+';"></div></div>' : '') +
+              (f.hi ? '<div class="dl-hi">'+Math.round(hi)+'°</div>' : '') +
+              '</div>';
+          }
+        }
+        inner.innerHTML = html;
+        inner.style.setProperty('--dl-track-color', p.trackColor);
         break;
       }
       case 'ww-detailgrid': {
@@ -1256,6 +1862,38 @@
         }
         break;
       }
+      case 'ww-dailylist': {
+        html += field('Mode', '<select id="pmode"><option value="daily"'+(p.mode!=='hourly'?' selected':'')+'>Daily forecast</option><option value="hourly"'+(p.mode==='hourly'?' selected':'')+'>Hourly forecast</option></select>');
+        html += '<div class="field-row">' +
+          field('Font size', '<input type="number" id="pfs" value="'+p.fontSize+'">') +
+          field('Text color', '<input type="color" id="pcolor" value="'+p.color+'">') +
+          '</div>';
+        html += '<div class="field-row">' +
+          field('Bar color', '<input type="color" id="pbarcolor" value="'+(p.barColor||'#EB9B4A')+'">') +
+          field('Track color', '<input type="color" id="ptrackcolor" value="'+(p.trackColor||'#E4E1D8')+'">') +
+          '</div>';
+        if(p.mode === 'hourly'){
+          html += '<div class="field-row">' +
+            field('Interval', '<select id="phourstep"><option value="1"'+((p.hourStep||1)===1?' selected':'')+'>Every hour</option><option value="3"'+(p.hourStep===3?' selected':'')+'>Every 3 hours</option><option value="6"'+(p.hourStep===6?' selected':'')+'>Every 6 hours</option></select>') +
+            field('Hours shown', '<input type="number" id="phours" min="1" max="'+hourlyLen()+'" value="'+(p.hours||12)+'">') +
+            '</div>';
+        } else {
+          html += field('Days shown', '<input type="number" id="pdays" min="1" max="16" value="'+p.days+'">');
+        }
+        const flds = Object.assign({date:true, icon:true, precip:true, lo:true, bar:true, hi:true}, p.fields||{});
+        const fieldLabels = p.mode === 'hourly'
+          ? {date:'Time', icon:'Icon', precip:'Precip %', lo:'(unused)', bar:'Marker', hi:'Temp'}
+          : {date:'Date', icon:'Icon', precip:'Precip %', lo:'Low', bar:'Range bar', hi:'High'};
+        html += '<div class="axis-block"><div class="axis-block-title">Columns shown</div>';
+        Object.keys(fieldLabels).forEach(key => {
+          if(p.mode === 'hourly' && key === 'lo') return; // hourly rows have no separate "lo" column
+          html += '<label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:5px;">' +
+            '<input type="checkbox" class="pfield" data-field="'+key+'"'+(flds[key]?' checked':'')+'> '+fieldLabels[key]+
+            '</label>';
+        });
+        html += '</div>';
+        break;
+      }
       case 'ww-combochart': {
         html += field('Attributes (multi-select)', multiSelect('pattrs', p.attrs, HOURLY_ATTRS()));
         html += '<div class="field-row">' +
@@ -1314,6 +1952,8 @@
     bind('pcondfs', e=>{ p.condFontSize = parseFloat(e.target.value)||13; updateComponentContent(comp); });
     bind('pglyphfs', e=>{ p.glyphSize = parseFloat(e.target.value)||36; updateComponentContent(comp); });
     bind('pcolor', e=>{ p.color = e.target.value; updateComponentContent(comp); });
+    bind('pbarcolor', e=>{ p.barColor = e.target.value; updateComponentContent(comp); });
+    bind('ptrackcolor', e=>{ p.trackColor = e.target.value; updateComponentContent(comp); });
     bind('palign', e=>{ p.align = e.target.value; updateComponentContent(comp); });
     bind('pweight', e=>{ p.weight = e.target.value; updateComponentContent(comp); });
     bind('pfont', e=>{ p.font = e.target.value; updateComponentContent(comp); });
@@ -1354,6 +1994,15 @@
     });
     bind('pcaption', e=>{ p.caption = e.target.value; updateComponentContent(comp); });
     bind('pdays', e=>{ p.days = parseInt(e.target.value)||5; updateComponentContent(comp); });
+    bind('phours', e=>{ p.hours = parseInt(e.target.value)||12; updateComponentContent(comp); });
+    bind('phourstep', e=>{ p.hourStep = parseInt(e.target.value)||1; updateComponentContent(comp); });
+    inspectorBody.querySelectorAll('.pfield').forEach(cb => {
+      cb.addEventListener('change', e => {
+        p.fields = p.fields || {};
+        p.fields[e.target.dataset.field] = e.target.checked;
+        updateComponentContent(comp);
+      });
+    });
     bind('phour', e=>{ p.hourOffset = Math.max(0, parseInt(e.target.value)||0); updateComponentContent(comp); });
     bind('playout', e=>{ p.layout = e.target.value; updateComponentContent(comp); });
     bind('pmode', e=>{ p.mode = e.target.value; renderInspector(); updateComponentContent(comp); });
@@ -1436,7 +2085,7 @@
       'ww-temp':'Big temperature', 'ww-bigcond':'Big conditions',
       'ww-condition':'Condition summary', 'ww-forecast':'Forecast strip', 'ww-condstrip':'Conditions strip',
       'ww-detailgrid':'Detail grid', 'ww-chart':'Temperature chart', 'ww-isobar':'Pressure trace',
-      'ww-combochart':'Combined chart', 'ww-map':'Location marker'
+      'ww-combochart':'Combined chart', 'ww-map':'Location marker', 'ww-dailylist':'Forecast list'
     };
     return names[type] || 'Component';
   }
@@ -1523,7 +2172,7 @@
     return {
       version: 1,
       paper: state.paper, customW: state.customW, customH: state.customH,
-      location: state.location, units: state.units,
+      location: state.location, units: state.units, provider: state.provider,
       components: state.components,
       nextId: state.nextId
     };
@@ -1569,6 +2218,14 @@
     state.components = data.components || [];
     state.nextId = data.nextId || (state.components.reduce((m,c)=>Math.max(m,c.id),0)+1);
     state.selectedId = null;
+
+    // Restore the saved provider choice, but fall back to Open-Meteo if it
+    // needs an API key this browser doesn't have — a shared layout never
+    // carries the key itself, only which provider was used.
+    const wantedProvider = data.provider && PROVIDERS[data.provider] ? data.provider : 'openmeteo';
+    const wantedDef = PROVIDERS[wantedProvider];
+    state.provider = (wantedDef.needsKey && !getStoredApiKey(wantedProvider)) ? 'openmeteo' : wantedProvider;
+    dataSourceLabel.textContent = PROVIDERS[state.provider].name;
 
     document.getElementById('paperSize').value = state.paper;
     document.getElementById('customSizeFields').style.display = state.paper === 'Custom' ? 'block' : 'none';
@@ -1743,16 +2400,10 @@
 
     return (async () => {
       try{
-        const loc = layout.location;
-        const tempUnit = layout.units === 'fahrenheit' ? 'fahrenheit' : 'celsius';
-        const windUnit = layout.units === 'fahrenheit' ? 'mph' : 'kmh';
-        const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + loc.lat + '&longitude=' + loc.lon +
-          '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,surface_pressure' +
-          '&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_probability_max' +
-          '&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,precipitation_probability,weather_code,pressure_msl,surface_pressure,cloud_cover,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index' +
-          '&temperature_unit=' + tempUnit + '&wind_speed_unit=' + windUnit + '&timezone=auto&forecast_days=16';
-        const res = await fetch(url);
-        state.weather = await res.json();
+        // The read-only viewer always uses Open-Meteo directly, regardless of
+        // which provider built the original report — it needs no API key, so
+        // a shared link works for anyone who opens it without setup.
+        state.weather = await PROVIDERS.openmeteo.fetch(layout.location, layout.units);
       }catch(e){ /* render with whatever weather data is already cached */ }
 
       layout.components.forEach(c => {
