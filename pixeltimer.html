@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html,body{margin:0;background:#0a0f0a;font-family:'Courier New',monospace;color:#8f8;display:flex;align-items:center;justify-content:center;min-height:100vh;overflow:hidden}
+  .wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:20px;width:100%;box-sizing:border-box}
+  canvas{image-rendering:pixelated;border:1px solid #223322;display:block}
+  .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center}
+  input[type=number]{width:56px;background:#0e150e;border:1px solid #2a3a2a;color:#9f9;padding:6px;border-radius:4px;font-family:inherit}
+  button{background:#132013;border:1px solid #2a3a2a;color:#9f9;padding:6px 14px;border-radius:4px;cursor:pointer;font-family:inherit}
+  button:hover{background:#1c2b1c}
+  label{font-size:12px;color:#5a7a5a}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <canvas id="c" width="736" height="384"></canvas>
+  <div class="controls">
+    <label>H</label><input type="number" id="h" min="0" value="0">
+    <label>M</label><input type="number" id="m" min="0" max="59" value="5">
+    <label>S</label><input type="number" id="s" min="0" max="59" value="0">
+    <button id="setBtn">Set</button>
+    <button id="startBtn">Start</button>
+    <button id="pauseBtn">Pause</button>
+    <button id="resetBtn">Reset</button>
+  </div>
+</div>
+<script>
+const GRID_W = 26, GRID_H = 12;
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas(){
+  const availW = window.innerWidth - 40;
+  const availH = window.innerHeight - 120; // leave room for controls
+  const px = Math.max(4, Math.floor(Math.min(availW / GRID_W, availH / GRID_H)));
+  canvas.width = GRID_W * px;
+  canvas.height = GRID_H * px;
+  canvas.dataset.px = px;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// 4x8 blocky digit font, defined on a 4-wide x 8-tall grid (1 = on)
+const FONT = {
+'0':['1111','1001','1001','1001','1001','1001','1001','1111'],
+'1':['0110','0110','0010','0010','0010','0010','0010','1111'],
+'2':['1111','0001','0001','1111','1000','1000','1000','1111'],
+'3':['1111','0001','0001','1111','0001','0001','0001','1111'],
+'4':['1001','1001','1001','1111','0001','0001','0001','0001'],
+'5':['1111','1000','1000','1111','0001','0001','0001','1111'],
+'6':['1111','1000','1000','1111','1001','1001','1001','1111'],
+'7':['1111','0001','0001','0001','0001','0001','0001','0001'],
+'8':['1111','1001','1001','1111','1001','1001','1001','1111'],
+'9':['1111','1001','1001','1111','0001','0001','0001','1111'],
+':':['0000','0110','0110','0000','0000','0110','0110','0000'],
+'.':['0000','0000','0000','0000','0000','0000','0110','0110'],
+'h':['1000','1000','1011','1101','1001','1001','1001','0000'],
+'m':['0000','0000','1111','1111','1111','1001','1001','0000'],
+' ':['0000','0000','0000','0000','0000','0000','0000','0000']
+};
+
+let totalMs = (0*3600+5*60+0)*1000;
+let remainingMs = totalMs;
+let running = false;
+let lastTick = null;
+let rafId = null;
+
+function fmtTime(ms){
+  if(ms < 0) ms = 0;
+  const totalSec = ms/1000;
+  const h = Math.floor(totalSec/3600);
+  const m = Math.floor((totalSec%3600)/60);
+  const s = Math.floor(totalSec%60);
+  const cs = Math.floor((ms%1000)/10);
+  if(h >= 10) return pad2(h)+':'+pad2(m);
+  if(h >= 1) return h+'h '+pad2(m);
+  if(m >= 10) return pad2(m)+':'+pad2(s);
+  if(totalSec >= 100) return m+':'+pad2(s)+'0';
+  return pad2(s)+'.'+pad2(cs);
+}
+function pad2(n){ return n<10 ? '0'+n : ''+n; }
+
+function colorForFraction(frac){
+  // frac: 1 = full green, 0 = red. Random brightness scatter per pixel.
+  // hue shift green(120) -> yellow(60) -> red(0)
+  const hue = 120 * Math.max(0, Math.min(1, frac));
+  return hue;
+}
+
+function drawChar(ch, gx, gy, hue, minB, PX){
+  const glyph = FONT[ch] || FONT[' '];
+  for(let row=0; row<8; row++){
+    for(let col=0; col<4; col++){
+      if(glyph[row][col] === '1'){
+        const b = minB + Math.random()*(100-minB);
+        ctx.fillStyle = `hsl(${hue}, 100%, ${b/2}%)`;
+        ctx.fillRect((gx+col)*PX, (gy+row)*PX, PX, PX);
+      }
+    }
+  }
+}
+
+function drawBackground(hue, PX){
+  for(let gy=0; gy<GRID_H; gy++){
+    for(let gx=0; gx<GRID_W; gx++){
+      const b = 4 + Math.random()*6;
+      ctx.fillStyle = `hsl(${hue}, 40%, ${b}%)`;
+      ctx.fillRect(gx*PX, gy*PX, PX, PX);
+    }
+  }
+}
+
+function render(){
+  const PX = canvas.width / GRID_W;
+  const frac = totalMs > 0 ? remainingMs/totalMs : 0;
+  const minB = 40 + frac*20; // brighter floor when time remains
+  const hue = colorForFraction(frac);
+
+  drawBackground(hue, PX);
+
+  const text = fmtTime(remainingMs);
+  // place chars starting near left, 1 col margin, 4 wide + 1 gap
+  let gx = 1;
+  const gy = 1;
+  for(const ch of text){
+    drawChar(ch, gx, gy, hue, minB, PX);
+    gx += 5;
+  }
+
+  // bottom bar
+  const barCols = Math.ceil(frac * 24);
+  const barY = GRID_H - 2;
+  for(let i=0; i<barCols; i++){
+    const b = minB + Math.random()*(100-minB);
+    ctx.fillStyle = `hsl(${hue}, 100%, ${b/2}%)`;
+    ctx.fillRect((1+i)*PX, barY*PX, PX, PX);
+  }
+}
+
+function tick(ts){
+  if(running){
+    if(lastTick == null) lastTick = ts;
+    const dt = ts - lastTick;
+    lastTick = ts;
+    remainingMs = Math.max(0, remainingMs - dt);
+    if(remainingMs <= 0) running = false;
+  }
+  render();
+  rafId = requestAnimationFrame(tick);
+}
+rafId = requestAnimationFrame(tick);
+
+document.getElementById('setBtn').onclick = () => {
+  const h = parseInt(document.getElementById('h').value)||0;
+  const m = parseInt(document.getElementById('m').value)||0;
+  const s = parseInt(document.getElementById('s').value)||0;
+  totalMs = (h*3600+m*60+s)*1000;
+  remainingMs = totalMs;
+  running = false;
+  lastTick = null;
+};
+document.getElementById('startBtn').onclick = () => { if(remainingMs>0){ running = true; lastTick = null; } };
+document.getElementById('pauseBtn').onclick = () => { running = false; };
+document.getElementById('resetBtn').onclick = () => { remainingMs = totalMs; running = false; lastTick = null; };
+</script>
+</body>
+</html>
