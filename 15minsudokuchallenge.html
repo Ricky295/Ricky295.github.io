@@ -92,9 +92,93 @@ background-size: 100% 1.2em;
     background-color: #ffcccc; /* Light red background for errors */
 }
 
+        /* ---- Leaderboard additions ---- */
+        #trophy-btn {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            font-size: 28px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px 8px;
+            margin: 0;
+        }
+        #submit-score-panel {
+            display: none;
+            font-size: 22px;
+            margin: 10px 0 20px;
+            text-align: center;
+        }
+        #submit-score-panel input[type="text"] {
+            font-family: inherit;
+            font-size: 20px;
+            padding: 4px 8px;
+            width: 220px;
+            text-align: center;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        #submit-score-panel button {
+            font-family: inherit;
+        }
+        #submit-status {
+            font-size: 18px;
+            margin-top: 6px;
+            min-height: 1.2em;
+        }
+        #leaderboard-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        #leaderboard-box {
+            background: #fff;
+            border-radius: 10px;
+            padding: 24px 32px;
+            max-height: 80vh;
+            width: min(420px, 90vw);
+            overflow-y: auto;
+            font-family: "Caveat", cursive;
+        }
+        #leaderboard-box h2 {
+            margin-top: 0;
+            text-align: center;
+        }
+        #leaderboard-box table {
+            width: 100%;
+            margin: 10px 0;
+        }
+        #leaderboard-box td, #leaderboard-box th {
+            border: none;
+            width: auto;
+            height: auto;
+            padding: 4px 6px;
+            font-size: 20px;
+            text-align: left;
+        }
+        #leaderboard-box th {
+            border-bottom: 2px solid #ccc;
+        }
+        #leaderboard-note {
+            font-size: 16px;
+            color: #666;
+            text-align: center;
+            margin-top: 10px;
+        }
+        #leaderboard-close {
+            display: block;
+            margin: 10px auto 0;
+        }
     </style>
 </head>
 <body>
+    <button id="trophy-btn" onclick="openLeaderboard()" title="Leaderboard">🏆</button>
+
     <div>
         <div class="timer" id="timer">Time remaining: 15:00</div>
         <div id="stats">Score: 0 - Completed: 0</div>
@@ -105,9 +189,33 @@ background-size: 100% 1.2em;
         <button onclick="validateSudoku()">Validate Sudoku</button>
         <button onclick="giveHint()">Hint</button>
         <button id="pauseButton" onclick="togglePause()">Pause</button> <!-- Pause button -->
+
+        <div id="submit-score-panel">
+            <div id="submit-score-text"></div>
+            <input type="text" id="submit-score-name" placeholder="Your name" maxlength="40">
+            <button onclick="submitScore()">Submit score</button>
+            <div id="submit-status"></div>
+        </div>
+    </div>
+
+    <div id="leaderboard-overlay">
+        <div id="leaderboard-box">
+            <h2>🏆 Leaderboard</h2>
+            <div id="leaderboard-content">Loading...</div>
+            <div id="leaderboard-note">Close and refresh the page to keep playing.</div>
+            <button id="leaderboard-close" onclick="closeLeaderboard()">Close</button>
+        </div>
     </div>
 	<script src="legacysudokusolver.js"></script>
     <script>
+        // ---- Leaderboard config ----
+        // Same shared GAS proxy pattern as the ChordSheet script, but this
+        // one talks to a separate Apps Script deployment (see
+        // sudoku-leaderboard-proxy.gs) that manages 15minsudokuchal.txt.
+        const LEADERBOARD_URL = 'https://script.google.com/macros/s/AKfycbyGNiFHVtVuZ24eHgzycBw0rqmkgRc7e7jTsrMosqLB9Gufpj2N6jww6H2i13duAlS5yg/exec';
+        const LEADERBOARD_SECRET = 'v90_PGMxzkqBpAqwNa8q8_EK2vIAuk0yF8Uz2oCX9WA';
+        let scoreAlreadySubmitted = false; // one submission per finished game
+
         let solution;
         let givens = 50; //CHANGE THIS TO 50 IN FINAL VERSION OK
         let score = 0;
@@ -296,7 +404,7 @@ background-size: 100% 1.2em;
                     clearInterval(timerInterval);
                     alert(`Out of time! Score: ${score}`);
         document.getElementById('stats').innerText = `Score: ${String(score)} - Completed: ${String(sudokuscompleted)}`;
-		
+                    offerScoreSubmission();
                 }
             }, 1000);
         }
@@ -308,6 +416,125 @@ function togglePause() {
             } else {
                 document.getElementById('pauseButton').innerText = 'Pause'; // Change button text to Pause
             }
+        }
+
+        // ---- Leaderboard: submission ----
+
+        function offerScoreSubmission() {
+            // Only 15-minute games count for the leaderboard.
+            if (initialTime !== 900) return;
+            if (scoreAlreadySubmitted) return;
+
+            const panel = document.getElementById('submit-score-panel');
+            const text = document.getElementById('submit-score-text');
+            text.innerText = `Game over! Final score: ${score} (Completed: ${sudokuscompleted})`;
+            panel.style.display = 'block';
+            document.getElementById('submit-status').innerText = '';
+        }
+
+        async function submitScore() {
+            if (scoreAlreadySubmitted) return;
+            const nameInput = document.getElementById('submit-score-name');
+            const status = document.getElementById('submit-status');
+            const name = nameInput.value.trim();
+
+            if (!name) {
+                status.innerText = 'Please enter a name.';
+                return;
+            }
+            if (LEADERBOARD_URL.indexOf('PASTE_YOUR') === 0) {
+                status.innerText = 'Leaderboard is not configured yet.';
+                return;
+            }
+
+            status.innerText = 'Submitting...';
+            try {
+                const res = await fetch(LEADERBOARD_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({
+                        action: 'submit',
+                        secret: LEADERBOARD_SECRET,
+                        name: name,
+                        score: score,
+                        completed: sudokuscompleted
+                    })
+                });
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.error || 'Unknown error');
+
+                scoreAlreadySubmitted = true;
+                nameInput.disabled = true;
+
+                const rankInfo = computeRanking_(data.entries, score);
+                status.innerText = `Saved! Rank #${rankInfo.rank} of ${rankInfo.total} (top ${rankInfo.topPercent}%).`;
+            } catch (err) {
+                status.innerText = 'Could not submit score: ' + err.message;
+            }
+        }
+
+        // Returns 1-based rank of `myScore` among entries (highest score = rank 1),
+        // and the top-percentile it falls in.
+        function computeRanking_(entries, myScore) {
+            const sorted = [...entries].sort((a, b) => b.score - a.score);
+            // Rank by count of strictly-better scores + 1, so ties share the
+            // best rank among them.
+            const better = sorted.filter(e => e.score > myScore).length;
+            const rank = better + 1;
+            const total = sorted.length;
+            const topPercent = total > 0 ? Math.max(1, Math.round((rank / total) * 100)) : 100;
+            return { rank, total, topPercent };
+        }
+
+        // ---- Leaderboard: viewing ----
+
+        async function openLeaderboard() {
+            const overlay = document.getElementById('leaderboard-overlay');
+            const content = document.getElementById('leaderboard-content');
+            overlay.style.display = 'flex';
+            content.innerText = 'Loading...';
+
+            if (LEADERBOARD_URL.indexOf('PASTE_YOUR') === 0) {
+                content.innerText = 'Leaderboard is not configured yet.';
+                return;
+            }
+
+            try {
+                const url = `${LEADERBOARD_URL}?action=list&secret=${encodeURIComponent(LEADERBOARD_SECRET)}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.error || 'Unknown error');
+                renderLeaderboard_(data.entries);
+            } catch (err) {
+                content.innerText = 'Could not load leaderboard: ' + err.message;
+            }
+        }
+
+        function renderLeaderboard_(entries) {
+            const content = document.getElementById('leaderboard-content');
+            const sorted = [...entries].sort((a, b) => b.score - a.score).slice(0, 10);
+
+            if (sorted.length === 0) {
+                content.innerText = 'No scores yet \u2014 be the first!';
+                return;
+            }
+
+            let html = '<table><tr><th>#</th><th>Name</th><th>Score</th><th>Completed</th></tr>';
+            sorted.forEach((e, i) => {
+                html += `<tr><td>${i + 1}</td><td>${escapeHtml_(e.name)}</td><td>${e.score}</td><td>${e.completed}</td></tr>`;
+            });
+            html += '</table>';
+            content.innerHTML = html;
+        }
+
+        function escapeHtml_(str) {
+            const div = document.createElement('div');
+            div.innerText = str;
+            return div.innerHTML;
+        }
+
+        function closeLeaderboard() {
+            document.getElementById('leaderboard-overlay').style.display = 'none';
         }
 
 
