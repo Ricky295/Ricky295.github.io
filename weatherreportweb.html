@@ -2257,35 +2257,78 @@
     return (s||'report').split(',')[0].trim().replace(/[^a-z0-9]+/gi,'-').toLowerCase() || 'report';
   }
 
-  // Compact base64url encode/decode of UTF-8 JSON, safe for a URL query param.
-  function encodeLayoutForUrl(layout){
-    const json = JSON.stringify(layout);
-    const b64 = btoa(unescape(encodeURIComponent(json)));
-    return b64.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  // Share encoding: gzip the JSON before base64url encoding. Large embedded
+  // data-URI images are omitted from shared URLs because they are the main
+  // source of multi-hundred-kilobyte links. Existing uncompressed links remain
+  // readable through the fallback decoder below.
+  function stripLargeEmbeddedImages(layout){
+    const copy = JSON.parse(JSON.stringify(layout));
+    (copy.components || []).forEach(c => {
+      if(c.type === 'image' && c.props && typeof c.props.src === 'string' && c.props.src.indexOf('data:') === 0 && c.props.src.length > 24000){
+        c.props.src = '';
+        c.props.caption = c.props.caption ? c.props.caption + ' (image omitted from share link)' : 'Image omitted from share link';
+      }
+    });
+    return copy;
   }
-  function decodeLayoutFromUrl(param){
+
+  function bytesToBase64Url(bytes){
+    let binary = '';
+    const chunk = 0x8000;
+    for(let i=0; i<bytes.length; i+=chunk){
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i+chunk));
+    }
+    return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }
+  function base64UrlToBytes(param){
     let b64 = param.replace(/-/g,'+').replace(/_/g,'/');
+    while(b64.length % 4) b64 += '=';
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+  async function encodeLayoutForUrl(layout){
+    const json = JSON.stringify(stripLargeEmbeddedImages(layout));
+    const raw = new TextEncoder().encode(json);
+    if('CompressionStream' in window){
+      const stream = new Blob([raw]).stream().pipeThrough(new CompressionStream('gzip'));
+      const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
+      return 'g' + bytesToBase64Url(compressed);
+    }
+    const b64 = btoa(unescape(encodeURIComponent(json)));
+    return 'j' + b64.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }
+  async function decodeLayoutFromUrl(param){
+    if(param.charAt(0) === 'g' && 'DecompressionStream' in window){
+      const compressed = base64UrlToBytes(param.slice(1));
+      const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'));
+      const json = await new Response(stream).text();
+      return JSON.parse(json);
+    }
+    const legacy = param.charAt(0) === 'j' ? param.slice(1) : param;
+    let b64 = legacy.replace(/-/g,'+').replace(/_/g,'/');
     while(b64.length % 4) b64 += '=';
     const json = decodeURIComponent(escape(atob(b64)));
     return JSON.parse(json);
   }
 
-  function buildShareUrl(layout, mode){
+  async function buildShareUrl(layout, mode){
     const url = new URL(window.location.href);
     url.search = '';
     url.searchParams.set('view', mode);
     url.searchParams.set('location', (layout.location && layout.location.name) || '');
-    url.searchParams.set('data', encodeLayoutForUrl(layout));
+    url.searchParams.set('data', await encodeLayoutForUrl(layout));
     return url.toString();
   }
 
   const REPORTS_KEY_PREFIX = 'weatherreport:reports:';
 
-  function shareCurrentReport(){
+  async function shareCurrentReport(){
     try{
       const layout = serializeLayout();
-      const viewUrl = buildShareUrl(layout, '1');
-      const editUrl = buildShareUrl(layout, '0');
+      const viewUrl = await buildShareUrl(layout, '1');
+      const editUrl = await buildShareUrl(layout, '0');
       shareLinkInput.value = viewUrl;
       editLinkInput.value = editUrl;
       shareLinkOverlay.classList.add('active');
@@ -2432,7 +2475,7 @@
   // ?view=1&data=... → full-page read-only render (share link).
   // ?view=0&data=... → the same layout is loaded straight into the editor,
   // so the exact same link can be reopened for editing instead of viewing.
-  function tryRenderFromUrl(){
+  async function tryRenderFromUrl(){
     const params = new URLSearchParams(window.location.search);
     const dataParam = params.get('data');
     if(!dataParam) return false;
@@ -2440,7 +2483,7 @@
 
     let layout;
     try{
-      layout = decodeLayoutFromUrl(dataParam);
+      layout = await decodeLayoutFromUrl(dataParam);
     }catch(err){
       statusLine.textContent = 'Could not read shared report from link: ' + err.message;
       return false;
@@ -2465,7 +2508,7 @@
   }
 
   /* ---------------- Init ---------------- */
-  if(!tryRenderFromUrl()) fetchWeather();
+  tryRenderFromUrl().then(found => { if(!found) fetchWeather(); });
 
 })();
 </script>
