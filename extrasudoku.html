@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -175,6 +176,13 @@
     color: var(--accent);
     border-color: var(--accent-dim);
     font-weight: 600;
+  }
+  .mini-cell.mini-cell-81 {
+    font-size: 0.44rem;
+  }
+  #miniGrid.mini-grid-81 {
+    max-height: 320px;
+    overflow-y: auto;
   }
 
   .m-button {
@@ -468,6 +476,7 @@
       <option value="medium" selected>Medium (10 master clues)</option>
       <option value="hard">Hard (5 master clues)</option>
       <option value="brutal">Brutal (0 master clues)</option>
+      <option value="extreme">Extreme (81 boards, 1 cell each — slow to generate)</option>
       <option value="custom">Custom&hellip;</option>
     </select>
     <button class="primary" id="newGameBtn">New Puzzle</button>
@@ -480,6 +489,7 @@
   <div class="hud">
     <span class="hud-item" id="timerDisplay">00:00</span>
     <span class="hud-item" id="mistakeDisplay"></span>
+    <span class="hud-item" id="scoreDisplay"></span>
   </div>
 
   <div class="status-bar" id="statusBar">Press "New Puzzle" to begin.</div>
@@ -507,7 +517,13 @@
     grid. Every board, including the master, must independently follow standard sudoku rules, and the
     puzzle is solved the moment the master board is complete. Clue counts are prioritized on the master
     grid first — Easy leaves 15 master clues, Medium 10, Hard 5, and Brutal strips it to 0, filling in
-    only from what the sub-boards force. Pick Custom to set any master clue count from 0 to 81 yourself.</p>
+    only from what the sub-boards force. Pick Custom to set any master clue count from 0 to 81 yourself.
+    <b>Extreme</b> replaces the 9 sub-boards with 81 of them (S11&ndash;S99, one per master cell) — each
+    extreme board contributes just its own single linked cell to the master grid, so the master is only
+    ever solved by cross-referencing eighty-one separate 9x9 puzzles. Generating an Extreme puzzle carves
+    81 boards down to a unique solution each, so it can take significantly longer than the other
+    difficulties — give it a few seconds. Conflicts are always checked live;
+    the Check button additionally flags any filled cell that doesn't match the actual solution.</p>
   </div>
 </div>
 
@@ -549,14 +565,6 @@
     <div class="setting-row">
       <label for="setAutoCandidates">Auto-remove candidates on entry</label>
       <input type="checkbox" id="setAutoCandidates">
-    </div>
-    <div class="setting-row setting-row-select">
-      <label for="setMistakeMode">Mistake counting</label>
-      <select id="setMistakeMode">
-        <option value="none">Don't count</option>
-        <option value="conflict">Only conflicts (row/col/box)</option>
-        <option value="solution">Different from solution</option>
-      </select>
     </div>
     <button class="primary" id="settingsCloseBtn">Done</button>
   </div>
@@ -706,17 +714,25 @@ function generateFullSolution() {
    we keep them numerically synced; boxCells(i) gives the 9 cells within a board for box i).
    ============================================================ */
 
-function generateSuperSudoku(onProgress) {
+// linkCellsFor(i, numBoards): returns the list of [r,c] master-cells that sub-board i
+// is linked to (shares physically with the master grid). For the classic 9-board mode,
+// board i shares its whole quadrant (box) i. For the 81-board "atomic" mode, board i
+// (0..80, laid out row-major as S11..S99) shares exactly ONE master cell: (row, col)
+// where row = Math.floor(i/9), col = i % 9.
+function linkCellsForClassic(i) { return boxCells(i); }
+function linkCellsForAtomic(i) { return [[Math.floor(i / 9), i % 9]]; }
+
+function generateSuperSudoku(onProgress, numBoards = 9, linkCellsFor = linkCellsForClassic) {
   // Step 1: generate master solution
   const master = generateFullSolution();
   onProgress && onProgress("Master board generated\u2026");
 
-  // Step 2: for each sub-board i, fix its quadrant i cells to match master's quadrant i,
-  // then solve the rest of that 9x9 board.
+  // Step 2: for each sub-board i, fix its linked cells to match master's corresponding
+  // cells, then solve the rest of that 9x9 board.
   const subs = [];
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < numBoards; i++) {
     const g = emptyGrid();
-    for (const [r, c] of boxCells(i)) {
+    for (const [r, c] of linkCellsFor(i)) {
       g[r][c] = master[r][c];
     }
     const ok = solveGrid(g, { countLimit: 1 });
@@ -725,15 +741,15 @@ function generateSuperSudoku(onProgress) {
       return null;
     }
     subs.push(g);
-    onProgress && onProgress(`Sub-board S${i + 1} solved\u2026`);
+    if (numBoards <= 9 || i % 9 === 8) onProgress && onProgress(`Sub-board ${i + 1}/${numBoards} solved\u2026`);
   }
 
   return { master, subs };
 }
 
-function generateSuperSudokuRetrying(onProgress, maxTries = 25) {
+function generateSuperSudokuRetrying(onProgress, maxTries = 25, numBoards = 9, linkCellsFor = linkCellsForClassic) {
   for (let t = 0; t < maxTries; t++) {
-    const res = generateSuperSudoku(onProgress);
+    const res = generateSuperSudoku(onProgress, numBoards, linkCellsFor);
     if (res) return res;
   }
   throw new Error("Failed to generate a consistent super sudoku after many tries.");
@@ -753,22 +769,22 @@ function generateSuperSudokuRetrying(onProgress, maxTries = 25) {
 // - for each sub-board i (0..8): 9 quadrants, but quadrant i is the "linked" quadrant shared with master.
 //   linked quadrant cells: identity = `L${i}:${r},${c}`  (this is ALSO master's quadrant i)
 //   other quadrant cells:  identity = `S${i}:${r},${c}`
-function buildCellIdentities(subs) {
-  // returns map boardIdx(0=master,1..9=sub) -> grid of identity strings
+function buildCellIdentities(subs, numBoards = 9, linkCellsFor = linkCellsForClassic) {
+  // returns map boardIdx(0=master,1..N=sub) -> grid of identity strings
   const ids = { master: emptyGrid().map(row => row.map(() => null)), subs: [] };
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < numBoards; i++) {
     const grid = emptyGrid().map(row => row.map(() => null));
     ids.subs.push(grid);
   }
-  for (let i = 0; i < 9; i++) {
-    const linkedSet = new Set(boxCells(i).map(([r,c]) => `${r},${c}`));
+  for (let i = 0; i < numBoards; i++) {
+    const linkedSet = new Set(linkCellsFor(i).map(([r,c]) => `${r},${c}`));
     for (let r = 0; r < 9; r++) {
       for (let c = 0; c < 9; c++) {
         const key = `${r},${c}`;
         if (linkedSet.has(key)) {
           const id = `L${i}:${r},${c}`;
           ids.subs[i][r][c] = id;
-          ids.master[r][c] = id; // master's box i uses same identity
+          ids.master[r][c] = id; // master's linked cell uses same identity
         } else {
           ids.subs[i][r][c] = `S${i}:${r},${c}`;
         }
@@ -825,22 +841,29 @@ function allCellIdentitiesWithValues(subs, master, ids) {
 // but never at the cost of pushing the master board back above target.
 // masterTarget: null means "just carve as far as possible" (legacy/local-only mode).
 const DIFFICULTY_TARGETS = {
-  easy:    { rounds: 2, genAttempts: 1, masterTarget: 15, removalChance: 1.0 },
-  medium:  { rounds: 3, genAttempts: 1, masterTarget: 10, removalChance: 1.0 },
-  hard:    { rounds: 4, genAttempts: 2, masterTarget: 5,  removalChance: 1.0 },
-  brutal:  { rounds: 6, genAttempts: 4, masterTarget: 0,  removalChance: 1.0 },
-  custom:  { rounds: 6, genAttempts: 3, masterTarget: 10, removalChance: 1.0 },
+  easy:    { rounds: 2, genAttempts: 1, masterTarget: 15, removalChance: 1.0, numBoards: 9,  linkCellsFor: linkCellsForClassic },
+  medium:  { rounds: 3, genAttempts: 1, masterTarget: 10, removalChance: 1.0, numBoards: 9,  linkCellsFor: linkCellsForClassic },
+  hard:    { rounds: 4, genAttempts: 2, masterTarget: 5,  removalChance: 1.0, numBoards: 9,  linkCellsFor: linkCellsForClassic },
+  brutal:  { rounds: 6, genAttempts: 4, masterTarget: 0,  removalChance: 1.0, numBoards: 9,  linkCellsFor: linkCellsForClassic },
+  extreme: { rounds: 3, genAttempts: 1, masterTarget: 0,  removalChance: 1.0, numBoards: 81, linkCellsFor: linkCellsForAtomic },
+  custom:  { rounds: 6, genAttempts: 3, masterTarget: 10, removalChance: 1.0, numBoards: 9,  linkCellsFor: linkCellsForClassic },
+};
+
+const BASE_SCORE = {
+  easy: 100e6, medium: 250e6, hard: 500e6, brutal: 1e9, extreme: 3e9, custom: 250e6,
 };
 
 function boardHasUniqueSolution(grid) {
   return countSolutions(grid, 2) === 1;
 }
 
-function puzzleMasterViewOf(puzzleSubs) {
+function puzzleMasterViewOf(puzzleSubs, linkCellsFor = linkCellsForClassic, numBoards = 9) {
   const m = emptyGrid();
-  for (let r = 0; r < 9; r++)
-    for (let c = 0; c < 9; c++)
-      m[r][c] = puzzleSubs[boxIndex(r, c)][r][c];
+  for (let i = 0; i < numBoards; i++) {
+    for (const [r, c] of linkCellsFor(i)) {
+      m[r][c] = puzzleSubs[i][r][c];
+    }
+  }
   return m;
 }
 
@@ -850,11 +873,11 @@ function idLocation(id) {
   return { i, r, c };
 }
 
-function collectIdentities(ids) {
+function collectIdentities(ids, numBoards = 9) {
   const localIds = [];
   const linkedIds = [];
   const seen = new Set();
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < numBoards; i++) {
     for (let r = 0; r < 9; r++) {
       for (let c = 0; c < 9; c++) {
         const id = ids.subs[i][r][c];
@@ -878,12 +901,12 @@ function collectIdentities(ids) {
 // cell (r,c) IS sub-board S_boxIndex(r,c)'s cell (r,c). Once all 9 sub-boards are
 // pinned down uniquely, the master grid is fully and uniquely determined for free.
 // This also means master clues can legitimately go all the way to 0.
-function carveOnePass(puzzleSubs, order, removalChance, targetMasterClues) {
+function carveOnePass(puzzleSubs, order, removalChance, targetMasterClues, linkCellsFor = linkCellsForClassic, numBoards = 9) {
   let removed = 0;
   for (const id of order) {
     if (removalChance < 1 && Math.random() > removalChance) continue;
     if (targetMasterClues != null && id.startsWith('L')) {
-      const cur = countMasterClues(puzzleMasterViewOf(puzzleSubs));
+      const cur = countMasterClues(puzzleMasterViewOf(puzzleSubs, linkCellsFor, numBoards));
       if (cur <= targetMasterClues) continue;
     }
     const { i, r, c } = idLocation(id);
@@ -910,31 +933,35 @@ function carveOnePass(puzzleSubs, order, removalChance, targetMasterClues) {
 function carveToLocalMinimum(subs, ids, difficulty, onProgress, masterTargetOverride) {
   const cfg = DIFFICULTY_TARGETS[difficulty] || DIFFICULTY_TARGETS.medium;
   const rounds = cfg.rounds, removalChance = cfg.removalChance;
+  const numBoards = cfg.numBoards || 9;
+  const linkCellsFor = cfg.linkCellsFor || linkCellsForClassic;
   const masterTarget = masterTargetOverride != null ? masterTargetOverride : cfg.masterTarget;
   const puzzleSubs = subs.map(g => cloneGrid(g));
-  const { localIds, linkedIds } = collectIdentities(ids);
+  const { localIds, linkedIds } = collectIdentities(ids, numBoards);
 
   // Phase 1: hammer the master (linked) clues down toward the target.
   for (let round = 0; round < rounds; round++) {
     onProgress && onProgress(`Carving master clues \u2014 pass ${round + 1}/${rounds}\u2026`);
-    const removed = carveOnePass(puzzleSubs, shuffled(linkedIds), removalChance, masterTarget);
-    const cur = countMasterClues(puzzleMasterViewOf(puzzleSubs));
+    const removed = carveOnePass(puzzleSubs, shuffled(linkedIds), removalChance, masterTarget, linkCellsFor, numBoards);
+    const cur = countMasterClues(puzzleMasterViewOf(puzzleSubs, linkCellsFor, numBoards));
     if ((removed === 0 && removalChance >= 1) || cur <= masterTarget) break;
   }
 
   // Phase 2: mop up local-only clues for extra sparsity (doesn't affect master count).
   for (let round = 0; round < rounds; round++) {
     onProgress && onProgress(`Carving local clues \u2014 pass ${round + 1}/${rounds}\u2026`);
-    const removed = carveOnePass(puzzleSubs, shuffled(localIds), removalChance, null);
+    const removed = carveOnePass(puzzleSubs, shuffled(localIds), removalChance, null, linkCellsFor, numBoards);
     if (removed === 0 && removalChance >= 1) break;
   }
 
-  return { puzzleSubs, masterView: puzzleMasterViewOf(puzzleSubs) };
+  return { puzzleSubs, masterView: puzzleMasterViewOf(puzzleSubs, linkCellsFor, numBoards) };
 }
 
 function carvePuzzle(subs, master, ids, difficulty, onProgress, masterTargetOverride) {
   const cfg = DIFFICULTY_TARGETS[difficulty] || DIFFICULTY_TARGETS.medium;
   const genAttempts = cfg.genAttempts;
+  const numBoards = cfg.numBoards || 9;
+  const linkCellsFor = cfg.linkCellsFor || linkCellsForClassic;
   const masterTarget = masterTargetOverride != null ? masterTargetOverride : cfg.masterTarget;
 
   // Try a few independent sub-board solution sets (regenerated around the same master)
@@ -947,9 +974,9 @@ function carvePuzzle(subs, master, ids, difficulty, onProgress, masterTargetOver
 
   for (let attempt = 1; attempt < genAttempts && bestMasterClues > masterTarget; attempt++) {
     onProgress && onProgress(`Trying alternate sub-board layout ${attempt + 1}/${genAttempts}\u2026`);
-    const regen = regenerateSubsForMaster(master);
+    const regen = regenerateSubsForMaster(master, numBoards, linkCellsFor);
     if (!regen) continue;
-    const regenIds = buildCellIdentities(regen);
+    const regenIds = buildCellIdentities(regen, numBoards, linkCellsFor);
     const candidate = carveToLocalMinimum(regen, regenIds, difficulty, onProgress, masterTarget);
     const clues = countMasterClues(candidate.masterView);
     if (clues < bestMasterClues) {
@@ -964,13 +991,13 @@ function carvePuzzle(subs, master, ids, difficulty, onProgress, masterTargetOver
   return { ...best, solutionSubs: bestSubs };
 }
 
-// Re-solve all 9 sub-boards for the same fixed master (different random fill of the
+// Re-solve all sub-boards for the same fixed master (different random fill of the
 // non-linked cells each time), used to explore alternate carve outcomes.
-function regenerateSubsForMaster(master) {
+function regenerateSubsForMaster(master, numBoards = 9, linkCellsFor = linkCellsForClassic) {
   const subs = [];
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < numBoards; i++) {
     const g = emptyGrid();
-    for (const [r, c] of boxCells(i)) g[r][c] = master[r][c];
+    for (const [r, c] of linkCellsFor(i)) g[r][c] = master[r][c];
     const ok = solveGrid(g, { countLimit: 1 });
     if (ok === 0) return null;
     subs.push(g);
@@ -978,10 +1005,10 @@ function regenerateSubsForMaster(master) {
   return subs;
 }
 
-function countClues(puzzleSubs, ids) {
+function countClues(puzzleSubs, ids, numBoards = 9) {
   const seen = new Set();
   let count = 0;
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < numBoards; i++) {
     for (let r = 0; r < 9; r++) {
       for (let c = 0; c < 9; c++) {
         const id = ids.subs[i][r][c];
@@ -1005,32 +1032,37 @@ function countMasterClues(masterView) {
    ============================================================ */
 
 const state = {
-  solutionSubs: null,   // 9 x 9x9 solved sub-boards
+  solutionSubs: null,   // N x 9x9 solved sub-boards
   solutionMaster: null, // 9x9 master solution
   ids: null,
-  givenSubs: null,      // 9 x 9x9, 0 = not given
-  userSubs: null,       // 9 x 9x9, current user entries (0 = blank), for non-given cells
-  notesSubs: null,      // 9 x 9x9 x Set of pencil marks
+  givenSubs: null,      // N x 9x9, 0 = not given
+  userSubs: null,       // N x 9x9, current user entries (0 = blank), for non-given cells
+  notesSubs: null,      // N x 9x9 x Set of pencil marks
   selected: null,       // {i, r, c}
   noteMode: false,
   solved: false,
-  view: 'master',       // 'master' or 0..8 (sub-board index)
+  view: 'master',       // 'master' or 0..N-1 (sub-board index)
   mistakes: 0,
+  hintsUsed: 0,
   timerSeconds: 0,
   timerHandle: null,
+  numBoards: 9,
+  linkCellsFor: linkCellsForClassic,
+  boardOwner: null,     // r*9+c -> owning board index (inverse of linkCellsFor), for master resolveCell
+  difficulty: 'medium',
+  score: null,
 };
 
 const settings = {
   regionHighlight: true,
   numberHighlight: true,
   showTimer: true,
-  mistakeMode: 'conflict', // 'none' | 'conflict' | 'solution'
   autoCandidates: true,
 };
 
-function deepEmptyNotes() {
+function deepEmptyNotes(numBoards = 9) {
   const arr = [];
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < numBoards; i++) {
     const g = [];
     for (let r = 0; r < 9; r++) {
       const row = [];
@@ -1054,25 +1086,50 @@ const boardTitleEl = document.getElementById('boardTitle');
 // Resolve a (boardCoord) cell in the CURRENT VIEW to its real owning (i, r, c) in the
 // underlying data model. In master view, virtual (r,c) belongs to sub-board boxIndex(r,c)
 // (the linked-quadrant convention). In a sub-board view, it's just that board directly.
+function buildBoardOwner(numBoards, linkCellsFor) {
+  const owner = emptyGrid();
+  for (let i = 0; i < numBoards; i++) {
+    for (const [r, c] of linkCellsFor(i)) owner[r][c] = i;
+  }
+  return owner;
+}
+
 function resolveCell(vr, vc) {
   if (state.view === 'master') {
-    const i = boxIndex(vr, vc);
+    const i = state.boardOwner[vr][vc];
     return { i, r: vr, c: vc };
   }
   return { i: state.view, r: vr, c: vc };
 }
 
+function boardLabel(i) {
+  if (state.numBoards === 81) {
+    const row = Math.floor(i / 9) + 1, col = (i % 9) + 1;
+    return `S${row}${col}`;
+  }
+  return 'S' + (i + 1);
+}
+
 function buildMiniNav() {
   miniGridEl.innerHTML = '';
-  for (let i = 0; i < 9; i++) {
+  miniGridEl.classList.toggle('mini-grid-81', state.numBoards === 81);
+  if (state.numBoards === 81) {
+    miniGridEl.style.gridTemplateColumns = 'repeat(9, 1fr)';
+    miniGridEl.style.width = '198px';
+  } else {
+    miniGridEl.style.gridTemplateColumns = 'repeat(3, 1fr)';
+    miniGridEl.style.width = '108px';
+  }
+  for (let i = 0; i < state.numBoards; i++) {
     const m = document.createElement('div');
     m.className = 'mini-cell';
+    if (state.numBoards === 81) m.classList.add('mini-cell-81');
     m.dataset.idx = i;
-    m.textContent = 'S' + (i + 1);
+    m.textContent = boardLabel(i);
+    m.title = boardLabel(i);
     m.addEventListener('click', () => switchView(i));
     miniGridEl.appendChild(m);
   }
-  masterBtnEl.addEventListener('click', () => switchView('master'));
   updateNavHighlight();
 }
 
@@ -1083,7 +1140,7 @@ function updateNavHighlight() {
   masterBtnEl.classList.toggle('active', state.view === 'master');
   boardTitleEl.innerHTML = state.view === 'master'
     ? 'Master grid'
-    : `Sub-board <b>S${state.view + 1}</b>`;
+    : `Sub-board <b>${boardLabel(state.view)}</b>`;
 }
 
 function switchView(view) {
@@ -1105,7 +1162,7 @@ function buildBoardDOM() {
   // rely on the box borders alone. In sub-board view we highlight the one linked quadrant.
   const linkedSet = state.view === 'master'
     ? null
-    : new Set(boxCells(state.view).map(([r, c]) => `${r},${c}`));
+    : new Set(state.linkCellsFor(state.view).map(([r, c]) => `${r},${c}`));
 
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 9; c++) {
@@ -1124,6 +1181,7 @@ function buildBoardDOM() {
 }
 
 function buildDOM() {
+  masterBtnEl.addEventListener('click', () => switchView('master'));
   buildMiniNav();
   buildBoardDOM();
 
@@ -1222,10 +1280,10 @@ function stripCandidatesFor(i, r, c, v) {
   }
 
   // If this cell is a linked (master) cell, also strip across the master view.
-  if (boxIndex(r, c) === i) {
+  if (state.boardOwner[r][c] === i) {
     const stripMasterPeer = (mr, mc) => {
       if (mr === r && mc === c) return;
-      const owner = boxIndex(mr, mc);
+      const owner = state.boardOwner[mr][mc];
       state.notesSubs[owner][mr][mc].delete(v);
     };
     for (let cc = 0; cc < 9; cc++) if (cc !== c) stripMasterPeer(r, cc);
@@ -1245,21 +1303,17 @@ function inputValue(v) {
     if (notes.has(v)) notes.delete(v); else notes.add(v);
     state.userSubs[i][r][c] = 0; // notes mode doesn't set a value
   } else {
-    if (settings.mistakeMode === 'solution' && v !== 0 && state.solutionSubs) {
-      if (v !== state.solutionSubs[i][r][c]) registerMistake();
-    }
     state.userSubs[i][r][c] = v;
     state.notesSubs[i][r][c].clear();
     if (v !== 0 && settings.autoCandidates) stripCandidatesFor(i, r, c, v);
   }
   renderBoard();
   renderSelection();
-  if (settings.mistakeMode === 'conflict') {
-    // markErrors() (called inside renderBoard) already flags conflicting cells;
-    // count any NEW conflict created by this exact move.
-    const el = cellEl(vr, vc);
-    if (el && el.classList.contains('error')) registerMistake();
-  }
+  // Conflicts (row/col/box duplicates) are always tracked as mistakes.
+  // markErrors() (called inside renderBoard) already flags conflicting cells;
+  // count any NEW conflict created by this exact move.
+  const el = cellEl(vr, vc);
+  if (el && el.classList.contains('error')) registerMistake();
   checkWin();
 }
 
@@ -1270,10 +1324,6 @@ function registerMistake() {
 
 function updateMistakeDisplay() {
   const el = document.getElementById('mistakeDisplay');
-  if (settings.mistakeMode === 'none') {
-    el.textContent = '';
-    return;
-  }
   el.textContent = `Mistakes: ${state.mistakes}`;
   el.classList.toggle('mistake-warn', state.mistakes > 0);
 }
@@ -1290,7 +1340,7 @@ function getMasterView() {
   const m = emptyGrid();
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 9; c++) {
-      const i = boxIndex(r, c);
+      const i = state.boardOwner[r][c];
       m[r][c] = currentValue(i, r, c);
     }
   }
@@ -1375,7 +1425,7 @@ function markErrors() {
 // lightweight progress cue (not a full render of the tiny board).
 function renderMiniProgress() {
   if (!state.givenSubs) return;
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < state.numBoards; i++) {
     const grid = boardGridFor(i);
     const filled = grid.flat().filter(v => v !== 0).length;
     const el = miniGridEl.querySelector(`.mini-cell[data-idx="${i}"]`);
@@ -1404,10 +1454,37 @@ function checkWin() {
 
   state.solved = true;
   stopTimer();
-  statusBar.textContent = 'Master board solved!';
+  const score = computeScore();
+  state.score = score;
+  statusBar.textContent = `Master board solved! Score: ${formatScore(score)}`;
   statusBar.classList.add('win');
+  const winText = document.getElementById('winText');
+  if (winText) {
+    winText.innerHTML = `The master board is complete.<br><br>` +
+      `<span style="color:var(--accent); font-family:var(--font-num); font-size:1.3rem;">${formatScore(score)}</span><br>` +
+      `<span style="font-size:0.78rem;">Time ${formatTime(state.timerSeconds)} &middot; ${state.mistakes} mistake${state.mistakes === 1 ? '' : 's'} &middot; ${state.hintsUsed} hint${state.hintsUsed === 1 ? '' : 's'}</span>`;
+  }
   document.getElementById('winModal').classList.add('show');
+  updateScoreDisplay();
   return true;
+}
+
+// Score = (baseScore for difficulty / elapsed seconds) * 0.9^mistakes * 0.75^hints
+function computeScore() {
+  const base = BASE_SCORE[state.difficulty] || BASE_SCORE.medium;
+  const seconds = Math.max(1, state.timerSeconds);
+  const raw = (base / seconds) * Math.pow(0.9, state.mistakes) * Math.pow(0.75, state.hintsUsed);
+  return Math.round(raw);
+}
+
+function formatScore(n) {
+  return Math.round(n).toLocaleString('en-US');
+}
+
+function updateScoreDisplay() {
+  const el = document.getElementById('scoreDisplay');
+  if (!el) return;
+  el.textContent = state.solved && state.score != null ? `Score: ${formatScore(state.score)}` : '';
 }
 
 /* ============================================================
@@ -1423,11 +1500,19 @@ async function newGame(customTarget) {
     return;
   }
 
+  const cfg = DIFFICULTY_TARGETS[difficulty] || DIFFICULTY_TARGETS.medium;
+  const numBoards = cfg.numBoards || 9;
+  const linkCellsFor = cfg.linkCellsFor || linkCellsForClassic;
+
   document.getElementById('newGameBtn').disabled = true;
   statusBar.textContent = '';
   statusBar.classList.remove('win');
-  genProgress.textContent = 'Generating master solution\u2026';
+  genProgress.textContent = numBoards > 9
+    ? 'Generating master solution\u2026 (Extreme carves 81 boards, this can take 10\u201320s)'
+    : 'Generating master solution\u2026';
   state.solved = false;
+  state.score = null;
+  updateScoreDisplay();
 
   // yield to browser so progress text paints
   await new Promise(r => setTimeout(r, 30));
@@ -1437,7 +1522,7 @@ async function newGame(customTarget) {
     result = await new Promise((resolve, reject) => {
       setTimeout(() => {
         try {
-          const gen = generateSuperSudokuRetrying((msg) => { genProgress.textContent = msg; });
+          const gen = generateSuperSudokuRetrying((msg) => { genProgress.textContent = msg; }, 25, numBoards, linkCellsFor);
           resolve(gen);
         } catch (e) { reject(e); }
       }, 20);
@@ -1449,7 +1534,7 @@ async function newGame(customTarget) {
   }
 
   const { master, subs } = result;
-  const ids = buildCellIdentities(subs);
+  const ids = buildCellIdentities(subs, numBoards, linkCellsFor);
 
   genProgress.textContent = 'Carving clues \u2014 prioritizing the master grid\u2026';
   await new Promise(r => setTimeout(r, 30));
@@ -1468,19 +1553,26 @@ async function newGame(customTarget) {
   state.ids = ids;
   state.givenSubs = carved.puzzleSubs;
   state.userSubs = carved.solutionSubs.map(() => emptyGrid());
-  state.notesSubs = deepEmptyNotes();
+  state.notesSubs = deepEmptyNotes(numBoards);
   state.selected = null;
   state.view = 'master';
   state.mistakes = 0;
+  state.hintsUsed = 0;
+  state.numBoards = numBoards;
+  state.linkCellsFor = linkCellsFor;
+  state.boardOwner = buildBoardOwner(numBoards, linkCellsFor);
+  state.difficulty = difficulty;
   updateMistakeDisplay();
   startTimer();
 
-  const totalClues = countClues(state.givenSubs, ids);
+  const totalClues = countClues(state.givenSubs, ids, numBoards);
   const masterClues = countMasterClues(carved.masterView);
   const label = difficulty === 'custom' ? `custom (target ${customTarget})` : difficulty;
   genProgress.textContent = `${totalClues} unique clues total \u2014 master board has ${masterClues} clues.`;
-  statusBar.textContent = `New ${label} puzzle ready. The master grid needs solving \u2014 use S1\u2013S9 to work each sub-board.`;
+  const navHint = numBoards === 81 ? 'use S11\u2013S99 to work each sub-board' : 'use S1\u2013S9 to work each sub-board';
+  statusBar.textContent = `New ${label} puzzle ready. The master grid needs solving \u2014 ${navHint}.`;
 
+  buildMiniNav();
   updateNavHighlight();
   buildBoardDOM();
   renderBoard();
@@ -1537,6 +1629,7 @@ function giveHint() {
   const correct = state.solutionSubs[i][r][c];
   state.userSubs[i][r][c] = correct;
   state.notesSubs[i][r][c].clear();
+  state.hintsUsed++;
   if (settings.autoCandidates) stripCandidatesFor(i, r, c, correct);
   renderBoard();
   renderSelection();
@@ -1550,15 +1643,39 @@ function giveHint() {
 
 function checkPuzzle() {
   let anyError = superGridEl.querySelector('.cell.error') !== null;
+
+  // Compare every filled, non-given cell in the CURRENT view against the actual solution,
+  // flagging any that differ (even if not a plain row/col/box conflict).
+  let wrongCount = 0;
+  for (let vr = 0; vr < 9; vr++) {
+    for (let vc = 0; vc < 9; vc++) {
+      const { i, r, c } = resolveCell(vr, vc);
+      if (state.givenSubs[i][r][c] !== 0) continue;
+      const uv = state.userSubs[i][r][c];
+      if (uv === 0) continue;
+      const solGrid = state.view === 'master' ? state.solutionMaster : state.solutionSubs[i];
+      const solVal = state.view === 'master' ? solGrid[vr][vc] : solGrid[r][c];
+      const el = cellEl(vr, vc);
+      if (uv !== solVal) {
+        wrongCount++;
+        if (el) el.classList.add('error');
+      }
+    }
+  }
+
   const m = getMasterView();
   let filled = m.every(row => row.every(v => v !== 0));
-  if (anyError) {
+
+  if (wrongCount > 0) {
+    statusBar.textContent = `${wrongCount} cell${wrongCount === 1 ? '' : 's'} in this view don\u2019t match the solution \u2014 check the highlighted cells.`;
+    statusBar.classList.remove('win');
+  } else if (anyError) {
     statusBar.textContent = 'There are conflicting entries \u2014 check the highlighted cells.';
     statusBar.classList.remove('win');
   } else if (filled) {
     checkWin();
   } else {
-    statusBar.textContent = 'No conflicts so far. Keep going!';
+    statusBar.textContent = 'No errors so far. Keep going!';
     statusBar.classList.remove('win');
   }
 }
@@ -1566,7 +1683,7 @@ function checkPuzzle() {
 function clearUserEntries() {
   if (!state.userSubs) return;
   state.userSubs = state.userSubs.map(() => emptyGrid());
-  state.notesSubs = deepEmptyNotes();
+  state.notesSubs = deepEmptyNotes(state.numBoards);
   state.solved = false;
   statusBar.classList.remove('win');
   statusBar.textContent = 'Cleared your entries.';
@@ -1623,13 +1740,11 @@ document.getElementById('customGoBtn').addEventListener('click', () => {
 const setRegionHighlight = document.getElementById('setRegionHighlight');
 const setNumberHighlight = document.getElementById('setNumberHighlight');
 const setTimerCheckbox = document.getElementById('setTimer');
-const setMistakeMode = document.getElementById('setMistakeMode');
 const setAutoCandidates = document.getElementById('setAutoCandidates');
 
 setRegionHighlight.checked = settings.regionHighlight;
 setNumberHighlight.checked = settings.numberHighlight;
 setTimerCheckbox.checked = settings.showTimer;
-setMistakeMode.value = settings.mistakeMode;
 setAutoCandidates.checked = settings.autoCandidates;
 
 document.getElementById('settingsBtn').addEventListener('click', () => {
@@ -1650,11 +1765,6 @@ setNumberHighlight.addEventListener('change', () => {
 setTimerCheckbox.addEventListener('change', () => {
   settings.showTimer = setTimerCheckbox.checked;
   updateTimerDisplay();
-});
-setMistakeMode.addEventListener('change', () => {
-  settings.mistakeMode = setMistakeMode.value;
-  state.mistakes = 0;
-  updateMistakeDisplay();
 });
 setAutoCandidates.addEventListener('change', () => {
   settings.autoCandidates = setAutoCandidates.checked;
