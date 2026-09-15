@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stretch Timer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --ink: #1c1b19;
+    --paper: #ede7da;
+    --rust: #a8492e;
+    --moss: #4c5f45;
+    --line: #c9c0aa;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Space Mono', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--moss);
+    margin-bottom: 6px;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 32px;
+    text-align: center;
+  }
+
+  .ring-wrap {
+    position: relative;
+    width: 260px;
+    height: 260px;
+    margin-bottom: 32px;
+  }
+
+  svg { transform: rotate(-90deg); }
+
+  .track { stroke: var(--line); }
+  .progress {
+    stroke: var(--rust);
+    transition: stroke-dashoffset 0.2s linear;
+    stroke-linecap: round;
+  }
+
+  .center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #status {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--moss);
+    margin-bottom: 8px;
+  }
+
+  #display {
+    font-family: 'Fraunces', serif;
+    font-size: 58px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  #display.long { font-size: 42px; }
+
+  .controls {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+  }
+
+  button {
+    font-family: 'Space Mono', monospace;
+    border: 2px solid var(--ink);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    transition: transform 0.1s ease, background 0.15s ease, color 0.15s ease;
+  }
+
+  button:active { transform: scale(0.96); }
+
+  #playPause {
+    padding: 14px 28px;
+    font-size: 14px;
+    font-weight: 700;
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 3px;
+  }
+
+  #playPause:hover { background: var(--rust); border-color: var(--rust); }
+
+  .icon-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 3px;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .icon-btn:hover { border-color: var(--rust); color: var(--rust); }
+
+  footer {
+    margin-top: 28px;
+    font-size: 10px;
+    color: var(--moss);
+    letter-spacing: 0.05em;
+  }
+
+  /* Modal */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(28, 27, 25, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 10;
+  }
+
+  .overlay.open { opacity: 1; pointer-events: auto; }
+
+  .modal {
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    padding: 24px;
+    width: 100%;
+    max-width: 360px;
+    transform: translateY(8px);
+    transition: transform 0.2s ease;
+  }
+
+  .overlay.open .modal { transform: translateY(0); }
+
+  .modal h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    margin: 0 0 4px;
+  }
+
+  .modal p.sub {
+    font-size: 11px;
+    color: var(--moss);
+    margin: 0 0 18px;
+  }
+
+  .field {
+    margin-bottom: 16px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    color: var(--moss);
+    margin-bottom: 6px;
+  }
+
+  .time-inputs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .time-inputs input {
+    width: 100%;
+    font-family: 'Space Mono', monospace;
+    font-size: 15px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: #fff;
+    color: var(--ink);
+  }
+
+  .time-inputs span { font-size: 12px; color: var(--moss); }
+
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .modal-actions button {
+    flex: 1;
+    padding: 10px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  #saveSettings { background: var(--rust); border-color: var(--rust); color: var(--paper); }
+  #saveSettings:hover { opacity: 0.9; }
+  #cancelSettings:hover { border-color: var(--rust); color: var(--rust); }
+
+  .hint {
+    text-align: center;
+    font-size: 10px;
+    color: var(--moss);
+    margin-top: 18px;
+  }
+</style>
+</head>
+<body>
+
+<div class="label">STRETCH TIMER</div>
+<h1>A five minute briefing<br>that isn't</h1>
+
+<div class="ring-wrap">
+  <svg viewBox="0 0 200 200" width="260" height="260">
+    <circle cx="100" cy="100" r="90" class="track" stroke-width="5" fill="none"/>
+    <circle id="ring" cx="100" cy="100" r="90" class="progress" stroke-width="5" fill="none"
+      stroke-dasharray="565.48" stroke-dashoffset="0"/>
+  </svg>
+  <div class="center">
+    <div id="status">READY</div>
+    <div id="display">05:00</div>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="icon-btn" id="resetBtn" title="Reset">↺</button>
+  <button id="playPause">Start</button>
+  <button class="icon-btn" id="soundBtn" title="Sound">🔊</button>
+  <button class="icon-btn" id="settingsBtn" title="Settings">⚙</button>
+</div>
+
+<footer>displayed time and actual time can differ</footer>
+<p class="hint">space to start/pause · r to reset</p>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2>Session setup</h2>
+    <p class="sub">Set what shows on the clock, and how long it actually runs.</p>
+
+    <div class="field">
+      <label>DISPLAYED TIME</label>
+      <div class="time-inputs">
+        <input type="number" id="visMin" min="0" max="99" value="5">
+        <span>m</span>
+        <input type="number" id="visSec" min="0" max="59" value="0">
+        <span>s</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>ACTUAL DURATION</label>
+      <div class="time-inputs">
+        <input type="number" id="realMin" min="0" max="999" value="24">
+        <span>m</span>
+        <input type="number" id="realSec" min="0" max="59" value="20">
+        <span>s</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>DECIMAL PLACES</label>
+      <div class="time-inputs">
+        <input type="number" id="decimals" min="0" max="3" value="0">
+        <span>digits after the seconds (0–3)</span>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button id="cancelSettings">Cancel</button>
+      <button id="saveSettings">Save &amp; reset</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let visualTotal = 300;
+  let realTotal = 1460;
+  let realRemainingMs = realTotal * 1000;
+  let running = false;
+  let soundOn = true;
+  let lastTs = null;
+  let rafId = null;
+  let decimalPlaces = 0;
+
+  const display = document.getElementById('display');
+  const status = document.getElementById('status');
+  const ring = document.getElementById('ring');
+  const playPause = document.getElementById('playPause');
+  const resetBtn = document.getElementById('resetBtn');
+  const soundBtn = document.getElementById('soundBtn');
+  const settingsBtn = document.getElementById('settingsBtn');
+  const overlay = document.getElementById('overlay');
+  const cancelSettings = document.getElementById('cancelSettings');
+  const saveSettings = document.getElementById('saveSettings');
+  const visMin = document.getElementById('visMin');
+  const visSec = document.getElementById('visSec');
+  const realMin = document.getElementById('realMin');
+  const realSec = document.getElementById('realSec');
+  const decimalsInput = document.getElementById('decimals');
+
+  const CIRC = 2 * Math.PI * 90;
+
+  let audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+  function beep(freq = 600, dur = 0.1, vol = 0.08) {
+    if (!soundOn || !audioCtx) return;
+    try {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur);
+    } catch (e) {}
+  }
+  function chime() {
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => setTimeout(() => beep(f, 0.5, 0.15), i * 180));
+  }
+
+  function fmt(sec, places) {
+    sec = Math.max(0, sec);
+    const m = Math.floor(sec / 60);
+    const s = sec - m * 60;
+    const sStr = places > 0 ? s.toFixed(places) : String(Math.floor(s)).padStart(2, '0');
+    const sPadded = places > 0
+      ? (s < 10 ? '0' + sStr : sStr)
+      : sStr;
+    return `${String(m).padStart(2,'0')}:${sPadded}`;
+  }
+
+  function render() {
+    const remainSec = realRemainingMs / 1000;
+    const ratio = remainSec / realTotal;
+    const visualRemain = visualTotal * ratio;
+    const shown = decimalPlaces > 0 ? visualRemain : Math.ceil(visualRemain);
+    const text = fmt(shown, decimalPlaces);
+    display.textContent = text;
+    display.classList.toggle('long', text.length > 5);
+    ring.style.strokeDashoffset = CIRC - ratio * CIRC;
+  }
+
+  function tick(ts) {
+    if (!running) return;
+    if (!lastTs) lastTs = ts;
+    const dt = ts - lastTs;
+    lastTs = ts;
+    realRemainingMs -= dt;
+    if (realRemainingMs <= 0) {
+      realRemainingMs = 0;
+      render();
+      stop();
+      status.textContent = 'DONE';
+      chime();
+      return;
+    }
+    render();
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function start() {
+    if (realRemainingMs <= 0) reset();
+    ensureAudio();
+    running = true;
+    lastTs = null;
+    playPause.textContent = 'Pause';
+    status.textContent = 'RUNNING';
+    beep(650, 0.08, 0.06);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function stop() {
+    running = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    playPause.textContent = 'Resume';
+    if (realRemainingMs > 0) status.textContent = 'PAUSED';
+  }
+
+  function toggle() {
+    ensureAudio();
+    if (running) { stop(); beep(420, 0.08, 0.06); } else { start(); }
+  }
+
+  function reset() {
+    stop();
+    realRemainingMs = realTotal * 1000;
+    playPause.textContent = 'Start';
+    status.textContent = 'READY';
+    render();
+  }
+
+  function openModal() { overlay.classList.add('open'); }
+  function closeModal() { overlay.classList.remove('open'); }
+
+  function saveAndReset() {
+    const vm = parseInt(visMin.value) || 0;
+    const vs = parseInt(visSec.value) || 0;
+    const rm = parseInt(realMin.value) || 0;
+    const rs = parseInt(realSec.value) || 0;
+    visualTotal = Math.max(1, vm * 60 + vs);
+    realTotal = Math.max(1, rm * 60 + rs);
+    decimalPlaces = Math.min(3, Math.max(0, parseInt(decimalsInput.value) || 0));
+    reset();
+    closeModal();
+  }
+
+  playPause.addEventListener('click', toggle);
+  resetBtn.addEventListener('click', reset);
+  soundBtn.addEventListener('click', () => {
+    soundOn = !soundOn;
+    soundBtn.textContent = soundOn ? '🔊' : '🔇';
+    if (soundOn) { ensureAudio(); beep(880, 0.1, 0.1); }
+  });
+  settingsBtn.addEventListener('click', openModal);
+  cancelSettings.addEventListener('click', closeModal);
+  saveSettings.addEventListener('click', saveAndReset);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.code === 'Space') { e.preventDefault(); toggle(); }
+    else if (e.code === 'KeyR') reset();
+  });
+
+  render();
+</script>
+</body>
+</html>
