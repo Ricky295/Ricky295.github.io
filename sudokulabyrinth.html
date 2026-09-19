@@ -1082,20 +1082,6 @@ if (typeof module !== 'undefined' && module.exports) {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            width: 100%;
-        }
-
-        /* Square, scalable wrapper: this is the only element that gets an
-           explicit size (capped by max-width/max-height); everything inside
-           fills it at 100%. aspect-ratio:1 forces height to always match
-           width, so the maze can never look "stretched" regardless of the
-           parent's flex/grid sizing on any screen. */
-        #maze-view-wrapper {
-            width: 100% !important;
-            max-width: min(560px, 88vw) !important;
-            max-height: 70vh !important;
-            aspect-ratio: 1 / 1 !important;
-            margin: 0 auto !important;
         }
 
         #maze-view-container {
@@ -1103,38 +1089,53 @@ if (typeof module !== 'undefined' && module.exports) {
             background: #000;
             padding: 1px;
             border-radius: 8px;
-            overflow: hidden;
+            /* was overflow:hidden — that clipped the .player-cell glow/box-shadow
+               whenever the player sat in the outermost row or column of the
+               viewport, making the dot look like it was cut off at the edge. */
+            overflow: visible;
             box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
-            width: 100% !important;
-            height: 100% !important;
-            aspect-ratio: 1 / 1 !important;
-            box-sizing: border-box !important;
-            display: block !important;
         }
 
         #mazeTable {
             border-collapse: collapse;
-            table-layout: fixed !important;
+            table-layout: fixed;
             user-select: none;
-            width: 100% !important;
-            height: 100% !important;
-            aspect-ratio: 1 / 1 !important;
         }
 
         #mazeTable td {
-            width: auto !important;
-            height: auto !important;
+            width: var(--cell-size);
+            height: var(--cell-size);
             padding: 0;
             box-sizing: border-box;
             background: #0d0d12;
             text-align: center;
             font-size: 10px;
             font-weight: bold;
-            line-height: 1;
+            line-height: var(--cell-size);
             vertical-align: middle;
             position: relative;
-            overflow: hidden;
         }
+
+        body.maze-zoomed #mazeTable td { font-size: 16px; }
+        body.maze-zoomed .cell-known,
+        body.maze-zoomed .cell-mystery { font-size: 18px; }
+        body.maze-zoomed .bb { border-bottom: 3px solid #3b82f6 !important; }
+        body.maze-zoomed .br { border-right: 3px solid #3b82f6 !important; }
+
+        #zoom-toggle {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            margin-left: 8px;
+            cursor: pointer;
+            color: #93c5fd;
+            background: rgba(59, 130, 246, 0.12);
+            border: 1px solid #3b82f6;
+            border-radius: 6px;
+            line-height: 1.5;
+        }
+        #zoom-toggle:hover { background: rgba(59, 130, 246, 0.28); }
+        #zoom-toggle.active { background: #3b82f6; color: #06121f; }
 
         .bb { border-bottom: 2px solid #3b82f6 !important; }
         .br { border-right: 2px solid #3b82f6 !important; }
@@ -1144,6 +1145,7 @@ if (typeof module !== 'undefined' && module.exports) {
             background-color: #10b981 !important;
             border-radius: 50%;
             transform: scale(0.85);
+            transform-origin: center center;
             box-shadow: 0 0 8px #10b981;
             z-index: 10;
         }
@@ -1724,7 +1726,10 @@ if (typeof module !== 'undefined' && module.exports) {
         <div class="panel">
             <div class="panel-title">
                 <span>The Labyrinth Viewport</span>
-                <span id="maze-dimension-indicator" style="font-size:0.75rem; color:var(--text-muted);">450 x 450 grid</span>
+                <span style="display:flex; align-items:center;">
+                    <span id="maze-dimension-indicator" style="font-size:0.75rem; color:var(--text-muted);">450 x 450 grid</span>
+                    <button id="zoom-toggle" type="button" title="Toggle viewport zoom (35×35 / 20×20)">🔍 35×35</button>
+                </span>
             </div>
 
             <div class="mini-stat-row">
@@ -1737,10 +1742,8 @@ if (typeof module !== 'undefined' && module.exports) {
             </div>
 
             <div class="maze-area">
-                <div id="maze-view-wrapper">
-                    <div id="maze-view-container">
-                        <table id="mazeTable"></table>
-                    </div>
+                <div id="maze-view-container">
+                    <table id="mazeTable"></table>
                 </div>
 
                 <!-- Minimap & Instruction Bar -->
@@ -1954,7 +1957,7 @@ if (typeof module !== 'undefined' && module.exports) {
         // --- Core Constraints ---
         const MAZE_W = 450;
         const MAZE_H = 450;
-        const VIEW_SIZE = 35; // Responsive camera viewport window
+        let VIEW_SIZE = 35; // Responsive camera viewport window (toggleable: 35 wide / 20 zoomed)
         
         let mazeData = null;
         let itemGrid = null; // Stores item codes: 0=empty, 1-9=known numbers, 10=mystery '?'
@@ -2648,6 +2651,68 @@ if (typeof module !== 'undefined' && module.exports) {
         let prevCellClass = null; // parallel 2D array caching last-applied className per cell, to skip no-op DOM writes
         let prevCellText = null;  // parallel 2D array caching last-applied textContent per cell
 
+        // --- Camera ---
+        // Hard-clamps the viewport so the player is always inside it, including
+        // right after a zoom change (VIEW_SIZE just changed, so old viewX/viewY
+        // may now be invalid) or a teleport/multi-cell jump.
+        function updateCamera() {
+            const maxX = MAZE_W - VIEW_SIZE;
+            const maxY = MAZE_H - VIEW_SIZE;
+            const pad = Math.min(6, Math.floor((VIEW_SIZE - 1) / 2));
+
+            let minVX = playerX - (VIEW_SIZE - 1 - pad);
+            let maxVX = playerX - pad;
+            let minVY = playerY - (VIEW_SIZE - 1 - pad);
+            let maxVY = playerY - pad;
+
+            if (viewX < minVX) viewX = minVX;
+            if (viewX > maxVX) viewX = maxVX;
+            if (viewY < minVY) viewY = minVY;
+            if (viewY > maxVY) viewY = maxVY;
+
+            if (viewX < 0) viewX = 0;
+            if (viewY < 0) viewY = 0;
+            if (viewX > maxX) viewX = maxX;
+            if (viewY > maxY) viewY = maxY;
+
+            if (playerX < viewX || playerX >= viewX + VIEW_SIZE) {
+                viewX = Math.max(0, Math.min(maxX, playerX - Math.floor(VIEW_SIZE / 2)));
+            }
+            if (playerY < viewY || playerY >= viewY + VIEW_SIZE) {
+                viewY = Math.max(0, Math.min(maxY, playerY - Math.floor(VIEW_SIZE / 2)));
+            }
+        }
+
+        // --- Viewport zoom toggle (35x35 <-> 20x20) ---
+        function setViewSize(size) {
+            VIEW_SIZE = size;
+            // Bigger cells when there are fewer of them, so the viewport stays
+            // filling the same physical box.
+            document.documentElement.style.setProperty('--cell-size', size <= 20 ? '28px' : '16px');
+            document.body.classList.toggle('maze-zoomed', size <= 20);
+            mazeCellNodes = null; // force full DOM rebuild at the new dimensions
+            updateCamera();
+            const btn = document.getElementById('zoom-toggle');
+            if (btn) {
+                btn.textContent = (size <= 20) ? '🔍 20×20' : '🔍 35×35';
+                btn.classList.toggle('active', size <= 20);
+            }
+            renderMazeViewport();
+            if (typeof drawMinimap === 'function') drawMinimap();
+        }
+
+        (function initZoomToggle() {
+            const btn = document.getElementById('zoom-toggle');
+            if (!btn) return;
+            btn.addEventListener('click', () => setViewSize(VIEW_SIZE === 35 ? 20 : 35));
+            document.addEventListener('keydown', (e) => {
+                if (e.key !== 'z' && e.key !== 'Z') return;
+                const t = e.target;
+                if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+                setViewSize(VIEW_SIZE === 35 ? 20 : 35);
+            });
+        })();
+
         function buildMazeViewportDom() {
             const table = document.getElementById('mazeTable');
             table.innerHTML = '';
@@ -2806,11 +2871,7 @@ if (typeof module !== 'undefined' && module.exports) {
                     renderInventorySlots();
                 }
 
-                const pad = 6;
-                if (playerX - viewX < pad && viewX > 0) viewX--;
-                if (playerX - viewX >= VIEW_SIZE - pad && viewX < MAZE_W - VIEW_SIZE) viewX++;
-                if (playerY - viewY < pad && viewY > 0) viewY--;
-                if (playerY - viewY >= VIEW_SIZE - pad && viewY < MAZE_H - VIEW_SIZE) viewY++;
+                updateCamera();
 
                 scheduleRender();
             }
@@ -3579,11 +3640,7 @@ if (typeof module !== 'undefined' && module.exports) {
                     renderInventorySlots();
                 }
 
-                const pad = 6;
-                if (playerX - viewX < pad && viewX > 0) viewX--;
-                if (playerX - viewX >= VIEW_SIZE - pad && viewX < MAZE_W - VIEW_SIZE) viewX++;
-                if (playerY - viewY < pad && viewY > 0) viewY--;
-                if (playerY - viewY >= VIEW_SIZE - pad && viewY < MAZE_H - VIEW_SIZE) viewY++;
+                updateCamera();
                 return true;
             }
             return false;
