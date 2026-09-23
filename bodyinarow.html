@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Body in a Row - Deluxe Edition</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Font Inter & Fredoka for playful Wii-style look -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Fredoka', 'Inter', sans-serif;
+            background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 50%, #e0e7ff 100%);
+            min-height: 100vh;
+            user-select: none;
+        }
+
+        /* Glassmorphism styling */
+        .wii-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+        }
+
+        .wii-button {
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .wii-button:hover {
+            transform: translateY(-2px) scale(1.02);
+        }
+        .wii-button:active {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        /* Tile pop animation */
+        @keyframes popIn {
+            0% { transform: scale(0.3); opacity: 0; }
+            70% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .tile-pop {
+            animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        /* Hint highlight: pulsing amber ring around the suggested cell */
+        @keyframes hintPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.85), 0 0 0 3px #f59e0b; }
+            50%      { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0), 0 0 0 3px #f59e0b; }
+        }
+        .hint-pulse {
+            animation: hintPulse 1.2s ease-in-out infinite;
+        }
+
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="text-slate-800 flex flex-col min-h-screen">
+
+    <header class="w-full bg-white/80 backdrop-blur-md border-b border-sky-100 py-3 px-4 sm:px-8 flex justify-between items-center sticky top-0 z-30 shadow-sm">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-400 to-blue-600 flex items-center justify-center text-white text-xl font-bold shadow-md shadow-sky-200">
+                <span aria-hidden="true">🧍‍🧍‍🧍</span>
+            </div>
+            <div>
+                <h1 class="text-xl sm:text-2xl font-bold bg-gradient-to-r from-sky-600 to-indigo-600 bg-clip-text text-transparent">
+                    Body in a Row
+                </h1>
+                <p class="text-xs text-slate-500 font-medium hidden sm:block">Match Head, Torso & Legs in any 3-in-a-row direction!</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-2 sm:space-x-4">
+            <button id="btnSoundToggle" onclick="game.toggleSound()" class="wii-button p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold flex items-center space-x-1.5">
+                <span id="soundIcon" class="text-sky-500" aria-hidden="true">🔊</span>
+                <span class="hidden md:inline">Sound</span>
+            </button>
+            <button onclick="game.showConfigModal()" class="wii-button px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-semibold text-sm shadow-md shadow-sky-200 flex items-center space-x-2">
+                <span aria-hidden="true">⚙️</span>
+                <span>New Game</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-grow container mx-auto px-2 sm:px-4 py-4 max-w-7xl flex flex-col lg:flex-row gap-6 items-start justify-center">
+
+        <!-- Left Sidebar: Player Info & Status -->
+        <div class="w-full lg:w-80 flex flex-col gap-4">
+            <div class="wii-card rounded-3xl p-5 border">
+                <div class="flex justify-between items-center mb-3">
+                    <span id="roundIndicator" class="px-3 py-1 rounded-full bg-sky-100 text-sky-700 text-xs font-bold uppercase tracking-wider">
+                        Round 1
+                    </span>
+                    <span id="modeBadge" class="px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">
+                        2 Players (6x6)
+                    </span>
+                </div>
+
+                <div id="turnBanner" class="p-3 rounded-2xl bg-slate-100 flex items-center justify-between transition-all">
+                    <div class="flex items-center space-x-3">
+                        <div id="turnAvatar" class="w-10 h-10 rounded-xl bg-red-500 flex items-center justify-center text-white font-bold text-lg shadow">
+                            P1
+                        </div>
+                        <div>
+                            <div class="text-xs text-slate-500 font-semibold uppercase">Current Turn</div>
+                            <div id="turnPlayerName" class="font-bold text-slate-800">Player 1</div>
+                        </div>
+                    </div>
+                    <div id="turnTypeBadge" class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-white/80 border text-slate-600">
+                        Human
+                    </div>
+                </div>
+            </div>
+
+            <div id="playersList" class="flex flex-col gap-2.5">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+
+        <!-- Center Column: Board Grid & Current Piece -->
+        <div class="flex-grow w-full flex flex-col items-center gap-4">
+            <div class="w-full max-w-2xl flex flex-col sm:flex-row gap-3 items-center justify-between">
+                <div id="currentPieceCard" class="w-full sm:w-auto bg-white/90 backdrop-blur rounded-2xl p-3 px-5 border border-sky-200 shadow-sm flex items-center space-x-3">
+                    <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Drawn Piece:</div>
+                    <div id="activePieceBadge" class="flex items-center space-x-2 px-3 py-1 rounded-xl bg-sky-500 text-white font-bold text-sm shadow-sm">
+                        <span id="activePieceIcon" aria-hidden="true">🧑</span>
+                        <span id="activePieceName">Head</span>
+                    </div>
+                </div>
+
+                <div class="w-full sm:w-auto bg-white/80 backdrop-blur rounded-2xl p-3 px-4 border border-slate-200 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 shadow-sm">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-indigo-500" aria-hidden="true">🎓</span>
+                        <span class="text-xs font-bold text-slate-700">Practice:</span>
+                        <span id="practiceLevelLabel" class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600">None</span>
+                    </div>
+
+                    <!-- Heatmap on/off switch (only shown when practice = High) -->
+                    <label id="heatmapSwitchWrap" class="hidden inline-flex items-center cursor-pointer" title="Show or hide the heatmap on the board">
+                        <input type="checkbox" id="heatmapSwitch" checked onchange="game.toggleBoardHeatmap(this.checked)" class="sr-only peer">
+                        <div class="relative w-8 h-4 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                        <span class="ms-1.5 text-xs font-semibold text-slate-700">Heatmap</span>
+                    </label>
+
+                    <!-- Hint button -->
+                    <button id="hintBtn" type="button" onclick="game.useHint()" class="hidden wii-button px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-amber-950 font-bold text-xs shadow-sm items-center gap-1.5">
+                        <span aria-hidden="true">💡</span>
+                        <span>Hint</span>
+                        <span id="hintCountBadge" class="hidden px-1.5 rounded-full bg-white/70 text-[10px] font-extrabold">0</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="feedbackPanel" class="w-full max-w-2xl p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 hidden transition-all flex items-center justify-between shadow-sm">
+                <div class="flex items-center space-x-2">
+                    <span class="text-xs font-bold uppercase tracking-wide text-amber-700">Last Move Rating:</span>
+                    <span id="moveBadgeCategory" class="text-sm font-extrabold text-amber-800">Best Move!</span>
+                </div>
+                <span id="moveScorePercent" class="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-200 text-amber-900">--</span>
+            </div>
+
+            <div class="wii-card rounded-3xl p-3 sm:p-5 border flex flex-col items-center justify-center relative max-w-2xl w-full shadow-xl">
+                <div id="boardGrid" class="grid gap-1.5 sm:gap-2 w-full aspect-square max-w-[550px] bg-slate-200/70 p-2 sm:p-3 rounded-2xl border border-slate-300">
+                    <!-- Dynamic Grid Tiles -->
+                </div>
+
+                <!-- Heatmap legend + "analyzing" chip (High practice only) -->
+                <div id="heatmapLegend" class="hidden w-full max-w-[550px] mt-3 flex items-center justify-between gap-3 text-[11px] font-semibold text-slate-600">
+                    <div class="flex items-center gap-2 flex-grow">
+                        <span>Worse</span>
+                        <div class="h-2 flex-grow rounded-full" style="background: linear-gradient(90deg, rgb(239,68,68), rgb(239,198,68), rgb(34,197,94));"></div>
+                        <span>Better</span>
+                    </div>
+                </div>
+
+                <!-- Shown while the evaluator runs (heatmap at High, or a hint at any level) -->
+                <div id="analyzingChip" class="hidden mt-3 px-3 py-1 rounded-full bg-sky-100 text-sky-700 text-[11px] font-bold">Analyzing…</div>
+
+                <div id="cpuThinking" class="absolute inset-0 bg-white/40 backdrop-blur-[2px] rounded-3xl flex flex-col items-center justify-center hidden z-20">
+                    <div class="p-4 rounded-2xl bg-white/90 shadow-xl border flex items-center space-x-3">
+                        <div class="w-6 h-6 border-3 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span class="text-sm font-bold text-slate-700" id="cpuThinkingText">CPU is evaluating move...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="configModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="wii-card bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-white max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <span class="text-sky-500" aria-hidden="true">🎛️</span> Game Setup
+                </h2>
+                <button onclick="game.closeConfigModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">
+                    <span aria-hidden="true">✕</span>
+                </button>
+            </div>
+
+            <form id="configForm" onsubmit="game.startNewGame(event)" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-2">Game Mode & Grid Size</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="relative flex flex-col p-3 rounded-2xl border-2 cursor-pointer transition-all peer-checked:border-sky-500 hover:bg-slate-50 border-slate-200 text-center">
+                            <input type="radio" name="gameMode" value="2p" checked class="sr-only peer" onchange="game.onModeChange('2p')">
+                            <div class="peer-checked:text-sky-600 font-bold text-sm">2 Players</div>
+                            <div class="text-xs text-slate-500">6 x 6 Grid</div>
+                            <div class="absolute inset-0 rounded-2xl border-2 border-transparent peer-checked:border-sky-500 pointer-events-none"></div>
+                        </label>
+
+                        <label class="relative flex flex-col p-3 rounded-2xl border-2 cursor-pointer transition-all peer-checked:border-sky-500 hover:bg-slate-50 border-slate-200 text-center">
+                            <input type="radio" name="gameMode" value="4p" class="sr-only peer" onchange="game.onModeChange('4p')">
+                            <div class="peer-checked:text-sky-600 font-bold text-sm">4 Players</div>
+                            <div class="text-xs text-slate-500">10 x 10 Grid</div>
+                            <div class="absolute inset-0 rounded-2xl border-2 border-transparent peer-checked:border-sky-500 pointer-events-none"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-2">Player Settings</label>
+                    <div id="playerConfigContainer" class="space-y-3">
+                        <!-- Populated via JS -->
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-2">Practice / Assistant Strength</label>
+                    <select id="cfgPracticeLevel" class="w-full p-3 rounded-2xl border border-slate-300 bg-white font-semibold text-sm focus:ring-2 focus:ring-sky-400 outline-none">
+                        <option value="none">None (Standard Match)</option>
+                        <option value="low">Low (Show Move Category Badges)</option>
+                        <option value="medium">Medium (Show Badges + Exact Move Score %)</option>
+                        <option value="high">High (Show Full Heatmap Overlay on Board)</option>
+                    </select>
+                    <label id="cfgHintsWrap" class="mt-3 flex items-start gap-3 p-3 rounded-2xl border border-slate-200 bg-slate-50 cursor-pointer">
+                        <input type="checkbox" id="cfgAllowHints" checked class="mt-0.5 w-4 h-4 accent-amber-500">
+                        <span>
+                            <span class="block text-sm font-bold text-slate-700"><span aria-hidden="true">💡</span> Allow hints</span>
+                            <span class="block text-xs text-slate-500">Adds a Hint button that highlights the best move. Hints used are noted in the end-of-game recap. Works at any Practice level, including None.</span>
+                        </span>
+                    </label>
+                </div>
+
+                <button type="submit" class="wii-button w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 text-white font-bold text-base shadow-lg shadow-sky-200">
+                    Start Game
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="recapModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="wii-card bg-gradient-to-b from-white via-sky-50/60 to-indigo-50/80 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-white max-h-[90vh] overflow-y-auto">
+            <div class="text-center mb-6">
+                <div class="inline-flex p-4 rounded-3xl bg-gradient-to-tr from-emerald-400 to-teal-500 text-white text-3xl mb-3 shadow-lg shadow-emerald-200">
+                    <span aria-hidden="true">🏆</span>
+                </div>
+                <h2 id="winnerText" class="text-3xl font-extrabold bg-gradient-to-r from-sky-600 to-indigo-600 bg-clip-text text-transparent">Player 1 Wins!</h2>
+                <p class="text-xs text-slate-500 font-semibold mt-1">Match Completed & Fully Evaluated</p>
+            </div>
+
+            <!-- Shown only if the player used hints during this game -->
+            <div id="recapHintBanner" class="hidden mb-5 p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center gap-2.5 shadow-sm">
+                <span class="text-xl" aria-hidden="true">💡</span>
+                <div class="text-xs font-semibold" id="recapHintText">Hints were used in this game.</div>
+            </div>
+
+            <!-- Player Accuracy Summary Table -->
+            <div class="mb-6">
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Match Performance</h3>
+                <div id="recapStatsList" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+
+            <!-- Replay Section with Heatmap Toggle -->
+            <div class="border-t border-slate-200/80 pt-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Move-by-Move Review</h3>
+                    <div class="flex items-center space-x-3">
+                        <label class="inline-flex items-center cursor-pointer bg-white/90 px-3 py-1 rounded-xl border border-sky-200 shadow-xs">
+                            <input type="checkbox" id="recapHeatmapToggle" onchange="game.toggleRecapHeatmap(this.checked)" class="sr-only peer">
+                            <div class="relative w-8 h-4 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                            <span class="ms-1.5 text-xs font-semibold text-slate-700">Heatmap Overlay</span>
+                        </label>
+                        <div class="text-xs font-bold text-slate-600 bg-white/80 px-3 py-1 rounded-full shadow-xs border border-sky-100">
+                            Move <span id="replayMoveIdx">0</span> / <span id="replayTotalMoves">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-4 items-center mb-4">
+                    <div id="replayMiniBoard" class="grid gap-1 w-48 h-48 bg-slate-200/80 p-2 rounded-2xl border border-slate-300 shadow-inner">
+                        <!-- Mini grid display -->
+                    </div>
+                    <div class="flex-grow space-y-3 text-left w-full">
+                        <div id="replayMoveDetail" class="p-3.5 rounded-2xl bg-white/90 border border-slate-200 text-xs font-semibold space-y-1.5 shadow-sm">
+                            <div>Player: <span id="replayPlayerName" class="font-bold text-slate-800">--</span></div>
+                            <div>Piece Played: <span id="replayPieceType" class="font-bold text-sky-600">--</span></div>
+                            <div>Evaluation Score: <span id="replayEvalScore" class="font-bold text-sky-600">--</span></div>
+                            <div>Category: <span id="replayCategory" class="font-bold text-indigo-600">--</span></div>
+                            <div id="replayHintRow" class="hidden">Hint: <span class="font-bold text-amber-600">💡 Used on this move</span></div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="game.navigateReplay(-1)" class="wii-button flex-1 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 font-bold text-xs text-slate-700 shadow-xs">
+                                <span aria-hidden="true">‹</span> Prev
+                            </button>
+                            <button onclick="game.navigateReplay(1)" class="wii-button flex-1 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 font-bold text-xs text-slate-700 shadow-xs">
+                                Next <span aria-hidden="true">›</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-3 mt-6">
+                <button onclick="game.closeRecapModal(); game.showConfigModal();" class="wii-button w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 text-white font-bold text-sm shadow-lg shadow-sky-200">
+                    Play Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Web Audio API Sound Generator for arcade feel
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+            }
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+            playTone(freq, duration = 0.1, type = 'sine') {
+                if (!this.enabled) return;
+                this.init();
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch(e) {}
+            }
+            playPlace() {
+                this.playTone(523.25, 0.08, 'triangle'); // C5
+                setTimeout(() => this.playTone(659.25, 0.1, 'sine'), 60); // E5
+            }
+            playMatch() {
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((n, i) => setTimeout(() => this.playTone(n, 0.15, 'sine'), i * 80));
+            }
+            playFanfare() {
+                const notes = [440, 554.37, 659.25, 880];
+                notes.forEach((n, i) => setTimeout(() => this.playTone(n, 0.25, 'triangle'), i * 120));
+            }
+        }
+        const audio = new SoundEngine();
+
+        const PLAYER_PRESETS = [
+            { id: 0, name: "Player 1", color: "#ef4444", bgClass: "bg-red-500", textClass: "text-red-500", borderClass: "border-red-500" },
+            { id: 1, name: "Player 2", color: "#3b82f6", bgClass: "bg-blue-500", textClass: "text-blue-500", borderClass: "border-blue-500" },
+            { id: 2, name: "Player 3", color: "#eab308", bgClass: "bg-yellow-500", textClass: "text-yellow-500", borderClass: "border-yellow-500" },
+            { id: 3, name: "Player 4", color: "#22c55e", bgClass: "bg-green-500", textClass: "text-green-500", borderClass: "border-green-500" }
+        ];
+
+        class BodyInARowGame {
+            constructor() {
+                this.mode = '2p';
+                this.gridSize = 6;
+                this.board = [];
+                this.players = [];
+                this.currentPlayerIdx = 0;
+                this.roundCounter = 1;
+                this.turnInRound = 0;
+                this.practiceLevel = 'none';
+                this.recapShowHeatmap = false;
+                
+                this.currentPieceSegment = 'head';
+                this.playerBags = null;
+
+                this.moveHistory = [];
+                this.replayIdx = 0;
+
+                // Practice-assistant state
+                this.showBoardHeatmap = true;   // on/off switch (High practice only)
+                this.pendingEvalMap = null;     // cached Monte Carlo map for the current turn
+                this.pendingEvalRaw = null;
+                this.hintCell = null;           // {r, c} currently highlighted by the hint button
+                this.hintsEnabled = true;       // on/off switch for the hint button
+                this.hintUsedThisTurn = false;  // hint requested on the turn in progress
+                this.hintsUsedCount = 0;        // total hints used this game
+                this.evalToken = 0;             // invalidates stale async evaluations
+
+                this.init();
+            }
+
+            // Builds one shuffled "bag" of pieces sized exactly to the board, following the
+            // Every player gets their own shuffled "bag" of pieces, sized to the fixed ratio for
+            // this game mode:
+            //   2p: 6 heads / 6 torsos / 6 legs per player  (2 players x 18 = 36 = 6x6 board)
+            //   4p: 8 heads / 9 torsos / 8 legs per player  (4 players x 25 = 100 = 10x10 board)
+            // So both/all players individually draw the exact same segment counts over the game
+            // - not just the pool as a whole. (Previously pieces were drawn independently at
+            // random, shared across everyone, which could - and did - produce runs heavily
+            // skewed toward one segment for a given player, e.g. 8 legs in a row with barely
+            // any heads.)
+            getPieceRatio() {
+                return this.mode === '2p'
+                    ? { head: 6, torso: 6, legs: 6 }
+                    : { head: 8, torso: 9, legs: 8 };
+            }
+
+            buildShuffledBagForPlayer() {
+                const ratio = this.getPieceRatio();
+                const bag = [];
+                for (let i = 0; i < ratio.head; i++) bag.push('head');
+                for (let i = 0; i < ratio.torso; i++) bag.push('torso');
+                for (let i = 0; i < ratio.legs; i++) bag.push('legs');
+
+                // Fisher-Yates shuffle
+                for (let i = bag.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [bag[i], bag[j]] = [bag[j], bag[i]];
+                }
+                return bag;
+            }
+
+            // Builds a fresh bag for every player (called at the start of each new game).
+            buildAllPlayerBags() {
+                this.playerBags = this.players.map(() => this.buildShuffledBagForPlayer());
+            }
+
+            drawNextPiece() {
+                if (!this.playerBags) this.buildAllPlayerBags();
+                const bag = this.playerBags[this.currentPlayerIdx];
+                // Bag should always have exactly one piece left per remaining turn for this
+                // player, but fall back safely just in case.
+                this.currentPieceSegment = bag.length > 0
+                    ? bag.pop()
+                    : BodyInARowGame.SEGMENTS[Math.floor(Math.random() * 3)];
+                this.updateActivePieceUI();
+            }
+
+            updateActivePieceUI() {
+                const iconEl = document.getElementById('activePieceIcon');
+                const nameEl = document.getElementById('activePieceName');
+                const badgeEl = document.getElementById('activePieceBadge');
+                if (!iconEl || !nameEl) return;
+
+                if (this.currentPieceSegment === 'head') {
+                    iconEl.textContent = "🧑";
+                    nameEl.textContent = "Head";
+                    badgeEl.className = "flex items-center space-x-2 px-3 py-1 rounded-xl bg-sky-500 text-white font-bold text-sm shadow-sm";
+                } else if (this.currentPieceSegment === 'torso') {
+                    iconEl.textContent = "👕";
+                    nameEl.textContent = "Torso";
+                    badgeEl.className = "flex items-center space-x-2 px-3 py-1 rounded-xl bg-indigo-500 text-white font-bold text-sm shadow-sm";
+                } else {
+                    iconEl.textContent = "🦵";
+                    nameEl.textContent = "Legs";
+                    badgeEl.className = "flex items-center space-x-2 px-3 py-1 rounded-xl bg-emerald-500 text-white font-bold text-sm shadow-sm";
+                }
+            }
+
+            init() {
+                this.setupDefaultPlayers('2p');
+                this.startNewGameFromConfig({
+                    mode: '2p',
+                    practiceLevel: 'none',
+                    players: [
+                        { type: 'human', level: 50 },
+                        { type: 'cpu', level: 50 }
+                    ]
+                });
+            }
+
+            setupDefaultPlayers(mode) {
+                const count = mode === '2p' ? 2 : 4;
+                const container = document.getElementById('playerConfigContainer');
+                if (!container) return;
+                
+                container.innerHTML = '';
+                for (let i = 0; i < count; i++) {
+                    const pDef = PLAYER_PRESETS[i];
+                    const defaultType = i === 0 ? 'human' : 'cpu';
+                    const defaultLevel = 40 + i * 10;
+
+                    const row = document.createElement('div');
+                    row.className = "p-3 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-2";
+                    row.innerHTML = `
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <div class="w-6 h-6 rounded-lg ${pDef.bgClass} text-white flex items-center justify-center font-bold text-xs">
+                                    P${i+1}
+                                </div>
+                                <span class="font-bold text-sm text-slate-800">${pDef.name}</span>
+                            </div>
+                            <select id="pType_${i}" onchange="game.onPlayerTypeChange(${i})" class="p-1.5 rounded-xl border border-slate-300 bg-white text-xs font-semibold">
+                                <option value="human" ${defaultType === 'human' ? 'selected' : ''}>Human</option>
+                                <option value="cpu" ${defaultType === 'cpu' ? 'selected' : ''}>CPU</option>
+                            </select>
+                        </div>
+                        <div id="cpuOpt_${i}" class="${defaultType === 'cpu' ? '' : 'hidden'} space-y-1.5 pt-1">
+                            <div class="flex justify-between items-center text-xs font-semibold text-slate-600">
+                                <span>CPU Strength Target:</span>
+                                <span id="pLevelVal_${i}">${defaultLevel}%</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <input type="range" id="pLevel_${i}" min="0" max="100" value="${defaultLevel}" 
+                                    oninput="document.getElementById('pLevelVal_${i}').textContent = this.value + '%'"
+                                    class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-sky-500">
+                            </div>
+                            <div class="flex gap-1">
+                                <button type="button" onclick="game.setCpuPreset(${i}, 40)" class="text-[10px] px-2 py-0.5 rounded bg-slate-200 font-semibold hover:bg-slate-300">Beg (40%)</button>
+                                <button type="button" onclick="game.setCpuPreset(${i}, 50)" class="text-[10px] px-2 py-0.5 rounded bg-slate-200 font-semibold hover:bg-slate-300">Int (50%)</button>
+                                <button type="button" onclick="game.setCpuPreset(${i}, 60)" class="text-[10px] px-2 py-0.5 rounded bg-slate-200 font-semibold hover:bg-slate-300">Adv (60%)</button>
+                                <button type="button" onclick="game.setCpuPreset(${i}, 70)" class="text-[10px] px-2 py-0.5 rounded bg-slate-200 font-semibold hover:bg-slate-300">Exp (70%)</button>
+                                <button type="button" onclick="game.setCpuPreset(${i}, 80)" class="text-[10px] px-2 py-0.5 rounded bg-slate-200 font-semibold hover:bg-slate-300">Mst (80%)</button>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(row);
+                }
+            }
+
+            onModeChange(mode) {
+                this.setupDefaultPlayers(mode);
+            }
+
+            onPlayerTypeChange(idx) {
+                const type = document.getElementById(`pType_${idx}`).value;
+                const opt = document.getElementById(`cpuOpt_${idx}`);
+                if (type === 'cpu') opt.classList.remove('hidden');
+                else opt.classList.add('hidden');
+            }
+
+            setCpuPreset(idx, val) {
+                const slider = document.getElementById(`pLevel_${idx}`);
+                const label = document.getElementById(`pLevelVal_${idx}`);
+                if (slider && label) {
+                    slider.value = val;
+                    label.textContent = val + '%';
+                }
+            }
+
+            showConfigModal() {
+                document.getElementById('configModal').classList.remove('hidden');
+            }
+
+            closeConfigModal() {
+                document.getElementById('configModal').classList.add('hidden');
+            }
+
+            startNewGame(e) {
+                if (e) e.preventDefault();
+                const mode = document.querySelector('input[name="gameMode"]:checked').value;
+                const practiceLevel = document.getElementById('cfgPracticeLevel').value;
+
+                const count = mode === '2p' ? 2 : 4;
+                const players = [];
+                for (let i = 0; i < count; i++) {
+                    const type = document.getElementById(`pType_${i}`).value;
+                    const level = parseInt(document.getElementById(`pLevel_${i}`)?.value || '50', 10);
+                    players.push({ type, level });
+                }
+
+                const allowHints = document.getElementById('cfgAllowHints').checked;
+
+                this.startNewGameFromConfig({ mode, practiceLevel, players, allowHints });
+                this.closeConfigModal();
+                return false;
+            }
+
+            startNewGameFromConfig(cfg) {
+                this.mode = cfg.mode;
+                this.gridSize = cfg.mode === '2p' ? 6 : 10;
+                this.practiceLevel = cfg.practiceLevel;
+                this.hintsEnabled = cfg.allowHints !== false;
+
+                this.players = cfg.players.map((p, idx) => ({
+                    ...PLAYER_PRESETS[idx],
+                    type: p.type,
+                    level: p.level,
+                    score: 0,
+                    completedBodies: 0,
+                    evalHistory: []
+                }));
+
+                this.board = Array(this.gridSize).fill(null).map(() => 
+                    Array(this.gridSize).fill(null).map(() => ({
+                        player: null,
+                        segment: null
+                    }))
+                );
+
+                this.currentPlayerIdx = 0;
+                this.roundCounter = 1;
+                this.turnInRound = 0;
+                this.moveHistory = [];
+                this.buildAllPlayerBags();
+
+                // Reset practice-assistant state
+                this.evalToken++;
+                this.pendingEvalMap = null;
+                this.pendingEvalRaw = null;
+                this.hintCell = null;
+                this.hintUsedThisTurn = false;
+                this.hintsUsedCount = 0;
+                this.showBoardHeatmap = true;
+                const hmSwitch = document.getElementById('heatmapSwitch');
+                if (hmSwitch) hmSwitch.checked = true;
+                document.getElementById('feedbackPanel')?.classList.add('hidden');
+
+                this.drawNextPiece();
+                this.updatePracticeControls();
+                this.updateUI();
+                this.renderBoard();
+                this.checkCurrentTurn();
+            }
+
+            // ---- Practice assistant helpers ----
+
+            // Show/hide the heatmap switch, legend and hint button based on practice level
+            // and whether it's currently a human's turn.
+            updatePracticeControls() {
+                const isHigh = this.practiceLevel === 'high';
+                const humanTurn = this.players.length > 0 && this.getCurrentPlayer().type === 'human';
+
+                const swWrap = document.getElementById('heatmapSwitchWrap');
+                const legend = document.getElementById('heatmapLegend');
+                const hintBtn = document.getElementById('hintBtn');
+                const hintBadge = document.getElementById('hintCountBadge');
+                const showHintBtn = this.hintsEnabled;
+
+                if (swWrap) swWrap.classList.toggle('hidden', !isHigh);
+                if (legend) legend.classList.toggle('hidden', !(isHigh && this.showBoardHeatmap));
+
+                if (hintBtn) {
+                    hintBtn.classList.toggle('hidden', !showHintBtn);
+                    hintBtn.classList.toggle('inline-flex', showHintBtn);
+                    const disabled = !humanTurn;
+                    hintBtn.disabled = disabled;
+                    hintBtn.classList.toggle('opacity-50', disabled);
+                    hintBtn.classList.toggle('cursor-not-allowed', disabled);
+                }
+                if (hintBadge) {
+                    hintBadge.textContent = this.hintsUsedCount;
+                    hintBadge.classList.toggle('hidden', this.hintsUsedCount === 0);
+                }
+            }
+
+            toggleBoardHeatmap(val) {
+                this.showBoardHeatmap = val;
+                this.updatePracticeControls();
+                this.renderBoard();
+            }
+
+            // Computes (once per turn) the Monte Carlo evaluation for a human player and caches
+            // it in pendingEvalMap. executeMove() reuses that same cache, so the number shown on
+            // the heatmap / hint is exactly the number the move is graded with. Deferred with a
+            // setTimeout so the "Analyzing…" chip can paint before the heavy synchronous work.
+            ensureHumanEvaluation(callback) {
+                if (this.pendingEvalMap) {
+                    if (callback) callback();
+                    return;
+                }
+                const token = ++this.evalToken;
+                const chip = document.getElementById('analyzingChip');
+                if (chip) chip.classList.remove('hidden');
+
+                setTimeout(() => {
+                    // A move was made / new game started while we were waiting: discard.
+                    if (token !== this.evalToken) return;
+                    const result = this.evaluateAllMovesMonteCarlo();
+                    this.pendingEvalMap = result.normalized;
+                    this.pendingEvalRaw = result.raw;
+                    if (chip) chip.classList.add('hidden');
+                    if (callback) callback();
+                }, 30);
+            }
+
+            // Finds the highest-scoring empty cell in a normalized map.
+            getBestCellFromMap(map) {
+                let best = null;
+                let bestScore = -Infinity;
+                for (let r = 0; r < this.gridSize; r++) {
+                    for (let c = 0; c < this.gridSize; c++) {
+                        if (this.board[r][c].player !== null) continue;
+                        const s = map[`${r}_${c}`];
+                        if (s !== undefined && s > bestScore) {
+                            bestScore = s;
+                            best = { r, c };
+                        }
+                    }
+                }
+                return best;
+            }
+
+            useHint() {
+                const curP = this.getCurrentPlayer();
+                if (curP.type !== 'human' || !this.hintsEnabled) return;
+                if (this.isBoardFull()) return;
+
+                const token = this.evalToken;
+                const btn = document.getElementById('hintBtn');
+                if (btn) btn.disabled = true;
+
+                this.ensureHumanEvaluation(() => {
+                    if (token !== this.evalToken && !this.pendingEvalMap) return;
+                    const best = this.getBestCellFromMap(this.pendingEvalMap);
+                    if (!best) return;
+
+                    // Only count each turn's hint once, even if the button is pressed again.
+                    if (!this.hintUsedThisTurn) {
+                        this.hintUsedThisTurn = true;
+                        this.hintsUsedCount++;
+                    }
+                    this.hintCell = best;
+                    this.updatePracticeControls();
+                    this.renderBoard();
+                });
+            }
+
+            renderBoard() {
+                const gridEl = document.getElementById('boardGrid');
+                gridEl.style.gridTemplateColumns = `repeat(${this.gridSize}, minmax(0, 1fr))`;
+                gridEl.innerHTML = '';
+
+                // Heatmap only on a human's turn, at High practice, with the switch on,
+                // and once the evaluation for this turn has been computed.
+                const humanTurn = this.getCurrentPlayer().type === 'human';
+                const showHeat = this.practiceLevel === 'high' && this.showBoardHeatmap
+                    && humanTurn && !!this.pendingEvalMap;
+                const heatMap = showHeat ? this.pendingEvalMap : null;
+                const bigBoard = this.gridSize > 6;
+
+                for (let r = 0; r < this.gridSize; r++) {
+                    for (let c = 0; c < this.gridSize; c++) {
+                        const cell = this.board[r][c];
+                        const tileBtn = document.createElement('button');
+                        
+                        let baseClasses = "relative w-full h-full rounded-xl flex flex-col items-center justify-center transition-all border shadow-sm select-none p-0.5 ";
+                        
+                        if (cell.player !== null) {
+                            const owner = this.players[cell.player];
+                            baseClasses += `${owner.bgClass} text-white border-white/40 tile-pop`;
+                        } else {
+                            baseClasses += "bg-white/90 hover:bg-white hover:scale-105 border-slate-200 text-slate-400 cursor-pointer";
+                        }
+
+                        const isHint = this.hintCell && this.hintCell.r === r && this.hintCell.c === c && cell.player === null;
+                        if (isHint) baseClasses += " hint-pulse z-10";
+
+                        tileBtn.className = baseClasses;
+                        tileBtn.onclick = () => this.handleTileClick(r, c);
+
+                        let segmentIcon = '';
+                        if (cell.segment === 'head') segmentIcon = '<span class="text-xs sm:text-base" aria-hidden="true">🧑</span>';
+                        else if (cell.segment === 'torso') segmentIcon = '<span class="text-xs sm:text-base" aria-hidden="true">👕</span>';
+                        else if (cell.segment === 'legs') segmentIcon = '<span class="text-xs sm:text-base" aria-hidden="true">🦵</span>';
+
+                        let inner = `<div class="leading-none">${segmentIcon}</div>`;
+
+                        if (cell.player === null && heatMap && heatMap[`${r}_${c}`] !== undefined) {
+                            const score = heatMap[`${r}_${c}`];
+                            const rgb = this.getHeatmapColor(score);
+                            tileBtn.style.backgroundColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.85)`;
+                            tileBtn.style.color = '#1e293b';
+                            inner += `<span class="${bigBoard ? 'text-[8px] sm:text-[10px]' : 'text-[10px] sm:text-xs'} font-black leading-none px-1 py-0.5 rounded bg-white/80">${Math.round(score)}</span>`;
+                        }
+
+                        if (isHint && !bigBoard) {
+                            // Small bulb tucked inside the tile's top-right corner (a negative offset
+                            // would get clipped by the board's rounded container). Skipped on the
+                            // 10x10 board where tiles are too small; the pulsing ring marks it there.
+                            inner += `<span class="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 text-xs sm:text-base leading-none pointer-events-none" role="img" aria-label="Best move">💡</span>`;
+                        }
+                        if (isHint) tileBtn.setAttribute('aria-label', 'Suggested best move');
+
+                        tileBtn.innerHTML = inner;
+                        gridEl.appendChild(tileBtn);
+                    }
+                }
+            }
+
+            handleTileClick(r, c) {
+                const curP = this.getCurrentPlayer();
+                if (curP.type === 'cpu') return;
+                if (this.board[r][c].player !== null) return;
+
+                this.executeMove(r, c);
+            }
+
+            // ---- Monte Carlo move evaluator ----
+            //
+            // For every empty cell, we simulate placing the current piece there and then
+            // play out the rest of the game with random future moves - future pieces drawn from
+            // each simulated player's own remaining fixed-ratio bag (not uniform random), random
+            // legal placements, for every player. We repeat this many times per candidate move
+            // and average the outcome (this player's final score minus the best opponent's final
+            // score) to get a raw "expected value" for that move.
+            //
+            // Those raw expected values are then min-max normalized to 0-100. This is
+            // deliberately NOT a rank ladder (1st=100, 2nd=~97, 3rd=~94...) — it preserves the
+            // actual *magnitude* of the gaps between moves. If there's one clearly winning move
+            // and everything else is roughly equally mediocre, the winning move scores 100 and
+            // the rest cluster together near the bottom, wherever their real value places them.
+            // If several moves are genuinely close in value, they'll score close together too.
+            static SEGMENTS = ['head', 'torso', 'legs'];
+
+            getMonteCarloSimCount() {
+                // Scale simulation budget by board size & how many empty cells remain, so we
+                // stay fast on the large 10x10 4-player board and thorough near the end game.
+                const totalCells = this.gridSize * this.gridSize;
+                let empty = 0;
+                for (let r = 0; r < this.gridSize; r++)
+                    for (let c = 0; c < this.gridSize; c++)
+                        if (this.board[r][c].player === null) empty++;
+
+                // Fewer empty spots -> each rollout is cheaper AND there's more riding on
+                // precision -> bump sims up. More empty spots -> cap sims to stay fast.
+                if (empty <= 8) return 400;
+                if (empty <= 20) return 200;
+                if (empty <= 40) return 120;
+                if (totalCells > 60) return 50; // large 10x10 board, lots of empty cells
+                return 90;
+            }
+
+            cloneBoardState(board) {
+                return board.map(row => row.map(cell => ({ player: cell.player, segment: cell.segment })));
+            }
+
+            // Scores a full (possibly simulated) board state for every player, same rules as
+            // calculateBoardScores() but operating on an arbitrary board array without mutating
+            // live game state.
+            scoreBoardState(board) {
+                const scores = Array(this.players.length).fill(0);
+                const directions = [
+                    { dr: 0, dc: 1 },
+                    { dr: 1, dc: 0 },
+                    { dr: 1, dc: 1 },
+                    { dr: 1, dc: -1 }
+                ];
+                for (let r = 0; r < this.gridSize; r++) {
+                    for (let c = 0; c < this.gridSize; c++) {
+                        directions.forEach(dir => {
+                            const r3 = r + dir.dr * 2;
+                            const c3 = c + dir.dc * 2;
+                            if (r3 >= 0 && r3 < this.gridSize && c3 >= 0 && c3 < this.gridSize) {
+                                const p1 = board[r][c];
+                                const p2 = board[r + dir.dr][c + dir.dc];
+                                const p3 = board[r3][c3];
+                                if (p1.player !== null && p1.player === p2.player && p2.player === p3.player) {
+                                    const seq1 = p1.segment === 'head' && p2.segment === 'torso' && p3.segment === 'legs';
+                                    const seq2 = p1.segment === 'legs' && p2.segment === 'torso' && p3.segment === 'head';
+                                    if (seq1 || seq2) scores[p1.player] += 300;
+                                }
+                            }
+                        });
+                    }
+                }
+                return scores;
+            }
+
+            // One random playout starting from `board` with the candidate move already placed,
+            // continuing with random future placements. Each player draws future pieces from a
+            // shuffled copy of THEIR OWN remaining bag (i.e. the exact same per-player finite
+            // pools the real game deals from), not shared/independent uniform random picks - so
+            // simulated games respect the same fixed per-player head/torso/legs ratio as actual
+            // play.
+            monteCarloRollout(board, startPlayerIdx, remainingBagsByPlayer) {
+                const spots = [];
+                for (let r = 0; r < this.gridSize; r++)
+                    for (let c = 0; c < this.gridSize; c++)
+                        if (board[r][c].player === null) spots.push({ r, c });
+
+                // Shuffle a copy of each player's remaining bag for this rollout (Fisher-Yates)
+                const bags = remainingBagsByPlayer.map(playerBag => {
+                    const bag = playerBag.slice();
+                    for (let i = bag.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [bag[i], bag[j]] = [bag[j], bag[i]];
+                    }
+                    return bag;
+                });
+
+                let curPlayer = startPlayerIdx;
+                const numPlayers = this.players.length;
+
+                while (spots.length > 0) {
+                    const idx = Math.floor(Math.random() * spots.length);
+                    const spot = spots[idx];
+                    const playerBag = bags[curPlayer];
+                    // Fall back to uniform random if a player's bag runs short for any reason
+                    // (shouldn't happen since each bag size always matches that player's
+                    // remaining turn count).
+                    const seg = playerBag.length > 0
+                        ? playerBag.pop()
+                        : BodyInARowGame.SEGMENTS[Math.floor(Math.random() * 3)];
+                    board[spot.r][spot.c] = { player: curPlayer, segment: seg };
+                    spots[idx] = spots[spots.length - 1];
+                    spots.pop();
+                    curPlayer = (curPlayer + 1) % numPlayers;
+                }
+
+                return this.scoreBoardState(board);
+            }
+
+            // Runs the Monte Carlo simulation for every empty cell and returns both the raw
+            // expected-value scores and the min-max normalized 0-100 scores.
+            evaluateAllMovesMonteCarlo() {
+                const emptySpots = [];
+                for (let r = 0; r < this.gridSize; r++) {
+                    for (let c = 0; c < this.gridSize; c++) {
+                        if (this.board[r][c].player === null) emptySpots.push({ r, c });
+                    }
+                }
+
+                if (emptySpots.length === 0) return { raw: {}, normalized: {} };
+
+                const playerIdx = this.currentPlayerIdx;
+                const segment = this.currentPieceSegment;
+                const numPlayers = this.players.length;
+                const sims = this.getMonteCarloSimCount();
+
+                const raw = {};
+                let maxRaw = -Infinity;
+                let minRaw = Infinity;
+
+                emptySpots.forEach(spot => {
+                    let total = 0;
+                    for (let i = 0; i < sims; i++) {
+                        const simBoard = this.cloneBoardState(this.board);
+                        simBoard[spot.r][spot.c] = { player: playerIdx, segment };
+                        // The piece being placed this turn already came out of the current
+                        // player's bag (it's this.currentPieceSegment, drawn by
+                        // drawNextPiece()), so only what's still left in this.playerBags
+                        // remains for future turns in the rollout, per player.
+                        const finalScores = this.monteCarloRollout(simBoard, (playerIdx + 1) % numPlayers, this.playerBags);
+
+                        const myScore = finalScores[playerIdx];
+                        let bestOpp = -Infinity;
+                        for (let p = 0; p < numPlayers; p++) {
+                            if (p !== playerIdx && finalScores[p] > bestOpp) bestOpp = finalScores[p];
+                        }
+                        if (bestOpp === -Infinity) bestOpp = 0;
+
+                        total += (myScore - bestOpp);
+                    }
+                    const avg = total / sims;
+                    raw[`${spot.r}_${spot.c}`] = avg;
+                    if (avg > maxRaw) maxRaw = avg;
+                    if (avg < minRaw) minRaw = avg;
+                });
+
+                const normalized = {};
+                const range = maxRaw - minRaw;
+                emptySpots.forEach(spot => {
+                    const key = `${spot.r}_${spot.c}`;
+                    normalized[key] = range === 0 ? 100 : ((raw[key] - minRaw) / range) * 100;
+                });
+
+                return { raw, normalized };
+            }
+
+            // Kept for API compatibility with existing callers - returns just the normalized map.
+            evaluateAllMovesNormalized() {
+                return this.evaluateAllMovesMonteCarlo().normalized;
+            }
+
+            getHeatmapColor(score) {
+                let r, g, b = 0;
+                if (score <= 50) {
+                    r = 239;
+                    g = Math.round(68 + (score / 50) * (198 - 68));
+                    b = 68;
+                } else {
+                    r = Math.round(234 - ((score - 50) / 50) * (234 - 34));
+                    g = 197;
+                    b = Math.round(94 - ((score - 50) / 50) * 94);
+                }
+                return { r, g, b };
+            }
+
+            getMoveCategory(score) {
+                if (score >= 90) return "Best Move!";
+                if (score >= 75) return "Great Move";
+                if (score >= 50) return "Good Move";
+                if (score >= 25) return "Inaccuracy";
+                if (score >= 10) return "Mistake";
+                return "Blunder";
+            }
+
+            showMoveFeedback(score, category) {
+                const panel = document.getElementById('feedbackPanel');
+                const badge = document.getElementById('moveBadgeCategory');
+                const percent = document.getElementById('moveScorePercent');
+                if (!panel || !badge) return;
+
+                panel.classList.remove('hidden');
+                badge.textContent = category;
+                
+                if (this.practiceLevel === 'medium' || this.practiceLevel === 'high') {
+                    percent.textContent = `${Math.round(score)}% Strength`;
+                    percent.classList.remove('hidden');
+                } else {
+                    percent.classList.add('hidden');
+                }
+            }
+
+            checkCurrentTurn() {
+                this.updateTurnBanner();
+                const curP = this.getCurrentPlayer();
+                if (curP.type === 'cpu') {
+                    document.getElementById('cpuThinking').classList.remove('hidden');
+                    const delay = 600 + Math.random() * 400;
+                    setTimeout(() => this.makeCpuMove(), delay);
+                } else {
+                    document.getElementById('cpuThinking').classList.add('hidden');
+
+                    // High practice: compute the evaluation up front so the heatmap can be drawn
+                    // over the board. The result is cached and reused when the move is graded.
+                    this.updatePracticeControls();
+                    if (this.practiceLevel === 'high') {
+                        this.ensureHumanEvaluation(() => this.renderBoard());
+                    }
+                }
+            }
+
+            makeCpuMove() {
+                const emptySpots = [];
+                for (let r = 0; r < this.gridSize; r++) {
+                    for (let c = 0; c < this.gridSize; c++) {
+                        if (this.board[r][c].player === null) emptySpots.push({ r, c });
+                    }
+                }
+
+                if (emptySpots.length === 0) return;
+
+                // Evaluate ONCE for this turn and reuse the exact same map for both picking
+                // the move and scoring it in executeMove(). Monte Carlo is random, so calling
+                // the evaluator twice would give two different numbers for the same move
+                // (e.g. CPU picks the move that looked like 100% here, but a fresh re-roll in
+                // executeMove reports 91% for that same cell). Caching avoids that mismatch.
+                const normalizedMap = this.evaluateAllMovesNormalized();
+                this.pendingEvalMap = normalizedMap;
+
+                const targetLevel = this.getCurrentPlayer().level;
+
+                let bestSpot = emptySpots[0];
+                let minDiff = 9999;
+
+                emptySpots.forEach(spot => {
+                    const key = `${spot.r}_${spot.c}`;
+                    const score = normalizedMap[key] !== undefined ? normalizedMap[key] : 50;
+                    const diff = Math.abs(score - targetLevel);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        bestSpot = spot;
+                    }
+                });
+
+                document.getElementById('cpuThinking').classList.add('hidden');
+                this.executeMove(bestSpot.r, bestSpot.c);
+            }
+
+            executeMove(r, c) {
+                const playerIdx = this.currentPlayerIdx;
+                const player = this.players[playerIdx];
+
+                // Reuse the map computed for this turn if one is cached (e.g. from
+                // makeCpuMove(), or from a heatmap render that just ran for a human turn).
+                // Only fall back to a fresh Monte Carlo run if nothing was cached yet, and
+                // always clear the cache right after so next turn computes fresh.
+                const allMovesScores = this.pendingEvalMap || this.evaluateAllMovesNormalized();
+                this.pendingEvalMap = null;
+                this.pendingEvalRaw = null;
+                this.evalToken++; // cancel any evaluation still waiting to run
+                const hintedThisMove = this.hintUsedThisTurn && player.type === 'human';
+                this.hintUsedThisTurn = false;
+                this.hintCell = null;
+                const analyzingChip = document.getElementById('analyzingChip');
+                if (analyzingChip) analyzingChip.classList.add('hidden');
+                const tileKey = `${r}_${c}`;
+                const evalScore = allMovesScores[tileKey] !== undefined ? allMovesScores[tileKey] : 100;
+                const category = this.getMoveCategory(evalScore);
+
+                player.evalHistory.push(evalScore);
+
+                audio.playPlace();
+                this.board[r][c] = {
+                    player: playerIdx,
+                    segment: this.currentPieceSegment
+                };
+
+                this.calculateBoardScores();
+
+                this.moveHistory.push({
+                    playerIdx,
+                    row: r,
+                    col: c,
+                    segment: this.currentPieceSegment,
+                    evalScore,
+                    category,
+                    hinted: hintedThisMove,
+                    boardStateAfter: JSON.parse(JSON.stringify(this.board))
+                });
+
+                if (player.type === 'human' && this.practiceLevel !== 'none') {
+                    this.showMoveFeedback(evalScore, category);
+                }
+
+                if (this.isBoardFull()) {
+                    this.renderBoard();
+                    this.updateUI();
+                    const hb = document.getElementById('hintBtn');
+                    if (hb) { hb.disabled = true; hb.classList.add('opacity-50', 'cursor-not-allowed'); }
+                    setTimeout(() => this.endGame(), 400);
+                    return;
+                }
+
+                this.turnInRound++;
+                this.currentPlayerIdx = (this.currentPlayerIdx + 1) % this.players.length;
+
+                if (this.turnInRound >= this.players.length) {
+                    this.turnInRound = 0;
+                    this.roundCounter++;
+                }
+
+                this.drawNextPiece();
+                this.renderBoard();
+                this.updateUI();
+                this.checkCurrentTurn();
+            }
+
+            calculateBoardScores() {
+                this.players.forEach(p => {
+                    p.score = 0;
+                    p.completedBodies = 0;
+                });
+
+                // Check all possible 3-in-a-row lines (Horizontal, Vertical, Diagonal both directions)
+                const directions = [
+                    { dr: 0, dc: 1 },   // Horizontal right
+                    { dr: 1, dc: 0 },   // Vertical down
+                    { dr: 1, dc: 1 },   // Diagonal down-right
+                    { dr: 1, dc: -1 }   // Diagonal down-left
+                ];
+
+                for (let r = 0; r < this.gridSize; r++) {
+                    for (let c = 0; c < this.gridSize; c++) {
+                        directions.forEach(dir => {
+                            const r2 = r + dir.dr;
+                            const c2 = c + dir.dc;
+                            const r3 = r + dir.dr * 2;
+                            const c3 = c + dir.dc * 2;
+
+                            if (r3 >= 0 && r3 < this.gridSize && c3 >= 0 && c3 < this.gridSize) {
+                                const p1 = this.board[r][c];
+                                const p2 = this.board[r2][c2];
+                                const p3 = this.board[r3][c3];
+
+                                if (p1.player !== null && p1.player === p2.player && p2.player === p3.player) {
+                                    // Valid sequence: Head -> Torso -> Legs (or Legs -> Torso -> Head)
+                                    const seq1 = (p1.segment === 'head' && p2.segment === 'torso' && p3.segment === 'legs');
+                                    const seq2 = (p1.segment === 'legs' && p2.segment === 'torso' && p3.segment === 'head');
+
+                                    if (seq1 || seq2) {
+                                        this.players[p1.player].score += 300;
+                                        this.players[p1.player].completedBodies += 1;
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+                return true;
+            }
+
+            isBoardFull() {
+                for (let r = 0; r < this.gridSize; r++) {
+                    for (let c = 0; c < this.gridSize; c++) {
+                        if (this.board[r][c].player === null) return false;
+                    }
+                }
+                return true;
+            }
+
+            updateUI() {
+                document.getElementById('roundIndicator').textContent = `Round ${this.roundCounter}`;
+                document.getElementById('modeBadge').textContent = `${this.players.length} Players (${this.gridSize}x${this.gridSize})`;
+                document.getElementById('practiceLevelLabel').textContent = this.practiceLevel.toUpperCase();
+
+                const listEl = document.getElementById('playersList');
+                listEl.innerHTML = '';
+
+                this.players.forEach((p, idx) => {
+                    const isCurrent = idx === this.currentPlayerIdx;
+                    const card = document.createElement('div');
+                    card.className = `wii-card rounded-2xl p-3 border transition-all ${isCurrent ? 'ring-2 ring-sky-400 bg-white' : 'opacity-90'}`;
+
+                    card.innerHTML = `
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center space-x-2">
+                                <div class="w-8 h-8 rounded-xl ${p.bgClass} text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                                    P${p.id+1}
+                                </div>
+                                <div>
+                                    <div class="font-bold text-sm text-slate-800">${p.name}</div>
+                                    <div class="text-[10px] text-slate-500 font-semibold">${p.type === 'cpu' ? `CPU (${p.level}%)` : 'Human'}</div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-lg font-black text-slate-800 leading-none">${p.score}</div>
+                                <div class="text-[10px] text-slate-500 font-bold uppercase">Points</div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center text-xs pt-2 border-t border-slate-100 text-slate-600">
+                            <span>Completed Bodies: <strong class="text-indigo-600">${p.completedBodies}</strong></span>
+                        </div>
+                    `;
+                    listEl.appendChild(card);
+                });
+            }
+
+            updateTurnBanner() {
+                const curP = this.getCurrentPlayer();
+                document.getElementById('turnAvatar').className = `w-10 h-10 rounded-xl ${curP.bgClass} flex items-center justify-center text-white font-bold text-lg shadow`;
+                document.getElementById('turnAvatar').textContent = `P${curP.id+1}`;
+                document.getElementById('turnPlayerName').textContent = curP.name;
+                document.getElementById('turnTypeBadge').textContent = curP.type === 'cpu' ? `CPU (${curP.level}%)` : 'Human';
+            }
+
+            getCurrentPlayer() {
+                return this.players[this.currentPlayerIdx];
+            }
+
+            getPlayerAvgEval(p) {
+                if (!p.evalHistory || p.evalHistory.length === 0) return 0;
+                const sum = p.evalHistory.reduce((a, b) => a + b, 0);
+                return Math.round(sum / p.evalHistory.length);
+            }
+
+            toggleRecapHeatmap(val) {
+                this.recapShowHeatmap = val;
+                this.renderReplayStep();
+            }
+
+            toggleSound() {
+                audio.enabled = !audio.enabled;
+                const icon = document.getElementById('soundIcon');
+                if (audio.enabled) {
+                    icon.textContent = "🔊";
+                    icon.className = "text-sky-500";
+                } else {
+                    icon.textContent = "🔇";
+                    icon.className = "text-slate-400";
+                }
+            }
+
+            endGame() {
+                audio.playFanfare();
+                const sorted = [...this.players].sort((a, b) => b.score - a.score);
+                const winner = sorted[0];
+
+                document.getElementById('winnerText').textContent = `${winner.name} Wins! (${winner.score} pts)`;
+                document.getElementById('recapModal').classList.remove('hidden');
+
+                const statsEl = document.getElementById('recapStatsList');
+                statsEl.innerHTML = '';
+
+                // Count hinted moves per player (supports multiple human players)
+                const hintsByPlayer = {};
+                this.moveHistory.forEach(m => {
+                    if (m.hinted) hintsByPlayer[m.playerIdx] = (hintsByPlayer[m.playerIdx] || 0) + 1;
+                });
+
+                this.players.forEach(p => {
+                    const card = document.createElement('div');
+                    card.className = "p-3 rounded-2xl bg-white/80 border border-slate-200/80 flex items-center justify-between shadow-xs";
+                    card.innerHTML = `
+                        <div class="flex items-center space-x-2">
+                            <div class="w-7 h-7 rounded-lg ${p.bgClass} text-white font-bold flex items-center justify-center text-xs">P${p.id+1}</div>
+                            <div>
+                                <div class="font-bold text-xs text-slate-800">${p.name}</div>
+                                <div class="text-[10px] text-slate-500">${p.type.toUpperCase()}</div>
+                            </div>
+                        </div>
+                        <div class="text-right text-xs">
+                            <div class="font-bold text-slate-800">${p.score} pts</div>
+                            <div class="text-emerald-600 font-semibold">${this.getPlayerAvgEval(p)}% Avg Strength</div>
+                            ${(p.type === 'human' && hintsByPlayer[p.id]) ? `<div class="text-amber-600 font-semibold">💡 ${hintsByPlayer[p.id]} hint${hintsByPlayer[p.id] === 1 ? '' : 's'} used</div>` : ''}
+                        </div>
+                    `;
+                    statsEl.appendChild(card);
+                });
+
+                // "Hints used" disclosure
+                const hintBanner = document.getElementById('recapHintBanner');
+                const hintText = document.getElementById('recapHintText');
+                if (this.hintsUsedCount > 0) {
+                    const n = this.hintsUsedCount;
+                    hintText.textContent = `Hints used: you asked for ${n} hint${n === 1 ? '' : 's'} during this game. Hinted moves are marked in the review below.`;
+                    hintBanner.classList.remove('hidden');
+                } else {
+                    hintBanner.classList.add('hidden');
+                }
+
+                this.replayIdx = 0;
+                this.recapShowHeatmap = false;
+                document.getElementById('recapHeatmapToggle').checked = false;
+                document.getElementById('replayTotalMoves').textContent = this.moveHistory.length;
+                this.renderReplayStep();
+            }
+
+            closeRecapModal() {
+                document.getElementById('recapModal').classList.add('hidden');
+            }
+
+            navigateReplay(dir) {
+                this.replayIdx = Math.max(0, Math.min(this.moveHistory.length - 1, this.replayIdx + dir));
+                this.renderReplayStep();
+            }
+
+            renderReplayStep() {
+                if (this.moveHistory.length === 0) return;
+                
+                const move = this.moveHistory[this.replayIdx];
+                const player = this.players[move.playerIdx];
+
+                document.getElementById('replayMoveIdx').textContent = this.replayIdx + 1;
+                document.getElementById('replayPlayerName').textContent = player.name;
+                document.getElementById('replayPieceType').textContent = move.segment ? move.segment.toUpperCase() : 'UNKNOWN';
+                document.getElementById('replayEvalScore').textContent = `${Math.round(move.evalScore)}%`;
+                document.getElementById('replayCategory').textContent = move.category;
+                document.getElementById('replayHintRow').classList.toggle('hidden', !move.hinted);
+
+                const mini = document.getElementById('replayMiniBoard');
+                mini.style.gridTemplateColumns = `repeat(${this.gridSize}, minmax(0, 1fr))`;
+                mini.innerHTML = '';
+
+                const bState = move.boardStateAfter;
+
+                // Temporary simulate board state up to this move to compute move heatmap if enabled
+                let moveScoresMap = {};
+                if (this.recapShowHeatmap) {
+                    // Temporarily set board to bState
+                    const savedBoard = this.board;
+                    this.board = bState;
+                    moveScoresMap = this.evaluateAllMovesNormalized();
+                    this.board = savedBoard;
+                }
+
+                for (let r = 0; r < this.gridSize; r++) {
+                    for (let c = 0; c < this.gridSize; c++) {
+                        const cell = bState[r][c];
+                        const tile = document.createElement('div');
+                        let bg = 'bg-white/95';
+                        let segmentIcon = '';
+
+                        if (cell.player !== null) {
+                            bg = this.players[cell.player].bgClass + ' text-white';
+                            if (cell.segment === 'head') segmentIcon = '<span class="text-[10px]" aria-hidden="true">🧑</span>';
+                            else if (cell.segment === 'torso') segmentIcon = '<span class="text-[10px]" aria-hidden="true">👕</span>';
+                            else if (cell.segment === 'legs') segmentIcon = '<span class="text-[10px]" aria-hidden="true">🦵</span>';
+                        }
+
+                        const isLastMove = (r === move.row && c === move.col);
+                        tile.className = `w-full h-full rounded-sm ${bg} flex flex-col items-center justify-center ${isLastMove ? 'ring-2 ring-black z-10' : ''}`;
+                        
+                        let contentHTML = `<div class="leading-none">${segmentIcon}</div>`;
+                        if (cell.player === null && this.recapShowHeatmap && moveScoresMap[`${r}_${c}`] !== undefined) {
+                            const score = moveScoresMap[`${r}_${c}`];
+                            const rgb = this.getHeatmapColor(score);
+                            tile.style.backgroundColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.85)`;
+                            tile.style.color = '#1e293b';
+                            contentHTML += `<span class="text-[7px] font-black leading-none mt-0.5 px-0.5 rounded bg-white/80">${Math.round(score)}</span>`;
+                        } else if (cell.player === null) {
+                            tile.style.backgroundColor = '';
+                        }
+
+                        tile.innerHTML = contentHTML;
+                        mini.appendChild(tile);
+                    }
+                }
+            }
+        }
+
+        let game;
+        window.onload = () => {
+            game = new BodyInARowGame();
+        };
+    </script>
+</body>
+</html>
