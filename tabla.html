@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ChordSheet</title>
+<title>TABLA</title>
 <style>
   :root{
     --bg:#000000;
@@ -612,6 +612,91 @@
   }
   .back-link:hover{ color:var(--text); }
 
+  .user-badge{
+    font-size:11px;
+    color:var(--text-dim);
+    border:1px solid var(--border);
+    border-radius:999px;
+    padding:4px 10px;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+  }
+
+  /* ===== Landing / gate screen ===== */
+  .landing{
+    position:fixed; inset:0;
+    background:var(--bg);
+    z-index:100;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:32px 20px;
+    gap:22px;
+  }
+  .landing.hidden{ display:none; }
+  .landing-photo{
+    width:150px; height:150px;
+    border-radius:50%;
+    object-fit:cover;
+    border:1px solid var(--border);
+    background:var(--panel);
+  }
+  .landing-name{
+    font-size:34px;
+    font-weight:700;
+    letter-spacing:0.5px;
+    margin:0;
+  }
+  .landing-tagline{
+    color:var(--text-dim);
+    font-size:14px;
+    margin:0;
+    max-width:340px;
+  }
+  .landing-actions{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    width:100%;
+    max-width:280px;
+    margin-top:6px;
+  }
+  .landing-actions .btn{
+    width:100%;
+    padding:12px 18px;
+  }
+  .landing-actions .btn.secondary{
+    background:none;
+    color:var(--text);
+    border:1px solid var(--border);
+  }
+  .landing-actions .btn.secondary:hover{ border-color:var(--text-dim); }
+
+  /* login card (account chooser) reuses .lock-card styling */
+  .account-choice{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    margin-bottom:16px;
+  }
+  .account-choice button{
+    text-align:left;
+    background:none;
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:10px 14px;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:14px;
+  }
+  .account-choice button:hover{ border-color:var(--accent); }
+  .account-choice button.selected{
+    border-color:var(--accent);
+    background:#0a1420;
+  }
+
   @media (max-width:720px){
     .sidebar{ display:none; }
     .sidebar-toggle{ display:none; }
@@ -623,6 +708,17 @@
 </head>
 <body>
 
+  <!-- Landing / opening page -->
+  <div class="landing" id="landingScreen">
+    <img class="landing-photo" id="landingPhoto" src="" alt="" style="display:none;">
+    <h1 class="landing-name">TABLA</h1>
+    <p class="landing-tagline">Testi e accordi. Area libera senza accordi, oppure accedi con il tuo account.</p>
+    <div class="landing-actions">
+      <button class="btn" id="landingFreeBtn">Entra nell'area libera</button>
+      <button class="btn secondary" id="landingLoginBtn">Accedi con password</button>
+    </div>
+  </div>
+
   <div class="topbar">
     <div class="topbar-left">
       <div class="brand">
@@ -631,10 +727,11 @@
           <circle cx="6" cy="18" r="3"/>
           <circle cx="18" cy="16" r="3"/>
         </svg>
-        ChordSheet
+        TABLA
       </div>
     </div>
     <div class="topbar-right">
+      <span id="currentUserBadge" class="user-badge" style="display:none;"></span>
       <button class="icon-btn" id="transposeToggle" title="Transpose">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18V5l12-2v13M9 9l12-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -716,12 +813,18 @@
   <div class="lock-overlay" id="lockOverlay">
     <div class="lock-card" id="lockScreenCard">
       <button class="close-btn" id="lockCloseBtn">&times;</button>
-      <h2>Private area</h2>
-      <p>Enter the password to add, edit, or delete songs.</p>
+      <h2>Accesso</h2>
+      <p>Scegli il tuo account e inserisci la password.</p>
+      <div class="account-choice" id="accountChoice">
+        <button data-user="ADMIN">ADMIN</button>
+        <button data-user="TABLA1">TABLA 1</button>
+        <button data-user="TABLA2">TABLA 2</button>
+        <button data-user="TABLA3">TABLA 3</button>
+      </div>
       <div class="field">
         <input type="password" id="pwInput" placeholder="Password">
       </div>
-      <button class="btn" id="unlockBtn" style="width:100%;">Enter</button>
+      <button class="btn" id="unlockBtn" style="width:100%;">Entra</button>
       <div class="status err" id="lockStatus"></div>
     </div>
 
@@ -730,7 +833,7 @@
       <button class="close-btn" id="adminCloseBtn">&times;</button>
       <button class="back-link" id="lockAgainBtn">&larr; Lock again</button>
       <div class="admin-header">
-        <h2>Manage songs</h2>
+        <h2 id="adminHeaderTitle">Manage songs</h2>
         <button class="btn" id="newSongBtn">+ New song</button>
       </div>
       <div class="status" id="githubStatus" style="margin:-6px 0 16px;"></div>
@@ -763,6 +866,10 @@
 
       <div class="admin-list" id="adminList"></div>
       <div class="admin-empty" id="adminEmpty" style="display:none;">No songs yet. Click "New song" to add one.</div>
+
+      <div id="nonAdminNotice" style="display:none; color:var(--text-dim); font-size:13px; line-height:1.6; margin-top:10px;">
+        Il tuo account può personalizzare l'aspetto grafico (font, dimensione) di ogni canzone: le tue modifiche restano solo sul tuo dispositivo e non toccano il testo o gli accordi salvati sul server. Usa l'icona impostazioni (⚙) in alto per cambiarli.
+      </div>
     </div>
   </div>
 
@@ -1297,6 +1404,7 @@
     renderSongList();
     renderSong(songs[idx]);
     saveToStorage();
+    applyUserDisplayOverride();
     requestAnimationFrame(() => {
       viewerWrap.scrollTop = 0;
       progressFill.style.width = '0%';
@@ -1345,11 +1453,66 @@
     serif: "var(--serif)",
     sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
   };
-  const SETTINGS_KEY = 'chordsheet.display.v1';
+  const SETTINGS_KEY = 'tabla.display.v1'; // global default (free area / no user)
   let fontSize = 16;
   let titleSize = 30;
   let metaSize = 13;
   let fontChoice = 'mono';
+
+  // ---------- Per-user, per-song graphic overrides ----------
+  // Each logged-in account (TABLA1/2/3, ADMIN) can tweak font/size for a
+  // given song; that choice is personal and lives only in this browser's
+  // localStorage, keyed by account + song identity. It never touches the
+  // song's lyrics/chords or the GitHub repo, and other accounts never see it.
+  const USER_SONG_SETTINGS_KEY = 'tabla.userSongSettings.v1';
+
+  function songIdentity(song){
+    return song && (song._ghPath || song.title || 'untitled');
+  }
+
+  function loadUserSongSettingsStore(){
+    try{
+      const raw = localStorage.getItem(USER_SONG_SETTINGS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    }catch(err){ return {}; }
+  }
+
+  function saveUserSongSettingsStore(store){
+    try{ localStorage.setItem(USER_SONG_SETTINGS_KEY, JSON.stringify(store)); }
+    catch(err){ console.warn('Could not save per-user song settings:', err); }
+  }
+
+  function getUserSongSettings(user, song){
+    if(!user || !song) return null;
+    const store = loadUserSongSettingsStore();
+    return (store[user] && store[user][songIdentity(song)]) || null;
+  }
+
+  function setUserSongSettings(user, song, settings){
+    if(!user || !song) return;
+    const store = loadUserSongSettingsStore();
+    if(!store[user]) store[user] = {};
+    store[user][songIdentity(song)] = settings;
+    saveUserSongSettingsStore(store);
+  }
+
+  // Called whenever the current song or the logged-in user changes: applies
+  // this user's saved graphic tweaks for this song, or falls back to the
+  // global default settings if this user never customized this song.
+  function applyUserDisplayOverride(){
+    if(currentIndex < 0) return;
+    const song = songs[currentIndex];
+    const override = currentUser ? getUserSongSettings(currentUser, song) : null;
+    if(override){
+      fontSize = override.fontSize || fontSize;
+      titleSize = override.titleSize || titleSize;
+      metaSize = override.metaSize || metaSize;
+      fontChoice = override.fontChoice || fontChoice;
+    } else {
+      loadDisplaySettings(); // global default
+    }
+    applyDisplaySettings();
+  }
 
   const settingsToggle = document.getElementById('settingsToggle');
   const settingsPopover = document.getElementById('settingsPopover');
@@ -1371,6 +1534,12 @@
   }
 
   function saveDisplaySettings(){
+    if(currentUser && currentIndex >= 0){
+      // Logged in and viewing a song: save as this user's personal
+      // override for this specific song (local only, never the server copy).
+      setUserSongSettings(currentUser, songs[currentIndex], {fontSize, titleSize, metaSize, fontChoice});
+      return;
+    }
     try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({fontSize, titleSize, metaSize, fontChoice})); }
     catch(err){ console.warn('Could not save display settings:', err); }
   }
@@ -1437,8 +1606,21 @@
   loadDisplaySettings();
   applyDisplaySettings();
 
-  // ---------- Private area (password-gated add/edit/delete) ----------
-  const PRIVATE_PASSWORD = "papa2026";
+  // ---------- Accounts ----------
+  // ADMIN can add/edit/delete songs; the change is saved to the central
+  // GitHub repo (the single source of truth for lyrics/chords).
+  // TABLA1/2/3 can only change graphic settings (font, sizes); those
+  // changes are saved locally per-account and never touch the server copy.
+  const ACCOUNTS = {
+    ADMIN:  { password: "papa2026",  role: "admin" },
+    TABLA1: { password: "tabla1",    role: "editor" },
+    TABLA2: { password: "tabla2",    role: "editor" },
+    TABLA3: { password: "tabla3",    role: "editor" }
+  };
+  const CURRENT_USER_KEY = 'tabla.currentUser.v1';
+  let currentUser = null;   // e.g. "ADMIN", "TABLA1"...
+  let currentRole = null;   // "admin" | "editor" | null (free area)
+  let selectedAccountBtn = null;
   let privateUnlocked = false;
   let editingSongIndex = null;
 
@@ -1466,12 +1648,14 @@
     if(privateUnlocked){
       lockScreenCard.style.display = 'none';
       adminCard.style.display = 'block';
+      applyRoleUI();
       renderAdminList();
     } else {
       lockScreenCard.style.display = 'block';
       adminCard.style.display = 'none';
       pwInput.value = '';
       lockStatus.textContent = '';
+      resetAccountChoice();
       setTimeout(() => pwInput.focus(), 50);
     }
   }
@@ -1482,6 +1666,20 @@
   }
 
   document.getElementById('privateAreaToggle').addEventListener('click', openPrivateArea);
+
+  // ---------- Landing / opening page ----------
+  const landingScreen = document.getElementById('landingScreen');
+  function enterApp(){
+    landingScreen.classList.add('hidden');
+  }
+  document.getElementById('landingFreeBtn').addEventListener('click', () => {
+    enterApp(); // free area: browse songs, chords stay hidden until login
+  });
+  document.getElementById('landingLoginBtn').addEventListener('click', () => {
+    enterApp();
+    openPrivateArea();
+  });
+
   document.getElementById('sidebarToggle').addEventListener('click', () => {
     document.body.classList.toggle('sidebar-collapsed');
   });
@@ -1490,26 +1688,80 @@
   lockOverlay.addEventListener('click', (e) => { if(e.target === lockOverlay) closePrivateArea(); });
 
   document.getElementById('lockAgainBtn').addEventListener('click', () => {
-    privateUnlocked = false;
-    document.body.classList.remove('chords-visible');
+    logoutUser();
     lockScreenCard.style.display = 'block';
     adminCard.style.display = 'none';
     songFormCard.style.display = 'none';
     editingSongIndex = null;
     pwInput.value = '';
     lockStatus.textContent = '';
+    resetAccountChoice();
     setTimeout(() => pwInput.focus(), 50);
   });
 
   githubStatusEl = document.getElementById('githubStatus');
 
+  const accountChoiceEl = document.getElementById('accountChoice');
+  const currentUserBadge = document.getElementById('currentUserBadge');
+  const adminHeaderTitle = document.getElementById('adminHeaderTitle');
+  const newSongBtn = document.getElementById('newSongBtn');
+  const nonAdminNotice = document.getElementById('nonAdminNotice');
+
+  accountChoiceEl.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      accountChoiceEl.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedAccountBtn = btn;
+      lockStatus.textContent = '';
+      pwInput.focus();
+    });
+  });
+  function resetAccountChoice(){
+    accountChoiceEl.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
+    selectedAccountBtn = null;
+  }
+
+  function applyRoleUI(){
+    const isAdmin = currentRole === 'admin';
+    newSongBtn.style.display = isAdmin ? '' : 'none';
+    adminHeaderTitle.textContent = isAdmin ? 'Manage songs' : 'La tua area';
+    nonAdminNotice.style.display = isAdmin ? 'none' : 'block';
+    if(currentUser){
+      currentUserBadge.textContent = currentUser;
+      currentUserBadge.style.display = '';
+    } else {
+      currentUserBadge.style.display = 'none';
+    }
+  }
+
+  function logoutUser(){
+    privateUnlocked = false;
+    currentUser = null;
+    currentRole = null;
+    document.body.classList.remove('chords-visible');
+    try{ localStorage.removeItem(CURRENT_USER_KEY); }catch(err){}
+    applyRoleUI();
+    if(currentIndex >= 0) applyUserDisplayOverride();
+  }
+
   function tryUnlock(){
-    if(pwInput.value === PRIVATE_PASSWORD){
+    if(!selectedAccountBtn){
+      lockStatus.textContent = 'Scegli un account.';
+      return;
+    }
+    const user = selectedAccountBtn.dataset.user;
+    const account = ACCOUNTS[user];
+    if(account && pwInput.value === account.password){
       privateUnlocked = true;
+      currentUser = user;
+      currentRole = account.role;
+      try{ localStorage.setItem(CURRENT_USER_KEY, user); }catch(err){}
       document.body.classList.add('chords-visible');
       lockScreenCard.style.display = 'none';
       adminCard.style.display = 'block';
+      applyRoleUI();
       renderAdminList();
+      if(currentIndex >= 0) applyUserDisplayOverride();
       setGithubStatus(githubOnline ? 'Connected to GitHub.' : (ghConfigured() ? 'Not yet synced.' : 'Cloud sync not configured — editing saves locally only.'), !githubOnline);
     } else {
       lockStatus.textContent = 'Wrong password. Try again.';
@@ -1521,6 +1773,7 @@
   function renderAdminList(){
     adminList.innerHTML = '';
     adminEmpty.style.display = songs.length ? 'none' : 'block';
+    const isAdmin = currentRole === 'admin';
     songs.forEach((song, idx) => {
       const row = document.createElement('div');
       row.className = 'admin-row';
@@ -1530,16 +1783,20 @@
           ${song.artist ? `<div class="admin-row-sub">${escapeHtml(song.artist)}</div>` : ''}
         </div>
         <div class="admin-row-actions">
-          <button data-act="edit">Edit</button>
-          <button data-act="delete" class="danger">Delete</button>
+          ${isAdmin ? `<button data-act="edit">Edit</button><button data-act="delete" class="danger">Delete</button>` : `<button data-act="open">Apri</button>`}
         </div>`;
-      row.querySelector('[data-act="edit"]').addEventListener('click', () => openSongForm(idx));
-      row.querySelector('[data-act="delete"]').addEventListener('click', () => deleteSongAdmin(idx));
+      const editBtn = row.querySelector('[data-act="edit"]');
+      const deleteBtn = row.querySelector('[data-act="delete"]');
+      const openBtn = row.querySelector('[data-act="open"]');
+      if(editBtn) editBtn.addEventListener('click', () => openSongForm(idx));
+      if(deleteBtn) deleteBtn.addEventListener('click', () => deleteSongAdmin(idx));
+      if(openBtn) openBtn.addEventListener('click', () => { closePrivateArea(); selectSong(idx); });
       adminList.appendChild(row);
     });
   }
 
   function openSongForm(idx){
+    if(currentRole !== 'admin') return; // safety net: only ADMIN edits server content
     editingSongIndex = (typeof idx === 'number') ? idx : null;
     if(editingSongIndex !== null){
       // Editing an existing song: allow adjusting title/artist/text directly.
@@ -1609,6 +1866,7 @@
   });
 
   formSaveBtn.addEventListener('click', async () => {
+    if(currentRole !== 'admin') return; // safety net
     const raw = formBody.value.trim();
     if(!raw){
       formStatus.textContent = editingSongIndex !== null
@@ -1656,6 +1914,7 @@
   });
 
   async function deleteSongAdmin(idx){
+    if(currentRole !== 'admin') return; // safety net: only ADMIN can delete server content
     if(!confirm('Delete this song?')) return;
     const [removed] = songs.splice(idx, 1);
     if(currentIndex === idx){
@@ -1799,6 +2058,22 @@ sull'orizzonte ottico [F]non c'è [Gm7]  [F]     si dovrà pur vedere
   renderSongList();
   selectSong(0);
   }
+
+  // Restore a previous session in this browser, if any. Runs last so that
+  // every function/const it touches (applyRoleUI, renderAdminList, etc.)
+  // is already defined.
+  (function restoreSession(){
+    try{
+      const savedUser = localStorage.getItem(CURRENT_USER_KEY);
+      if(savedUser && ACCOUNTS[savedUser]){
+        currentUser = savedUser;
+        currentRole = ACCOUNTS[savedUser].role;
+        privateUnlocked = true;
+        document.body.classList.add('chords-visible');
+      }
+    }catch(err){}
+    applyRoleUI();
+  })();
 
 })();
 
