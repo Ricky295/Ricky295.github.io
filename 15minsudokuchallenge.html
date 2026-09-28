@@ -476,11 +476,37 @@ function togglePause() {
                 scoreAlreadySubmitted = true;
                 nameInput.disabled = true;
 
-                const rankInfo = computeRanking_(data.entries, score);
+                const rankInfo = computeRanking_(normalizeEntries_(data), score);
                 status.innerText = `Saved! Rank #${rankInfo.rank} of ${rankInfo.total} (top ${rankInfo.topPercent}%).`;
             } catch (err) {
                 status.innerText = 'Could not submit score: ' + err.message;
             }
+        }
+
+        // Coerces whatever the server sent into a clean array of
+        // { name, score, completed } entries. Tolerates: a real array, a
+        // JSON string, an object wrapping the array under a common key,
+        // or a missing/empty value (treated as "no scores yet").
+        function normalizeEntries_(data) {
+            let raw = data && (data.entries ?? data.scores ?? data.leaderboard ?? data.data ?? data.list);
+
+            if (typeof raw === 'string') {
+                try { raw = JSON.parse(raw); } catch (e) { raw = []; }
+            }
+            if (raw && !Array.isArray(raw) && typeof raw === 'object') {
+                // e.g. { entries: [...] } nested one level deeper
+                const inner = raw.entries ?? raw.scores ?? raw.leaderboard ?? raw.data ?? raw.list;
+                raw = Array.isArray(inner) ? inner : Object.values(raw);
+            }
+            if (!Array.isArray(raw)) raw = [];
+
+            return raw
+                .filter(e => e && typeof e === 'object')
+                .map(e => ({
+                    name: String(e.name ?? e.player ?? 'Anonymous'),
+                    score: Number(e.score) || 0,
+                    completed: e.completed ?? e.sudokuscompleted ?? 0
+                }));
         }
 
         // Returns 1-based rank of `myScore` among entries (highest score = rank 1),
@@ -514,7 +540,7 @@ function togglePause() {
                 const res = await fetch(url);
                 const data = await res.json();
                 if (!data.ok) throw new Error(data.error || 'Unknown error');
-                renderLeaderboard_(data.entries);
+                renderLeaderboard_(normalizeEntries_(data));
             } catch (err) {
                 content.innerText = 'Could not load leaderboard: ' + err.message;
             }
