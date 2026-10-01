@@ -476,7 +476,7 @@
       <option value="medium" selected>Medium (10 master clues)</option>
       <option value="hard">Hard (5 master clues)</option>
       <option value="brutal">Brutal (0 master clues)</option>
-      <option value="extreme">Extreme (81 boards, 1 cell each — slow to generate)</option>
+      <option value="extreme">Extreme (81 boards, linked quadrant empty — slow)</option>
       <option value="custom">Custom&hellip;</option>
     </select>
     <button class="primary" id="newGameBtn">New Puzzle</button>
@@ -519,9 +519,10 @@
     grid first — Easy leaves 15 master clues, Medium 10, Hard 5, and Brutal strips it to 0, filling in
     only from what the sub-boards force. Pick Custom to set any master clue count from 0 to 81 yourself.
     <b>Extreme</b> replaces the 9 sub-boards with 81 of them (S11&ndash;S99, one per master cell) — each
-    extreme board contributes just its own single linked cell to the master grid, so the master is only
-    ever solved by cross-referencing eighty-one separate 9x9 puzzles. Generating an Extreme puzzle carves
-    81 boards down to a unique solution each, so it can take significantly longer than the other
+    extreme board contributes just its own single linked cell to the master grid, and the entire 3x3
+    quadrant containing that linked cell starts empty. The master is therefore solved by cross-referencing
+    eighty-one separate 9x9 puzzles. Generating an Extreme puzzle carves 81 boards down to a unique
+    solution each, so it can take significantly longer than the other
     difficulties — give it a few seconds. Conflicts are always checked live;
     the Check button additionally flags any filled cell that doesn't match the actual solution.</p>
   </div>
@@ -845,7 +846,7 @@ const DIFFICULTY_TARGETS = {
   medium:  { rounds: 3, genAttempts: 1, masterTarget: 10, removalChance: 1.0, numBoards: 9,  linkCellsFor: linkCellsForClassic },
   hard:    { rounds: 4, genAttempts: 2, masterTarget: 5,  removalChance: 1.0, numBoards: 9,  linkCellsFor: linkCellsForClassic },
   brutal:  { rounds: 6, genAttempts: 4, masterTarget: 0,  removalChance: 1.0, numBoards: 9,  linkCellsFor: linkCellsForClassic },
-  extreme: { rounds: 3, genAttempts: 1, masterTarget: 0,  removalChance: 1.0, numBoards: 81, linkCellsFor: linkCellsForAtomic },
+  extreme: { rounds: 3, genAttempts: 6, masterTarget: 0,  removalChance: 1.0, numBoards: 81, linkCellsFor: linkCellsForAtomic, emptyLinkedQuadrants: true },
   custom:  { rounds: 6, genAttempts: 3, masterTarget: 10, removalChance: 1.0, numBoards: 9,  linkCellsFor: linkCellsForClassic },
 };
 
@@ -855,6 +856,28 @@ const BASE_SCORE = {
 
 function boardHasUniqueSolution(grid) {
   return countSolutions(grid, 2) === 1;
+}
+
+// Atomic mode is intentionally stricter than merely removing the linked cell:
+// the whole 3x3 box containing that cell must be blank in the playable puzzle.
+// Clear each required box as one transaction, restoring it if doing so would
+// leave that sub-board with zero or multiple solutions.
+function clearAtomicLinkedQuadrants(puzzleSubs, linkCellsFor, numBoards) {
+  let cleared = 0;
+  for (let i = 0; i < numBoards; i++) {
+    const linked = linkCellsFor(i);
+    if (linked.length !== 1) continue;
+    const [r, c] = linked[0];
+    const cells = boxCells(boxIndex(r, c));
+    const saved = cells.map(([rr, cc]) => [rr, cc, puzzleSubs[i][rr][cc]]);
+    for (const [rr, cc] of cells) puzzleSubs[i][rr][cc] = 0;
+    if (boardHasUniqueSolution(puzzleSubs[i])) {
+      cleared++;
+    } else {
+      for (const [rr, cc, value] of saved) puzzleSubs[i][rr][cc] = value;
+    }
+  }
+  return { cleared, required: cleared === numBoards };
 }
 
 function puzzleMasterViewOf(puzzleSubs, linkCellsFor = linkCellsForClassic, numBoards = 9) {
@@ -939,6 +962,15 @@ function carveToLocalMinimum(subs, ids, difficulty, onProgress, masterTargetOver
   const puzzleSubs = subs.map(g => cloneGrid(g));
   const { localIds, linkedIds } = collectIdentities(ids, numBoards);
 
+  // In atomic mode, empty every linked cell's complete quadrant before the
+  // ordinary carving passes. This is done transactionally per board so every
+  // accepted puzzle still has a unique solution on every sub-board.
+  let requiredQuadrants = { cleared: 0, required: true };
+  if (cfg.emptyLinkedQuadrants) {
+    onProgress && onProgress('Clearing linked quadrants across 81 boards…');
+    requiredQuadrants = clearAtomicLinkedQuadrants(puzzleSubs, linkCellsFor, numBoards);
+  }
+
   // Phase 1: hammer the master (linked) clues down toward the target.
   for (let round = 0; round < rounds; round++) {
     onProgress && onProgress(`Carving master clues \u2014 pass ${round + 1}/${rounds}\u2026`);
@@ -954,7 +986,11 @@ function carveToLocalMinimum(subs, ids, difficulty, onProgress, masterTargetOver
     if (removed === 0 && removalChance >= 1) break;
   }
 
-  return { puzzleSubs, masterView: puzzleMasterViewOf(puzzleSubs, linkCellsFor, numBoards) };
+  return {
+    puzzleSubs,
+    masterView: puzzleMasterViewOf(puzzleSubs, linkCellsFor, numBoards),
+    requiredQuadrants,
+  };
 }
 
 function carvePuzzle(subs, master, ids, difficulty, onProgress, masterTargetOverride) {
@@ -972,14 +1008,18 @@ function carvePuzzle(subs, master, ids, difficulty, onProgress, masterTargetOver
   let best = carveToLocalMinimum(subs, ids, difficulty, onProgress, masterTarget);
   let bestMasterClues = countMasterClues(best.masterView);
 
-  for (let attempt = 1; attempt < genAttempts && bestMasterClues > masterTarget; attempt++) {
+  for (let attempt = 1; attempt < genAttempts &&
+       (bestMasterClues > masterTarget || !best.requiredQuadrants.required); attempt++) {
     onProgress && onProgress(`Trying alternate sub-board layout ${attempt + 1}/${genAttempts}\u2026`);
     const regen = regenerateSubsForMaster(master, numBoards, linkCellsFor);
     if (!regen) continue;
     const regenIds = buildCellIdentities(regen, numBoards, linkCellsFor);
     const candidate = carveToLocalMinimum(regen, regenIds, difficulty, onProgress, masterTarget);
     const clues = countMasterClues(candidate.masterView);
-    if (clues < bestMasterClues) {
+    const candidateRequired = candidate.requiredQuadrants.required;
+    const bestRequired = best.requiredQuadrants.required;
+    if ((candidateRequired && !bestRequired) ||
+        (candidateRequired === bestRequired && clues < bestMasterClues)) {
       best = candidate;
       bestMasterClues = clues;
       bestSubs = regen;
