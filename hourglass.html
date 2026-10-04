@@ -1,0 +1,661 @@
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2f5a4c" />
+    <meta name="description" content="Sandglass is an adjustable timer with a golden snake-wrapped hourglass and black falling sand." />
+    <title>Sandglass — Adjustable hourglass timer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet" />
+    <style>
+:root {
+  --felt-deep: #1e3d34;
+  --felt: #2f5a4c;
+  --felt-light: #3a6b5a;
+  --felt-ink: #173129;
+  --cream: #f2e9d1;
+  --cream-muted: rgba(242, 233, 209, 0.63);
+  --gold: #d5a53e;
+  --gold-light: #f2d274;
+  --line: rgba(225, 207, 157, 0.26);
+  --shadow: rgba(6, 22, 18, 0.34);
+  --serif: "Fraunces", Georgia, serif;
+  --mono: "DM Mono", "Courier New", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html { min-width: 320px; background: var(--felt-deep); }
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--cream);
+  background:
+    radial-gradient(circle at 62% 42%, rgba(80, 132, 106, 0.19), transparent 28rem),
+    radial-gradient(circle at 15% 100%, rgba(15, 42, 34, 0.5), transparent 42rem),
+    linear-gradient(135deg, #244a3d, #2f5a4c 46%, #264b3e);
+  font-family: var(--mono);
+  overflow-x: hidden;
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+  opacity: 0.16;
+  background-image:
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 140 140' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.36'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+}
+
+button, input { font: inherit; }
+button { cursor: pointer; }
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 0 clamp(1.25rem, 4vw, 4.5rem);
+}
+
+.topbar, .footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 92px;
+  border-bottom: 1px solid var(--line);
+  letter-spacing: 0.06em;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.64rem;
+  color: var(--cream);
+  font-family: var(--serif);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+  text-transform: lowercase;
+}
+
+.wordmark-mark {
+  position: relative;
+  width: 18px;
+  height: 26px;
+  border: 1.5px solid var(--gold-light);
+  border-radius: 4px;
+  transform: skewY(-8deg);
+}
+.wordmark-mark::before, .wordmark-mark::after {
+  position: absolute;
+  left: 50%;
+  width: 8px;
+  height: 1px;
+  content: "";
+  background: var(--gold-light);
+  transform: translateX(-50%);
+}
+.wordmark-mark::before { top: 6px; }
+.wordmark-mark::after { bottom: 6px; }
+.wordmark-mark span { position: absolute; top: 12px; left: 8px; width: 1px; height: 4px; background: var(--gold-light); }
+
+.topbar-note { display: flex; align-items: center; gap: 0.6rem; color: var(--cream-muted); }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold-light); box-shadow: 0 0 0 4px rgba(242, 210, 116, 0.1); }
+
+.main-layout {
+  display: grid;
+  grid-template-columns: minmax(200px, 0.74fr) minmax(390px, 1.3fr) minmax(290px, 0.92fr);
+  flex: 1;
+  align-items: center;
+  gap: clamp(1rem, 3.3vw, 4.5rem);
+  padding: clamp(2.6rem, 7vh, 6rem) 0 clamp(2.8rem, 6vh, 5rem);
+}
+
+.hero-copy { align-self: center; padding-bottom: 8rem; }
+.eyebrow, .panel-kicker, .section-label, .caption-rule + span, .glass-note, .readout-label, .readout-state {
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.eyebrow { margin: 0 0 1.75rem; color: var(--gold-light); }
+.hero-copy h1 { max-width: 10ch; margin: 0; font-family: var(--serif); font-size: clamp(3.7rem, 6.6vw, 7.4rem); font-weight: 500; line-height: 0.88; letter-spacing: -0.065em; }
+.hero-copy h1 em { color: var(--gold-light); font-style: normal; }
+.intro { max-width: 24rem; margin: 2rem 0 0; color: var(--cream-muted); font-size: 0.76rem; line-height: 1.85; }
+.object-caption { display: flex; align-items: center; gap: 0.9rem; margin-top: 3.4rem; color: rgba(242, 233, 209, 0.45); }
+.caption-rule { display: inline-block; width: 36px; height: 1px; background: var(--gold); }
+
+.hourglass-stage { position: relative; min-height: 700px; display: flex; align-items: center; justify-content: center; }
+.stage-glow { position: absolute; top: 45%; left: 50%; width: 28rem; height: 31rem; border-radius: 50%; background: rgba(135, 209, 174, 0.1); filter: blur(62px); transform: translate(-50%, -50%); }
+.hourglass-wrap { position: relative; z-index: 2; width: min(100%, 540px); filter: drop-shadow(0 28px 22px rgba(7, 23, 18, 0.3)); }
+.hourglass { display: block; width: 100%; overflow: visible; }
+.glass-shadow { fill: rgba(6, 18, 14, 0.38); filter: url(#softShadow); }
+.glass-outline { fill: none; stroke: rgba(216, 255, 241, 0.48); stroke-width: 4; stroke-linecap: round; }
+.glass-highlight { fill: none; stroke: rgba(255,255,255,0.54); stroke-width: 7; stroke-linecap: round; opacity: 0.76; }
+.glass-neck { fill: rgba(215, 255, 241, 0.08); stroke: rgba(255,255,255,0.22); stroke-width: 2; }
+.sand-layer { transition: opacity 300ms ease; }
+.top-sand, .bottom-sand { transition: y 400ms cubic-bezier(.22,.8,.3,1), height 400ms cubic-bezier(.22,.8,.3,1); }
+.top-surface, .bottom-surface { transition: cy 400ms cubic-bezier(.22,.8,.3,1); }
+.sand-stream, .sand-stream-glow, .sand-drop { transition: opacity 250ms ease; }
+.sand-stream { stroke: #080706; stroke-width: 3.3; stroke-linecap: round; }
+.sand-stream-glow { stroke: rgba(246, 221, 158, 0.2); stroke-width: 9; stroke-linecap: round; filter: url(#sandGlow); }
+.sand-drop { fill: #080706; }
+.hourglass.is-paused .sand-stream, .hourglass.is-paused .sand-stream-glow, .hourglass.is-paused .sand-drop { opacity: 0.18; }
+.hourglass.is-complete .sand-stream, .hourglass.is-complete .sand-stream-glow, .hourglass.is-complete .sand-drop { opacity: 0; }
+.snake-body, .snake-body.lower { fill: none; stroke: url(#goldBody); stroke-width: 27; stroke-linecap: round; stroke-linejoin: round; }
+.snake-body.lower { stroke-width: 25; }
+.snake-shadow { fill: none; stroke: #44280a; stroke-width: 35; stroke-linecap: round; stroke-linejoin: round; opacity: 0.5; }
+.snake-shine { fill: none; stroke: rgba(255, 239, 160, 0.58); stroke-width: 4; stroke-linecap: round; }
+.snake-shine.lower { stroke-width: 3.5; }
+.snake-head { fill: url(#goldBody); stroke: #69410c; stroke-width: 4; }
+.stage-floor { position: absolute; bottom: 8.6%; left: 50%; width: 66%; height: 1px; background: linear-gradient(90deg, transparent, rgba(233, 211, 154, 0.42), transparent); transform: translateX(-50%); }
+.glass-note { position: absolute; right: 4%; bottom: 8%; display: flex; align-items: center; gap: 0.8rem; margin: 0; color: rgba(242, 233, 209, 0.56); }
+.note-line { display: inline-block; width: 28px; height: 1px; background: rgba(242, 233, 209, 0.46); }
+
+.control-panel { align-self: center; width: 100%; max-width: 390px; padding: clamp(1.6rem, 3vw, 2.8rem); border: 1px solid rgba(230, 214, 171, 0.26); background: linear-gradient(145deg, rgba(18, 50, 40, 0.56), rgba(20, 49, 40, 0.22)); box-shadow: 0 28px 55px rgba(8, 26, 20, 0.18), inset 0 1px rgba(255,255,255,0.05); backdrop-filter: blur(11px); }
+.panel-heading { display: flex; justify-content: space-between; padding-bottom: 1.5rem; border-bottom: 1px solid var(--line); }
+.panel-kicker { color: var(--gold-light); }
+.panel-index { color: rgba(242, 233, 209, 0.35); font-size: 0.6rem; }
+.timer-readout { padding: 2rem 0 1.8rem; }
+.readout-label { display: block; margin-bottom: 0.65rem; color: rgba(242,233,209,0.5); }
+.readout-time { display: block; font-family: var(--serif); font-size: clamp(3.4rem, 5vw, 5rem); line-height: 0.95; letter-spacing: -0.07em; color: var(--cream); }
+.readout-state { display: block; margin-top: 0.8rem; color: var(--gold-light); }
+.duration-section { padding: 1.5rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.section-label { display: flex; justify-content: space-between; gap: 1rem; color: rgba(242, 233, 209, 0.48); }
+.section-label span:last-child { color: var(--cream); letter-spacing: 0.05em; }
+.preset-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.45rem; margin-top: 1rem; }
+.preset { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; padding: 0.8rem 0.25rem 0.7rem; color: var(--cream-muted); border: 1px solid rgba(242, 233, 209, 0.19); background: rgba(8, 25, 20, 0.16); transition: color 180ms ease, border-color 180ms ease, background 180ms ease, transform 180ms ease; }
+.preset:hover { color: var(--cream); border-color: rgba(242, 210, 116, 0.58); transform: translateY(-2px); }
+.preset.active { color: var(--felt-ink); border-color: var(--gold-light); background: var(--gold-light); }
+.preset span { font-size: 0.54rem; text-transform: uppercase; letter-spacing: 0.1em; }
+.custom-duration { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; margin-top: 1rem; color: rgba(242, 233, 209, 0.48); font-size: 0.63rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.custom-input-wrap { display: flex; align-items: center; gap: 0.55rem; color: var(--cream-muted); }
+.custom-input-wrap input { width: 4.8rem; padding: 0.6rem 0.55rem; color: var(--cream); border: 1px solid rgba(242,233,209,0.22); outline: none; background: rgba(5, 17, 13, 0.28); text-align: right; }
+.custom-input-wrap input:focus { border-color: var(--gold-light); box-shadow: 0 0 0 3px rgba(242,210,116,0.12); }
+.custom-input-wrap input::placeholder { color: rgba(242,233,209,0.35); }
+.custom-input-wrap > span { font-size: 0.57rem; letter-spacing: 0.04em; text-transform: lowercase; }
+.progress-wrap { padding: 1.55rem 0 1.45rem; }
+.progress-track { width: 100%; height: 2px; overflow: hidden; background: rgba(242,233,209,0.14); }
+.progress-fill { width: 0%; height: 100%; background: var(--gold-light); transition: width 300ms linear; }
+.progress-meta { display: flex; justify-content: space-between; margin-top: 0.7rem; color: rgba(242,233,209,0.38); font-size: 0.52rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.action-row { display: flex; flex-direction: column; gap: 0.9rem; }
+.primary-action { display: flex; align-items: center; justify-content: center; gap: 0.7rem; min-height: 3.55rem; color: var(--felt-ink); border: 1px solid var(--gold-light); background: var(--gold-light); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; transition: background 180ms ease, transform 180ms ease, box-shadow 180ms ease; }
+.primary-action:hover { background: #f8dc88; box-shadow: 0 10px 20px rgba(5, 20, 15, 0.2); transform: translateY(-2px); }
+.primary-action:active { transform: translateY(0); }
+.button-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.4rem; height: 1.4rem; border: 1px solid rgba(25, 53, 42, 0.4); font-size: 0.58rem; }
+.reset-action { align-self: center; padding: 0.25rem 0.5rem; color: rgba(242,233,209,0.48); border: 0; background: transparent; font-size: 0.61rem; letter-spacing: 0.1em; text-transform: uppercase; transition: color 180ms ease; }
+.reset-action:hover { color: var(--cream); }
+.reset-action span { margin-right: 0.28rem; color: var(--gold-light); font-size: 1rem; }
+.panel-footnote { display: flex; align-items: flex-start; gap: 0.5rem; margin: 2rem 0 0; color: rgba(242,233,209,0.39); font-size: 0.6rem; line-height: 1.6; }
+.tiny-snake { color: var(--gold-light); font-family: var(--serif); font-size: 1rem; line-height: 0.8; }
+
+.time-entry { margin-top: 1.15rem; }
+.time-entry label { color: rgba(242,233,209,0.52); }
+.input-help { margin: 0.72rem 0 0; color: rgba(242,233,209,0.39); font-size: 0.57rem; line-height: 1.5; }
+#customMinutes { width: 7.4rem; text-align: right; }
+#customMinutes.invalid { border-color: #ef8d70; box-shadow: 0 0 0 3px rgba(239,141,112,0.12); }
+.utility-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.55rem; }
+.utility-action { padding: 0.28rem 0.35rem; color: rgba(242,233,209,0.53); border: 0; background: transparent; font-size: 0.57rem; letter-spacing: 0.07em; text-transform: uppercase; transition: color 180ms ease; }
+.utility-action:hover, .utility-action.active { color: var(--gold-light); }
+.utility-action span { color: var(--gold-light); margin-right: 0.18rem; }
+.permission-note { min-height: 1em; margin: 0.3rem 0 0; color: rgba(242,233,209,0.42); font-size: 0.55rem; line-height: 1.45; }
+
+.footer { min-height: 62px; color: rgba(242, 233, 209, 0.38); border-top: 1px solid var(--line); border-bottom: 0; font-size: 0.57rem; }
+
+/* Minimal hourglass-only layout */
+.main-layout { grid-template-columns: minmax(290px, 360px) minmax(430px, 1fr); gap: clamp(2rem, 8vw, 9rem); padding: clamp(3rem, 8vh, 6rem) 0; }
+.hero-copy { display: none; }
+.control-panel { max-width: none; padding: clamp(1.45rem, 2.6vw, 2.35rem); }
+.panel-footnote, .glass-note, .footer { display: none; }
+.duration-section { padding-top: 1.25rem; }
+.timer-readout { padding: 1.8rem 0 1.4rem; }
+.progress-wrap { padding: 1.2rem 0 1.1rem; }
+.hourglass-stage { min-height: min(67vw, 680px); }
+@media (min-width: 761px) {
+  .main-layout { grid-template-columns: minmax(0, 1fr) minmax(320px, 390px); }
+  .hourglass-stage { grid-column: 1; grid-row: 1; }
+  .control-panel { grid-column: 2; grid-row: 1; }
+}
+
+@media (max-width: 1120px) { .main-layout { grid-template-columns: minmax(280px, 360px) minmax(360px, 1fr); } }
+@media (max-width: 760px) { .main-layout { display: flex; flex-direction: column; gap: 1rem; padding-top: 2.5rem; } .hourglass-stage { min-height: 480px; order: -1; } .control-panel { width: 100%; } }
+@media (max-width: 430px) { .hourglass-stage { min-height: 390px; } .control-panel { padding: 1.35rem; } }
+
+@media (max-width: 1120px) {
+  .main-layout { grid-template-columns: minmax(180px, 0.7fr) minmax(340px, 1fr); grid-template-areas: "copy glass" "panel glass"; align-items: center; }
+  .hero-copy { grid-area: copy; padding: 0; }
+  .hourglass-stage { grid-area: glass; min-height: 680px; }
+  .control-panel { grid-area: panel; align-self: start; max-width: none; }
+}
+
+@media (max-width: 760px) {
+  .app-shell { padding: 0 1.2rem; }
+  .topbar { min-height: 72px; }
+  .topbar-note { font-size: 0.56rem; }
+  .main-layout { display: flex; flex-direction: column; align-items: stretch; gap: 0; padding-top: 3rem; }
+  .hero-copy { padding: 0 0 1rem; }
+  .hero-copy h1 { max-width: none; font-size: clamp(3.6rem, 17vw, 6rem); }
+  .hero-copy h1 br { display: none; }
+  .intro { max-width: 29rem; margin-top: 1.4rem; }
+  .object-caption { margin-top: 1.9rem; }
+  .hourglass-stage { min-height: 520px; margin: -1rem 0 -1.8rem; }
+  .stage-glow { width: 19rem; height: 24rem; }
+  .hourglass-wrap { width: min(100%, 450px); }
+  .glass-note { right: 0; bottom: 10%; }
+  .stage-floor { bottom: 5.5%; width: 70%; }
+  .control-panel { max-width: none; padding: 1.5rem; }
+  .footer { margin-top: 3rem; }
+}
+
+@media (max-width: 430px) {
+  .topbar-note { max-width: 9rem; line-height: 1.4; text-align: right; }
+  .hourglass-stage { min-height: 445px; }
+  .readout-time { font-size: 3.7rem; }
+  .custom-duration { align-items: flex-start; flex-direction: column; }
+  .custom-input-wrap { width: 100%; }
+  .custom-input-wrap input { flex: 1; width: auto; text-align: left; }
+  .footer { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0.35rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; }
+}
+
+    /* Final desktop/tablet placement: hourglass left, time setter right. */
+  @media (min-width: 761px) {
+    .main-layout {
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 390px) !important;
+      grid-template-areas: none !important;
+    }
+    .hourglass-stage { grid-area: 1 / 1 / 2 / 2 !important; }
+    .control-panel { grid-area: 1 / 2 / 2 / 3 !important; }
+  }
+
+  </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="wordmark" href="#" aria-label="Sandglass">
+          <span class="wordmark-mark" aria-hidden="true"><span></span></span>
+          <span>sandglass</span>
+        </a>
+        <div class="topbar-note"><span class="status-dot"></span><span id="headerState">ready when you are</span></div>
+      </header>
+
+      <main class="main-layout">
+        <aside class="control-panel" aria-label="Timer controls">
+          <div class="panel-heading">
+            <span class="panel-kicker">Time setter</span>
+            <span class="panel-index">01 / 01</span>
+          </div>
+          <div class="timer-readout" aria-live="polite">
+            <span class="readout-label">Time</span>
+            <span class="readout-time" id="timeRemaining">05:00</span>
+            <span class="readout-state" id="timerState">ready to begin</span>
+          </div>
+
+          <div class="duration-section">
+            <div class="section-label"><span>Time</span><span id="durationSummary">5 minutes</span></div>
+            <div class="custom-duration time-entry">
+              <label for="customMinutes">Enter min,sec</label>
+              <span class="custom-input-wrap"><input id="customMinutes" type="text" inputmode="decimal" autocomplete="off" placeholder="5 or 1,30" aria-label="Duration in minutes and seconds" /><span>e.g. 1,30</span></span>
+            </div>
+            <p class="input-help" id="inputHelp">30 = 30 minutes · 1,3 = 1:30 · 0.27 = 27 seconds</p>
+            <div class="preset-grid" role="group" aria-label="Duration presets">
+              <button class="preset" type="button" data-minutes="1">01<span>min</span></button>
+              <button class="preset active" type="button" data-minutes="5">05<span>min</span></button>
+              <button class="preset" type="button" data-minutes="10">10<span>min</span></button>
+              <button class="preset" type="button" data-minutes="25">25<span>min</span></button>
+            </div>
+          </div>
+
+          <div class="progress-wrap" aria-hidden="true">
+            <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+            <div class="progress-meta"><span>start</span><span id="progressPercent">0%</span><span>complete</span></div>
+          </div>
+
+          <div class="action-row">
+            <button class="primary-action" id="startButton" type="button"><span class="button-icon" id="startIcon">▶</span><span id="startLabel">Start</span></button>
+            <div class="utility-row">
+              <button class="utility-action" id="pipButton" type="button"><span>↗</span> picture-in-picture</button>
+              <button class="utility-action" id="notifyButton" type="button"><span>•</span> notifications: off</button>
+              <button class="reset-action" id="resetButton" type="button" aria-label="Reset timer"><span>↺</span> reset</button>
+            </div>
+            <p class="permission-note" id="permissionNote" aria-live="polite"></p>
+          </div>
+        </aside>
+        <section class="hourglass-stage" aria-label="Animated golden snake-wrapped hourglass">
+          <div class="stage-glow" aria-hidden="true"></div>
+          <div class="hourglass-wrap">
+            <svg class="hourglass" viewBox="0 0 520 720" role="img" aria-labelledby="glassTitle glassDesc">
+              <title id="glassTitle">Hourglass</title>
+              <desc id="glassDesc">Golden snake, black sand.</desc>
+              <defs>
+                <linearGradient id="goldBody" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#fff0a4" />
+                  <stop offset="0.18" stop-color="#c9942a" />
+                  <stop offset="0.52" stop-color="#8e5c12" />
+                  <stop offset="0.78" stop-color="#e2b849" />
+                  <stop offset="1" stop-color="#6d410c" />
+                </linearGradient>
+                <linearGradient id="goldEdge" x1="0" y1="0" x2="0.9" y2="1">
+                  <stop offset="0" stop-color="#6f410d" />
+                  <stop offset="0.3" stop-color="#efcf69" />
+                  <stop offset="0.7" stop-color="#9f6814" />
+                  <stop offset="1" stop-color="#f5d67d" />
+                </linearGradient>
+                <linearGradient id="glassBody" x1="0" y1="0" x2="1" y2="0.8">
+                  <stop offset="0" stop-color="#ffffff" stop-opacity="0.08" />
+                  <stop offset="0.3" stop-color="#d7fff2" stop-opacity="0.22" />
+                  <stop offset="0.52" stop-color="#ffffff" stop-opacity="0.08" />
+                  <stop offset="0.78" stop-color="#a9ead8" stop-opacity="0.16" />
+                  <stop offset="1" stop-color="#ffffff" stop-opacity="0.04" />
+                </linearGradient>
+                <linearGradient id="sandBody" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#23201e" />
+                  <stop offset="0.42" stop-color="#080808" />
+                  <stop offset="0.75" stop-color="#171311" />
+                  <stop offset="1" stop-color="#030303" />
+                </linearGradient>
+                <radialGradient id="sandSurface" cx="40%" cy="25%" r="90%">
+                  <stop offset="0" stop-color="#4a4037" />
+                  <stop offset="0.4" stop-color="#171311" />
+                  <stop offset="1" stop-color="#050505" />
+                </radialGradient>
+                <filter id="softShadow" x="-40%" y="-40%" width="180%" height="200%">
+                  <feGaussianBlur stdDeviation="14" />
+                </filter>
+                <filter id="goldShadow" x="-30%" y="-30%" width="160%" height="180%">
+                  <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#0a211c" flood-opacity="0.46" />
+                </filter>
+                <filter id="sandGlow" x="-200%" y="-20%" width="400%" height="140%">
+                  <feGaussianBlur stdDeviation="2.2" />
+                </filter>
+                <clipPath id="topBulbClip">
+                  <path d="M155 140 C155 211 179 259 235 315 L285 315 C341 259 365 211 365 140 Z" />
+                </clipPath>
+                <clipPath id="bottomBulbClip">
+                  <path d="M155 580 C155 509 179 461 235 405 L285 405 C341 461 365 509 365 580 Z" />
+                </clipPath>
+              </defs>
+
+              <ellipse class="glass-shadow" cx="260" cy="645" rx="150" ry="24" />
+
+              <g class="frame" filter="url(#goldShadow)">
+                <rect x="118" y="92" width="284" height="42" rx="20" fill="url(#goldBody)" stroke="#4a2c0c" stroke-width="6" />
+                <path d="M139 105 H381" stroke="#fff0a4" stroke-opacity="0.46" stroke-width="5" stroke-linecap="round" />
+                <rect x="118" y="586" width="284" height="44" rx="21" fill="url(#goldBody)" stroke="#4a2c0c" stroke-width="6" />
+                <path d="M139 600 H381" stroke="#fff0a4" stroke-opacity="0.44" stroke-width="5" stroke-linecap="round" />
+                <path d="M125 98 Q260 74 395 98" fill="none" stroke="#e6bd55" stroke-width="8" stroke-linecap="round" opacity="0.74" />
+                <path d="M125 624 Q260 649 395 624" fill="none" stroke="#6f430c" stroke-width="8" stroke-linecap="round" opacity="0.74" />
+              </g>
+
+              <g class="sand-layer" aria-hidden="true">
+                <g clip-path="url(#topBulbClip)">
+                  <rect class="top-sand" x="100" y="145" width="320" height="170" fill="url(#sandBody)" />
+                  <ellipse class="top-surface" cx="260" cy="150" rx="113" ry="13" fill="url(#sandSurface)" />
+                </g>
+                <g clip-path="url(#bottomBulbClip)">
+                  <rect class="bottom-sand" x="100" y="578" width="320" height="0" fill="url(#sandBody)" />
+                  <ellipse class="bottom-surface" cx="260" cy="578" rx="113" ry="13" fill="url(#sandSurface)" />
+                </g>
+                <path class="sand-stream-glow" d="M260 310 L260 574" />
+                <path class="sand-stream" d="M260 310 L260 574" />
+                <circle class="sand-drop" cx="260" cy="578" r="5" />
+              </g>
+
+              <path class="glass-outline" d="M155 134 C155 210 178 258 235 315 L235 405 C178 462 155 510 155 586 M365 134 C365 210 342 258 285 315 L285 405 C342 462 365 510 365 586" />
+              <path class="glass-highlight" d="M182 151 C184 216 205 255 244 298 M183 568 C185 506 207 468 244 426" />
+              <path class="glass-neck" d="M235 315 H285 V405 H235 Z" />
+
+              <g class="snake" filter="url(#goldShadow)" aria-hidden="true">
+                <path class="snake-shadow" d="M112 165 C65 123 96 68 153 83 C198 95 173 150 219 166 C273 185 322 126 365 151 C408 176 394 224 350 236 C312 246 291 214 310 188 C327 164 355 172 367 194" />
+                <path class="snake-body" d="M112 165 C65 123 96 68 153 83 C198 95 173 150 219 166 C273 185 322 126 365 151 C408 176 394 224 350 236 C312 246 291 214 310 188 C327 164 355 172 367 194" />
+                <path class="snake-shine" d="M103 154 C81 130 92 102 114 96 M220 153 C267 175 313 141 350 159" />
+                <path class="snake-head" d="M357 185 C377 178 403 185 414 200 C405 216 382 223 364 213 C357 207 353 194 357 185Z" />
+                <circle cx="395" cy="196" r="3.7" fill="#1a120a" />
+                <path d="M413 202 L427 205 M413 207 L426 212" stroke="#dc3d2d" stroke-width="2.2" stroke-linecap="round" />
+                <path class="snake-body lower" d="M370 527 C430 552 420 611 365 625 C308 640 287 598 308 574 C328 551 360 560 368 584 C377 611 343 625 305 621 C239 615 191 589 135 613 C94 631 72 593 101 567 C127 544 157 561 168 582" />
+                <path class="snake-shine lower" d="M384 547 C407 567 396 591 378 599 M145 594 C120 578 104 590 103 603" />
+              </g>
+
+              <g class="rivet-set" aria-hidden="true">
+                <circle cx="145" cy="112" r="6" fill="#5b350a" /><circle cx="145" cy="112" r="2" fill="#f2d177" />
+                <circle cx="375" cy="112" r="6" fill="#5b350a" /><circle cx="375" cy="112" r="2" fill="#f2d177" />
+                <circle cx="145" cy="608" r="6" fill="#5b350a" /><circle cx="145" cy="608" r="2" fill="#f2d177" />
+                <circle cx="375" cy="608" r="6" fill="#5b350a" /><circle cx="375" cy="608" r="2" fill="#f2d177" />
+              </g>
+            </svg>
+          </div>
+          <div class="stage-floor" aria-hidden="true"></div>
+        </section>
+      </main>
+    </div>
+    <script>
+const DEFAULT_MINUTES = 5;
+const MIN_SECONDS = 1;
+
+const state = {
+  duration: DEFAULT_MINUTES * 60,
+  remaining: DEFAULT_MINUTES * 60,
+  elapsed: 0,
+  running: false,
+  complete: false,
+  startedAt: 0,
+  raf: null,
+  notificationEnabled: false,
+  pipWindow: null,
+};
+
+const els = {
+  hourglass: document.querySelector('.hourglass'),
+  timeRemaining: document.querySelector('#timeRemaining'),
+  timerState: document.querySelector('#timerState'),
+  headerState: document.querySelector('#headerState') || { textContent: '' },
+  sandStatus: document.querySelector('#sandStatus') || { textContent: '' },
+  durationSummary: document.querySelector('#durationSummary'),
+  customMinutes: document.querySelector('#customMinutes'),
+  inputHelp: document.querySelector('#inputHelp'),
+  progressFill: document.querySelector('#progressFill'),
+  progressPercent: document.querySelector('#progressPercent'),
+  startButton: document.querySelector('#startButton'),
+  startIcon: document.querySelector('#startIcon'),
+  startLabel: document.querySelector('#startLabel'),
+  resetButton: document.querySelector('#resetButton'),
+  pipButton: document.querySelector('#pipButton'),
+  notifyButton: document.querySelector('#notifyButton'),
+  permissionNote: document.querySelector('#permissionNote'),
+  topSand: document.querySelector('.top-sand'),
+  bottomSand: document.querySelector('.bottom-sand'),
+  topSurface: document.querySelector('.top-surface'),
+  bottomSurface: document.querySelector('.bottom-surface'),
+  sandStream: document.querySelector('.sand-stream'),
+  sandStreamGlow: document.querySelector('.sand-stream-glow'),
+  sandDrop: document.querySelector('.sand-drop'),
+};
+const presets = [...document.querySelectorAll('.preset')];
+
+function formatTime(totalSeconds) {
+  const safeSeconds = Math.max(0, Math.ceil(totalSeconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+function formatDuration(seconds) {
+  const rounded = Math.round(seconds);
+  if (rounded < 60) return `${rounded} second${rounded === 1 ? '' : 's'}`;
+  const minutes = Math.floor(rounded / 60);
+  const rest = rounded % 60;
+  if (!rest) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  return `${minutes}m ${String(rest).padStart(2, '0')}s`;
+}
+function parseDuration(value) {
+  const raw = String(value).trim().replace(/\s+/g, '');
+  if (!raw) return null;
+  const separator = raw.includes(',') ? ',' : raw.includes(':') ? ':' : raw.includes('.') ? '.' : null;
+  if (!separator) {
+    if (!/^\d+$/.test(raw)) return null;
+    // A bare integer is a number of minutes: 1 = 01:00, 30 = 30:00.
+    const minutes = Number(raw);
+    return Number.isFinite(minutes) ? minutes * 60 : null;
+  }
+  const parts = raw.split(separator);
+  if (parts.length !== 2 || !/^\d+$/.test(parts[0]) || !/^\d+$/.test(parts[1])) return null;
+  const minutes = Number(parts[0]);
+  const trailing = Number(parts[1]);
+  if (!Number.isFinite(minutes) || !Number.isFinite(trailing)) return null;
+  if (separator === ':') {
+    // Colon notation is conventional minutes:seconds: 1:3 = 01:03.
+    if (trailing >= 60) return null;
+    return minutes * 60 + trailing;
+  }
+  // Comma/decimal notation is timestamp-style: 1.3 = 01:30, 0.27 = 00:27.
+  // This is equivalent to int(timestamp) + (timestamp % 1) / 0.6 minutes.
+  if (trailing >= 60) return null;
+  const encodedSeconds = parts[1].length === 1 ? trailing * 10 : trailing;
+  return minutes * 60 + encodedSeconds;
+}
+function setActivePreset(minutes) {
+  presets.forEach((preset) => preset.classList.toggle('active', Number(preset.dataset.minutes) === minutes));
+}
+function setDuration(seconds, inputValue = '') {
+  const cleanSeconds = Math.max(MIN_SECONDS, Math.round(seconds));
+  state.duration = cleanSeconds;
+  state.remaining = cleanSeconds;
+  state.elapsed = 0;
+  state.running = false;
+  state.complete = false;
+  cancelAnimationFrame(state.raf);
+  if (inputValue) els.customMinutes.value = inputValue;
+  els.customMinutes.classList.remove('invalid');
+  els.inputHelp.textContent = '30 = 30 minutes · 1,3 = 1:30 · 0.27 = 27 seconds';
+  els.durationSummary.textContent = formatDuration(cleanSeconds);
+  setActivePreset(cleanSeconds / 60);
+  render();
+}
+function render() {
+  const progress = state.duration > 0 ? Math.min(1, Math.max(0, state.elapsed / state.duration)) : 0;
+  const topHeight = Math.max(0, 170 * (1 - progress));
+  const topY = 145 + (170 - topHeight);
+  const bottomHeight = 175 * progress;
+  const bottomY = 578 - bottomHeight;
+  els.timeRemaining.textContent = formatTime(state.remaining);
+  els.progressFill.style.width = `${progress * 100}%`;
+  els.progressPercent.textContent = `${Math.round(progress * 100)}%`;
+  els.topSand.setAttribute('y', topY.toFixed(2));
+  els.topSand.setAttribute('height', topHeight.toFixed(2));
+  els.bottomSand.setAttribute('y', bottomY.toFixed(2));
+  els.bottomSand.setAttribute('height', bottomHeight.toFixed(2));
+  els.topSurface.setAttribute('cy', Math.max(150, topY).toFixed(2));
+  els.bottomSurface.setAttribute('cy', Math.max(410, bottomY).toFixed(2));
+  const streamEnd = Math.max(414, bottomY - 4).toFixed(2);
+  els.sandStream.setAttribute('d', `M260 310 L260 ${streamEnd}`);
+  els.sandStreamGlow.setAttribute('d', `M260 310 L260 ${streamEnd}`);
+  els.sandDrop.setAttribute('cy', Math.max(419, bottomY).toFixed(2));
+  els.hourglass.classList.toggle('is-paused', !state.running);
+  els.hourglass.classList.toggle('is-complete', state.complete);
+  if (state.complete) {
+    els.startLabel.textContent = 'Start again'; els.startIcon.textContent = '↻'; els.timerState.textContent = 'complete'; els.headerState.textContent = 'complete'; els.sandStatus.textContent = 'black sand / settled';
+  } else if (state.running) {
+    els.startLabel.textContent = 'Pause timer'; els.startIcon.textContent = 'Ⅱ'; els.timerState.textContent = 'in progress'; els.headerState.textContent = 'running'; els.sandStatus.textContent = 'black sand / falling';
+  } else if (state.elapsed > 0) {
+    els.startLabel.textContent = 'Resume timer'; els.startIcon.textContent = '▶'; els.timerState.textContent = 'paused'; els.headerState.textContent = 'paused'; els.sandStatus.textContent = 'black sand / paused';
+  } else {
+    els.startLabel.textContent = 'Start timer'; els.startIcon.textContent = '▶'; els.timerState.textContent = 'ready to begin'; els.headerState.textContent = 'ready'; els.sandStatus.textContent = 'black sand / ready';
+  }
+  updatePip();
+}
+function tick(now) {
+  if (!state.running) return;
+  state.elapsed = Math.min(state.duration, (now - state.startedAt) / 1000);
+  state.remaining = Math.max(0, state.duration - state.elapsed);
+  if (state.remaining <= 0) {
+    state.running = false; state.complete = true; state.elapsed = state.duration; state.remaining = 0; render(); notifyComplete(); return;
+  }
+  render(); state.raf = requestAnimationFrame(tick);
+}
+function startTimer() {
+  if (state.complete) { state.elapsed = 0; state.remaining = state.duration; state.complete = false; }
+  state.running = true; state.startedAt = performance.now() - state.elapsed * 1000; render(); cancelAnimationFrame(state.raf); state.raf = requestAnimationFrame(tick);
+}
+function pauseTimer() { state.running = false; cancelAnimationFrame(state.raf); render(); }
+async function toggleNotifications() {
+  if (!('Notification' in window)) { els.permissionNote.textContent = 'Browser notifications are not supported here.'; return; }
+  if (Notification.permission === 'denied') { els.permissionNote.textContent = 'Notifications are blocked in browser settings.'; return; }
+  const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
+  state.notificationEnabled = permission === 'granted';
+  els.notifyButton.classList.toggle('active', state.notificationEnabled);
+  els.notifyButton.innerHTML = `<span>•</span> notifications: ${state.notificationEnabled ? 'on' : 'off'}`;
+  els.permissionNote.textContent = state.notificationEnabled ? 'You will be notified when the sand settles.' : 'Notification permission was not granted.';
+}
+function notifyComplete() {
+  if (state.notificationEnabled && Notification.permission === 'granted') new Notification('Sandglass complete', { body: `${formatDuration(state.duration)} has elapsed.` });
+  if ('vibrate' in navigator) navigator.vibrate?.([180, 80, 180]);
+}
+function pipStyles() { return `
+*{box-sizing:border-box} body{margin:0;background:#1e3d34;color:#f2e9d1;font-family:Arial,sans-serif;height:100vh;overflow:hidden}.pip{display:grid;grid-template-columns:46% 54%;align-items:center;width:100%;height:100%;padding:12px 14px;gap:6px}.pip-glass{display:grid;place-items:center;height:100%}.pip-hourglass{width:100%;height:auto;max-height:170px;overflow:visible}.glass-shadow{fill:rgba(6,18,14,.38);filter:url(#softShadow)}.glass-outline{fill:none;stroke:rgba(216,255,241,.48);stroke-width:4;stroke-linecap:round}.glass-highlight{fill:none;stroke:rgba(255,255,255,.54);stroke-width:7;stroke-linecap:round;opacity:.76}.glass-neck{fill:rgba(215,255,241,.08);stroke:rgba(255,255,255,.22);stroke-width:2}.sand-stream{stroke:#080706;stroke-width:3.3;stroke-linecap:round}.sand-stream-glow{stroke:rgba(246,221,158,.2);stroke-width:9;stroke-linecap:round;filter:url(#sandGlow)}.sand-drop{fill:#080706}.snake-body,.snake-body.lower{fill:none;stroke:url(#goldBody);stroke-width:27;stroke-linecap:round;stroke-linejoin:round}.snake-body.lower{stroke-width:25}.snake-shadow{fill:none;stroke:#44280a;stroke-width:35;stroke-linecap:round;stroke-linejoin:round;opacity:.5}.snake-shine{fill:none;stroke:rgba(255,239,160,.58);stroke-width:4;stroke-linecap:round}.snake-shine.lower{stroke-width:3.5}.snake-head{fill:url(#goldBody);stroke:#69410c;stroke-width:4}.pip-info{min-width:0}.label{font-size:9px;letter-spacing:1.7px;text-transform:uppercase;color:#f2d274}.time{font:600 clamp(34px,12vw,62px) Georgia,serif;margin:8px 0 3px;color:#f2e9d1;line-height:.95}.state{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:rgba(242,233,209,.65)}button{width:100%;margin-top:12px;padding:9px 8px;color:#173129;background:#f2d274;border:0;font:11px Arial,sans-serif;text-transform:uppercase;letter-spacing:1px}`; }
+async function togglePip() {
+  if (!('documentPictureInPicture' in window)) { els.permissionNote.textContent = 'Picture-in-picture is not supported in this browser.'; return; }
+  if (state.pipWindow) { state.pipWindow.close(); return; }
+  try {
+    const pip = await window.documentPictureInPicture.requestWindow({ width: 420, height: 230 });
+    state.pipWindow = pip;
+    const style = pip.document.createElement('style'); style.textContent = pipStyles(); pip.document.head.append(style);
+    pip.document.body.innerHTML = `<div class="pip"><div class="pip-glass"></div><div class="pip-info"><div class="label">sandglass</div><div class="time" id="pipTime">${formatTime(state.remaining)}</div><div class="state" id="pipState">${state.running ? 'running' : 'ready'}</div><button id="pipToggle">${state.running ? 'pause' : 'start'}</button></div></div>`;
+    const pipSvg = document.querySelector('.hourglass').cloneNode(true);
+    pipSvg.classList.add('pip-hourglass');
+    pip.document.querySelector('.pip-glass').appendChild(pip.document.importNode(pipSvg, true));
+    pip.document.querySelector('#pipToggle').onclick = () => state.running ? pauseTimer() : startTimer();
+    pip.addEventListener('pagehide', () => { state.pipWindow = null; els.pipButton.classList.remove('active'); });
+    els.pipButton.classList.add('active'); els.permissionNote.textContent = 'Timer popped into a floating window.'; updatePip();
+  } catch (error) { els.permissionNote.textContent = 'Picture-in-picture could not be opened.'; }
+}
+function updatePip() {
+  const doc = state.pipWindow?.document;
+  if (!doc) return;
+  const time = doc.querySelector('#pipTime'); const pipState = doc.querySelector('#pipState'); const button = doc.querySelector('#pipToggle');
+  if (time) time.textContent = formatTime(state.remaining);
+  if (pipState) pipState.textContent = state.complete ? 'complete' : state.running ? 'running' : state.elapsed ? 'paused' : 'ready';
+  if (button) button.textContent = state.running ? 'pause' : state.complete ? 'start again' : 'start';
+  const svg = doc.querySelector('.pip-hourglass');
+  if (!svg) return;
+  ['.top-sand','.bottom-sand','.top-surface','.bottom-surface','.sand-stream','.sand-stream-glow','.sand-drop'].forEach((selector) => {
+    const source = document.querySelector(selector); const target = svg.querySelector(selector);
+    if (!source || !target) return;
+    for (const attr of ['y','height','cy','d']) { if (source.hasAttribute(attr)) target.setAttribute(attr, source.getAttribute(attr)); }
+  });
+  svg.classList.toggle('is-paused', !state.running); svg.classList.toggle('is-complete', state.complete);
+}
+els.startButton.addEventListener('click', () => state.running ? pauseTimer() : startTimer());
+els.resetButton.addEventListener('click', () => setDuration(state.duration));
+els.notifyButton.addEventListener('click', toggleNotifications);
+els.pipButton.addEventListener('click', togglePip);
+presets.forEach((preset) => preset.addEventListener('click', () => setDuration(Number(preset.dataset.minutes), String(preset.dataset.minutes))));
+function applyCustomDuration() {
+  const value = els.customMinutes.value;
+  const seconds = parseDuration(value);
+  if (!seconds || !Number.isFinite(seconds) || seconds < MIN_SECONDS) {
+    els.customMinutes.classList.add('invalid'); els.inputHelp.textContent = 'Enter a duration like 30, 1,3, or 0.27.'; return;
+  }
+  setDuration(seconds, value);
+}
+els.customMinutes.addEventListener('change', applyCustomDuration);
+els.customMinutes.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); applyCustomDuration(); els.customMinutes.blur(); } });
+setDuration(state.duration, String(DEFAULT_MINUTES));
+    </script>
+  </body>
+</html>
