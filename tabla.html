@@ -61,6 +61,8 @@
     font-weight:600;
     font-size:15px;
     letter-spacing:0.2px;
+    cursor:pointer;
+    user-select:none;
   }
   .brand svg{ opacity:0.9; }
 
@@ -117,13 +119,13 @@
     transition:width .18s ease, min-width .18s ease, padding .18s ease, opacity .12s ease;
   }
   body.sidebar-collapsed .sidebar{
-    width:230px;
-    min-width:230px;
+    width:0;
+    min-width:0;
     padding:10px 0;
-    opacity:1;
-    overflow-y:auto;
-    border-right-color:var(--border);
-    pointer-events:auto;
+    opacity:0;
+    overflow:hidden;
+    border-right-color:transparent;
+    pointer-events:none;
   }
   .sidebar-toggle{
     position:absolute;
@@ -706,7 +708,22 @@
   }
 
   @media (max-width:720px){
-    .sidebar{ display:none; }
+    .sidebar{
+      display:flex;
+      position:fixed;
+      left:0;
+      top:54px;
+      bottom:0;
+      width:min(280px, 85vw);
+      min-width:min(280px, 85vw);
+      height:auto;
+      z-index:15;
+      background:var(--bg);
+      box-shadow:10px 0 28px rgba(0,0,0,.45);
+      transform:translateX(-105%);
+      transition:transform .18s ease;
+    }
+    body.sidebar-menu-open .sidebar{ transform:translateX(0); }
     .sidebar-toggle{ display:none; }
     .viewer{ padding:24px 10px 130px; }
     .song-title{ font-size:min(24px, var(--title-font-size)); }
@@ -729,7 +746,7 @@
 
   <div class="topbar">
     <div class="topbar-left">
-      <div class="brand">
+      <div class="brand" id="brandMenuToggle" role="button" tabindex="0" aria-label="Apri menu canzoni" title="Menu canzoni">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <path d="M9 18V5l12-2v13" stroke-linecap="round" stroke-linejoin="round"/>
           <circle cx="6" cy="18" r="3"/>
@@ -999,6 +1016,13 @@
 
 
   async function dropboxLoadAll(){
+    // Il token precedente era scaduto e causava 401 ad ogni apertura.
+    // Il token aggiornato, se presente, viene configurato localmente.
+    if(!DROPBOX_TOKEN){
+      dropboxOnline = false;
+      setDropboxStatus('Dropbox non configurato: uso la copia locale.');
+      return false;
+    }
     dropboxSyncing = true;
     setDropboxStatus('Syncing from Dropbox…');
     try{
@@ -1050,7 +1074,10 @@
     }catch(err){
       dropboxOnline = false;
       console.error('[dropbox-sync] Full error:', err);
-      setDropboxStatus('Could not sync with Dropbox, showing local copy: ' + err.message, true);
+      const isUnauthorized = String(err.message || '').includes('401');
+      setDropboxStatus(isUnauthorized
+        ? 'Dropbox non autorizzato (401): uso la copia locale.'
+        : 'Could not sync with Dropbox, showing local copy: ' + err.message, !isUnauthorized);
       return false;
     }finally{
       dropboxSyncing = false;
@@ -1058,6 +1085,10 @@
   }
 
   async function dropboxSaveSong(song){
+    if(!DROPBOX_TOKEN){
+      setDropboxStatus('Dropbox non configurato: canzone salvata solo localmente.');
+      return false;
+    }
     try{
       const fileName = song._dbPath ? song._dbPath.split('/').pop() : slugify(song.title || 'song');
       const content = song._raw || rebuildChordProText(song);
@@ -1089,6 +1120,10 @@
   }
 
   async function dropboxDeleteSong(song){
+    if(!DROPBOX_TOKEN){
+      setDropboxStatus('Dropbox non configurato: eliminazione eseguita solo localmente.');
+      return false;
+    }
     if(!song._dbPath){
       return false; // never synced, nothing to delete remotely
     }
@@ -1480,6 +1515,7 @@
   // localStorage, keyed by account + song identity. It never touches the
   // song's lyrics/chords or the GitHub repo, and other accounts never see it.
   const USER_SONG_SETTINGS_KEY = 'tabla.userSongSettings.v1';
+  const GUEST_DISPLAY_USER = 'GUEST';
 
   function songIdentity(song){
     return song && (song._ghPath || song.title || 'untitled');
@@ -1517,7 +1553,8 @@
   function applyUserDisplayOverride(){
     if(currentIndex < 0) return;
     const song = songs[currentIndex];
-    const override = currentUser ? getUserSongSettings(currentUser, song) : null;
+    const displayUser = currentUser || GUEST_DISPLAY_USER;
+    const override = getUserSongSettings(displayUser, song);
     if(override){
       fontSize = override.fontSize || fontSize;
       chordSize = override.chordSize || chordSize;
@@ -1554,10 +1591,11 @@
   }
 
   function saveDisplaySettings(){
-    if(currentUser && currentIndex >= 0){
-      // Logged in and viewing a song: save as this user's personal
-      // override for this specific song (local only, never the server copy).
-      setUserSongSettings(currentUser, songs[currentIndex], {fontSize, chordSize, titleSize, metaSize, fontChoice});
+    if(currentIndex >= 0){
+      // Le dimensioni sono personali e persistono per ogni canzone, anche
+      // nell'area libera; non modificano mai il file della canzone.
+      const displayUser = currentUser || GUEST_DISPLAY_USER;
+      setUserSongSettings(displayUser, songs[currentIndex], {fontSize, chordSize, titleSize, metaSize, fontChoice});
       return;
     }
     try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({fontSize, chordSize, titleSize, metaSize, fontChoice})); }
@@ -1647,7 +1685,8 @@
   const ACCOUNTS = { ADMIN: { role: 'admin' } };
   let currentUser = null;
   let currentRole = null;
-  const DROPBOX_TOKEN = 'sl.u.AGx7Wil7g2id4jtHzC8IqBwmI_bsktPsz4POw8AxkstfTREYufHKM9NCHZ9B9DK-oGfoIhIi-nqp_crcq37nT5dklY9lp75dvVlh0hoZaLHqNjnw1MTBuWagvCrfSDgQMuLAVzXp-ALEN_0O9ajVOXoueBTthnS0NmBPrZ5jR3FQZaQKU55BXEFiuWENX-rss2E2cCEwnsun1pZL2-5I44PX4xiTU28blMJSMGT1ovbrAArCIR2Sxm4fonV_9bnv_cQL7CxEHPQh0LtE6p7lxyqkH4QT8WBxgxdxyuC_V19Sc--CWGjdk_3UPLXD1ncWZtzzCV4U6fJVbbrGHREu1HU24wUGffJoVMyYrevleEbD-0fQExPLllr-dwSI76J1ht-pMbY71ELKQlc9Nrl2Zq1-2FyQHNkANeV39b5dVsYhubseUn6G45gnTtwmvunyPcT6qmcS1InWhbAtr7Aphbpa9mB39bh8e76nwPUhqz9SP3FUhnzoTbwbj7rACCICahEMwj9RmHnRqjbGg7rkUdpfysxs6aueFOLVB7dhKtcrlsL6K0EPZnku0D_m9AWjQSlPiCDv_zXKHceeN-afC2WDw47fMTs6-jd5KXc7tiqM2BXSqcT3oVIDz7fydVSSc6BzILgNSAppUFbtxxCTDIXdV2eybGOe8vl2NvLAAK8zvrgPFvlID5YSvGIU6RFbyfkIQsq_0vB1rdjPYreiyqHcgYvACaugraBQk0yWNX_2wpFE-rM-kL-1mswOPxSUR8vupx8IOkaLR5wiDcijefQlbaMrPZK-oSdNqZZrbugIGliO5Sj8oBgaCet2vxp_sgKUvJulFh7g9Ci1fitd6WX9HeLvDZqT_f2ZMd8jc6Vs6uyxzKlg3xLm7QwA7_tXCavb-mzAxOjQmFxrieRWsk3n89jTelkszxEDpJVTAP2bjjq1gDs1M-HjGEDO5RlHlDtkNXw2bczExqzm9rXfpJFjybVPdYAXM2RfwLtXpNRIsWa0RCayr_MO7UkmB4q3ypjxYspADVgyJ23aQdaJCbKB5yks8fWQZX5uP6HsQWtR3dZugV0zmuhG63IQUb4q1Z7ZAp992Z1bM8ktxPQYjiBvp01PWmCoU5Wc7S0VZA96erIuw-jwzjauXZnUBvbjEqqCAmItdM9McfUNHmvEydRb8dY39qDSptS6hUutTTXx_nqnc97_LVJ3dJ5QC6ZruH6WTQMPWnheXS7yiUxS6cBzlQXs-OPuCdHZSp0obEaUM2qgmdGit8rIpIJHK_mmzd22laSgXZ2S48hHIVUOirtpXx7zUqpDNYJS3MoEYHAGVuJKEuQp1ERllCcigPWbKzvzRub8EVk1YC9d7PEn11ajXkx0MMvQkem6ZCScdwf7_76ahxBMROfwBHtZTXe9plb73pEzyQCIPz_Ntc5CSKnJl047p9h14EQJ5eFJ9Po1_hovY0-ect7Boexqy9aJVNA';
+  // Token opzionale configurabile solo localmente, mai più hard-coded nel file.
+  const DROPBOX_TOKEN = 'sl.u.AGxlgqJ_JMJuhN6pKBOhBI-qbYTR08l5fh9WD8AP-wJsYdSQ4LXmGBz5Z-VmPJAvhmmYM4gywtMqyo85CIbXKonV5qUrOzMF-Szkk2_r6m3jBKD9fMgfMI4h257TzlRLFRNzIjSjRgDcx0yb9ATqj_g7ECbuUeDUQUzOJICa2UjG50Z5wIv66nA7cZuKePqHPWdno-qRQWRMBU8FqTemLahdFxO9BQ68OyhsAOUgF6qalNaikDnB3PLG9KKhzwYD7BHAyrBXKhqpvXHFI4wOjoYM7QzvI3HLGJhlfpc8H9-R9Bw-9fdTTJDhxOaNhFbW9GS7NNYDERyQQkdT8-gJen620oBNQ_gdCxE5LVr-GwwMLy1xP4ZUbAmBdXkVPK0RRxnnaWfp-Z_VhYIu2KdkDuhq-m4_0KO_VzJnmN2iKPJkzj-MRDBWKLrQ0vaemsW-CDmeFGsnexFkNLxUNqW2vubCYgaJ6UFL_6AyBDtiGCFs0m05pVkzFYIVnr6s2yrGg3C33L2YqUswf_zMi34Ze1bNCPIRh09HB3A4xNWnHNJHj3rfjiXxhkcgcFzDIkFG06CQvw-IpCDwEf1uwf2D4utoyU7DqhFpytVF97GEMMsU6pCqzB_47HS-BGG3nBZPk8fGRhF8LcRotRkaXKL0R1hiJQkewiszvQzVSu2KKqsxzyt7tSjkW1NkcycWXdGeh15blbBq9I47FC0FYTFYOa9YvTww8bJAC9uvI4ofrXxFdDrre235y_9ZSuix6IB0qbe-ze1v0ZlCsi9cddOK_18VsrdN9h1sjGv9W5jo1DwqASiB5frYS2FNvk4zdR8wmKaP0S8T7Zf-zOxHXKIieb4PPS9Gb326teDnmId1Wnr3xGr1xEpmdwjxeLY79DTy0RSSLngp13ils8DzlqihCns3sPkm7PlKp6dzB9BK3q3pLpRGR4eziU9ekU6Jp7IRFKyZTDGmpsn6kG0nYOF0QX220ZJ_N9hEA0ouLuKD1juxvR7CKT8nNiQa3ou2k7GiioVwKjBY7pkuzQkLydTNHXGQ8T36DjUR9EyAfwcDnh32i8T7m0dw1Fr-QAl2dSfW-DCvxMfk4qJjSgI9n7aJpeGhWj4eAIz9bu3hR0hlO4voI-cztYzT3jQiiQ0EaGS4YfnG47hQv079OUZp8TZvVEVNW5Lmzwnt7uA9afZUTNR6wev0o0W2YupkrcUhBpV5bkLIOWf7JDc3fj9PDE1bz6EnMfsnw2mlcXqbC8WFrqM0p37hcvseaahbLw73--5OCfNRabgCJfqBSqTaNGQaUHKdAB2-8Oz-XAc0hdosfCCl4Hvvk1m2ajZLe4PQK-V5MGXd1xbT0lFMto0E2CXtgC4rNgxqjQhGgEusbKrHVBgwkRf84_lvffB4Ges9yZLYTaQSRv9rp-4E7cxYp08wB6NI-aFlTrOJwo69u7zH1JFWlkX5YLo2kSA1PsogJTCss7k';
   let isAuthenticated = false;
   let dropboxOnline = false;
   let dropboxSyncing = false;
@@ -1710,8 +1749,18 @@
     openPrivateArea();
   });
 
-  document.getElementById('sidebarToggle').addEventListener('click', () => {
-    document.body.classList.toggle('sidebar-collapsed');
+  function toggleSongMenu(){
+    if(window.matchMedia('(max-width: 720px)').matches){
+      document.body.classList.toggle('sidebar-menu-open');
+    } else {
+      document.body.classList.toggle('sidebar-collapsed');
+    }
+  }
+  document.getElementById('sidebarToggle').addEventListener('click', toggleSongMenu);
+  const brandMenuToggle = document.getElementById('brandMenuToggle');
+  brandMenuToggle.addEventListener('click', toggleSongMenu);
+  brandMenuToggle.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleSongMenu(); }
   });
   document.getElementById('lockCloseBtn').addEventListener('click', closePrivateArea);
   document.getElementById('adminCloseBtn').addEventListener('click', closePrivateArea);
@@ -1767,7 +1816,7 @@
       adminCard.style.display = 'block';
       renderAdminList();
       if(currentIndex >= 0) applyUserDisplayOverride();
-      setDropboxStatus('Connected to Dropbox.');
+      setDropboxStatus(DROPBOX_TOKEN ? 'Connected to Dropbox.' : 'Accesso locale: Dropbox non configurato.');
     } else {
       lockStatus.textContent = 'Wrong password. Try again.';
     }
