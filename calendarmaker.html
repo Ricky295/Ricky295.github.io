@@ -178,6 +178,7 @@ header .pill {
   border-radius: var(--radius-sm); background: var(--surface2); cursor: pointer; padding: 2px;
 }
 .prop-row input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--accent); }
+.file-hint { color: var(--text3); font-size: 10px; margin: -2px 0 8px 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .xy-pair { display: flex; gap: 6px; flex: 1; }
 .xy-pair input { width: 0; flex: 1; }
 .no-sel {
@@ -290,8 +291,10 @@ header .pill {
       <input type="number" id="canvas-scale" value="100" min="20" max="300" step="10"> <span style="font-size:11px;color:var(--text2)">%</span>
       <label style="margin-left:8px">Canvas</label>
       <select id="canvas-size">
-        <option value="794,1123">A4 Portrait</option>
-        <option value="1123,794">A4 Landscape</option>
+        <option value="794,1123">A4 Portrait (210×297 mm)</option>
+        <option value="1123,794">A4 Landscape (297×210 mm)</option>
+        <option value="800,1200">4×6 in (100×150 mm)</option>
+        <option value="400,600">2×3 in (50×75 mm)</option>
         <option value="800,800">Square 800</option>
         <option value="1200,900">Wide 1200×900</option>
         <option value="600,900">Tall 600×900</option>
@@ -320,6 +323,11 @@ header .pill {
   <button class="btn" onclick="clearAll()" style="color:var(--red);border-color:var(--red)">🗑️ Clear All</button>
   <div style="flex:1"></div>
   <button class="btn" onclick="copyJSON()">📋 Copy JSON</button>
+  <button class="btn" onclick="document.getElementById('json-file-input').click()">⬆️ Import JSON</button>
+  <input id="json-file-input" type="file" accept="application/json,.json" hidden onchange="importJSONFile(this)">
+  <button class="btn" onclick="exportCanvas('PNG')">⬇️ PNG</button>
+  <button class="btn" onclick="exportCanvas('JPEG')">⬇️ JPG</button>
+  <button class="btn" onclick="printCanvas()">🖨️ PDF / Print</button>
   <button class="btn primary" onclick="exportJSON()">⬇️ Export JSON</button>
 </div>
 
@@ -436,6 +444,8 @@ const DEFAULTS = {
     textColor: '#e2e8f0',
     weekendColor: '#4a5568',
     todayColor: '#6c8ef5',
+    fontSize: 13,
+    showToday: true,
     monthOffset: 0,
     dayStart: 1,
     showWeekNumbers: false,
@@ -450,6 +460,8 @@ const DEFAULTS = {
     color: '#1e293b',
     textColor: '#e2e8f0',
     accentColor: '#6c8ef5',
+    fontSize: 11,
+    showToday: true,
     monthOffset: 0,
     showMonthName: true,
     opacity: 1, rotation: 0, zIndex: 0
@@ -462,6 +474,8 @@ const DEFAULTS = {
     color: '#1e293b',
     textColor: '#e2e8f0',
     accentColor: '#6c8ef5',
+    fontSize: 11,
+    showToday: true,
     monthOffset: 0,
     showMonthName: true,
     opacity: 1, rotation: 0, zIndex: 0
@@ -472,6 +486,8 @@ const DEFAULTS = {
     x: 0, y: 0,
     size: [80, 60],
     imageUrl: 'https://placehold.co/400x300/1a1a2e/ffffff?text=Image',
+    imageData: '',
+    imageName: '',
     fit: 'cover',
     opacity: 1, rotation: 0, zIndex: 0
   },
@@ -601,6 +617,8 @@ function renderProps() {
       ${propRow('Day start', selectInput('dayStart',c.dayStart,[[0,'Sun'],[1,'Mon'],[2,'Tue'],[3,'Wed'],[4,'Thu'],[5,'Fri'],[6,'Sat']]))}
       ${propRow('Week nums', checkInput('showWeekNumbers',c.showWeekNumbers))}
       ${propRow('Month label', checkInput('showMonthLabel',c.showMonthLabel))}
+      ${propRow('Text size', numInput('fontSize',c.fontSize ?? 13,1,200,1))}
+      ${propRow('Show today', checkInput('showToday',c.showToday !== false))}
     </div>
     <div class="prop-group">
       <div class="prop-group-title">Colors</div>
@@ -617,6 +635,8 @@ function renderProps() {
       <div class="prop-group-title">Settings</div>
       ${propRow('Month offset', numInput('monthOffset',c.monthOffset,-24,24,1))}
       ${propRow('Show name', checkInput('showMonthName',c.showMonthName))}
+      ${propRow('Text size', numInput('fontSize',c.fontSize ?? 11,1,200,1))}
+      ${propRow('Show today', checkInput('showToday',c.showToday !== false))}
     </div>
     <div class="prop-group">
       <div class="prop-group-title">Colors</div>
@@ -629,6 +649,8 @@ function renderProps() {
   if (c.type === 'image') {
     html += `<div class="prop-group">
       <div class="prop-group-title">Image</div>
+      ${propRow('File', `<input type="file" accept="image/*" onchange="handleImageFile(this)">`)}
+      ${c.imageName ? `<div class="file-hint">Using: ${escAttr(c.imageName)}</div>` : ''}
       ${propRow('URL', urlInput('imageUrl',c.imageUrl))}
       ${propRow('Fit', selectInput('fit',c.fit,[['cover','Cover'],['contain','Contain'],['fill','Fill']]))}
     </div>`;
@@ -638,6 +660,7 @@ function renderProps() {
     html += `<div class="prop-group">
       <div class="prop-group-title">Text</div>
       ${propRow('Content', textInput('textContent',c.textContent))}
+      <div class="file-hint">Attributes: {{month}}, {{month + 1}}, {{monthNumber}}, {{year}}, {{monthName}}</div>
       ${propRow('Color', colorInput('color',c.color))}
       ${propRow('Font size', numInput('fontSize',c.fontSize,6,200,1))}
       ${propRow('Weight', selectInput('fontWeight',c.fontWeight,[['normal','Normal'],['bold','Bold'],['300','Light'],['600','Semibold']]))}
@@ -653,8 +676,28 @@ function updateProp(field, value) {
   if (!c) return;
   if (field === 'size0') { c.size[0] = value; }
   else if (field === 'size1') { c.size[1] = value; }
+  else if (field === 'imageUrl') { c.imageUrl = value; c.imageData = ''; c.imageName = ''; }
   else { c[field] = value; }
   refreshCanvas();
+}
+
+function handleImageFile(input) {
+  const c = components.find(x => x.id === selectedId);
+  const file = input.files && input.files[0];
+  if (!c || !file) return;
+  if (!file.type.startsWith('image/')) {
+    alert('Please select an image file.');
+    input.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    c.imageData = reader.result;
+    c.imageName = file.name;
+    renderProps();
+    refreshCanvas();
+  };
+  reader.readAsDataURL(file);
 }
 
 // ---- DRAWING ----
@@ -696,7 +739,7 @@ async function refreshCanvas() {
     if (c.type === 'calendar-grid') drawGrid(ctx, c, base, cx, cy, w, h);
     else if (c.type === 'calendar-row') drawRow(ctx, c, base, cx, cy, w, h);
     else if (c.type === 'calendar-col') drawCol(ctx, c, base, cx, cy, w, h);
-    else if (c.type === 'text') drawText(ctx, c, cx, cy, w, h);
+    else if (c.type === 'text') drawText(ctx, c, base, cx, cy, w, h);
     else if (c.type === 'image') await drawImage(ctx, c, cx, cy, w, h);
 
     // selection highlight
@@ -718,6 +761,7 @@ function drawGrid(ctx, c, base, x, y, w, h) {
   const startDay = firstDayOfWeek(date, c.dayStart || 1);
   const today = new Date();
   const isThisMonth = today.getFullYear()===date.getFullYear() && today.getMonth()===date.getMonth();
+  const showToday = c.showToday !== false;
 
   const weekNums = c.showWeekNumbers;
   const cols = 7 + (weekNums ? 1 : 0);
@@ -732,7 +776,7 @@ function drawGrid(ctx, c, base, x, y, w, h) {
     ctx.fillStyle = c.headerColor || '#1a1a2e';
     ctx.fillRect(x, y, w, headerH);
     ctx.fillStyle = c.textColor || '#e2e8f0';
-    ctx.font = `bold ${Math.min(headerH * 0.6, 18)}px Inter,sans-serif`;
+    ctx.font = `bold ${Math.min((c.fontSize || 13) * 1.25, headerH * 0.6, 18)}px Inter,sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`${monthName(date)} ${date.getFullYear()}`, x + w/2, y + headerH/2);
@@ -743,7 +787,7 @@ function drawGrid(ctx, c, base, x, y, w, h) {
   const orderedDays = [...Array(7)].map((_,i) => dayNames[(i + (c.dayStart||1)) % 7]);
   ctx.fillStyle = c.dayColor || '#1e293b';
   ctx.fillRect(x, y + headerH, w, dowH);
-  ctx.font = `600 ${Math.min(dowH * 0.6, 11)}px Inter,sans-serif`;
+  ctx.font = `600 ${Math.min(c.fontSize || 13, dowH * 0.6, 11)}px Inter,sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -791,7 +835,7 @@ function drawGrid(ctx, c, base, x, y, w, h) {
       ctx.strokeRect(cellX, cellY, cellW, cellH);
 
       if (inMonth) {
-        const isToday = isThisMonth && dayNum === today.getDate();
+        const isToday = showToday && isThisMonth && dayNum === today.getDate();
         const isWE = ((col + (c.dayStart||1)) % 7 === 0) || ((col + (c.dayStart||1)) % 7 === 6);
         if (isToday) {
           const r2 = Math.min(cellW, cellH) * 0.35;
@@ -803,7 +847,7 @@ function drawGrid(ctx, c, base, x, y, w, h) {
         } else {
           ctx.fillStyle = isWE ? (c.weekendColor || '#4a5568') : (c.textColor || '#e2e8f0');
         }
-        ctx.font = `${isToday?'bold':'500'} ${Math.min(cellH*0.5, 13)}px Inter,sans-serif`;
+        ctx.font = `${isToday?'bold':'500'} ${Math.min(c.fontSize || 13, cellH*0.5)}px Inter,sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(dayNum, cellX + cellW/2, cellY + cellH/2);
@@ -825,6 +869,7 @@ function drawRow(ctx, c, base, x, y, w, h) {
   const days = daysInMonth(date);
   const today = new Date();
   const isThisMonth = today.getFullYear()===date.getFullYear() && today.getMonth()===date.getMonth();
+  const showToday = c.showToday !== false;
 
   const nameW = c.showMonthName ? Math.min(w * 0.12, 50) : 0;
   const cellW = (w - nameW) / days;
@@ -836,7 +881,7 @@ function drawRow(ctx, c, base, x, y, w, h) {
     ctx.fillStyle = c.accentColor || '#6c8ef5';
     ctx.fillRect(x, y, nameW, h);
     ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${Math.min(h*0.45, 11)}px Inter,sans-serif`;
+    ctx.font = `bold ${Math.min(c.fontSize || 11, h*0.45, 11)}px Inter,sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.save();
@@ -847,7 +892,7 @@ function drawRow(ctx, c, base, x, y, w, h) {
 
   for (let d = 1; d <= days; d++) {
     const cx = x + nameW + (d-1)*cellW;
-    const isToday = isThisMonth && d === today.getDate();
+    const isToday = showToday && isThisMonth && d === today.getDate();
     const dow = new Date(date.getFullYear(), date.getMonth(), d).getDay();
     const isWE = dow === 0 || dow === 6;
 
@@ -865,7 +910,7 @@ function drawRow(ctx, c, base, x, y, w, h) {
     ctx.lineWidth = 0.5;
     ctx.strokeRect(cx, y, cellW, h);
 
-    ctx.font = `500 ${Math.min(cellW*0.7, h*0.5, 11)}px Inter,sans-serif`;
+    ctx.font = `500 ${Math.min(c.fontSize || 11, cellW*0.7, h*0.5)}px Inter,sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(d, cx + cellW/2, y + h/2);
@@ -877,6 +922,7 @@ function drawCol(ctx, c, base, x, y, w, h) {
   const days = daysInMonth(date);
   const today = new Date();
   const isThisMonth = today.getFullYear()===date.getFullYear() && today.getMonth()===date.getMonth();
+  const showToday = c.showToday !== false;
 
   const nameH = c.showMonthName ? Math.min(h * 0.08, 30) : 0;
   const cellH = (h - nameH) / days;
@@ -888,7 +934,7 @@ function drawCol(ctx, c, base, x, y, w, h) {
     ctx.fillStyle = c.accentColor || '#6c8ef5';
     ctx.fillRect(x, y, w, nameH);
     ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${Math.min(nameH*0.6, 11)}px Inter,sans-serif`;
+    ctx.font = `bold ${Math.min(c.fontSize || 11, nameH*0.6, 11)}px Inter,sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(monthName(date).slice(0,3), x + w/2, y + nameH/2);
@@ -896,7 +942,7 @@ function drawCol(ctx, c, base, x, y, w, h) {
 
   for (let d = 1; d <= days; d++) {
     const cy = y + nameH + (d-1)*cellH;
-    const isToday = isThisMonth && d === today.getDate();
+    const isToday = showToday && isThisMonth && d === today.getDate();
     const dow = new Date(date.getFullYear(), date.getMonth(), d).getDay();
     const isWE = dow === 0 || dow === 6;
 
@@ -914,25 +960,54 @@ function drawCol(ctx, c, base, x, y, w, h) {
     ctx.lineWidth = 0.5;
     ctx.strokeRect(x, cy, w, cellH);
 
-    ctx.font = `500 ${Math.min(w*0.55, cellH*0.6, 11)}px Inter,sans-serif`;
+    ctx.font = `500 ${Math.min(c.fontSize || 11, w*0.55, cellH*0.6)}px Inter,sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(d, x + w/2, cy + cellH/2);
   }
 }
 
-function drawText(ctx, c, x, y, w, h) {
+function formatAttributeValue(value) {
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
+}
+
+function interpolateText(template, base) {
+  const target = applyOffset(base, 0);
+  const vars = {
+    month: monthName(target),
+    monthNumber: target.getMonth() + 1,
+    year: target.getFullYear(),
+    monthName: monthName(target),
+    monthShort: monthName(target).slice(0, 3),
+    day: target.getDate()
+  };
+  return String(template || '').replace(/\{\{\s*([a-zA-Z]+)(?:\s*([+-])\s*(\d+))?\s*\}\}/g, (match, name, op, amount) => {
+    if (!(name in vars)) return match;
+    if (name === 'month' && op) {
+      const delta = Number(amount) * (op === '+' ? 1 : -1);
+      return monthName(applyOffset(target, delta));
+    }
+    if (!op) return String(vars[name]);
+    const numeric = Number(vars[name]);
+    if (!Number.isFinite(numeric)) return String(vars[name]);
+    const delta = Number(amount) * (op === '+' ? 1 : -1);
+    return formatAttributeValue(numeric + delta);
+  });
+}
+
+function drawText(ctx, c, base, x, y, w, h) {
   ctx.fillStyle = c.color || '#1a1a2e';
   ctx.font = `${c.fontWeight||'bold'} ${c.fontSize||24}px Inter,sans-serif`;
   ctx.textBaseline = 'middle';
   const align = c.align || 'center';
   ctx.textAlign = align;
   const tx = align === 'left' ? x : align === 'right' ? x + w : x + w/2;
-  ctx.fillText(c.textContent || '', tx, y + h/2);
+  ctx.fillText(interpolateText(c.textContent || '', base), tx, y + h/2);
 }
 
 async function drawImage(ctx, c, x, y, w, h) {
-  const img = await loadImage(c.imageUrl);
+  const source = c.imageData || c.imageUrl;
+  const img = await loadImage(source);
   if (!img) {
     ctx.fillStyle = '#2d2d3a';
     ctx.fillRect(x, y, w, h);
@@ -1000,6 +1075,70 @@ function downloadJSON() {
   a.href = URL.createObjectURL(blob);
   a.download = 'calendar-layout.json';
   a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+async function exportCanvas(format) {
+  const previousSelection = selectedId;
+  selectedId = null;
+  await refreshCanvas();
+  const mime = format === 'JPEG' ? 'image/jpeg' : 'image/png';
+  const extension = format === 'JPEG' ? 'jpg' : 'png';
+  const quality = format === 'JPEG' ? 0.95 : undefined;
+  const url = canvas.toDataURL(mime, quality);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `calendar-${baseMonthInput.value || 'export'}.${extension}`;
+  a.click();
+  selectedId = previousSelection;
+  await refreshCanvas();
+}
+
+function printCanvas() {
+  const previousSelection = selectedId;
+  selectedId = null;
+  refreshCanvas().then(() => {
+    const dataUrl = canvas.toDataURL('image/png');
+    const win = window.open('', '_blank');
+    if (!win) {
+      selectedId = previousSelection;
+      refreshCanvas();
+      alert('Allow pop-ups to print or save as PDF.');
+      return;
+    }
+    win.document.write(`<!doctype html><html><head><title>Calendar</title><style>@page{margin:0}body{margin:0;display:flex;justify-content:center;align-items:flex-start}img{max-width:100%;height:auto}</style></head><body><img src="${dataUrl}" onload="window.print()"></body></html>`);
+    win.document.close();
+    selectedId = previousSelection;
+    refreshCanvas();
+  });
+}
+
+function importJSONFile(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data || !Array.isArray(data.components)) throw new Error('Expected a JSON object with a components array.');
+      idCounter = 0;
+      components = data.components.map(raw => {
+        if (!raw || !DEFAULTS[raw.type]) throw new Error(`Unsupported component type: ${raw && raw.type}`);
+        const c = { ...JSON.parse(JSON.stringify(DEFAULTS[raw.type])), ...raw, id: uid() };
+        if (Array.isArray(raw.size)) c.size = [...raw.size];
+        return c;
+      });
+      selectedId = components.length ? components[0].id : null;
+      renderLayerList();
+      renderProps();
+      refreshCanvas();
+    } catch (error) {
+      alert(`Could not import JSON: ${error.message}`);
+    } finally {
+      input.value = '';
+    }
+  };
+  reader.readAsText(file);
 }
 
 function clearAll() {
