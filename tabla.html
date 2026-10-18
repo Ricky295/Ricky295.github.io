@@ -127,31 +127,6 @@
     border-right-color:transparent;
     pointer-events:none;
   }
-  .sidebar-toggle{
-    position:absolute;
-    top:64px;
-    left:230px;
-    width:26px;
-    height:44px;
-    background:var(--panel, #10151c);
-    border:1px solid var(--border);
-    border-left:none;
-    border-radius:0 6px 6px 0;
-    color:var(--text-dim);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    cursor:pointer;
-    z-index:20;
-    transition:left .18s ease;
-  }
-  .sidebar-toggle:hover{ color:var(--text); }
-  body.sidebar-collapsed .sidebar-toggle{
-    left:0;
-    border-radius:0 6px 6px 0;
-  }
-  .sidebar-toggle svg{ transition:transform .18s ease; }
-  body.sidebar-collapsed .sidebar-toggle svg{ transform:rotate(180deg); }
   .sidebar-title{
     font-size:11px;
     text-transform:uppercase;
@@ -724,7 +699,6 @@
       transition:transform .18s ease;
     }
     body.sidebar-menu-open .sidebar{ transform:translateX(0); }
-    .sidebar-toggle{ display:none; }
     .viewer{ padding:24px 10px 130px; }
     .song-title{ font-size:min(24px, var(--title-font-size)); }
     .settings-popover{ right:-10px; }
@@ -789,6 +763,12 @@
             <span class="size-display" id="metaSizeVal">13px</span>
             <button id="metaSizeUp" aria-label="Increase meta size">+</button>
           </div>
+          <div class="s-label">Scroll speed</div>
+          <div class="size-row">
+            <button id="scrollSpeedDown" aria-label="Decrease scroll speed">−</button>
+            <span class="size-display" id="scrollSpeedVal">1.0×</span>
+            <button id="scrollSpeedUp" aria-label="Increase scroll speed">+</button>
+          </div>
           <div class="s-label">Font</div>
           <div class="font-choice-row">
             <button data-font="mono" class="active">Mono</button>
@@ -807,9 +787,6 @@
   </div>
 
   <div class="layout">
-    <button class="sidebar-toggle" id="sidebarToggle" title="Toggle song list">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>
     <div class="sidebar" id="sidebarPanel">
       <div class="sidebar-title">Songs</div>
       <div id="songList"></div>
@@ -920,6 +897,7 @@
   const durLabel = document.getElementById('durLabel');
   let playing = false;
   let scrollRAF = null;
+  let scrollSpeed = 1.0; // 1.0x is the normal speed; higher values scroll faster
 
   function formatTime(ms){
     const totalSec = Math.max(0, Math.round(ms / 1000));
@@ -934,7 +912,7 @@
     const secondsPerBeat = 60 / bpm;
     const secondsPerLine = secondsPerBeat * 4;
     const totalSeconds = lineCount * secondsPerLine * 0.55;
-    return Math.max(20000, totalSeconds * 1000);
+    return Math.max(20000, (totalSeconds * 1000) / scrollSpeed);
   }
 
   function stopAutoscroll(){
@@ -965,8 +943,14 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if(!raw) return false;
       const parsed = JSON.parse(raw);
-      if(!Array.isArray(parsed) || parsed.length === 0) return false;
-      songs = parsed;
+      if(!Array.isArray(parsed)) return false;
+      // Purge the former built-in Panama demo from existing browser caches.
+      songs = parsed.filter(song => !(song && song.title === 'PANAMA' && song.artist === 'Ivano Fossati' && String(song.tempo) === '130'));
+      if(songs.length === 0){
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_INDEX_KEY);
+        return false;
+      }
       const savedIdx = parseInt(localStorage.getItem(STORAGE_INDEX_KEY), 10);
       currentIndex = (!isNaN(savedIdx) && savedIdx >= 0 && savedIdx < songs.length) ? savedIdx : 0;
       return true;
@@ -976,174 +960,81 @@
     }
   }
 
-  // ---------- Cloud sync via Google Apps Script proxy ----------
-  // Songs are stored as individual .chordpro files in a GitHub repo, but the
-  // browser never talks to GitHub or holds a GitHub token. Instead it calls
-  // a Google Apps Script "Web app" that you deploy yourself; the script
-  // holds the real GitHub token as a Script Property on Google's servers
-  // and relays list/save/delete requests to the GitHub Contents API.
-  //
-  // SETUP:
-  // 1. Deploy the companion ChordSheetProxy.gs as an Apps Script Web App
-  //    (see the setup comment at the top of that file).
-  // 2. Paste its /exec URL into PROXY_URL below.
-  // 3. Pick a long random string, put it in the script's SHARED_SECRET
-  //    property AND in PROXY_SECRET below. This is what stops strangers
-  //    from using your proxy even though the URL itself is public-ish.
-  const PROXY_URL    = "https://script.google.com/macros/s/AKfycbwSKwa9Eo5m124zkbhwD9Lqi1Ttk53EpYFqNazmL-iBqsNLoXjoFRHgT30eEs3Yv09G/exec";
-  const PROXY_SECRET = "v90_PGMxzkqBpAqwNa8q8_EK2vIAuk0yF8Uz2oCX9WA";
+  // ---------- Google Sheets API + local cache ----------
+  const API_URL = 'https://script.google.com/macros/s/AKfycbw3dteFiIUkRPrtht117rH-FyVfzSOUiaLdoqi18n0iVtRrns5hklUKN2Jfjknsjqff/exec';
+  const API_KEY_SESSION = 'tabla.apiAdminKey.session';
 
-
-  let githubStatusEl = null;     // set once the private-area DOM exists
-
-
-
-  function slugify(title, fallback){
-    const base = (title || fallback || "song").toLowerCase()
-      .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-    return (base || "song") + ".chordpro";
-  }
-
-  function setDropboxStatus(msg, isErr){
+  function setLocalStatus(msg, isErr){
     if(githubStatusEl){
       githubStatusEl.textContent = msg;
       githubStatusEl.classList.toggle('err', !!isErr);
     }
-    if(msg) console[isErr ? 'warn' : 'log']('[dropbox-sync] ' + msg);
+    if(msg) console[isErr ? 'warn' : 'log']('[tabla-api] ' + msg);
   }
 
+  function songFromApiItem(item){
+    const raw = String(item && item.content || '');
+    const song = parseChordPro(raw);
+    if(item && item.title) song.title = String(item.title);
+    song._raw = raw;
+    song._apiUpdatedAt = item && item.updatedAt || '';
+    return song;
+  }
 
-
-  async function dropboxLoadAll(){
-    // Il token precedente era scaduto e causava 401 ad ogni apertura.
-    // Il token aggiornato, se presente, viene configurato localmente.
-    if(!DROPBOX_TOKEN){
-      dropboxOnline = false;
-      setDropboxStatus('Dropbox non configurato: uso la copia locale.');
-      return false;
-    }
-    dropboxSyncing = true;
-    setDropboxStatus('Syncing from Dropbox…');
+  async function loadSongsFromApi(){
     try{
-      const response = await fetch('https://api.dropboxapi.com/2/files/list_folder', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + DROPBOX_TOKEN,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          path: '/tabla',
-          recursive: false
-        })
-      });
-
-      if(!response.ok) throw new Error('Dropbox API error: ' + response.status);
+      const response = await fetch(API_URL + '?action=list', { cache: 'no-store' });
+      if(!response.ok) throw new Error('API HTTP ' + response.status);
       const data = await response.json();
-      
-      const loaded = [];
-      for(const entry of data.entries){
-        if(entry['.tag'] === 'file' && (entry.name.endsWith('.txt') || entry.name.endsWith('.chordpro'))){
-          try{
-            const fileResponse = await fetch('https://content.dropboxapi.com/2/files/download', {
-              method: 'POST',
-              headers: {
-                'Authorization': 'Bearer ' + DROPBOX_TOKEN,
-                'Dropbox-API-Arg': JSON.stringify({ path: entry.path_display })
-              }
-            });
-            if(fileResponse.ok){
-              const text = await fileResponse.text();
-              const song = parseChordPro(text);
-              song._raw = text;
-              song._dbPath = entry.path_display;
-              loaded.push(song);
-            }
-          }catch(err){
-            console.warn('[dropbox-sync] Failed to load ' + entry.name + ':', err);
-          }
-        }
-      }
+      if(!data.ok || !Array.isArray(data.songs)) throw new Error(data.error || 'Invalid API response');
 
-      songs = loaded;
-      currentIndex = songs.length ? 0 : -1;
-      dropboxOnline = true;
+      const previousTitle = currentIndex >= 0 && songs[currentIndex] ? songs[currentIndex].title : '';
+      songs = data.songs.map(songFromApiItem);
+      currentIndex = previousTitle
+        ? songs.findIndex(song => song.title.toLowerCase() === previousTitle.toLowerCase())
+        : -1;
+      if(currentIndex < 0 && songs.length) currentIndex = 0;
       saveToStorage();
-      setDropboxStatus('Synced ' + songs.length + ' song' + (songs.length === 1 ? '' : 's') + ' from Dropbox.');
+      renderSongList();
+      if(currentIndex >= 0) selectSong(currentIndex);
+      else {
+        viewerEl.innerHTML = '';
+        viewerEl.appendChild(emptyState);
+        emptyState.style.display = 'flex';
+        transport.style.display = 'none';
+      }
+      setLocalStatus('Collegate: ' + songs.length + ' canzon' + (songs.length === 1 ? 'e' : 'i') + '.');
       return true;
     }catch(err){
-      dropboxOnline = false;
-      console.error('[dropbox-sync] Full error:', err);
-      const isUnauthorized = String(err.message || '').includes('401');
-      setDropboxStatus(isUnauthorized
-        ? 'Dropbox non autorizzato (401): uso la copia locale.'
-        : 'Could not sync with Dropbox, showing local copy: ' + err.message, !isUnauthorized);
-      return false;
-    }finally{
-      dropboxSyncing = false;
-    }
-  }
-
-  async function dropboxSaveSong(song){
-    if(!DROPBOX_TOKEN){
-      setDropboxStatus('Dropbox non configurato: canzone salvata solo localmente.');
-      return false;
-    }
-    try{
-      const fileName = song._dbPath ? song._dbPath.split('/').pop() : slugify(song.title || 'song');
-      const content = song._raw || rebuildChordProText(song);
-      
-      const response = await fetch('https://content.dropboxapi.com/2/files/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + DROPBOX_TOKEN,
-          'Dropbox-API-Arg': JSON.stringify({
-            path: '/tabla/' + fileName,
-            mode: 'overwrite'
-          }),
-          'Content-Type': 'text/plain'
-        },
-        body: content
-      });
-
-      if(!response.ok) throw new Error('Upload failed: ' + response.status);
-      
-      const result = await response.json();
-      song._dbPath = result.path_display;
-      dropboxOnline = true;
-      setDropboxStatus('Saved "' + (song.title || fileName) + '" to Dropbox.');
-      return true;
-    }catch(err){
-      setDropboxStatus('Could not save to Dropbox (kept locally): ' + err.message, true);
+      console.warn('[tabla-api] API unavailable, using local cache:', err);
+      setLocalStatus('API non disponibile: uso la copia locale.', true);
       return false;
     }
   }
 
-  async function dropboxDeleteSong(song){
-    if(!DROPBOX_TOKEN){
-      setDropboxStatus('Dropbox non configurato: eliminazione eseguita solo localmente.');
-      return false;
+  function getApiAdminKey(){
+    let key = '';
+    try{ key = sessionStorage.getItem(API_KEY_SESSION) || ''; }catch(err){}
+    if(!key){
+      key = prompt('Inserisci la chiave admin API per modificare Google Sheets:') || '';
+      if(key){
+        try{ sessionStorage.setItem(API_KEY_SESSION, key); }catch(err){}
+      }
     }
-    if(!song._dbPath){
-      return false; // never synced, nothing to delete remotely
-    }
-    try{
-      const response = await fetch('https://api.dropboxapi.com/2/files/delete_v2', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + DROPBOX_TOKEN,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ path: song._dbPath })
-      });
-      
-      if(!response.ok) throw new Error('Delete failed: ' + response.status);
-      setDropboxStatus('Deleted "' + (song.title || song._dbPath) + '".');
-      return true;
-    }catch(err){
-      setDropboxStatus('Could not delete: ' + err.message, true);
-      return false;
-    }
+    return key.trim();
+  }
+
+  async function apiWrite(payload){
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      // text/plain keeps the request CORS-simple; the Apps Script still parses
+      // the body as JSON, while the browser avoids an OPTIONS preflight.
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+    if(!response.ok || !data.ok) throw new Error(data.error || ('API HTTP ' + response.status));
+    return data;
   }
 
   // ---------- ChordPro parsing ----------
@@ -1598,7 +1489,7 @@
       setUserSongSettings(displayUser, songs[currentIndex], {fontSize, chordSize, titleSize, metaSize, fontChoice});
       return;
     }
-    try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({fontSize, chordSize, titleSize, metaSize, fontChoice})); }
+    try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({fontSize, chordSize, titleSize, metaSize, fontChoice, scrollSpeed})); }
     catch(err){ console.warn('Could not save display settings:', err); }
   }
 
@@ -1609,6 +1500,7 @@
       const parsed = JSON.parse(raw);
       if(parsed.fontSize) fontSize = parsed.fontSize;
       if(parsed.chordSize) chordSize = parsed.chordSize;
+      if(parsed.scrollSpeed) scrollSpeed = Math.min(2.5, Math.max(0.5, Number(parsed.scrollSpeed)));
       if(parsed.titleSize) titleSize = parsed.titleSize;
       if(parsed.metaSize) metaSize = parsed.metaSize;
       if(parsed.fontChoice) fontChoice = parsed.fontChoice;
@@ -1665,6 +1557,24 @@
     applyDisplaySettings();
     saveDisplaySettings();
   });
+
+  const scrollSpeedVal = document.getElementById('scrollSpeedVal');
+  function updateScrollSpeedDisplay(){
+    scrollSpeedVal.textContent = scrollSpeed.toFixed(1) + '×';
+    if(currentIndex >= 0 && !playing){
+      durLabel.textContent = '-' + formatTime(computeScrollDuration(songs[currentIndex]));
+    }
+  }
+  document.getElementById('scrollSpeedDown').addEventListener('click', () => {
+    scrollSpeed = Math.max(0.5, Math.round((scrollSpeed - 0.1) * 10) / 10);
+    updateScrollSpeedDisplay();
+    saveDisplaySettings();
+  });
+  document.getElementById('scrollSpeedUp').addEventListener('click', () => {
+    scrollSpeed = Math.min(2.5, Math.round((scrollSpeed + 0.1) * 10) / 10);
+    updateScrollSpeedDisplay();
+    saveDisplaySettings();
+  });
   document.querySelectorAll('.font-choice-row button').forEach(btn => {
     btn.addEventListener('click', () => {
       fontChoice = btn.dataset.font;
@@ -1675,21 +1585,21 @@
 
   loadDisplaySettings();
   applyDisplaySettings();
+  updateScrollSpeedDisplay();
 
   // ---------- Accounts ----------
   // ADMIN can add/edit/delete songs; the change is saved to the central
   // GitHub repo (the single source of truth for lyrics/chords).
   const PASSWORD = "papa2026";
+  const MEDIUM_PASSWORD = "medio2026";
   const CURRENT_USER_KEY = 'tabla.authenticated.v1';
-  // The password gate represents the administrator account.
-  const ACCOUNTS = { ADMIN: { role: 'admin' } };
+  const ACCOUNTS = {
+    ADMIN: { role: 'admin' },
+    MEDIO: { role: 'viewer' }
+  };
   let currentUser = null;
   let currentRole = null;
-  // Token opzionale configurabile solo localmente, mai più hard-coded nel file.
-  const DROPBOX_TOKEN = 'sl.u.AGxlgqJ_JMJuhN6pKBOhBI-qbYTR08l5fh9WD8AP-wJsYdSQ4LXmGBz5Z-VmPJAvhmmYM4gywtMqyo85CIbXKonV5qUrOzMF-Szkk2_r6m3jBKD9fMgfMI4h257TzlRLFRNzIjSjRgDcx0yb9ATqj_g7ECbuUeDUQUzOJICa2UjG50Z5wIv66nA7cZuKePqHPWdno-qRQWRMBU8FqTemLahdFxO9BQ68OyhsAOUgF6qalNaikDnB3PLG9KKhzwYD7BHAyrBXKhqpvXHFI4wOjoYM7QzvI3HLGJhlfpc8H9-R9Bw-9fdTTJDhxOaNhFbW9GS7NNYDERyQQkdT8-gJen620oBNQ_gdCxE5LVr-GwwMLy1xP4ZUbAmBdXkVPK0RRxnnaWfp-Z_VhYIu2KdkDuhq-m4_0KO_VzJnmN2iKPJkzj-MRDBWKLrQ0vaemsW-CDmeFGsnexFkNLxUNqW2vubCYgaJ6UFL_6AyBDtiGCFs0m05pVkzFYIVnr6s2yrGg3C33L2YqUswf_zMi34Ze1bNCPIRh09HB3A4xNWnHNJHj3rfjiXxhkcgcFzDIkFG06CQvw-IpCDwEf1uwf2D4utoyU7DqhFpytVF97GEMMsU6pCqzB_47HS-BGG3nBZPk8fGRhF8LcRotRkaXKL0R1hiJQkewiszvQzVSu2KKqsxzyt7tSjkW1NkcycWXdGeh15blbBq9I47FC0FYTFYOa9YvTww8bJAC9uvI4ofrXxFdDrre235y_9ZSuix6IB0qbe-ze1v0ZlCsi9cddOK_18VsrdN9h1sjGv9W5jo1DwqASiB5frYS2FNvk4zdR8wmKaP0S8T7Zf-zOxHXKIieb4PPS9Gb326teDnmId1Wnr3xGr1xEpmdwjxeLY79DTy0RSSLngp13ils8DzlqihCns3sPkm7PlKp6dzB9BK3q3pLpRGR4eziU9ekU6Jp7IRFKyZTDGmpsn6kG0nYOF0QX220ZJ_N9hEA0ouLuKD1juxvR7CKT8nNiQa3ou2k7GiioVwKjBY7pkuzQkLydTNHXGQ8T36DjUR9EyAfwcDnh32i8T7m0dw1Fr-QAl2dSfW-DCvxMfk4qJjSgI9n7aJpeGhWj4eAIz9bu3hR0hlO4voI-cztYzT3jQiiQ0EaGS4YfnG47hQv079OUZp8TZvVEVNW5Lmzwnt7uA9afZUTNR6wev0o0W2YupkrcUhBpV5bkLIOWf7JDc3fj9PDE1bz6EnMfsnw2mlcXqbC8WFrqM0p37hcvseaahbLw73--5OCfNRabgCJfqBSqTaNGQaUHKdAB2-8Oz-XAc0hdosfCCl4Hvvk1m2ajZLe4PQK-V5MGXd1xbT0lFMto0E2CXtgC4rNgxqjQhGgEusbKrHVBgwkRf84_lvffB4Ges9yZLYTaQSRv9rp-4E7cxYp08wB6NI-aFlTrOJwo69u7zH1JFWlkX5YLo2kSA1PsogJTCss7k';
   let isAuthenticated = false;
-  let dropboxOnline = false;
-  let dropboxSyncing = false;
   let selectedAccountBtn = null;
   let privateUnlocked = false;
   let editingSongIndex = null;
@@ -1756,7 +1666,6 @@
       document.body.classList.toggle('sidebar-collapsed');
     }
   }
-  document.getElementById('sidebarToggle').addEventListener('click', toggleSongMenu);
   const brandMenuToggle = document.getElementById('brandMenuToggle');
   brandMenuToggle.addEventListener('click', toggleSongMenu);
   brandMenuToggle.addEventListener('keydown', (e) => {
@@ -1788,10 +1697,12 @@
   pwInput.focus();
 
   function applyRoleUI(){
-    newSongBtn.style.display = '';
-    adminHeaderTitle.textContent = 'Manage songs';
-    nonAdminNotice.style.display = 'none';
-    currentUserBadge.style.display = 'none';
+    const isAdmin = currentRole === 'admin';
+    newSongBtn.style.display = isAdmin ? '' : 'none';
+    adminHeaderTitle.textContent = isAdmin ? 'Manage songs' : 'Songs (read-only)';
+    nonAdminNotice.style.display = isAdmin ? 'none' : 'block';
+    currentUserBadge.style.display = currentUser ? 'inline-flex' : 'none';
+    currentUserBadge.textContent = currentUser === 'MEDIO' ? 'MEDIO · sola lettura' : (currentUser || '');
   }
 
   function logoutUser(){
@@ -1805,20 +1716,23 @@
   }
 
   function tryUnlock(){
-    if(pwInput.value === PASSWORD){
+    const account = pwInput.value === PASSWORD ? 'ADMIN'
+      : (pwInput.value === MEDIUM_PASSWORD ? 'MEDIO' : null);
+    if(account){
       isAuthenticated = true;
       privateUnlocked = true;
-      currentUser = 'ADMIN';
-      currentRole = ACCOUNTS.ADMIN.role;
+      currentUser = account;
+      currentRole = ACCOUNTS[account].role;
       try{ localStorage.setItem(CURRENT_USER_KEY, currentUser); }catch(err){}
       document.body.classList.add('chords-visible');
       lockScreenCard.style.display = 'none';
       adminCard.style.display = 'block';
+      applyRoleUI();
       renderAdminList();
       if(currentIndex >= 0) applyUserDisplayOverride();
-      setDropboxStatus(DROPBOX_TOKEN ? 'Connected to Dropbox.' : 'Accesso locale: Dropbox non configurato.');
+      setLocalStatus(account === 'ADMIN' ? 'Accesso admin: salvataggio locale.' : 'Accesso medio: sola lettura.');
     } else {
-      lockStatus.textContent = 'Wrong password. Try again.';
+      lockStatus.textContent = 'Password non riconosciuta.';
     }
   }
   document.getElementById('unlockBtn').addEventListener('click', tryUnlock);
@@ -1826,6 +1740,7 @@
 
   function renderAdminList(){
     adminList.innerHTML = '';
+    const isAdmin = currentRole === 'admin';
     adminEmpty.style.display = songs.length ? 'none' : 'block';
     songs.forEach((song, idx) => {
       const row = document.createElement('div');
@@ -1835,9 +1750,9 @@
           <div class="admin-row-title">${escapeHtml(song.title)}</div>
           ${song.artist ? `<div class="admin-row-sub">${escapeHtml(song.artist)}</div>` : ''}
         </div>
-        <div class="admin-row-actions">
+        ${isAdmin ? `<div class="admin-row-actions">
           <button data-act="edit">Edit</button><button data-act="delete" class="danger">Delete</button>
-        </div>`;
+        </div>` : ''}`;
       const editBtn = row.querySelector('[data-act="edit"]');
       const deleteBtn = row.querySelector('[data-act="delete"]');
       const openBtn = row.querySelector('[data-act="open"]');
@@ -1849,6 +1764,7 @@
   }
 
   function openSongForm(idx){
+    if(currentRole !== 'admin') return;
 
     editingSongIndex = (typeof idx === 'number') ? idx : null;
     if(editingSongIndex !== null){
@@ -1919,6 +1835,7 @@
   });
 
   formSaveBtn.addEventListener('click', async () => {
+    if(currentRole !== 'admin') return;
     const raw = formBody.value.trim();
     if(!raw){
       formStatus.textContent = editingSongIndex !== null
@@ -1932,33 +1849,39 @@
     if(formArtist.value.trim()) parsed.artist = formArtist.value.trim();
     parsed._raw = raw;
 
-    // Preserve the GitHub file link when editing an existing song, so saving
-    // updates the same file instead of creating a duplicate.
-    if(editingSongIndex !== null){
-      const prev = songs[editingSongIndex];
-      parsed._ghPath = prev._ghPath;
-      parsed._ghSha = prev._ghSha;
-      songs[editingSongIndex] = parsed;
-    } else {
-      songs.push(parsed);
+    const previousTitle = editingSongIndex !== null ? songs[editingSongIndex].title : '';
+    const apiKey = getApiAdminKey();
+    if(!apiKey){
+      formStatus.textContent = 'Salvataggio annullato: serve la chiave API admin.';
+      formStatus.classList.add('err');
+      return;
     }
-    saveToStorage();
-    renderSongList();
-    renderAdminList();
-    if(editingSongIndex !== null && editingSongIndex === currentIndex){
-      renderSong(songs[currentIndex]);
-    }
-    formStatus.classList.remove('err');
     formSaveBtn.disabled = true;
-    formStatus.textContent = 'Saving to Dropbox…';
-
-    const savedSong = editingSongIndex !== null ? songs[editingSongIndex] : songs[songs.length - 1];
-    await dropboxSaveSong(savedSong);
-    saveToStorage(); // persist the _dbPath we just got back
+    formStatus.classList.remove('err');
+    formStatus.textContent = 'Salvataggio su Google Sheets…';
+    try{
+      await apiWrite({ action:'upsert', key:apiKey, title:parsed.title, content:raw });
+      if(previousTitle && previousTitle.toLowerCase() !== parsed.title.toLowerCase()){
+        await apiWrite({ action:'delete', key:apiKey, title:previousTitle });
+      }
+      if(editingSongIndex !== null) songs[editingSongIndex] = parsed;
+      else songs.push(parsed);
+      saveToStorage();
+      renderSongList();
+      renderAdminList();
+      if(editingSongIndex !== null && editingSongIndex === currentIndex){
+        renderSong(songs[currentIndex]);
+      }
+      formStatus.textContent = 'Salvata su Google Sheets.';
+    }catch(err){
+      formStatus.textContent = 'Errore API: ' + err.message;
+      formStatus.classList.add('err');
+      try{ sessionStorage.removeItem(API_KEY_SESSION); }catch(ignore){}
+      formSaveBtn.disabled = false;
+      return;
+    }
 
     formSaveBtn.disabled = false;
-    formStatus.textContent = dropboxOnline ? 'Saved to Dropbox.' : 'Saved locally (Dropbox sync failed — see below).';
-    formStatus.classList.toggle('err', !dropboxOnline);
     setTimeout(() => {
       songFormCard.style.display = 'none';
       editingSongIndex = null;
@@ -1966,8 +1889,19 @@
   });
 
   async function deleteSongAdmin(idx){
+    if(currentRole !== 'admin') return;
     if(!confirm('Delete this song?')) return;
-    const [removed] = songs.splice(idx, 1);
+    const apiKey = getApiAdminKey();
+    if(!apiKey) return;
+    const songToDelete = songs[idx];
+    try{
+      await apiWrite({ action:'delete', key:apiKey, title:songToDelete.title });
+    }catch(err){
+      alert('Errore API: ' + err.message);
+      try{ sessionStorage.removeItem(API_KEY_SESSION); }catch(ignore){}
+      return;
+    }
+    songs.splice(idx, 1);
     if(currentIndex === idx){
       currentIndex = songs.length ? 0 : -1;
     } else if(currentIndex > idx){
@@ -1976,15 +1910,13 @@
     saveToStorage();
     renderSongList();
     renderAdminList();
-    if(currentIndex >= 0){
-      renderSong(songs[currentIndex]);
-    } else {
+    if(currentIndex >= 0) renderSong(songs[currentIndex]);
+    else {
       viewerEl.innerHTML = '';
       viewerEl.appendChild(emptyState);
       emptyState.style.display = 'flex';
       transport.style.display = 'none';
     }
-    await dropboxDeleteSong(removed);
   }
 
   // ---------- Autoscroll (tempo-driven) ----------
@@ -2049,66 +1981,17 @@
 
   renderSongList();
 
-  // ---------- Load songs: try GitHub first, then local cache, then demo ----------
+  // ---------- Load local cache, then refresh from Google Sheets ----------
   (async function boot(){
     const hadLocalCache = loadFromStorage();
     if(hadLocalCache){
       renderSongList();
       renderSong(songs[currentIndex]);
-    }
-
-    const gotCloud = await dropboxLoadAll();
-    if(gotCloud && songs.length){
+    } else {
       renderSongList();
-      selectSong(0);
-      return;
     }
-    if(gotCloud && !songs.length && !hadLocalCache){
-      // Connected to Dropbox, folder is empty, and no local cache — show the demo song.
-      loadDemoSong();
-      return;
-    }
-    if(!hadLocalCache && !gotCloud){
-      loadDemoSong();
-    }
+    await loadSongsFromApi();
   })();
-
-  function loadDemoSong(){
-  const demo = `{title: PANAMA}
-{artist: Ivano Fossati}
-{key: Dm}
-{tempo: 130}
-{time: 4/4}
-
-{start_of_verse}
-|[Dm]    .    .    .    |[C]    .    .    .    |[Gm7]    .    .    .    |[Dm]    .    .    .    |
-|[C]    .    .    .    |[Gm7]    .    .    .    |
-{end_of_verse}
-
-{start_of_verse}
-Di [Dm]andare ai [C]cocktails con la [Gm7]pistola,   [Dm]non ne [C]posso [Gm7]più
-[Dm]piña colada o [C]coca [Gm7]cola,        [Dm]non ne [C]posso [Gm7]più
-{end_of_verse}
-
-{start_of_verse}
-Di [Dm]trafficanti e [C]rifugiati,       [Gm7]ne ho già piena la vita
-[Dm]oh maledetta [C]traversata,          [Gm7]non sarà mai finita, ma
-[Dm]Vedete a nove [C]nodi appena         [Gm7]si è un punto fermo nel mare
-[Dm]che sa di nafta e lo [C]nasconde con l'odore del [Gm7]té e dell'erba da fumare.
-{end_of_verse}
-
-{start_of_chorus}
-Oh [F]mamaçita [Gm7]Panama dov'è         ora che stiamo in [F]mare [Gm7]
-sull'orizzonte ottico [F]non c'è [Gm7]  [F]     si dovrà pur vedere
-{C}                    {F}                 {Dm7}          {Gm7}      {A7/9aug}
-{end_of_chorus}
-`;
-  const song = parseChordPro(demo);
-  song._raw = demo;
-  songs.push(song);
-  renderSongList();
-  selectSong(0);
-  }
 
   // Restore a previous session in this browser, if any. Runs last so that
   // every function/const it touches (applyRoleUI, renderAdminList, etc.)
@@ -2129,5 +2012,15 @@ sull'orizzonte ottico [F]non c'è [Gm7]  [F]     si dovrà pur vedere
 })();
 
 </script>
+<!-- TABLA build marker 01 -->
+<!-- TABLA build marker 02 -->
+<!-- TABLA build marker 03 -->
+<!-- TABLA build marker 04 -->
+<!-- TABLA build marker 05 -->
+<!-- TABLA build marker 06 -->
+<!-- TABLA build marker 07 -->
+<!-- TABLA build marker 08 -->
+<!-- TABLA build marker 09 -->
+<!-- TABLA build marker 10 -->
 </body>
 </html>
