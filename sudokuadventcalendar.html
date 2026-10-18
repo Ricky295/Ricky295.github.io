@@ -196,10 +196,19 @@ body.dark .candidate-num.cand-active { color: #93c5fd; }
 @keyframes wrappedTextIn { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes wrappedFloat { from { transform: translate3d(-10px,0,0) scale(.96); } to { transform: translate3d(22px,18px,0) scale(1.06); } }
 @keyframes wrappedCountPop { 0% { opacity: 0; transform: scale(.45) rotate(-8deg); } 72% { opacity: 1; transform: scale(1.12) rotate(2deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
+@keyframes wrappedBonusIn { 0% { opacity: 0; transform: translateY(-35px) rotate(45deg) scale(.5); } 70% { opacity: 1; transform: translateY(6px) rotate(45deg) scale(1.12); } 100% { opacity: 1; transform: translateY(0) rotate(45deg) scale(1); } }
 .wrapped-close { position: fixed; top: max(16px, env(safe-area-inset-top)); right: max(18px, env(safe-area-inset-right)); z-index: 2; width: 42px; height: 42px; border: 1px solid rgba(255,255,255,.45); border-radius: 50%; background: rgba(255,255,255,.14); color: #fff; font-size: 1.4rem; cursor: pointer; }
 .wrapped-slide h2 { font-size: clamp(1.7rem, 6vw, 2.6rem); line-height: 1.05; }
 .wrapped-slide p { font-size: 1.05rem; opacity: .9; }
 .wrapped-big-number { font-size: clamp(4rem, 18vw, 7rem); font-weight: 900; line-height: 1; animation: wrappedCountPop .8s .2s cubic-bezier(.2,.8,.2,1) both; }
+.wrapped-points-stage { position: relative; min-height: clamp(4rem, 18vw, 7rem); display: flex; align-items: center; justify-content: center; }
+.wrapped-points-counter { transition: opacity .2s ease; }
+.wrapped-points-total { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; }
+.wrapped-points-total.is-visible { opacity: 1; visibility: visible; animation: wrappedCountPop .45s cubic-bezier(.2,.8,.2,1) both; }
+.wrapped-slide > .wrapped-consistency-bonus { animation: none; }
+.wrapped-consistency-bonus { position: absolute; top: -1.6rem; right: 0; min-height: 1.3em; color: #8df0a4; font-size: clamp(1.3rem, 4vw, 2rem) !important; font-weight: 900; opacity: 0; visibility: hidden; transform: rotate(45deg) scale(1); }
+.wrapped-consistency-bonus.is-visible { visibility: visible; animation: wrappedBonusIn .58s cubic-bezier(.18,.82,.22,1) both; }
+.wrapped-points-base.is-hidden { opacity: 0; visibility: hidden; }
 .wrapped-medals { display: flex; gap: 18px; align-items: center; justify-content: center; flex-wrap: wrap; font-size: 1.35rem; font-weight: 800; }
 .wrapped-medal-pick { cursor: pointer; border: 2px solid rgba(255,255,255,.8); background: rgba(255,255,255,.16); color: #fff; border-radius: 18px; padding: 16px 22px; font-size: 1.15rem; font-weight: 800; }
 .wrapped-medal-pick:hover { background: rgba(255,255,255,.3); }
@@ -594,10 +603,13 @@ function showWrapped(yr) {
         spotlight = { medal: chosenMedal, tokenIndex: medalStartIndex + Math.floor(Math.random() * candidates.length) };
     }
     wrappedState = {
-        year: String(yr), entries, totalPoints: entries.reduce((sum, e) => sum + (Number(e.points) || 0), 0),
+        year: String(yr), entries,
+        puzzlePoints: entries.reduce((sum, e) => sum + (Number(e.points) || 0), 0),
+        consistencyBonus: entries.length >= 24 ? 2000 : 0,
         highestScore: entries.length ? Math.max(...entries.map(e => Number(e.points) || 0)) : 0,
         medalCounts, spotlight, slide: 0
     };
+    wrappedState.totalPoints = wrappedState.puzzlePoints + wrappedState.consistencyBonus;
     wrappedState.highestScoreDays = entries
         .filter(e => Number(e.points) === wrappedState.highestScore)
         .map(e => e.day)
@@ -634,7 +646,7 @@ function renderWrappedSlide() {
     const w = wrappedState, slides = [
         `<div class="wrapped-slide"><p>SUDOKU ADVENT CALENDAR</p><h2>Your ${w.year}<br>Wrapped</h2><p>A season of puzzles, one day at a time.</p></div>`,
         `<div class="wrapped-slide"><p>YOUR SEASON IN NUMBERS</p><div class="wrapped-big-number" data-count-to="${w.entries.length}">0</div><h2>puzzle${w.entries.length === 1 ? '' : 's'} completed</h2><p>Out of 24 Advent days</p></div>`,
-        `<div class="wrapped-slide"><p>YOUR SEASON IN NUMBERS</p><div class="wrapped-big-number" data-count-to="${w.totalPoints}">0</div><h2>points earned</h2><p>Your total for ${w.year}</p></div>`,
+        `<div class="wrapped-slide"><p>YOUR SEASON IN NUMBERS</p><div class="wrapped-points-stage"><div class="wrapped-big-number wrapped-points-counter wrapped-points-base" data-count-to="${w.puzzlePoints}">0</div>${w.consistencyBonus ? `<div class="wrapped-big-number wrapped-points-counter wrapped-points-total" data-count-to="${w.totalPoints}">0</div><p class="wrapped-consistency-bonus">+${w.consistencyBonus.toLocaleString()}!</p>` : ''}</div><h2>points earned</h2><p>${w.consistencyBonus ? 'Consistency bonus unlocked!' : `Your total for ${w.year}`}</p></div>`,
         `<div class="wrapped-slide"><p>YOUR MEDAL CABINET</p><h2>Look what you earned</h2><div class="medal-drop-stage" aria-label="All earned medals dropping onto the floor">${renderFallingMedals(w.medalCounts, w.spotlight.tokenIndex)}<div class="medal-floor"></div></div><div class="wrapped-medal-counts"><span>🥇 ${w.medalCounts['🥇']} Gold</span><span>🥈 ${w.medalCounts['🥈']} Silver</span><span>🥉 ${w.medalCounts['🥉']} Bronze</span></div><p>Every medal you earned this season</p></div>`,
         w.spotlight.medal !== 'empty'
             ? `<div class="wrapped-slide"><p>YOUR HIGHEST SCORE</p><div class="spotlight-score-layout"><span class="spotlight-medal-target">${w.spotlight.medal}</span><div class="spotlight-score-copy"><span>TOP PUZZLE SCORE</span><strong>${w.highestScore.toLocaleString()}</strong><small>POINTS</small><span>${w.highestScoreDays.length === 1 ? 'DAY' : 'DAYS'} ${w.highestScoreDays.join(', ')}</span></div></div><p>Your highest score for the season.</p></div>`
@@ -664,18 +676,48 @@ function renderWrappedSlide() {
 }
 
 function animateWrappedNumbers() {
-    const node = document.querySelector('#wrappedModal [data-count-to]');
+    const modal = document.getElementById('wrappedModal');
+    const base = modal.querySelector('.wrapped-points-base');
+    const total = modal.querySelector('.wrapped-points-total');
+    const bonus = modal.querySelector('.wrapped-consistency-bonus');
+    const count = (node, target, duration, done, initial = 0) => {
+        if (!node) { if (done) done(); return; }
+        const start = performance.now();
+        const tick = now => {
+            const progress = Math.min(1, (now - start) / duration);
+            const eased = 1 - Math.pow(1 - progress, 4);
+            node.textContent = Math.floor(initial + (target - initial) * eased).toLocaleString();
+            if (progress < 1) requestAnimationFrame(tick); else if (done) done();
+        };
+        requestAnimationFrame(tick);
+    };
+    if (base) {
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduced) {
+            if (wrappedState.consistencyBonus) {
+                base.classList.add('is-hidden');
+                bonus.classList.add('is-visible');
+                total.textContent = wrappedState.totalPoints.toLocaleString();
+                total.classList.add('is-visible');
+            } else base.textContent = wrappedState.puzzlePoints.toLocaleString();
+            return;
+        }
+        count(base, wrappedState.puzzlePoints, 1150, () => {
+            if (!wrappedState.consistencyBonus) return;
+            bonus.classList.add('is-visible');
+            setTimeout(() => {
+                base.classList.add('is-hidden');
+                total.classList.add('is-visible');
+                count(total, wrappedState.totalPoints, 500, null, wrappedState.puzzlePoints);
+            }, 650);
+        });
+        return;
+    }
+    const node = modal.querySelector('[data-count-to]');
     if (!node) return;
     const target = Number(node.dataset.countTo) || 0;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { node.textContent = target.toLocaleString(); return; }
-    const start = performance.now(), duration = 1150;
-    const tick = now => {
-        const progress = Math.min(1, (now - start) / duration);
-        const eased = 1 - Math.pow(1 - progress, 4);
-        node.textContent = Math.floor(target * eased).toLocaleString();
-        if (progress < 1) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
+    count(node, target, 1150);
 }
 
 function changeWrappedSlide(direction) {
@@ -740,7 +782,20 @@ async function createWrappedPng() {
     ctx.fillStyle = '#fff'; ctx.font = '900 115px system-ui, sans-serif'; ctx.fillText(String(w.entries.length), 540, 465);
     ctx.font = '700 36px system-ui, sans-serif'; ctx.fillText(`PUZZLE${w.entries.length === 1 ? '' : 'S'} COMPLETED`, 540, 530);
     ctx.fillStyle = 'rgba(255,255,255,0.16)'; ctx.beginPath(); ctx.roundRect(100, 615, 880, 235, 28); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = '900 100px system-ui, sans-serif'; ctx.fillText(w.totalPoints.toLocaleString(), 540, 730);
+    ctx.font = '900 100px system-ui, sans-serif';
+    const puzzlePointsText = w.puzzlePoints.toLocaleString();
+    if (w.consistencyBonus) {
+        const bonusText = ` + ${w.consistencyBonus.toLocaleString()}`;
+        const totalText = ` = ${w.totalPoints.toLocaleString()}`;
+        const totalWidth = ctx.measureText(puzzlePointsText).width + ctx.measureText(bonusText).width + ctx.measureText(totalText).width;
+        let textX = (1080 - totalWidth) / 2;
+        ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.fillText(puzzlePointsText, textX, 730); textX += ctx.measureText(puzzlePointsText).width;
+        ctx.fillStyle = '#8df0a4'; ctx.fillText(bonusText, textX, 730); textX += ctx.measureText(bonusText).width;
+        ctx.fillStyle = '#fff'; ctx.fillText(totalText, textX, 730);
+        ctx.textAlign = 'center';
+    } else {
+        ctx.fillStyle = '#fff'; ctx.fillText(puzzlePointsText, 540, 730);
+    }
     ctx.font = '700 36px system-ui, sans-serif'; ctx.fillText('POINTS EARNED', 540, 800);
     ctx.font = '700 38px system-ui, sans-serif'; ctx.fillText('YOUR MEDAL CABINET', 540, 930);
     ctx.font = '800 45px system-ui, sans-serif';
