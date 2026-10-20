@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-900 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cashier Speed Challenge</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .btn-push {
+            transition: transform 0.05s ease, box-shadow 0.05s ease;
+        }
+        .btn-push:active {
+            transform: translateY(2px);
+            box-shadow: none !important;
+        }
+        .shake {
+            animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col font-sans antialiased selection:bg-emerald-500 selection:text-white">
+
+    <header class="border-b border-slate-800 bg-slate-950/60 backdrop-blur px-4 py-3 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold text-lg">
+                <i id="currencySymbolHeader" class="fa-solid font-mono">€</i>
+            </div>
+            <div>
+                <h1 class="font-bold text-slate-100 leading-none">Cashier Speed Run</h1>
+                <p class="text-xs text-slate-400 mt-1">Master rapid change-making across world currencies</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <button id="keyboardToggleBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-keyboard"></i>
+                <span class="hidden sm:inline">Shortcuts</span>
+            </button>
+            <button id="settingsBtn" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-900/30 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-sliders"></i>
+                <span>Options</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-5xl w-full mx-auto p-4 md:p-6 flex flex-col gap-6 justify-between overflow-y-auto">
+
+        <!-- Top Status Bar & Timer -->
+        <div class="grid grid-cols-3 gap-3 bg-slate-950/40 p-4 rounded-2xl border border-slate-800/80">
+            <div class="flex flex-col items-center justify-center border-r border-slate-800/60 pr-2">
+                <span class="text-xs uppercase tracking-wider text-slate-400 font-medium">Time Left</span>
+                <span id="timerDisplay" class="text-2xl sm:text-3xl font-mono font-bold text-emerald-400 mt-0.5">60.0s</span>
+            </div>
+            <div class="flex flex-col items-center justify-center border-r border-slate-800/60 px-2">
+                <span class="text-xs uppercase tracking-wider text-slate-400 font-medium">Score / Accuracy</span>
+                <div class="flex items-baseline gap-2 mt-0.5">
+                    <span id="scoreDisplay" class="text-2xl sm:text-3xl font-mono font-bold text-white">0</span>
+                    <span id="accuracyDisplay" class="text-xs font-mono text-slate-400">(0%)</span>
+                </div>
+            </div>
+            <div class="flex flex-col items-center justify-center pl-2">
+                <span class="text-xs uppercase tracking-wider text-slate-400 font-medium">Streak</span>
+                <span id="streakDisplay" class="text-2xl sm:text-3xl font-mono font-bold text-amber-400 mt-0.5">0 🔥</span>
+            </div>
+        </div>
+
+        <!-- Start / Game Over Screen Overlay container -->
+        <div id="screenOverlay" class="flex-1 flex flex-col items-center justify-center relative my-2 min-h-[340px]">
+            
+            <!-- START SCREEN -->
+            <div id="startScreen" class="absolute inset-0 bg-slate-950/80 backdrop-blur-md rounded-2xl border border-slate-800 flex flex-col items-center justify-center p-6 text-center z-20">
+                <div class="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-3xl mb-4">
+                    <i class="fa-solid fa-calculator"></i>
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-white mb-2">Ready for the Cashier Challenge?</h2>
+                <p class="text-slate-400 text-sm max-w-md mb-6">
+                    Calculate and select the required change as quickly as possible.
+                </p>
+                <button id="startGameBtn" class="px-8 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-lg rounded-xl shadow-lg shadow-emerald-500/20 hover:scale-105 transition transform active:scale-95">
+                    <i class="fa-solid fa-play mr-2"></i> Start Challenge
+                </button>
+            </div>
+
+            <!-- GAME OVER SCREEN -->
+            <div id="gameOverScreen" class="hidden absolute inset-0 bg-slate-950/90 backdrop-blur-md rounded-2xl border border-slate-800 flex flex-col items-center justify-center p-6 text-center z-20">
+                <div class="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center text-3xl mb-3">
+                    <i class="fa-solid fa-trophy"></i>
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-white mb-1">Time's Up!</h2>
+                <p class="text-slate-400 text-sm mb-4">Here is how you performed under pressure:</p>
+
+                <div class="grid grid-cols-2 gap-3 w-full max-w-sm mb-6">
+                    <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-center">
+                        <div class="text-xs text-slate-400">Total Solved</div>
+                        <div id="finalScore" class="text-2xl font-bold font-mono text-emerald-400">0</div>
+                    </div>
+                    <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-center">
+                        <div class="text-xs text-slate-400">Avg Speed</div>
+                        <div id="finalSpeed" class="text-2xl font-bold font-mono text-amber-400">0.0s</div>
+                    </div>
+                    <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-center">
+                        <div class="text-xs text-slate-400">Accuracy</div>
+                        <div id="finalAccuracy" class="text-2xl font-bold font-mono text-sky-400">100%</div>
+                    </div>
+                    <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-center">
+                        <div class="text-xs text-slate-400">Best Streak</div>
+                        <div id="finalStreak" class="text-2xl font-bold font-mono text-purple-400">0</div>
+                    </div>
+                </div>
+
+                <button id="restartGameBtn" class="px-8 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-lg rounded-xl shadow-lg shadow-emerald-500/20 hover:scale-105 transition transform active:scale-95">
+                    <i class="fa-solid fa-rotate-right mr-2"></i> Play Again
+                </button>
+            </div>
+
+            <!-- REGISTER BOARD (Active Game View) -->
+            <div id="gameBoard" class="w-full flex-1 bg-slate-950/60 rounded-2xl border border-slate-800 p-4 sm:p-6 flex flex-col justify-between gap-6">
+                
+                <!-- Display Panel (The POS Screen) -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 shadow-inner">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-center sm:text-left items-center">
+                        <div>
+                            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Bill</span>
+                            <div id="billDisplay" class="text-2xl sm:text-3xl font-mono font-bold text-white mt-1">€0.00</div>
+                        </div>
+                        <div>
+                            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Customer Paid</span>
+                            <div id="paidDisplay" class="text-2xl sm:text-3xl font-mono font-bold text-amber-400 mt-1">€0.00</div>
+                        </div>
+                        <div class="col-span-2 sm:col-span-1 bg-slate-950/80 p-3 rounded-lg border border-slate-800/80 text-center">
+                            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                                Target Change 
+                                <span id="assistBadge" class="hidden text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded ml-1 border border-emerald-500/30">Assist On</span>
+                            </span>
+                            <div id="targetChangeDisplay" class="text-2xl sm:text-3xl font-mono font-bold text-emerald-400 mt-0.5">???</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Selected Change Basket & Feedback -->
+                <div class="flex flex-col gap-2">
+                    <div class="flex justify-between items-center text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
+                        <span>Current Selected Change</span>
+                        <span id="coinCountDisplay" class="text-slate-400">Items: 0</span>
+                    </div>
+                    
+                    <div class="min-h-[72px] bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center gap-2 overflow-x-auto" id="selectedBasket">
+                        <span id="emptyBasketText" class="text-slate-400 text-sm italic w-full text-center py-2">Click bills/coins below to prepare change...</span>
+                    </div>
+
+                    <div class="flex justify-between items-center px-1">
+                        <div id="liveTotalDisplay" class="text-lg font-mono font-bold text-slate-300">
+                            Given: <span class="text-white">€0.00</span>
+                        </div>
+                        <button id="clearBasketBtn" class="text-xs text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-1 font-medium px-2 py-1">
+                            <i class="fa-solid fa-xmark"></i> Clear All
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- DENOMINATION SELECTION TRAY (Dynamically Rendered) -->
+        <div id="cashTray" class="bg-slate-950/60 p-4 rounded-2xl border border-slate-800 flex flex-col gap-3">
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1 flex justify-between items-center">
+                <span id="tillTitle">Till / Cash Drawer (EUR)</span>
+                <span class="text-[11px] text-slate-400 normal-case hidden sm:inline"><i class="fa-solid fa-lightbulb text-amber-400/80 mr-1"></i>Auto-submits when target reached</span>
+            </div>
+
+            <!-- Dynamic Notes Section -->
+            <div id="notesContainer" class="grid grid-cols-4 gap-2"></div>
+
+            <!-- Dynamic Coins Section -->
+            <div id="coinsContainer" class="grid grid-cols-4 sm:grid-cols-6 gap-2"></div>
+        </div>
+
+    </main>
+
+    <!-- OPTIONS / SETTINGS MODAL -->
+    <div id="settingsModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-5">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-emerald-400"></i> Game Options
+                </h3>
+                <button id="closeSettingsBtn" class="text-slate-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Currency Selector -->
+            <div class="flex flex-col gap-1.5">
+                <label for="currencySelect" class="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Currency System
+                </label>
+                <select id="currencySelect" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-sans focus:outline-none focus:border-emerald-500">
+                    <option value="EUR" selected>Euro (€) - 50c, 20c, 10c, 5c, 2c, 1c</option>
+                    <option value="USD">US Dollar ($) - 25c, 10c, 5c, 1c</option>
+                    <option value="GBP">British Pound (£) - 50p, 20p, 10p, 5p, 2p, 1p</option>
+                </select>
+            </div>
+
+            <!-- Option 1: Time Limit -->
+            <div class="flex flex-col gap-1.5">
+                <label for="timeLimitInput" class="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Time Limit (Seconds)
+                </label>
+                <input type="number" id="timeLimitInput" value="60" min="10" max="300" step="5" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500">
+                <span class="text-[11px] text-slate-400">Default: 60 seconds. Set to 0 for unlimited practice.</span>
+            </div>
+
+            <!-- Option 2: Assist Mode -->
+            <div class="flex items-center justify-between py-1 border-t border-slate-800/60 pt-3">
+                <div>
+                    <div class="text-sm font-semibold text-white">Assist Mode</div>
+                    <div class="text-xs text-slate-400">Explicitly display exact change due amount</div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="assistToggle" class="sr-only peer">
+                    <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                </label>
+            </div>
+
+            <!-- Option 3: Suboptimal Deliveries -->
+            <div class="flex items-center justify-between py-1 border-t border-slate-800/60 pt-3">
+                <div>
+                    <div class="text-sm font-semibold text-white">Allow Suboptimal Change</div>
+                    <div class="text-xs text-slate-400">Accept any valid combination equal to change</div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="suboptimalToggle" class="sr-only peer" checked>
+                    <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                </label>
+            </div>
+
+            <div class="pt-3 border-t border-slate-800 flex justify-end">
+                <button id="saveSettingsBtn" class="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-sm transition">
+                    Save & Apply
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SHORTCUTS MODAL -->
+    <div id="shortcutsModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-keyboard text-emerald-400"></i> Keyboard Shortcuts
+                </h3>
+                <button id="closeShortcutsBtn" class="text-slate-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="space-y-2 text-sm" id="shortcutsList">
+                <!-- Dynamically updated based on active currency -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Currency Configurations (Values in CENTS / PENCE)
+        const CURRENCIES = {
+            EUR: {
+                symbol: '€',
+                name: 'Euro',
+                denominations: [
+                    { id: '2000', label: '€20', value: 2000, type: 'note', key: '4' },
+                    { id: '1000', label: '€10', value: 1000, type: 'note', key: '3' },
+                    { id: '500',  label: '€5',  value: 500,  type: 'note', key: '2' },
+                    { id: '200',  label: '€2',  value: 200,  type: 'coin', key: '1' },
+                    { id: '100',  label: '€1',  value: 100,  type: 'coin', key: 'q' },
+                    { id: '50',   label: '50c', value: 50,   type: 'coin', key: 'w' },
+                    { id: '20',   label: '20c', value: 20,   type: 'coin', key: 'e' },
+                    { id: '10',   label: '10c', value: 10,   type: 'coin', key: 'r' },
+                    { id: '5',    label: '5c',  value: 5,    type: 'coin', key: 't' },
+                    { id: '2',    label: '2c',  value: 2,    type: 'coin', key: 'a' },
+                    { id: '1',    label: '1c',  value: 1,    type: 'coin', key: 's' },
+                ]
+            },
+            USD: {
+                symbol: '$',
+                name: 'US Dollar',
+                denominations: [
+                    { id: '2000', label: '$20', value: 2000, type: 'note', key: '4' },
+                    { id: '1000', label: '$10', value: 1000, type: 'note', key: '3' },
+                    { id: '500',  label: '$5',  value: 500,  type: 'note', key: '2' },
+                    { id: '100',  label: '$1',  value: 100,  type: 'note', key: '1' },
+                    { id: '25',   label: '25¢', value: 25,   type: 'coin', key: 'q' },
+                    { id: '10',   label: '10¢', value: 10,   type: 'coin', key: 'w' },
+                    { id: '5',    label: '5¢',  value: 5,    type: 'coin', key: 'e' },
+                    { id: '1',    label: '1¢',  value: 1,    type: 'coin', key: 'r' },
+                ]
+            },
+            GBP: {
+                symbol: '£',
+                name: 'British Pound',
+                denominations: [
+                    { id: '2000', label: '£20', value: 2000, type: 'note', key: '4' },
+                    { id: '1000', label: '£10', value: 1000, type: 'note', key: '3' },
+                    { id: '500',  label: '£5',  value: 500,  type: 'note', key: '2' },
+                    { id: '200',  label: '£2',  value: 200,  type: 'coin', key: '1' },
+                    { id: '100',  label: '£1',  value: 100,  type: 'coin', key: 'q' },
+                    { id: '50',   label: '50p', value: 50,   type: 'coin', key: 'w' },
+                    { id: '20',   label: '20p', value: 20,   type: 'coin', key: 'e' },
+                    { id: '10',   label: '10p', value: 10,   type: 'coin', key: 'r' },
+                    { id: '5',    label: '5p',  value: 5,    type: 'coin', key: 't' },
+                    { id: '2',    label: '2p',  value: 2,    type: 'coin', key: 'a' },
+                    { id: '1',    label: '1p',  value: 1,    type: 'coin', key: 's' },
+                ]
+            }
+        };
+
+        // Game Configuration State
+        let config = {
+            currency: 'EUR',
+            timeLimit: 60,
+            assistMode: false,
+            allowSuboptimal: true
+        };
+
+        // Gameplay State
+        let gameState = {
+            active: false,
+            timeRemaining: 60,
+            timerId: null,
+            score: 0,
+            totalAttempts: 0,
+            streak: 0,
+            bestStreak: 0,
+            startTime: null,
+            totalTimeTaken: 0,
+            
+            // Current round state
+            currentBill: 0,
+            currentPaid: 0,
+            targetChange: 0,
+            selectedChange: [],
+            selectedTotal: 0
+        };
+
+        // Audio Effects (Synthesized Web Audio API)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+            if (type === 'coin') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(1200, now);
+                osc.frequency.exponentialRampToValueAtTime(1600, now + 0.08);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+                osc.start(now);
+                osc.stop(now + 0.08);
+            } else if (type === 'correct') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(523.25, now); // C5
+                osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
+                osc.frequency.setValueAtTime(783.99, now + 0.16); // G5
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            } else if (type === 'error') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, now);
+                osc.frequency.linearRampToValueAtTime(110, now + 0.2);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+                osc.start(now);
+                osc.stop(now + 0.2);
+            }
+        }
+
+        const DOM = {
+            currencySymbolHeader: document.getElementById('currencySymbolHeader'),
+            timerDisplay: document.getElementById('timerDisplay'),
+            scoreDisplay: document.getElementById('scoreDisplay'),
+            accuracyDisplay: document.getElementById('accuracyDisplay'),
+            streakDisplay: document.getElementById('streakDisplay'),
+            billDisplay: document.getElementById('billDisplay'),
+            paidDisplay: document.getElementById('paidDisplay'),
+            targetChangeDisplay: document.getElementById('targetChangeDisplay'),
+            assistBadge: document.getElementById('assistBadge'),
+            selectedBasket: document.getElementById('selectedBasket'),
+            emptyBasketText: document.getElementById('emptyBasketText'),
+            liveTotalDisplay: document.getElementById('liveTotalDisplay'),
+            coinCountDisplay: document.getElementById('coinCountDisplay'),
+            tillTitle: document.getElementById('tillTitle'),
+            notesContainer: document.getElementById('notesContainer'),
+            coinsContainer: document.getElementById('coinsContainer'),
+            shortcutsList: document.getElementById('shortcutsList'),
+            
+            // Screens & Modals
+            startScreen: document.getElementById('startScreen'),
+            gameOverScreen: document.getElementById('gameOverScreen'),
+            gameBoard: document.getElementById('gameBoard'),
+            startGameBtn: document.getElementById('startGameBtn'),
+            restartGameBtn: document.getElementById('restartGameBtn'),
+            clearBasketBtn: document.getElementById('clearBasketBtn'),
+            
+            // Stats
+            finalScore: document.getElementById('finalScore'),
+            finalSpeed: document.getElementById('finalSpeed'),
+            finalAccuracy: document.getElementById('finalAccuracy'),
+            finalStreak: document.getElementById('finalStreak'),
+
+            // Options
+            settingsBtn: document.getElementById('settingsBtn'),
+            settingsModal: document.getElementById('settingsModal'),
+            closeSettingsBtn: document.getElementById('closeSettingsBtn'),
+            saveSettingsBtn: document.getElementById('saveSettingsBtn'),
+            currencySelect: document.getElementById('currencySelect'),
+            timeLimitInput: document.getElementById('timeLimitInput'),
+            assistToggle: document.getElementById('assistToggle'),
+            suboptimalToggle: document.getElementById('suboptimalToggle'),
+            
+            // Keyboard modal
+            keyboardToggleBtn: document.getElementById('keyboardToggleBtn'),
+            shortcutsModal: document.getElementById('shortcutsModal'),
+            closeShortcutsBtn: document.getElementById('closeShortcutsBtn'),
+        };
+
+        function formatMoney(cents) {
+            const symbol = CURRENCIES[config.currency].symbol;
+            return `${symbol}${(cents / 100).toFixed(2)}`;
+        }
+
+        function getActiveDenominations() {
+            return CURRENCIES[config.currency].denominations;
+        }
+
+        function buildTillUI() {
+            const activeCurr = CURRENCIES[config.currency];
+            DOM.currencySymbolHeader.textContent = activeCurr.symbol;
+            DOM.tillTitle.textContent = `Till / Cash Drawer (${activeCurr.name})`;
+
+            DOM.notesContainer.innerHTML = '';
+            DOM.coinsContainer.innerHTML = '';
+            DOM.shortcutsList.innerHTML = '';
+
+            const denoms = getActiveDenominations();
+
+            denoms.forEach(denom => {
+                const btn = document.createElement('button');
+                btn.dataset.value = denom.value;
+                btn.className = `denom-btn btn-push font-mono font-bold p-2 sm:p-3 rounded-xl flex flex-col items-center justify-center relative ${
+                    denom.type === 'note'
+                        ? 'bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-600/40 text-emerald-200'
+                        : 'bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-200'
+                }`;
+
+                btn.innerHTML = `
+                    <span class="text-base sm:text-lg">${denom.label}</span>
+                    <span class="text-[10px] text-slate-400 font-normal hidden sm:inline">[${denom.key.toUpperCase()}]</span>
+                `;
+                btn.onclick = () => addDenomination(denom.value);
+
+                if (denom.type === 'note') {
+                    DOM.notesContainer.appendChild(btn);
+                } else {
+                    DOM.coinsContainer.appendChild(btn);
+                }
+
+                // Append shortcut to modal
+                const scItem = document.createElement('div');
+                scItem.className = 'flex justify-between items-center bg-slate-950 p-2 rounded-lg border border-slate-800';
+                scItem.innerHTML = `
+                    <span class="text-slate-300">${denom.label} (${denom.type})</span>
+                    <span class="font-mono text-emerald-400 bg-slate-800 px-2 py-0.5 rounded">${denom.key.toUpperCase()}</span>
+                `;
+                DOM.shortcutsList.appendChild(scItem);
+            });
+
+            // Extra shortcuts info
+            const clearSc = document.createElement('div');
+            clearSc.className = 'flex justify-between items-center bg-slate-950 p-2 rounded-lg border border-slate-800';
+            clearSc.innerHTML = `
+                <span class="text-slate-300">Clear Current Selection</span>
+                <span class="font-mono text-rose-400 bg-slate-800 px-2 py-0.5 rounded">Backspace / C</span>
+            `;
+            DOM.shortcutsList.appendChild(clearSc);
+        }
+
+        // Calculates minimum coins required using standard greedy algorithm
+        function getOptimalCoinCount(targetCents) {
+            let remaining = targetCents;
+            let count = 0;
+            const denoms = getActiveDenominations();
+            for (const denom of denoms) {
+                if (remaining <= 0) break;
+                const numItems = Math.floor(remaining / denom.value);
+                count += numItems;
+                remaining %= denom.value;
+            }
+            return count;
+        }
+
+        function startGame() {
+            gameState.active = true;
+            gameState.score = 0;
+            gameState.totalAttempts = 0;
+            gameState.streak = 0;
+            gameState.bestStreak = 0;
+            gameState.totalTimeTaken = 0;
+            gameState.timeRemaining = config.timeLimit;
+            gameState.startTime = Date.now();
+
+            DOM.startScreen.classList.add('hidden');
+            DOM.gameOverScreen.classList.add('hidden');
+            DOM.assistBadge.classList.toggle('hidden', !config.assistMode);
+
+            updateHUD();
+            nextRound();
+
+            if (config.timeLimit > 0) {
+                clearInterval(gameState.timerId);
+                gameState.timerId = setInterval(tickTimer, 100);
+            } else {
+                DOM.timerDisplay.textContent = '∞';
+            }
+        }
+
+        function tickTimer() {
+            gameState.timeRemaining -= 0.1;
+            if (gameState.timeRemaining <= 0) {
+                gameState.timeRemaining = 0;
+                endGame();
+            }
+            DOM.timerDisplay.textContent = `${gameState.timeRemaining.toFixed(1)}s`;
+        }
+
+        function endGame() {
+            gameState.active = false;
+            clearInterval(gameState.timerId);
+            playSound('error');
+
+            const avgSpeed = gameState.score > 0 
+                ? (gameState.totalTimeTaken / gameState.score / 1000).toFixed(2) 
+                : '0.0';
+            
+            const accuracy = gameState.totalAttempts > 0 
+                ? Math.round((gameState.score / gameState.totalAttempts) * 100) 
+                : 0;
+
+            DOM.finalScore.textContent = gameState.score;
+            DOM.finalSpeed.textContent = `${avgSpeed}s`;
+            DOM.finalAccuracy.textContent = `${accuracy}%`;
+            DOM.finalStreak.textContent = gameState.bestStreak;
+
+            DOM.gameOverScreen.classList.remove('hidden');
+        }
+
+        function nextRound() {
+            gameState.selectedChange = [];
+            gameState.selectedTotal = 0;
+            renderBasket();
+
+            // Randomize bill paid between $5, $10, $20, $50
+            const possiblePaidValues = [500, 1000, 2000, 5000];
+            const randomPaid = possiblePaidValues[Math.floor(Math.random() * possiblePaidValues.length)];
+            
+            // Random bill price less than paid
+            const randomBill = Math.floor(Math.random() * (randomPaid - 5)) + 5;
+
+            gameState.currentBill = randomBill;
+            gameState.currentPaid = randomPaid;
+            gameState.targetChange = randomPaid - randomBill;
+            gameState.roundStartTime = Date.now();
+
+            DOM.billDisplay.textContent = formatMoney(gameState.currentBill);
+            DOM.paidDisplay.textContent = formatMoney(gameState.currentPaid);
+            
+            if (config.assistMode) {
+                DOM.targetChangeDisplay.textContent = formatMoney(gameState.targetChange);
+            } else {
+                DOM.targetChangeDisplay.textContent = '???';
+            }
+        }
+
+        function addDenomination(value) {
+            if (!gameState.active) return;
+
+            playSound('coin');
+            gameState.selectedChange.push(value);
+            gameState.selectedTotal += value;
+            renderBasket();
+
+            // Check correctness condition
+            if (gameState.selectedTotal === gameState.targetChange) {
+                validateSubmission();
+            } else if (gameState.selectedTotal > gameState.targetChange) {
+                triggerErrorState();
+            }
+        }
+
+        function removeDenominationAtIndex(index) {
+            if (!gameState.active) return;
+            const removed = gameState.selectedChange.splice(index, 1)[0];
+            gameState.selectedTotal -= removed;
+            renderBasket();
+        }
+
+        function clearBasket() {
+            if (!gameState.active) return;
+            gameState.selectedChange = [];
+            gameState.selectedTotal = 0;
+            renderBasket();
+        }
+
+        function triggerErrorState() {
+            playSound('error');
+            gameState.totalAttempts++;
+            gameState.streak = 0;
+            updateHUD();
+
+            DOM.gameBoard.classList.add('shake');
+            setTimeout(() => DOM.gameBoard.classList.remove('shake'), 300);
+
+            clearBasket();
+        }
+
+        function validateSubmission() {
+            const isSuboptimal = gameState.selectedChange.length > getOptimalCoinCount(gameState.targetChange);
+
+            if (!config.allowSuboptimal && isSuboptimal) {
+                triggerErrorState();
+                return;
+            }
+
+            playSound('correct');
+            const timeTaken = Date.now() - gameState.roundStartTime;
+            gameState.totalTimeTaken += timeTaken;
+            
+            gameState.score++;
+            gameState.totalAttempts++;
+            gameState.streak++;
+            if (gameState.streak > gameState.bestStreak) {
+                gameState.bestStreak = gameState.streak;
+            }
+
+            updateHUD();
+            nextRound();
+        }
+
+        function updateHUD() {
+            DOM.scoreDisplay.textContent = gameState.score;
+            DOM.streakDisplay.textContent = `${gameState.streak} 🔥`;
+
+            const accuracy = gameState.totalAttempts > 0 
+                ? Math.round((gameState.score / gameState.totalAttempts) * 100) 
+                : 100;
+            DOM.accuracyDisplay.textContent = `(${accuracy}%)`;
+        }
+
+        function renderBasket() {
+            DOM.selectedBasket.innerHTML = '';
+
+            if (gameState.selectedChange.length === 0) {
+                DOM.selectedBasket.appendChild(DOM.emptyBasketText);
+            } else {
+                const denoms = getActiveDenominations();
+                gameState.selectedChange.forEach((val, idx) => {
+                    const denom = denoms.find(d => d.value === val);
+                    const tag = document.createElement('button');
+                    tag.className = `px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition transform hover:scale-105 ${
+                        denom.type === 'note' 
+                            ? 'bg-emerald-900/60 border border-emerald-500/40 text-emerald-200' 
+                            : 'bg-slate-800 border border-slate-700 text-amber-200'
+                    }`;
+                    tag.innerHTML = `${denom.label} <i class="fa-solid fa-xmark text-[10px] text-slate-400"></i>`;
+                    tag.onclick = () => removeDenominationAtIndex(idx);
+                    DOM.selectedBasket.appendChild(tag);
+                });
+            }
+
+            DOM.liveTotalDisplay.innerHTML = `Given: <span class="${
+                gameState.selectedTotal > gameState.targetChange ? 'text-rose-400' : 'text-white'
+            }">${formatMoney(gameState.selectedTotal)}</span>`;
+            
+            DOM.coinCountDisplay.textContent = `Items: ${gameState.selectedChange.length}`;
+        }
+
+        // Attach static event listeners
+        DOM.clearBasketBtn.addEventListener('click', clearBasket);
+        DOM.startGameBtn.addEventListener('click', startGame);
+        DOM.restartGameBtn.addEventListener('click', startGame);
+
+        // Options Modal Handlers
+        DOM.settingsBtn.addEventListener('click', () => DOM.settingsModal.classList.remove('hidden'));
+        DOM.closeSettingsBtn.addEventListener('click', () => DOM.settingsModal.classList.add('hidden'));
+        DOM.saveSettingsBtn.addEventListener('click', () => {
+            config.currency = DOM.currencySelect.value;
+            config.timeLimit = parseInt(DOM.timeLimitInput.value, 10) || 60;
+            config.assistMode = DOM.assistToggle.checked;
+            config.allowSuboptimal = DOM.suboptimalToggle.checked;
+            
+            buildTillUI();
+            DOM.settingsModal.classList.add('hidden');
+            if (gameState.active) startGame();
+        });
+
+        // Keyboard Modal Handlers
+        DOM.keyboardToggleBtn.addEventListener('click', () => DOM.shortcutsModal.classList.remove('hidden'));
+        DOM.closeShortcutsBtn.addEventListener('click', () => DOM.shortcutsModal.classList.add('hidden'));
+
+        // Global Keyboard Event Listener
+        window.addEventListener('keydown', (e) => {
+            if (!DOM.settingsModal.classList.contains('hidden')) return;
+            if (!DOM.shortcutsModal.classList.contains('hidden')) return;
+
+            const key = e.key.toLowerCase();
+            const denoms = getActiveDenominations();
+            const matchedDenom = denoms.find(d => d.key === key);
+
+            if (matchedDenom) {
+                e.preventDefault();
+                addDenomination(matchedDenom.value);
+            } else if (key === 'backspace' || key === 'c') {
+                e.preventDefault();
+                clearBasket();
+            } else if (key === 'enter' && !gameState.active) {
+                startGame();
+            }
+        });
+
+        // Initialize default view
+        buildTillUI();
+    </script>
+</body>
+</html>
