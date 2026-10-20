@@ -1105,6 +1105,7 @@ if (typeof module !== 'undefined' && module.exports) {
         #mazeTable td {
             width: var(--cell-size);
             height: var(--cell-size);
+            min-width: var(--cell-size);
             padding: 0;
             box-sizing: border-box;
             background: #0d0d12;
@@ -2684,11 +2685,21 @@ if (typeof module !== 'undefined' && module.exports) {
         }
 
         // --- Viewport zoom toggle (35x35 <-> 20x20) ---
+        function updateMazeCellSize() {
+            const nominalSize = VIEW_SIZE <= 20 ? 28 : 16;
+            const panel = document.querySelector('.game-layout > .panel');
+            const availableWidth = panel ? panel.clientWidth - 18 : window.innerWidth - 60;
+            const cellSize = window.matchMedia('(max-width: 1023px)').matches
+                ? Math.min(nominalSize, Math.max(1, availableWidth / VIEW_SIZE))
+                : nominalSize;
+            document.documentElement.style.setProperty('--cell-size', `${cellSize}px`);
+        }
+
         function setViewSize(size) {
             VIEW_SIZE = size;
             // Bigger cells when there are fewer of them, so the viewport stays
             // filling the same physical box.
-            document.documentElement.style.setProperty('--cell-size', size <= 20 ? '28px' : '16px');
+            updateMazeCellSize();
             document.body.classList.toggle('maze-zoomed', size <= 20);
             mazeCellNodes = null; // force full DOM rebuild at the new dimensions
             updateCamera();
@@ -2705,12 +2716,8 @@ if (typeof module !== 'undefined' && module.exports) {
             const btn = document.getElementById('zoom-toggle');
             if (!btn) return;
             btn.addEventListener('click', () => setViewSize(VIEW_SIZE === 35 ? 20 : 35));
-            document.addEventListener('keydown', (e) => {
-                if (e.key !== 'z' && e.key !== 'Z') return;
-                const t = e.target;
-                if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-                setViewSize(VIEW_SIZE === 35 ? 20 : 35);
-            });
+            updateMazeCellSize();
+            window.addEventListener('resize', updateMazeCellSize);
         })();
 
         function buildMazeViewportDom() {
