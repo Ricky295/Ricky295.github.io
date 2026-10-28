@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1200,116 +1201,94 @@
 
   function renderChordLyricLine(tokens){
     const { text, chords } = tokens;
-    // Bar/tab notation line: text is only "|", ".", spaces (no actual lyrics).
-    const isBarLine = /^[|.\s]*$/.test(text) && chords.length;
+
+    // ------------------------------------------------------------------
+    // Two-row rendering: chord row above, lyric row below.
+    // Chords are placed at exact character columns from the ChordPro
+    // source, so "Em" in "[Em]don't" lands precisely above the "d".
+    // Both rows share the same monospace-friendly proportional font;
+    // we measure column widths by building a char-indexed chord map.
+    // ------------------------------------------------------------------
+
+    // Build a map: column → chord label(s)
+    const chordAt = new Map();
+    for(const c of chords){
+      const label = transposeChord(c.chord, transpose);
+      if(!chordAt.has(c.pos)) chordAt.set(c.pos, []);
+      chordAt.get(c.pos).push(label);
+    }
+
+    // isBarLine: text is only |, ., spaces — pure rhythm notation line
+    const isBarLine = /^[|.\s]*$/.test(text);
+
+    // ---- Build chord row ----
+    // We lay out character-by-character. When a chord starts at position i,
+    // we emit its label; it visually "overhangs" subsequent characters but
+    // lives in a nowrap inline-block so it doesn't push lyrics sideways.
+    // We use a wrapper <span class="cword"> that is position:relative so
+    // the chord (position:absolute, top:0) floats above the lyric char.
+
     if(isBarLine){
-      // chord-only line (like bar notation): each chord sits exactly at the
-      // character position it was found at in the source (e.g. right after
-      // a "|"), rendered over the literal bar/dot text so alignment matches
-      // the original ChordPro spacing instead of a fixed offset.
-      // Attach each chord to the character immediately BEFORE its recorded
-      // position (i.e. the "|" it follows), so the chord's left-aligned
-      // label sits flush against the bar instead of floating one dot later.
-      const byPos = new Map();
-      for(const c of chords){
-        const anchor = Math.max(0, c.pos - 1);
-        const arr = byPos.get(anchor) || [];
-        arr.push(c.chord);
-        byPos.set(anchor, arr);
-      }
-      // Each character gets wrapped so a chord can be absolutely positioned
-      // above it without shoving later characters to the right (chords are
-      // often 2-3 chars wide but must sit over a single "|" or ".").
+      // For bar/tab lines render each character wrapped so chords sit above.
       let out = '<div class="line chordline">';
-      for(let i = 0; i <= text.length; i++){
-        const ch = i < text.length ? text[i] : '\u00a0'; // trailing slot needs a char to anchor to
-        const chordHere = byPos.has(i) ? byPos.get(i).map(c => formatChordHTML(transposeChord(c, transpose))).join(' ') : '';
+      for(let i = 0; i < text.length; i++){
+        const ch = text[i];
         const displayCh = ch === '|' ? '<span class="bar">|</span>' : escapeHtml(ch);
-        if(chordHere){
-          out += `<span class="cword"><span class="cchord">${chordHere}</span>${displayCh}</span>`;
+        if(chordAt.has(i)){
+          const chordHtml = chordAt.get(i).map(c => formatChordHTML(c)).join(' ');
+          out += `<span class="cword"><span class="cchord">${chordHtml}</span>${displayCh}</span>`;
         } else {
           out += displayCh;
         }
+      }
+      // trailing chords beyond text length
+      if(chordAt.has(text.length)){
+        const chordHtml = chordAt.get(text.length).map(c => formatChordHTML(c)).join(' ');
+        out += `<span class="cword"><span class="cchord">${chordHtml}</span>\u00a0</span>`;
       }
       out += '</div>';
       return out;
     }
 
-    // split text into words, keep track of char positions
+    // ---- Normal lyric+chord line ----
+    // Walk character by character through the lyric text.
+    // Whenever a chord is anchored at position i, open a cword span
+    // that holds the chord above. The cword span covers the text from
+    // position i until either the next chord position or the end of the
+    // current "token" (so it doesn't span across a gap wider than needed).
+    //
+    // Strategy: collect all chord positions sorted; split text at those
+    // boundaries; emit each segment wrapped in cword if a chord precedes it.
+
+    const sortedPos = [...chordAt.keys()].sort((a, b) => a - b);
+
+    // Extend text to at least cover all chord positions (trailing chords)
+    const maxPos = sortedPos.length ? sortedPos[sortedPos.length - 1] : 0;
+    const fullText = text.length <= maxPos
+      ? text + '\u00a0'.repeat(maxPos - text.length + 1)
+      : text;
+
+    // Build split boundaries: 0, each chord position, fullText.length
+    const boundaries = [0, ...sortedPos.filter(p => p > 0), fullText.length];
+    // deduplicate & sort
+    const splits = [...new Set(boundaries)].sort((a, b) => a - b);
+
     let out = '<div class="line">';
-    let pos = 0;
-    let i = 0;
-    const wordRegex = /\S+|\s+/g;
-    let match;
-    let buffer = '';
-
-    // Find word boundaries up front so we can reassign chords that land
-    // inside whitespace runs (e.g. multiple chords stacked before a word,
-    // like "[Cmaj7]   [D/C]   I did...") to the next word instead of
-    // silently dropping them.
-    const words = [];
-    {
-      const wr = /\S+/g;
-      let wm;
-      while((wm = wr.exec(text)) !== null){
-        words.push({ start: wm.index, end: wm.index + wm[0].length });
-      }
-    }
-    function reassignPos(p){
-      // if p already falls inside a word, keep it
-      for(const w of words){
-        if(p >= w.start && p < w.end) return { pos: p, trailing: false };
-      }
-      // otherwise snap forward to the start of the next word
-      for(const w of words){
-        if(w.start >= p) return { pos: w.start, trailing: false };
-      }
-      return { pos: p, trailing: true }; // past the last word: render at line end
-    }
-    const adjustedChords = chords.map(c => {
-      const r = reassignPos(c.pos);
-      return { chord: c.chord, pos: r.pos, trailing: r.trailing };
-    });
-
-    while((match = wordRegex.exec(text)) !== null){
-      const chunk = match[0];
-      const start = match.index;
-      const end = start + chunk.length;
-      const isSpace = /^\s+$/.test(chunk);
-
-      if(isSpace){
-        out += escapeHtml(chunk);
+    for(let si = 0; si < splits.length - 1; si++){
+      const from = splits[si];
+      const to   = splits[si + 1];
+      const segment = fullText.slice(from, to);
+      if(chordAt.has(from)){
+        const chordHtml = chordAt.get(from).map(c => formatChordHTML(c)).join(' ');
+        out += `<span class="cword"><span class="cchord">${chordHtml}</span>${escapeHtml(segment)}</span>`;
       } else {
-        // find chord(s) that fall within [start,end) of this word
-        const relevant = adjustedChords.filter(c => !c.trailing && c.pos >= start && c.pos < end);
-        if(relevant.length){
-          // split the word into syllable segments at each chord's exact
-          // character offset, so the chord sits above the letter it
-          // precedes instead of snapping to the whole word's left edge
-          const cuts = [...new Set(relevant.map(c => c.pos))].sort((a,b) => a-b);
-          let cursor = start;
-          for(const cutPos of cuts){
-            if(cutPos > cursor){
-              out += escapeHtml(chunk.slice(cursor - start, cutPos - start));
-            }
-            const here = relevant.filter(c => c.pos === cutPos);
-            const chordHtml = here.map(c => formatChordHTML(transposeChord(c.chord, transpose))).join(' ');
-            const nextCut = cuts.find(p => p > cutPos);
-            const segEnd = nextCut !== undefined ? nextCut : end;
-            const segText = chunk.slice(cutPos - start, segEnd - start);
-            out += `<span class="cword"><span class="cchord">${chordHtml}</span>${escapeHtml(segText || '\u200b')}</span>`;
-            cursor = segEnd;
-          }
-        } else {
-          out += escapeHtml(chunk);
-        }
+        out += escapeHtml(segment);
       }
     }
-    // chords past the last word (no following word to attach to)
-    const trailing = adjustedChords.filter(c => c.trailing);
-    if(trailing.length){
-      const chordHtml = trailing.map(c => formatChordHTML(transposeChord(c.chord, transpose))).join(' ');
-      out += `<span class="cword"><span class="cchord">${chordHtml}</span>&nbsp;</span>`;
+    // trailing chords that land exactly at fullText.length (beyond last char)
+    if(chordAt.has(fullText.length)){
+      const chordHtml = chordAt.get(fullText.length).map(c => formatChordHTML(c)).join(' ');
+      out += `<span class="cword"><span class="cchord">${chordHtml}</span>\u00a0</span>`;
     }
     out += '</div>';
     return out;
@@ -2017,10 +1996,5 @@
 <!-- TABLA build marker 11 -->
 <!-- TABLA build marker 12 -->
 <!-- TABLA build marker 13 -->
-<!-- TABLA build marker 14 -->
-<!-- TABLA build marker 15 -->
-<!-- TABLA build marker 16 -->
-<!-- TABLA build marker 17 -->
-<!-- TABLA build marker 18 -->
 </body>
 </html>
