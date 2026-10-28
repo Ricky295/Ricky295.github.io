@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Survival Candles — 2P 8×8</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg: #0d0f14;
+    --surface: #151820;
+    --surface2: #1c2030;
+    --border: #2a3045;
+    --text: #e8ecf4;
+    --text-dim: #6b7694;
+    --p1: #4fc3f7;
+    --p2: #f06292;
+    --p3: #aed581;
+    --p4: #ffb74d;
+    --fire: #ff6b35;
+    --ice: #64b5f6;
+    --candle: #ffe082;
+    --empty: #1e2535;
+    --radius: 6px;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f0f2f8; --surface: #ffffff; --surface2: #e8ecf4;
+      --border: #c8d0e0; --text: #1a1f2e; --text-dim: #7a849a; --empty: #dde2f0;
+    }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg); color: var(--text); font-family: var(--sans);
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+  }
+
+  header {
+    width: 100%; max-width: 960px; padding: 20px 20px 0;
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.02em; font-family: var(--mono); }
+  .subtitle { font-size: 0.7rem; color: var(--text-dim); font-family: var(--mono); }
+
+  /* ── Setup screen ── */
+  #setupScreen {
+    width: 100%; max-width: 780px; padding: 20px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  }
+  .setup-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px;
+  }
+  .setup-card h3 { font-size: 0.85rem; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .player-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .setup-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .setup-row label { font-size: 0.72rem; color: var(--text-dim); }
+  .setup-row select, .setup-row input[type=text] {
+    background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 6px 10px; font-family: var(--sans); font-size: 0.8rem; width: 100%;
+  }
+  .level-wrap { display: none; flex-direction: column; gap: 6px; }
+  .level-wrap.visible { display: flex; }
+  .level-presets { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+  .preset-btn {
+    font-size: 0.65rem; padding: 3px 7px; border-radius: 3px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text-dim); cursor: pointer; font-family: var(--mono);
+    transition: all 0.1s;
+  }
+  .preset-btn:hover { border-color: var(--candle); color: var(--candle); }
+  input[type=range] { width: 100%; accent-color: var(--candle); }
+  .level-readout { font-family: var(--mono); font-size: 0.7rem; color: var(--candle); }
+  .setup-footer { grid-column: 1 / -1; display: flex; justify-content: center; gap: 12px; padding-top: 4px; }
+  .sim-note { grid-column: 1 / -1; text-align: center; font-size: 0.7rem; color: var(--text-dim); font-family: var(--mono); }
+
+  /* ── Game screen ── */
+  #gameScreen { display: none; width: 100%; max-width: 960px; padding: 16px 20px; flex-direction: column; gap: 14px; }
+  #gameScreen.active { display: flex; }
+
+  .game-layout { display: grid; grid-template-columns: 1fr 220px; gap: 16px; }
+  @media (max-width: 640px) { .game-layout { grid-template-columns: 1fr; } #setupScreen { grid-template-columns: 1fr; } }
+
+  /* Board */
+  .board-wrap { display: flex; flex-direction: column; gap: 2px; }
+  .board-col-labels { display: flex; padding-left: 26px; }
+  .board-col-label { width: 48px; text-align: center; font-family: var(--mono); font-size: 0.65rem; color: var(--text-dim); }
+  .board-row { display: flex; align-items: center; }
+  .row-num { width: 26px; font-family: var(--mono); font-size: 0.65rem; color: var(--text-dim); }
+
+  .cell {
+    width: 48px; height: 48px; border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem; transition: background 0.12s, transform 0.1s;
+    position: relative; user-select: none;
+  }
+  .cell.clickable { cursor: pointer; }
+  .cell.clickable:hover { transform: scale(1.08); z-index: 3; }
+  .cell.empty { background: var(--empty); }
+  .cell.has-candle { background: #2a2010; }
+  .cell.has-fire   { background: #3a1500; }
+  .cell.q1 { border-color: rgba(79,195,247,.25); }
+  .cell.q2 { border-color: rgba(240,98,146,.25); }
+  .cell.q3 { border-color: rgba(174,213,129,.25); }
+  .cell.q4 { border-color: rgba(255,183,77,.25); }
+  .cell.last-move { outline: 2px solid var(--candle); outline-offset: -2px; }
+  .cell.valid-move { background: rgba(255,224,130,.07); }
+  .cell.valid-move::after { content: '·'; position: absolute; font-size: 1.2rem; color: var(--candle); opacity: 0.4; }
+  .flame { animation: flicker 0.9s ease-in-out infinite alternate; display: block; }
+  @keyframes flicker { from { opacity:.8; transform:scale(.93); } to { opacity:1; transform:scale(1.07); } }
+
+  @media (max-width: 640px) { .cell { width: 9vw; height: 9vw; flex-basis: 9vw; font-size: 1rem; } .board-col-label { width: 9vw; } .row-num { width: 22px; } }
+
+  /* Players panel */
+  .players-panel { display: flex; flex-direction: column; gap: 8px; }
+  .player-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 11px 12px; transition: border-color 0.2s, opacity 0.3s;
+  }
+  .player-card.active { border-color: var(--candle); }
+  .player-card.eliminated { opacity: 0.35; }
+  .pc-header { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+  .pc-name { font-weight: 600; font-size: 0.82rem; flex: 1; }
+  .pc-badge {
+    font-family: var(--mono); font-size: 0.58rem; color: var(--text-dim);
+    background: var(--surface2); padding: 2px 5px; border-radius: 3px;
+    white-space: nowrap;
+  }
+  .temp-bar-track { height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+  .temp-bar { height: 100%; border-radius: 3px; transition: width 0.3s; }
+  .pc-stats { font-family: var(--mono); font-size: 0.63rem; color: var(--text-dim); display: flex; justify-content: space-between; }
+
+  .base-stat { margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--border); }
+  .base-label { font-family: var(--mono); font-size: .62rem; color: var(--text-dim); margin-bottom: 3px; }
+  .base-out { font-family: var(--mono); font-size: .58rem; color: var(--fire); margin-top: 3px; }
+
+  /* Score bars (MC result) */
+  .mc-scores { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; max-height: 90px; overflow-y: auto; }
+  .mc-row { display: flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 0.6rem; }
+  .mc-coord { width: 22px; color: var(--text-dim); flex-shrink: 0; }
+  .mc-bar-track { flex: 1; height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
+  .mc-bar-fill { height: 100%; border-radius: 2px; background: var(--candle); }
+  .mc-score-val { width: 28px; text-align: right; color: var(--text); }
+  .mc-chosen { color: var(--candle); }
+
+  /* Log */
+  .log-area {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 10px 14px; height: 110px; overflow-y: auto;
+  }
+  .log-line { font-family: var(--mono); font-size: 0.67rem; line-height: 1.65; color: var(--text-dim); }
+  .log-line.hi { color: var(--text); }
+
+  /* Controls bar */
+  .ctrl-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .btn {
+    font-family: var(--sans); font-weight: 600; font-size: 0.78rem;
+    padding: 8px 16px; border-radius: var(--radius); border: none; cursor: pointer;
+    transition: opacity .15s, transform .1s;
+  }
+  .btn:hover:not(:disabled) { opacity: .85; transform: translateY(-1px); }
+  .btn:disabled { opacity: .3; cursor: not-allowed; transform: none; }
+  .btn-primary { background: var(--candle); color: #111; }
+  .btn-ghost { background: var(--surface2); color: var(--text); }
+  .speed-row { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--text-dim); margin-left: auto; }
+  .speed-row select {
+    background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 4px 8px; font-family: var(--sans); font-size: 0.72rem;
+  }
+
+  /* Thinking dots */
+  .thinking { display: inline-flex; gap: 3px; align-items: center; vertical-align: middle; }
+  .thinking span { width: 4px; height: 4px; border-radius: 50%; background: var(--candle); animation: bounce .8s ease-in-out infinite; }
+  .thinking span:nth-child(2) { animation-delay: .15s; }
+  .thinking span:nth-child(3) { animation-delay: .3s; }
+  @keyframes bounce { 0%,80%,100% { transform:scale(.6); opacity:.4; } 40% { transform:scale(1); opacity:1; } }
+
+  /* Human turn overlay */
+  .your-turn-banner {
+    text-align: center; padding: 8px 14px; background: rgba(255,224,130,.1);
+    border: 1px solid rgba(255,224,130,.3); border-radius: var(--radius);
+    font-size: 0.8rem; font-weight: 600; color: var(--candle);
+  }
+
+  /* Game over */
+  .game-over-overlay {
+    text-align: center; padding: 20px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius);
+  }
+  .game-over-overlay h2 { font-size: 1.4rem; margin-bottom: 10px; }
+  .rankings { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; margin-top: 10px; }
+  .rank-item { font-family: var(--mono); font-size: 0.8rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>SURVIVAL CANDLES</h1>
+  <span class="subtitle">— 2 players · 8×8 · Monte Carlo AI</span>
+</header>
+
+<!-- Setup -->
+<div id="setupScreen">
+  <div class="setup-card" id="p0setup">
+    <h3><div class="player-dot" style="background:var(--p1)"></div> Player 1 — Ignis</h3>
+    <div class="setup-row">
+      <label>Type</label>
+      <select class="type-sel" data-p="0">
+        <option value="human">Human</option>
+        <option value="ai" selected>AI</option>
+      </select>
+    </div>
+    <div class="level-wrap" id="lvl0">
+      <label class="setup-row" style="margin:0">
+        <span style="font-size:.72rem;color:var(--text-dim)">AI Level</span>
+      </label>
+      <input type="range" class="level-range" data-p="0" min="0" max="100" value="50">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="level-presets">
+          <button class="preset-btn" data-p="0" data-v="40">Beginner</button>
+          <button class="preset-btn" data-p="0" data-v="50">Standard</button>
+          <button class="preset-btn" data-p="0" data-v="60">Advanced</button>
+          <button class="preset-btn" data-p="0" data-v="70">Expert</button>
+          <button class="preset-btn" data-p="0" data-v="80">Master</button>
+        </div>
+        <span class="level-readout" id="lbl0">50</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="setup-card" id="p1setup">
+    <h3><div class="player-dot" style="background:var(--p2)"></div> Player 2 — Glacies</h3>
+    <div class="setup-row">
+      <label>Type</label>
+      <select class="type-sel" data-p="1">
+        <option value="human">Human</option>
+        <option value="ai" selected>AI</option>
+      </select>
+    </div>
+    <div class="level-wrap visible" id="lvl1">
+      <label class="setup-row" style="margin:0">
+        <span style="font-size:.72rem;color:var(--text-dim)">AI Level</span>
+      </label>
+      <input type="range" class="level-range" data-p="1" min="0" max="100" value="50">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="level-presets">
+          <button class="preset-btn" data-p="1" data-v="40">Beginner</button>
+          <button class="preset-btn" data-p="1" data-v="50">Standard</button>
+          <button class="preset-btn" data-p="1" data-v="60">Advanced</button>
+          <button class="preset-btn" data-p="1" data-v="70">Expert</button>
+          <button class="preset-btn" data-p="1" data-v="80">Master</button>
+        </div>
+        <span class="level-readout" id="lbl1">50</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sim-note">🎲 Fixed strength: 2,000 simulations per legal move · 2 players · diagonal ownership · 8×8 board · four 4×4 bases · center-facing 3×3 starts (connected central 6×6) · 3×3 blow · fire spreads at 2+ neighbours · ΔT by candles: 0–2 −3, 3–4 −2, 5–6 −1, 7–10 0, 11–12 +1, 13–14 +2, 15–16 0</div>
+  <div class="setup-footer">
+    <button class="btn btn-primary" id="btnLaunch">Start Game</button>
+  </div>
+</div>
+
+<!-- Game -->
+<div id="gameScreen">
+  <div class="game-layout">
+    <div class="board-wrap">
+      <div class="board-col-labels" id="colLabels"></div>
+      <div id="boardGrid"></div>
+    </div>
+    <div class="players-panel" id="playersPanel"></div>
+  </div>
+  <div id="humanBanner" style="display:none" class="your-turn-banner"></div>
+  <div class="log-area" id="logArea"></div>
+  <div class="ctrl-bar">
+    <button class="btn btn-ghost" id="btnBack">← Setup</button>
+    <button class="btn btn-ghost" id="btnPause" disabled>Pause</button>
+    <div class="speed-row">
+      Speed
+      <select id="speedSel">
+        <option value="1200">Slow</option>
+        <option value="600" selected>Normal</option>
+        <option value="200">Fast</option>
+        <option value="50">Turbo</option>
+      </select>
+    </div>
+  </div>
+  <div class="game-over-overlay" id="gameOverPanel" style="display:none">
+    <h2>🏆 Game Over</h2>
+    <div id="rankingsDiv" class="rankings"></div>
+    <button class="btn btn-primary" style="margin-top:14px" id="btnAgain">Play Again</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════════════════════
+const ROWS = 8, COLS = 8;
+const NAMES = ['Ignis','Glacies'];
+const PLAYER_COUNT = 2;
+// Diagonal assignment: Ignis TL+BR, Glacies TR+BL (same pattern as the 6×6 2P version).
+const BASE_OWNER = [0,1,1,0];
+const OWNERS = [
+  [0,0,0,0,1,1,1,1],[0,0,0,0,1,1,1,1],
+  [0,0,0,0,1,1,1,1],[0,0,0,0,1,1,1,1],
+  [1,1,1,1,0,0,0,0],[1,1,1,1,0,0,0,0],
+  [1,1,1,1,0,0,0,0],[1,1,1,1,0,0,0,0]
+];
+const BASE_GRID = [
+  [0,0,0,0,1,1,1,1],[0,0,0,0,1,1,1,1],
+  [0,0,0,0,1,1,1,1],[0,0,0,0,1,1,1,1],
+  [2,2,2,2,3,3,3,3],[2,2,2,2,3,3,3,3],
+  [2,2,2,2,3,3,3,3],[2,2,2,2,3,3,3,3]
+];
+const Q_ORIGIN = [[0,0],[0,4],[4,0],[4,4]];
+const BASE_LABELS = ['Top-left base','Top-right base','Bottom-left base','Bottom-right base'];
+const COLORS = ['var(--p1)','var(--p2)'];
+const INIT_BOARD = [
+  [0,0,0,0,0,0,0,0],
+  [0,1,1,1,1,1,1,0],
+  [0,1,1,1,1,1,1,0],
+  [0,1,1,1,1,1,1,0],
+  [0,1,1,1,1,1,1,0],
+  [0,1,1,1,1,1,1,0],
+  [0,1,1,1,1,1,1,0],
+  [0,0,0,0,0,0,0,0],
+];
+// Each 4×4 base starts with a center-facing 3×3 block; together they form a connected central 6×6.
+
+const ALL_MOVES = Array.from({length: ROWS * COLS}, (_, i) => [Math.floor(i / COLS), i % COLS]);
+const MC_SIMS = 2000;  // fixed simulations per legal candidate move
+const MC_DEPTH = 40;   // max turns per simulation
+
+// ═══════════════════════════════════════════════════════
+//  PLAYER CONFIG (from setup)
+// ═══════════════════════════════════════════════════════
+let playerConfig = [
+  { type:'ai', level:50 },
+  { type:'ai', level:50 },
+];
+
+// ═══════════════════════════════════════════════════════
+//  GAME STATE
+// ═══════════════════════════════════════════════════════
+let board, temps, baseAlive, alive, elimOrder, currentP;
+let pendingElim; // a threatened base is lost only if still unsafe after its owner's next move
+let running = false, paused = false, turnTO = null;
+let humanWaiting = false, humanResolver = null;
+let lastMove = null, lastMcScores = null;
+
+function initState() {
+  board = INIT_BOARD.map(r => [...r]);
+  temps = [15,15,15,15];
+  baseAlive = [true,true,true,true];
+  alive = [true,true];
+  elimOrder = [];
+  currentP = 0;
+  pendingElim = [false,false,false,false];
+  lastMove = null; lastMcScores = null;
+}
+
+// ═══════════════════════════════════════════════════════
+//  PURE GAME LOGIC (operates on plain arrays — no globals)
+// ═══════════════════════════════════════════════════════
+
+function cloneBoard(b) { return b.map(r => [...r]); }
+
+function applyMove(b, row, col, p) {
+  // All 64 cells are legal. Light with classic 2-neighbour spread; blow a 3×3 patch inside that 4×4 base.
+  if (b[row][col] === 0) {
+    b[row][col] = 1;
+    for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+      let nb=0;
+      if(r>0&&b[r-1][c]>=1)nb++;
+      if(r<ROWS-1&&b[r+1][c]>=1)nb++;
+      if(c>0&&b[r][c-1]>=1)nb++;
+      if(c<COLS-1&&b[r][c+1]>=1)nb++;
+      if(nb>=2)b[r][c]=2;
+    }
+  } else {
+    const q=BASE_GRID[row][col], [qr,qc]=Q_ORIGIN[q];
+    for(let r=Math.max(qr,row-1);r<=Math.min(qr+3,row+1);r++)
+      for(let c=Math.max(qc,col-1);c<=Math.min(qc+3,col+1);c++) b[r][c]=0;
+  }
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(b[r][c]>1)b[r][c]=1;
+  return b;
+}
+
+function refreshPlayers(baseState) {
+  return [0,1].map(p => BASE_OWNER.some((owner,b) => owner===p && baseState[b]));
+}
+function baseCandleCounts(b) {
+  const counts=[0,0,0,0];
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(b[r][c]>0) counts[BASE_GRID[r][c]]++;
+  return counts;
+}
+function tempDeltaForCandles(cnt) {
+  if(cnt<=2)return -3;
+  if(cnt<=4)return -2;
+  if(cnt<=6)return -1;
+  if(cnt<=10)return 0;
+  if(cnt<=12)return 1;
+  if(cnt<=14)return 2;
+  return 0;
+}
+function tickTemps(b, t, baseState) {
+  const counts=baseCandleCounts(b);
+  for(let base=0;base<4;base++) if(baseState[base]) t[base]+=tempDeltaForCandles(counts[base]);
+}
+function resolveBasePressure(t, baseState, pending, actor=null, eliminated=[]) {
+  for(let base=0;base<4;base++) {
+    if(!baseState[base]) continue;
+    const unsafe=t[base]>30 || t[base]<=0;
+    if(actor===BASE_OWNER[base] && pending[base] && unsafe) {
+      baseState[base]=false; pending[base]=false; eliminated.push(base);
+    } else if(unsafe) pending[base]=true;
+    else pending[base]=false;
+  }
+  return refreshPlayers(baseState);
+}
+function legalMoves(p) { return ALL_MOVES; }
+
+function countAlive(alive) { return alive.filter(Boolean).length; }
+
+// Random playout policy — slightly biased toward survival
+function randomPolicyMove(b, t, p, baseState=baseAlive) {
+  const counts=baseCandleCounts(b), owned=[0,1,2,3].filter(base=>BASE_OWNER[base]===p&&baseState[base]);
+  let best=-Infinity,choice=null,ties=0;
+  const sampleStart=Math.random()*ALL_MOVES.length|0;
+  for(let sample=0;sample<9;sample++) {
+    const [r,c]=ALL_MOVES[(sampleStart+sample*4)%ALL_MOVES.length];
+    const projectedCounts=[...counts];
+    if(b[r][c]===0) projectedCounts[BASE_GRID[r][c]]++;
+    else {
+      const q=BASE_GRID[r][c],[qr,qc]=Q_ORIGIN[q];
+      for(let rr=Math.max(qr,r-1);rr<=Math.min(qr+3,r+1);rr++)
+        for(let cc=Math.max(qc,c-1);cc<=Math.min(qc+3,c+1);cc++)
+          if(b[rr][cc]>0)projectedCounts[BASE_GRID[rr][cc]]--;
+    }
+    let score=0;
+    for(const base of owned) {
+      const projected=t[base]+tempDeltaForCandles(projectedCounts[base]);
+      score-=Math.abs(projected-15);
+      if(projected<=0||projected>30)score-=100;
+      else if(projected<=5||projected>=25)score-=8;
+    }
+    if(b[r][c]===0)score+=0.01;
+    if(score>best+1e-6){best=score;choice=[r,c];ties=1;}
+    else if(Math.abs(score-best)<=1e-6){ties++;if(Math.random()<1/ties)choice=[r,c];}
+  }
+  return choice;
+}
+// ── Monte Carlo evaluation ────────────────────────────
+// Every rollout tracks four bases independently; a player survives while either base remains.
+async function monteCarlo(initBoard, initTemps, initAlive, initPending, p) {
+  const moves=legalMoves(p), wins=new Float32Array(moves.length), plays=new Float32Array(moves.length), thermalBias=new Float32Array(moves.length);
+  const owned=[0,1,2,3].filter(base=>BASE_OWNER[base]===p);
+  const riskActive=owned.some(base=>initTemps[base]>=25||initTemps[base]<=5||initPending[base]);
+  for(let i=0;i<moves.length;i++) {
+    const [r,c]=moves[i],b=cloneBoard(initBoard),t=[...initTemps],ba=[...baseAlive],pend=[...initPending];
+    applyMove(b,r,c,p);tickTemps(b,t,ba);
+    let bias=0; for(const base of owned){const safe=t[base]>0&&t[base]<=30;bias+=safe?0.3:-0.45;}
+    thermalBias[i]=riskActive?bias:0;
+  }
+  for(let mi=0;mi<moves.length;mi++) {
+    if(mi>0&&mi%6===0) await new Promise(r=>setTimeout(r,0));
+    const [mr,mc]=moves[mi];
+    for(let sim=0;sim<MC_SIMS;sim++) {
+      const b=cloneBoard(initBoard),t=[...initTemps],ba=[...baseAlive],pend=[...initPending];
+      let al=refreshPlayers(ba), eliminated=[];
+      applyMove(b,mr,mc,p);tickTemps(b,t,ba);al=resolveBasePressure(t,ba,pend,p,eliminated);
+      let cp=(p+1)%PLAYER_COUNT,depth=0;
+      while(countAlive(al)>1&&depth<MC_DEPTH) {
+        if(al[cp]) {
+          const [r,c]=randomPolicyMove(b,t,cp,ba);applyMove(b,r,c,cp);tickTemps(b,t,ba);
+          eliminated=[];al=resolveBasePressure(t,ba,pend,cp,eliminated);
+        }
+        cp=(cp+1)%PLAYER_COUNT;depth++;
+      }
+      plays[mi]++;if(al[p])wins[mi]++;
+    }
+  }
+  const rates=new Float32Array(moves.length);let minR=Infinity,maxR=-Infinity;
+  for(let i=0;i<moves.length;i++){rates[i]=(plays[i]?wins[i]/plays[i]:0)+thermalBias[i];if(rates[i]<minR)minR=rates[i];if(rates[i]>maxR)maxR=rates[i];}
+  const range=maxR-minR,scores=new Float32Array(moves.length);
+  for(let i=0;i<moves.length;i++)scores[i]=range>0?((rates[i]-minR)/range)*100:50;
+  return {moves,scores};
+}
+// Pick move closest to target level
+function pickByLevel(moves, scores, level) {
+  // Level 100 always picks the strongest estimated move; lower levels add controlled variety.
+  if (level >= 100) return scores.indexOf(Math.max(...scores));
+  const tolerance = (100 - level) * 0.45;
+  const bestScore = Math.max(...scores);
+  const candidates = [];
+  for (let i = 0; i < scores.length; i++)
+    if (scores[i] >= bestScore - tolerance) candidates.push(i);
+  return candidates[Math.random() * candidates.length | 0];
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDERING
+// ═══════════════════════════════════════════════════════
+
+function renderBoard(highlightRC = null, validCells = null) {
+  const cl = document.getElementById('colLabels');
+  cl.innerHTML = 'abcdefgh'.split('').map(ch =>
+    `<div class="board-col-label">${ch}</div>`).join('');
+
+  const grid = document.getElementById('boardGrid');
+  grid.innerHTML = '';
+  for (let r = 0; r < ROWS; r++) {
+    const row = document.createElement('div');
+    row.className = 'board-row';
+    const rn = document.createElement('div');
+    rn.className = 'row-num'; rn.textContent = r+1;
+    row.appendChild(rn);
+    for (let c = 0; c < COLS; c++) {
+      const cell = document.createElement('div');
+      const owner = OWNERS[r][c];
+      let cls = `cell q${owner+1}`;
+      const v = board[r][c];
+      cls += v === 0 ? ' empty' : v === 1 ? ' has-candle' : ' has-fire';
+      if (highlightRC && highlightRC[0]===r && highlightRC[1]===c) cls += ' last-move';
+      if (validCells && validCells.some(([vr,vc])=>vr===r&&vc===c)) cls += ' valid-move clickable';
+      cell.className = cls;
+      if (v > 0) {
+        const sp = document.createElement('span');
+        sp.className = 'flame';
+        sp.textContent = v === 1 ? '🕯️' : '🔥';
+        cell.appendChild(sp);
+      }
+      row.appendChild(cell);
+    }
+    grid.appendChild(row);
+  }
+}
+
+function renderPlayers(activeP = -1, thinkingP = -1, mcResult = null) {
+  const panel = document.getElementById('playersPanel');
+  panel.innerHTML = '';
+  for (let p = 0; p < PLAYER_COUNT; p++) {
+    const card = document.createElement('div');
+    let cls = 'player-card';
+    if (p === activeP) cls += ' active';
+    if (!alive[p]) cls += ' eliminated';
+    card.className = cls;
+
+    const owned=[0,1,2,3].filter(base=>BASE_OWNER[base]===p);
+    const counts=baseCandleCounts(board);
+    const cfg=playerConfig[p];
+    const badgeText=!alive[p]?'☠ OUT':thinkingP===p?'<span class="thinking"><span></span><span></span><span></span></span>':cfg.type==='human'?'👤 You':`AI·${cfg.level}`;
+    card.innerHTML=`<div class="pc-header"><div class="player-dot" style="background:${COLORS[p]}"></div><span class="pc-name">${NAMES[p]}</span><span class="pc-badge">${badgeText}</span></div>`;
+    for(let i=0;i<owned.length;i++) {
+      const base=owned[i],t=temps[base],pct=Math.max(0,Math.min(100,t/30*100)),color=t<=5?'var(--ice)':t>=25?'var(--fire)':'var(--candle)';
+      const row=document.createElement('div');row.className='base-stat';
+      row.innerHTML=`<div class="base-label">${BASE_LABELS[base]}</div><div class="temp-bar-track"><div class="temp-bar" style="width:${pct}%;background:${color}"></div></div><div class="pc-stats"><span>🌡 ${t.toFixed(1)}°</span><span>🕯 ${counts[base]}/16</span></div>${baseAlive[base]?'':'<div class="base-out">BASE LOST</div>'}`;
+      card.appendChild(row);
+    }
+
+    // Show MC scores if this is the active player with results
+    if (p === activeP && mcResult) {
+      const { moves, scores, chosenIdx } = mcResult;
+      // Only show top 6 by score
+      const indexed = Array.from(scores).map((s,i)=>({s,i}))
+        .sort((a,b)=>b.s-a.s).slice(0,6);
+      const scoresDiv = document.createElement('div');
+      scoresDiv.className = 'mc-scores';
+      for (const {s,i} of indexed) {
+        const [mr,mc2] = moves[i];
+        const coord = String.fromCharCode(97+mc2)+(mr+1);
+        const isChosen = i === chosenIdx;
+        scoresDiv.innerHTML += `
+          <div class="mc-row${isChosen?' mc-chosen':''}">
+            <span class="mc-coord">${coord}</span>
+            <div class="mc-bar-track"><div class="mc-bar-fill" style="width:${s}%"></div></div>
+            <span class="mc-score-val">${s.toFixed(0)}</span>
+          </div>`;
+      }
+      card.appendChild(scoresDiv);
+    }
+
+    panel.appendChild(card);
+  }
+}
+
+function log(msg, hi=false) {
+  const area = document.getElementById('logArea');
+  const d = document.createElement('div');
+  d.className = 'log-line' + (hi?' hi':'');
+  d.innerHTML = msg;
+  area.appendChild(d);
+  area.scrollTop = area.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════
+//  HUMAN MOVE
+// ═══════════════════════════════════════════════════════
+
+function waitForHumanMove(p) {
+  return new Promise(resolve => {
+    humanWaiting = true;
+    humanResolver = resolve;
+    const banner = document.getElementById('humanBanner');
+    banner.style.display = 'block';
+    banner.textContent = `Your turn, ${NAMES[p]}! Click any cell.`;
+    // Make all cells clickable
+    renderBoard(lastMove, legalMoves(p));
+    // Attach click listeners
+    document.getElementById('boardGrid').querySelectorAll('.cell').forEach((cell, idx) => {
+      const r = Math.floor(idx / COLS);
+      const c = idx % COLS;
+      cell.addEventListener('click', () => {
+        if (!humanWaiting) return;
+        humanWaiting = false;
+        humanResolver = null;
+        banner.style.display = 'none';
+        resolve([r, c]);
+      }, { once: true });
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  TURN LOGIC
+// ═══════════════════════════════════════════════════════
+
+async function doTurn() {
+  if (!running || paused) return;
+  if (alive.filter(Boolean).length <= 1) { endGame(); return; }
+
+  // Advance to next alive player
+  while (!alive[currentP]) currentP = (currentP+1)%PLAYER_COUNT;
+
+  const p = currentP;
+
+  const cfg = playerConfig[p];
+  renderPlayers(p, p);
+  renderBoard(lastMove);
+
+  let chosenRow, chosenCol, mcResult = null;
+
+  if (cfg.type === 'human') {
+    log(`— <b>${NAMES[p]}</b>'s turn (you)`);
+    [chosenRow, chosenCol] = await waitForHumanMove(p);
+    if (!running) return;
+  } else {
+    log(`— <b>${NAMES[p]}</b> thinking (AI·${cfg.level})…`);
+    // Run MC in a yielded microtask so UI can update
+    await new Promise(r => setTimeout(r, 0));
+    const { moves, scores } = await monteCarlo(board, temps, alive, pendingElim, p);
+    const chosenIdx = pickByLevel(moves, scores, cfg.level);
+    [chosenRow, chosenCol] = moves[chosenIdx];
+    mcResult = { moves, scores, chosenIdx };
+    if (!running) return;
+  }
+
+  const coord = String.fromCharCode(97+chosenCol)+(chosenRow+1);
+  const action = board[chosenRow][chosenCol] === 0 ? 'lights candle at' : 'extinguishes';
+  log(`<span style="color:${COLORS[p]}">${NAMES[p]}</span> ${action} <b>${coord}</b>`, true);
+
+  applyMove(board, chosenRow, chosenCol, p);
+  tickTemps(board, temps, baseAlive);
+  const lostBases=[];
+  alive=resolveBasePressure(temps,baseAlive,pendingElim,p,lostBases);
+  for(const base of lostBases) {
+    const owner=BASE_OWNER[base];
+    log(`☠️ ${NAMES[owner]} lost ${BASE_LABELS[base]} (${temps[base].toFixed(1)}°).`,true);
+    if(!alive[owner]) {
+      elimOrder.push(owner);
+      log(`<b>${NAMES[owner]}</b> lost both bases and is eliminated.`,true);
+    }
+  }
+  for(let base=0;base<4;base++) {
+    if(!baseAlive[base]||!pendingElim[base]) continue;
+    const owner=BASE_OWNER[base];
+    log(`⚠️ ${NAMES[owner]} ${BASE_LABELS[base]} at ${temps[base].toFixed(1)}° — recover on your next turn.`);
+  }
+
+  lastMove = [chosenRow, chosenCol];
+  renderBoard(lastMove);
+  renderPlayers(p, -1, mcResult);
+
+  if (alive.filter(Boolean).length <= 1) { setTimeout(endGame, 500); return; }
+
+  currentP = (currentP+1)%PLAYER_COUNT;
+
+  if (cfg.type === 'human') {
+    // Minimal delay for human turns
+    turnTO = setTimeout(doTurn, 200);
+  } else {
+    const delay = parseInt(document.getElementById('speedSel').value);
+    turnTO = setTimeout(doTurn, delay);
+  }
+}
+
+function endGame() {
+  running = false;
+  const survivors = alive.map((a,i) => a ? i : null).filter(v=>v!==null);
+  const finalOrder = [...elimOrder, ...survivors].reverse();
+  const medals = ['🥇','🥈'];
+  document.getElementById('rankingsDiv').innerHTML =
+    finalOrder.map((p,i) =>
+      `<div class="rank-item">${medals[i]} ${NAMES[p]} <span style="font-family:var(--mono);font-size:.65rem;color:var(--text-dim)">${playerConfig[p].type==='human'?'(you)':`(AI·${playerConfig[p].level})`}</span></div>`
+    ).join('');
+  document.getElementById('gameOverPanel').style.display = 'block';
+  document.getElementById('btnPause').disabled = true;
+  log(`🏆 Winner: <b>${NAMES[finalOrder[0]]}</b>`, true);
+}
+
+// ═══════════════════════════════════════════════════════
+//  SETUP WIRING
+// ═══════════════════════════════════════════════════════
+
+document.querySelectorAll('.type-sel').forEach(sel => {
+  sel.addEventListener('change', e => {
+    const p = +e.target.dataset.p;
+    const lvl = document.getElementById(`lvl${p}`);
+    if (e.target.value === 'ai') lvl.classList.add('visible');
+    else lvl.classList.remove('visible');
+    playerConfig[p].type = e.target.value;
+  });
+  // init
+  const p = +sel.dataset.p;
+  playerConfig[p].type = sel.value;
+  const lvl = document.getElementById(`lvl${p}`);
+  if (sel.value === 'ai') lvl.classList.add('visible');
+  else lvl.classList.remove('visible');
+});
+
+document.querySelectorAll('.level-range').forEach(rng => {
+  rng.addEventListener('input', e => {
+    const p = +e.target.dataset.p;
+    const v = +e.target.value;
+    playerConfig[p].level = v;
+    document.getElementById(`lbl${p}`).textContent = v;
+  });
+});
+
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    const p = +e.target.dataset.p;
+    const v = +e.target.dataset.v;
+    playerConfig[p].level = v;
+    document.getElementById(`lbl${p}`).textContent = v;
+    document.querySelector(`.level-range[data-p="${p}"]`).value = v;
+  });
+});
+
+document.getElementById('btnLaunch').addEventListener('click', () => {
+  document.getElementById('setupScreen').style.display = 'none';
+  const gs = document.getElementById('gameScreen');
+  gs.style.display = 'flex'; gs.classList.add('active');
+  document.getElementById('logArea').innerHTML = '';
+  document.getElementById('gameOverPanel').style.display = 'none';
+  document.getElementById('btnPause').disabled = false;
+
+  initState();
+  renderBoard();
+  renderPlayers();
+  running = true; paused = false;
+  log('2-player 8×8 game started! Ignis owns TL+BR; Glacies owns TR+BL. Each base starts at 15° with a center-facing 3×3 block (9/16); together they form a connected central 6×6. 3×3 blow, classic 2-neighbour spread, temperature table per base. You lose only when both bases are lost.', true);
+  doTurn();
+});
+
+document.getElementById('btnBack').addEventListener('click', () => {
+  running = false; paused = false;
+  if (turnTO) clearTimeout(turnTO);
+  humanWaiting = false;
+  document.getElementById('gameScreen').style.display = 'none';
+  document.getElementById('gameScreen').classList.remove('active');
+  document.getElementById('setupScreen').style.display = 'grid';
+});
+
+document.getElementById('btnPause').addEventListener('click', () => {
+  if (!running) return;
+  paused = !paused;
+  document.getElementById('btnPause').textContent = paused ? 'Resume' : 'Pause';
+  if (!paused && !humanWaiting) doTurn();
+});
+
+document.getElementById('btnAgain').addEventListener('click', () => {
+  document.getElementById('gameOverPanel').style.display = 'none';
+  document.getElementById('logArea').innerHTML = '';
+  document.getElementById('btnPause').disabled = false;
+  document.getElementById('btnPause').textContent = 'Pause';
+  initState();
+  renderBoard(); renderPlayers();
+  running = true; paused = false;
+  log('New 2-player 8×8 game! Monte Carlo AI ready.', true);
+  doTurn();
+});
+</script>
+</body>
+</html>
