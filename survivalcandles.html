@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -80,6 +81,10 @@
   .level-readout { font-family: var(--mono); font-size: 0.7rem; color: var(--candle); }
   .setup-footer { grid-column: 1 / -1; display: flex; justify-content: center; gap: 12px; padding-top: 4px; }
   .sim-note { grid-column: 1 / -1; text-align: center; font-size: 0.7rem; color: var(--text-dim); font-family: var(--mono); }
+  .barrier-toggle { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  .barrier-toggle input { margin-top: 3px; accent-color: var(--candle); width: 16px; height: 16px; flex: 0 0 auto; }
+  .barrier-toggle label { cursor: pointer; font-size: .82rem; font-weight: 600; }
+  .barrier-toggle small { display: block; margin-top: 3px; color: var(--text-dim); font-size: .7rem; font-weight: 400; line-height: 1.4; }
 
   /* ── Game screen ── */
   #gameScreen { display: none; width: 100%; max-width: 960px; padding: 16px 20px; flex-direction: column; gap: 14px; }
@@ -262,7 +267,11 @@
     </div>
   </div>
 
-  <div class="sim-note">🎲 Fixed strength: 2,000 simulations per legal move · 2 players · diagonal ownership · 8×8 board · four 4×4 bases · center-facing 3×3 starts (connected central 6×6) · 3×3 blow · fire spreads at 2+ neighbours · ΔT by candles: 0–2 −3, 3–4 −2, 5–6 −1, 7–10 0, 11–12 +1, 13–14 +2, 15–16 0</div>
+  <div class="barrier-toggle">
+    <input id="barriersToggle" type="checkbox" role="switch" aria-describedby="barriersHelp">
+    <label for="barriersToggle">Add barriers<small id="barriersHelp">Off: 3×3 box blows can cross quadrant boundaries. On: they stop at the clicked base’s boundary.</small></label>
+  </div>
+  <div class="sim-note">🎲 Fixed strength: 2,000 simulations per legal move · 2 players · diagonal ownership · 8×8 board · four 4×4 bases · center-facing 3×3 starts (connected central 6×6) · 3×3 box blow (9 cells) · one simultaneous spread pass only when all 4 orthogonal neighbours are lit · every light action warms its base +2° · ΔT by candles: 0–4 −1, 5–12 0, 13–16 +1</div>
   <div class="setup-footer">
     <button class="btn btn-primary" id="btnLaunch">Start Game</button>
   </div>
@@ -321,6 +330,7 @@ const BASE_GRID = [
   [2,2,2,2,3,3,3,3],[2,2,2,2,3,3,3,3]
 ];
 const Q_ORIGIN = [[0,0],[0,4],[4,0],[4,4]];
+const BLOW_OFFSETS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,0],[0,1],[1,-1],[1,0],[1,1]];
 const BASE_LABELS = ['Top-left base','Top-right base','Bottom-left base','Bottom-right base'];
 const COLORS = ['var(--p1)','var(--p2)'];
 const INIT_BOARD = [
@@ -351,6 +361,7 @@ let playerConfig = [
 //  GAME STATE
 // ═══════════════════════════════════════════════════════
 let board, temps, baseAlive, alive, elimOrder, currentP;
+let barriersEnabled = false;
 let pendingElim; // a threatened base is lost only if still unsafe after its owner's next move
 let running = false, paused = false, turnTO = null;
 let humanWaiting = false, humanResolver = null;
@@ -373,22 +384,34 @@ function initState() {
 
 function cloneBoard(b) { return b.map(r => [...r]); }
 
-function applyMove(b, row, col, p) {
-  // All 64 cells are legal. Light with classic 2-neighbour spread; blow a 3×3 patch inside that 4×4 base.
+function countLitNeighbours(b,row,col) {
+  let n=0;
+  if(row>0&&b[row-1][col]>=1)n++;
+  if(row<ROWS-1&&b[row+1][col]>=1)n++;
+  if(col>0&&b[row][col-1]>=1)n++;
+  if(col<COLS-1&&b[row][col+1]>=1)n++;
+  return n;
+}
+function getBlowCells(row,col,axis='H') {
+  const q=BASE_GRID[row][col], cells=[];
+  for(const [dr,dc] of BLOW_OFFSETS) {
+    const r=row+dr,c=col+dc;
+    if(r<0||r>=ROWS||c<0||c>=COLS)continue;
+    if(barriersEnabled&&BASE_GRID[r][c]!==q)continue;
+    cells.push([r,c]);
+  }
+  return cells;
+}
+function applyMove(b, row, col, p, axis='H') {
+  // All 64 cells are legal. Empty cells with all 4 neighbours lit spread once, simultaneously; blows clear the board-clipped 3×3 box.
   if (b[row][col] === 0) {
     b[row][col] = 1;
-    for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
-      let nb=0;
-      if(r>0&&b[r-1][c]>=1)nb++;
-      if(r<ROWS-1&&b[r+1][c]>=1)nb++;
-      if(c>0&&b[r][c-1]>=1)nb++;
-      if(c<COLS-1&&b[r][c+1]>=1)nb++;
-      if(nb>=2)b[r][c]=2;
-    }
+    const lightThisPass=[];
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)
+      if(b[r][c]===0&&countLitNeighbours(b,r,c)>=4)lightThisPass.push([r,c]);
+    for(const [r,c] of lightThisPass)b[r][c]=2;
   } else {
-    const q=BASE_GRID[row][col], [qr,qc]=Q_ORIGIN[q];
-    for(let r=Math.max(qr,row-1);r<=Math.min(qr+3,row+1);r++)
-      for(let c=Math.max(qc,col-1);c<=Math.min(qc+3,col+1);c++) b[r][c]=0;
+    for(const [r,c] of getBlowCells(row,col,axis))b[r][c]=0;
   }
   for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(b[r][c]>1)b[r][c]=1;
   return b;
@@ -403,17 +426,16 @@ function baseCandleCounts(b) {
   return counts;
 }
 function tempDeltaForCandles(cnt) {
-  if(cnt<=2)return -3;
-  if(cnt<=4)return -2;
-  if(cnt<=6)return -1;
-  if(cnt<=10)return 0;
-  if(cnt<=12)return 1;
-  if(cnt<=14)return 2;
-  return 0;
+  if(cnt<=4)return -1;
+  if(cnt<=12)return 0;
+  return 1;
 }
-function tickTemps(b, t, baseState) {
+function tickTemps(b, t, baseState, actor=null, moveRow=-1, moveCol=-1, action='') {
   const counts=baseCandleCounts(b);
-  for(let base=0;base<4;base++) if(baseState[base]) t[base]+=tempDeltaForCandles(counts[base]);
+  for(let base=0;base<4;base++) if(baseState[base]) {
+    t[base]+=tempDeltaForCandles(counts[base]);
+    if(action==='L'&&BASE_GRID[moveRow][moveCol]===base)t[base]+=2;
+  }
 }
 function resolveBasePressure(t, baseState, pending, actor=null, eliminated=[]) {
   for(let base=0;base<4;base++) {
@@ -426,7 +448,14 @@ function resolveBasePressure(t, baseState, pending, actor=null, eliminated=[]) {
   }
   return refreshPlayers(baseState);
 }
-function legalMoves(p) { return ALL_MOVES; }
+function legalMoves(p,b=board) {
+  const moves=[];
+  for(const [r,c] of ALL_MOVES) {
+    if(b[r][c]===0)moves.push([r,c,'L']);
+    else moves.push([r,c,'H']);
+  }
+  return moves;
+}
 
 function countAlive(alive) { return alive.filter(Boolean).length; }
 
@@ -434,53 +463,55 @@ function countAlive(alive) { return alive.filter(Boolean).length; }
 function randomPolicyMove(b, t, p, baseState=baseAlive) {
   const counts=baseCandleCounts(b), owned=[0,1,2,3].filter(base=>BASE_OWNER[base]===p&&baseState[base]);
   let best=-Infinity,choice=null,ties=0;
-  const sampleStart=Math.random()*ALL_MOVES.length|0;
+  const candidates=legalMoves(p,b),sampleStart=Math.random()*candidates.length|0;
   for(let sample=0;sample<9;sample++) {
-    const [r,c]=ALL_MOVES[(sampleStart+sample*4)%ALL_MOVES.length];
+    const [r,c,axis]=candidates[(sampleStart+sample*7)%candidates.length];
     const projectedCounts=[...counts];
-    if(b[r][c]===0) projectedCounts[BASE_GRID[r][c]]++;
-    else {
-      const q=BASE_GRID[r][c],[qr,qc]=Q_ORIGIN[q];
-      for(let rr=Math.max(qr,r-1);rr<=Math.min(qr+3,r+1);rr++)
-        for(let cc=Math.max(qc,c-1);cc<=Math.min(qc+3,c+1);cc++)
-          if(b[rr][cc]>0)projectedCounts[BASE_GRID[rr][cc]]--;
+    if(axis==='L') {
+      const projectedBoard=cloneBoard(b);
+      applyMove(projectedBoard,r,c,p,axis);
+      const exactCounts=baseCandleCounts(projectedBoard);
+      for(let base=0;base<4;base++)projectedCounts[base]=exactCounts[base];
+    } else {
+      for(const [rr,cc] of getBlowCells(r,c,axis))
+        if(b[rr][cc]>0)projectedCounts[BASE_GRID[rr][cc]]--;
     }
     let score=0;
     for(const base of owned) {
-      const projected=t[base]+tempDeltaForCandles(projectedCounts[base]);
+      const projected=t[base]+tempDeltaForCandles(projectedCounts[base])+(axis==='L'&&BASE_GRID[r][c]===base?2:0);
       score-=Math.abs(projected-15);
       if(projected<=0||projected>30)score-=100;
       else if(projected<=5||projected>=25)score-=8;
     }
-    if(b[r][c]===0)score+=0.01;
-    if(score>best+1e-6){best=score;choice=[r,c];ties=1;}
-    else if(Math.abs(score-best)<=1e-6){ties++;if(Math.random()<1/ties)choice=[r,c];}
+    if(axis==='L')score+=0.01;
+    if(score>best+1e-6){best=score;choice=[r,c,axis];ties=1;}
+    else if(Math.abs(score-best)<=1e-6){ties++;if(Math.random()<1/ties)choice=[r,c,axis];}
   }
   return choice;
 }
 // ── Monte Carlo evaluation ────────────────────────────
 // Every rollout tracks four bases independently; a player survives while either base remains.
 async function monteCarlo(initBoard, initTemps, initAlive, initPending, p) {
-  const moves=legalMoves(p), wins=new Float32Array(moves.length), plays=new Float32Array(moves.length), thermalBias=new Float32Array(moves.length);
+  const moves=legalMoves(p,initBoard), wins=new Float32Array(moves.length), plays=new Float32Array(moves.length), thermalBias=new Float32Array(moves.length);
   const owned=[0,1,2,3].filter(base=>BASE_OWNER[base]===p);
   const riskActive=owned.some(base=>initTemps[base]>=25||initTemps[base]<=5||initPending[base]);
   for(let i=0;i<moves.length;i++) {
-    const [r,c]=moves[i],b=cloneBoard(initBoard),t=[...initTemps],ba=[...baseAlive],pend=[...initPending];
-    applyMove(b,r,c,p);tickTemps(b,t,ba);
+    const [r,c,axis]=moves[i],b=cloneBoard(initBoard),t=[...initTemps],ba=[...baseAlive],pend=[...initPending];
+    applyMove(b,r,c,p,axis);tickTemps(b,t,ba,p,r,c,axis);
     let bias=0; for(const base of owned){const safe=t[base]>0&&t[base]<=30;bias+=safe?0.3:-0.45;}
     thermalBias[i]=riskActive?bias:0;
   }
   for(let mi=0;mi<moves.length;mi++) {
     if(mi>0&&mi%6===0) await new Promise(r=>setTimeout(r,0));
-    const [mr,mc]=moves[mi];
+    const [mr,mc,ma]=moves[mi];
     for(let sim=0;sim<MC_SIMS;sim++) {
       const b=cloneBoard(initBoard),t=[...initTemps],ba=[...baseAlive],pend=[...initPending];
       let al=refreshPlayers(ba), eliminated=[];
-      applyMove(b,mr,mc,p);tickTemps(b,t,ba);al=resolveBasePressure(t,ba,pend,p,eliminated);
+      applyMove(b,mr,mc,p,ma);tickTemps(b,t,ba,p,mr,mc,ma);al=resolveBasePressure(t,ba,pend,p,eliminated);
       let cp=(p+1)%PLAYER_COUNT,depth=0;
       while(countAlive(al)>1&&depth<MC_DEPTH) {
         if(al[cp]) {
-          const [r,c]=randomPolicyMove(b,t,cp,ba);applyMove(b,r,c,cp);tickTemps(b,t,ba);
+          const [r,c,axis]=randomPolicyMove(b,t,cp,ba);applyMove(b,r,c,cp,axis);tickTemps(b,t,ba,cp,r,c,axis);
           eliminated=[];al=resolveBasePressure(t,ba,pend,cp,eliminated);
         }
         cp=(cp+1)%PLAYER_COUNT;depth++;
@@ -611,7 +642,7 @@ function waitForHumanMove(p) {
     humanResolver = resolve;
     const banner = document.getElementById('humanBanner');
     banner.style.display = 'block';
-    banner.textContent = `Your turn, ${NAMES[p]}! Click any cell.`;
+    banner.textContent = `Your turn, ${NAMES[p]}! Click any cell; occupied cells are blown horizontally.`;
     // Make all cells clickable
     renderBoard(lastMove, legalMoves(p));
     // Attach click listeners
@@ -623,7 +654,7 @@ function waitForHumanMove(p) {
         humanWaiting = false;
         humanResolver = null;
         banner.style.display = 'none';
-        resolve([r, c]);
+        resolve([r, c, board[r][c]===0?'L':'H']);
       }, { once: true });
     });
   });
@@ -646,11 +677,11 @@ async function doTurn() {
   renderPlayers(p, p);
   renderBoard(lastMove);
 
-  let chosenRow, chosenCol, mcResult = null;
+  let chosenRow, chosenCol, chosenAxis, mcResult = null;
 
   if (cfg.type === 'human') {
     log(`— <b>${NAMES[p]}</b>'s turn (you)`);
-    [chosenRow, chosenCol] = await waitForHumanMove(p);
+    [chosenRow, chosenCol, chosenAxis] = await waitForHumanMove(p);
     if (!running) return;
   } else {
     log(`— <b>${NAMES[p]}</b> thinking (AI·${cfg.level})…`);
@@ -658,17 +689,17 @@ async function doTurn() {
     await new Promise(r => setTimeout(r, 0));
     const { moves, scores } = await monteCarlo(board, temps, alive, pendingElim, p);
     const chosenIdx = pickByLevel(moves, scores, cfg.level);
-    [chosenRow, chosenCol] = moves[chosenIdx];
+    [chosenRow, chosenCol, chosenAxis] = moves[chosenIdx];
     mcResult = { moves, scores, chosenIdx };
     if (!running) return;
   }
 
   const coord = String.fromCharCode(97+chosenCol)+(chosenRow+1);
-  const action = board[chosenRow][chosenCol] === 0 ? 'lights candle at' : 'extinguishes';
+  const action = board[chosenRow][chosenCol] === 0 ? 'lights candle at' : 'blows a 3×3 box at';
   log(`<span style="color:${COLORS[p]}">${NAMES[p]}</span> ${action} <b>${coord}</b>`, true);
 
-  applyMove(board, chosenRow, chosenCol, p);
-  tickTemps(board, temps, baseAlive);
+  applyMove(board, chosenRow, chosenCol, p, chosenAxis);
+  tickTemps(board, temps, baseAlive, p, chosenRow, chosenCol, chosenAxis);
   const lostBases=[];
   alive=resolveBasePressure(temps,baseAlive,pendingElim,p,lostBases);
   for(const base of lostBases) {
@@ -756,6 +787,7 @@ document.querySelectorAll('.preset-btn').forEach(btn => {
 });
 
 document.getElementById('btnLaunch').addEventListener('click', () => {
+  barriersEnabled = document.getElementById('barriersToggle').checked;
   document.getElementById('setupScreen').style.display = 'none';
   const gs = document.getElementById('gameScreen');
   gs.style.display = 'flex'; gs.classList.add('active');
@@ -767,7 +799,7 @@ document.getElementById('btnLaunch').addEventListener('click', () => {
   renderBoard();
   renderPlayers();
   running = true; paused = false;
-  log('2-player 8×8 game started! Ignis owns TL+BR; Glacies owns TR+BL. Each base starts at 15° with a center-facing 3×3 block (9/16); together they form a connected central 6×6. 3×3 blow, classic 2-neighbour spread, temperature table per base. You lose only when both bases are lost.', true);
+  log(`2-player 8×8 game started! Ignis owns TL+BR; Glacies owns TR+BL. Each base starts at 15° with a center-facing 3×3 block (9/16); together they form a connected central 6×6. 3×3 box blow (9 cells); barriers ${barriersEnabled?'ON (blows stop at base boundaries)':'OFF (blows cross base boundaries)'}. One simultaneous spread pass only when all 4 orthogonal neighbours are lit. Temperature: 0–4 −1°, 5–12 stable, 13–16 +1°; every light action adds +2° to the base it lands in. You lose only when both bases are lost.`, true);
   doTurn();
 });
 
