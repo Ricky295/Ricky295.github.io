@@ -298,7 +298,14 @@ header .pill {
         <option value="800,800">Square 800</option>
         <option value="1200,900">Wide 1200×900</option>
         <option value="600,900">Tall 600×900</option>
+        <option value="custom">Custom size…</option>
       </select>
+      <span id="custom-size-controls" style="display:none;align-items:center;gap:4px">
+        <input type="number" id="custom-width-mm" aria-label="Custom canvas width in millimeters" min="1" max="2000" step="1" value="210" style="width:58px">
+        <span style="font-size:10px;color:var(--text2)">×</span>
+        <input type="number" id="custom-height-mm" aria-label="Custom canvas height in millimeters" min="1" max="2000" step="1" value="297" style="width:58px">
+        <span style="font-size:10px;color:var(--text2)">mm</span>
+      </span>
     </div>
     <div id="canvas-wrap">
       <canvas id="preview-canvas"></canvas>
@@ -367,6 +374,10 @@ const ctx = canvas.getContext('2d');
 const baseMonthInput = document.getElementById('base-month');
 const canvasScaleInput = document.getElementById('canvas-scale');
 const canvasSizeSelect = document.getElementById('canvas-size');
+const customSizeControls = document.getElementById('custom-size-controls');
+const customWidthInput = document.getElementById('custom-width-mm');
+const customHeightInput = document.getElementById('custom-height-mm');
+const MM_TO_PX = 96 / 25.4;
 
 function todayMonth() {
   const d = new Date();
@@ -396,12 +407,26 @@ function firstDayOfWeek(date, startDay) {
   return ((first - startDay) + 7) % 7;
 }
 
-canvasSizeSelect.addEventListener('change', () => {
-  const [w,h] = canvasSizeSelect.value.split(',').map(Number);
-  canvasW = w; canvasH = h;
+function applyCanvasDimensions() {
+  customSizeControls.style.display = canvasSizeSelect.value === 'custom' ? 'inline-flex' : 'none';
+  if (canvasSizeSelect.value === 'custom') {
+    const widthMm = Math.max(1, Math.min(2000, Number(customWidthInput.value) || 1));
+    const heightMm = Math.max(1, Math.min(2000, Number(customHeightInput.value) || 1));
+    customWidthInput.value = widthMm;
+    customHeightInput.value = heightMm;
+    canvasW = Math.round(widthMm * MM_TO_PX);
+    canvasH = Math.round(heightMm * MM_TO_PX);
+  } else {
+    const [w, h] = canvasSizeSelect.value.split(',').map(Number);
+    canvasW = w; canvasH = h;
+  }
   updateCanvasSize();
   refreshCanvas();
-});
+}
+
+canvasSizeSelect.addEventListener('change', applyCanvasDimensions);
+customWidthInput.addEventListener('input', () => { if (canvasSizeSelect.value === 'custom') applyCanvasDimensions(); });
+customHeightInput.addEventListener('input', () => { if (canvasSizeSelect.value === 'custom') applyCanvasDimensions(); });
 
 canvasScaleInput.addEventListener('input', () => {
   scale = Math.max(0.2, Math.min(3, Number(canvasScaleInput.value) / 100));
@@ -1045,6 +1070,7 @@ async function drawImage(ctx, c, x, y, w, h) {
 function buildJSON() {
   return {
     version: 1,
+    canvas: { width: canvasW, height: canvasH, customWidthMm: canvasSizeSelect.value === 'custom' ? Number(customWidthInput.value) : null, customHeightMm: canvasSizeSelect.value === 'custom' ? Number(customHeightInput.value) : null },
     components: components.map(c => {
       const { id, ...rest } = c;
       return rest;
@@ -1121,6 +1147,21 @@ function importJSONFile(input) {
     try {
       const data = JSON.parse(reader.result);
       if (!data || !Array.isArray(data.components)) throw new Error('Expected a JSON object with a components array.');
+      if (data.canvas && data.canvas.customWidthMm && data.canvas.customHeightMm) {
+        canvasSizeSelect.value = 'custom';
+        customWidthInput.value = data.canvas.customWidthMm;
+        customHeightInput.value = data.canvas.customHeightMm;
+        applyCanvasDimensions();
+      } else if (data.canvas && Number(data.canvas.width) > 0 && Number(data.canvas.height) > 0) {
+        const preset = [...canvasSizeSelect.options].find(o => o.value === `${data.canvas.width},${data.canvas.height}`);
+        if (preset) canvasSizeSelect.value = preset.value;
+        else {
+          canvasSizeSelect.value = 'custom';
+          customWidthInput.value = Math.round(data.canvas.width / MM_TO_PX);
+          customHeightInput.value = Math.round(data.canvas.height / MM_TO_PX);
+        }
+        applyCanvasDimensions();
+      }
       idCounter = 0;
       components = data.components.map(raw => {
         if (!raw || !DEFAULTS[raw.type]) throw new Error(`Unsupported component type: ${raw && raw.type}`);
