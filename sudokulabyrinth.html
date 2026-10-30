@@ -1638,9 +1638,23 @@ if (typeof module !== 'undefined' && module.exports) {
             background: var(--accent-primary);
             color: #fff;
         }
+
+        #pause-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 2147483647;
+            display: none;
+            background: #000;
+        }
+
+        #pause-screen.is-visible {
+            display: block;
+        }
     </style>
 </head>
 <body>
+
+    <div id="pause-screen" aria-hidden="true"></div>
 
     <header>
         <h1>SUDOKU MAZE HUNTER</h1>
@@ -1815,6 +1829,11 @@ if (typeof module !== 'undefined' && module.exports) {
                             <label for="puzzleCountInput">Sudokus to solve (same labyrinth)</label>
                             <input type="number" id="puzzleCountInput" min="1" max="50" value="1">
                         </div>
+                        <div class="settings-row">
+                            <label for="afkPauseMinutes">AFK pause (put 0 to disable):</label>
+                            <input type="number" id="afkPauseMinutes" min="0" max="600" step="1" value="10" aria-label="AFK pause threshold in minutes">
+                            <span>minutes</span>
+                        </div>
                         <div class="settings-row settings-row-choice">
                             <span class="settings-row-label">Numbers between rounds</span>
                             <div class="segmented-control" id="regenSegmented" role="group" aria-label="Regenerate numbers each round">
@@ -1839,6 +1858,10 @@ if (typeof module !== 'undefined' && module.exports) {
                 <div class="hud-row">
                     <button id="eraseBtn" class="secondary" style="flex:1; margin-right:10px;">Erase Grid Cell</button>
                     <button id="resetGameBtn" style="flex:1.2;">Generate New Labyrinth</button>
+                </div>
+                <div class="hud-row" style="display:block; text-align:center; margin-top:8px;">
+                    <button id="pauseBtn" type="button" class="secondary" title="Pause or resume with Escape">Pause (Esc)</button>
+                    <div style="color:var(--text-muted); font-size:0.8rem; margin-top:5px;">Press Esc to pause; while paused, press Esc again to resume.</div>
                 </div>
             </div>
         </div>
@@ -2372,8 +2395,47 @@ if (typeof module !== 'undefined' && module.exports) {
         }
 
         // Global key handlers
+        let gamePaused = false;
+        let pausedAt = 0;
+        let lastActivityTime = performance.now();
+        const afkPauseInput = document.getElementById('afkPauseMinutes');
+        try {
+            const savedAfkMinutes = localStorage.getItem('sudokuMazeAfkPauseMinutes');
+            if (savedAfkMinutes !== null) afkPauseInput.value = savedAfkMinutes;
+        } catch (error) { /* Storage may be unavailable in private browsing. */ }
+        afkPauseInput.addEventListener('input', () => {
+            const minutes = Math.min(600, Math.max(0, parseInt(afkPauseInput.value, 10) || 0));
+            afkPauseInput.value = String(minutes);
+            try { localStorage.setItem('sudokuMazeAfkPauseMinutes', String(minutes)); } catch (error) { /* Ignore storage errors. */ }
+            lastActivityTime = performance.now();
+        });
+        function notePlayerActivity() {
+            if (gameActive && !gamePaused) lastActivityTime = performance.now();
+        }
+        ['mousemove', 'pointerdown', 'touchstart', 'keydown'].forEach(eventName =>
+            document.addEventListener(eventName, notePlayerActivity, { passive: true, capture: true })
+        );
+        document.getElementById('pauseBtn').addEventListener('click', () => {
+            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        });
         window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                gamePaused = !gamePaused;
+                const pauseScreen = document.getElementById('pause-screen');
+                pauseScreen.classList.toggle('is-visible', gamePaused);
+                pauseScreen.setAttribute('aria-hidden', String(!gamePaused));
+                if (gamePaused) {
+                    pausedAt = performance.now();
+                    clearInterval(timerInterval);
+                } else if (gameActive) {
+                    startTime += performance.now() - pausedAt;
+                    timerInterval = setInterval(updateRunningTimer, 100);
+                }
+                return;
+            }
             if (!gameActive) return;
+            if (gamePaused) return;
             const key = e.key.toLowerCase();
             if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(key)) {
                 e.preventDefault(); // Lock scroll
@@ -2409,6 +2471,7 @@ if (typeof module !== 'undefined' && module.exports) {
             // Timer Initialization
             clearInterval(timerInterval);
             startTime = performance.now();
+            lastActivityTime = startTime;
             timerInterval = setInterval(updateRunningTimer, 100);
             resetMoveStats();
 
@@ -2455,7 +2518,20 @@ if (typeof module !== 'undefined' && module.exports) {
 
         function updateRunningTimer() {
             if (!gameActive) return;
-            const elapsed = (performance.now() - startTime) / 1000;
+            const now = performance.now();
+            const afkMinutes = Math.min(600, Math.max(0, parseInt(afkPauseInput.value, 10) || 0));
+            const afkDurationMs = afkMinutes * 60 * 1000;
+            if (!gamePaused && afkDurationMs > 0 && now - lastActivityTime >= afkDurationMs) {
+                // Exclude the configured AFK period from the stopwatch, then pause.
+                startTime += afkDurationMs;
+                gamePaused = true;
+                pausedAt = now;
+                clearInterval(timerInterval);
+                const pauseScreen = document.getElementById('pause-screen');
+                pauseScreen.classList.add('is-visible');
+                pauseScreen.setAttribute('aria-hidden', 'false');
+            }
+            const elapsed = Math.max(0, (now - startTime) / 1000);
             const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
             const secs = Math.floor(elapsed % 60).toString().padStart(2, '0');
             const tenths = Math.floor((elapsed % 1) * 10);
