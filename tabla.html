@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1228,6 +1229,27 @@
     // We use a wrapper <span class="cword"> that is position:relative so
     // the chord (position:absolute, top:0) floats above the lyric char.
 
+    // Estimated pixel width of a chord label. Labels render at
+    // var(--chord-font-size) with an average glyph advance of ~0.68em.
+    function chordLabelWidth(labels){
+      const labelLen = labels.join(' ').length;
+      return `calc(${labelLen} * var(--chord-font-size) * 0.68)`;
+    }
+
+    // A cword holding a chord must never be narrower than its chord label,
+    // otherwise the label overflows into the next chord ("DAᵐ" collisions).
+    function chordMinWidth(labels){
+      return `min-width:${chordLabelWidth(labels)}`;
+    }
+
+    // A chord placed over a run of whitespace (e.g. "saved [D]         [A]")
+    // gets a compact fixed spacer: wide enough for its own label, but never
+    // as wide as the raw space run. This keeps the chord row on one line
+    // (no wrapping) and mirrors how SongSheet Pro compresses long gaps.
+    function chordGapWidth(labels){
+      return `width:max(${chordLabelWidth(labels)}, 0.9em)`;
+    }
+
     if(isBarLine){
       // For bar/tab lines render each character wrapped so chords sit above.
       let out = '<div class="line chordline">';
@@ -1236,7 +1258,7 @@
         const displayCh = ch === '|' ? '<span class="bar">|</span>' : escapeHtml(ch);
         if(chordAt.has(i)){
           const chordHtml = chordAt.get(i).map(c => formatChordHTML(c)).join(' ');
-          out += `<span class="cword"><span class="cchord">${chordHtml}</span>${displayCh}</span>`;
+          out += `<span class="cword" style="${chordMinWidth(chordAt.get(i))}"><span class="cchord">${chordHtml}</span>${displayCh}</span>`;
         } else {
           out += displayCh;
         }
@@ -1244,7 +1266,7 @@
       // trailing chords beyond text length
       if(chordAt.has(text.length)){
         const chordHtml = chordAt.get(text.length).map(c => formatChordHTML(c)).join(' ');
-        out += `<span class="cword"><span class="cchord">${chordHtml}</span>\u00a0</span>`;
+        out += `<span class="cword" style="${chordMinWidth(chordAt.get(text.length))}"><span class="cchord">${chordHtml}</span>\u00a0</span>`;
       }
       out += '</div>';
       return out;
@@ -1280,7 +1302,12 @@
       const segment = fullText.slice(from, to);
       if(chordAt.has(from)){
         const chordHtml = chordAt.get(from).map(c => formatChordHTML(c)).join(' ');
-        out += `<span class="cword"><span class="cchord">${chordHtml}</span>${escapeHtml(segment)}</span>`;
+        // Whitespace-only segments (spaces, nbsp, ZWSP) become compact
+        // fixed-width spacers so gap chords stay readable and the line
+        // never wraps; text segments just get the collision guard.
+        const isGap = segment.replace(/[\s\u200b]/g, '') === '';
+        const style = isGap ? chordGapWidth(chordAt.get(from)) : chordMinWidth(chordAt.get(from));
+        out += `<span class="cword" style="${style}"><span class="cchord">${chordHtml}</span>${escapeHtml(segment)}</span>`;
       } else {
         out += escapeHtml(segment);
       }
@@ -1288,7 +1315,7 @@
     // trailing chords that land exactly at fullText.length (beyond last char)
     if(chordAt.has(fullText.length)){
       const chordHtml = chordAt.get(fullText.length).map(c => formatChordHTML(c)).join(' ');
-      out += `<span class="cword"><span class="cchord">${chordHtml}</span>\u00a0</span>`;
+      out += `<span class="cword" style="${chordMinWidth(chordAt.get(fullText.length))}"><span class="cchord">${chordHtml}</span>\u00a0</span>`;
     }
     out += '</div>';
     return out;
@@ -1455,15 +1482,17 @@
   }
 
   function saveDisplaySettings(){
+    // Always keep a global default too, so brand-new songs (and other
+    // devices/states without a per-song override) start from the sizes you
+    // last used instead of the built-in 16/14/30/13px defaults.
+    try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({fontSize, chordSize, titleSize, metaSize, fontChoice, scrollSpeed})); }
+    catch(err){ console.warn('Could not save display settings:', err); }
     if(currentIndex >= 0){
       // Le dimensioni sono personali e persistono per ogni canzone, anche
       // nell'area libera; non modificano mai il file della canzone.
       const displayUser = currentUser || GUEST_DISPLAY_USER;
       setUserSongSettings(displayUser, songs[currentIndex], {fontSize, chordSize, titleSize, metaSize, fontChoice});
-      return;
     }
-    try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({fontSize, chordSize, titleSize, metaSize, fontChoice, scrollSpeed})); }
-    catch(err){ console.warn('Could not save display settings:', err); }
   }
 
   function loadDisplaySettings(){
@@ -1566,6 +1595,9 @@
   const PASSWORD = "papa2026";
   const MEDIUM_PASSWORD = "medio2026";
   const CURRENT_USER_KEY = 'tabla.authenticated.v1';
+  // Once the visitor has passed the landing screen, remember it so the
+  // homescreen never launches again in this browser.
+  const LANDING_SEEN_KEY = 'tabla.landingSeen.v1';
   const ACCOUNTS = {
     ADMIN: { role: 'admin' },
     MEDIO: { role: 'viewer' }
@@ -1623,6 +1655,7 @@
   const landingScreen = document.getElementById('landingScreen');
   function enterApp(){
     landingScreen.classList.add('hidden');
+    try{ localStorage.setItem(LANDING_SEEN_KEY, '1'); }catch(err){}
   }
   document.getElementById('landingFreeBtn').addEventListener('click', () => {
     enterApp(); // free area: browse songs, chords stay hidden until login
@@ -1968,6 +2001,13 @@
   // every function/const it touches (applyRoleUI, renderAdminList, etc.)
   // is already defined.
   (function restoreSession(){
+    // Skip the landing/homescreen entirely if this browser has already
+    // entered TABLA at least once.
+    try{
+      if(localStorage.getItem(LANDING_SEEN_KEY) === '1'){
+        landingScreen.classList.add('hidden');
+      }
+    }catch(err){}
     try{
       const savedUser = localStorage.getItem(CURRENT_USER_KEY);
       if(savedUser && ACCOUNTS[savedUser]){
@@ -1981,20 +2021,6 @@
   })();
 
 })();
-
 </script>
-<!-- TABLA build marker 01 -->
-<!-- TABLA build marker 02 -->
-<!-- TABLA build marker 03 -->
-<!-- TABLA build marker 04 -->
-<!-- TABLA build marker 05 -->
-<!-- TABLA build marker 06 -->
-<!-- TABLA build marker 07 -->
-<!-- TABLA build marker 08 -->
-<!-- TABLA build marker 09 -->
-<!-- TABLA build marker 10 -->
-<!-- TABLA build marker 11 -->
-<!-- TABLA build marker 12 -->
-<!-- TABLA build marker 13 -->
 </body>
 </html>
