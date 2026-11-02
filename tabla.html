@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -977,7 +976,7 @@
   }
 
   function songFromApiItem(item){
-    const raw = String(item && item.content || '');
+    const raw = sanitizeSongText(String(item && item.content || ''));
     const song = parseChordPro(raw);
     if(item && item.title) song.title = String(item.title);
     song._raw = raw;
@@ -1034,7 +1033,27 @@
   }
 
   // ---------- ChordPro parsing ----------
+  // Word processors and iPad text tools insert typographic quotes and
+  // invisible characters that break ChordPro parsing/rendering. Normalize
+  // them to plain ASCII before parsing.
+  function sanitizeSongText(text){
+    return String(text)
+      // curly single quotes / apostrophes -> '
+      .replace(/[\u2018\u2019\u201B\u2032\uFF07]/g, "'")
+      // curly double quotes -> "
+      .replace(/[\u201C\u201D\u201F\u2033\uFF02]/g, '"')
+      // dashes -> plain hyphen
+      .replace(/[\u2013\u2014\u2212]/g, '-')
+      // ellipsis -> three dots
+      .replace(/\u2026/g, '...')
+      // non-breaking & narrow spaces -> normal space
+      .replace(/[\u00A0\u202F\u2007\u2009]/g, ' ')
+      // zero-width and invisible formatting characters -> removed
+      .replace(/[\u200B\u200C\u200D\uFEFF\u2060]/g, '');
+  }
+
   function parseChordPro(text){
+    text = sanitizeSongText(text);
     const meta = { title:'Untitled', artist:'', key:'', tempo:'', time:'' };
     const lines = text.split(/\r?\n/);
     const sections = [];
@@ -1359,7 +1378,7 @@
     reader.onload = (e) => {
       const text = e.target.result;
       const song = parseChordPro(text);
-      song._raw = text;
+      song._raw = sanitizeSongText(text);
       songs.push(song);
       renderSongList();
       selectSong(songs.length - 1);
@@ -1853,7 +1872,7 @@
     const parsed = parseChordPro(raw);
     if(formTitle.value.trim()) parsed.title = formTitle.value.trim();
     if(formArtist.value.trim()) parsed.artist = formArtist.value.trim();
-    parsed._raw = raw;
+    parsed._raw = sanitizeSongText(raw);
 
     const previousTitle = editingSongIndex !== null ? songs[editingSongIndex].title : '';
     const apiKey = getApiAdminKey();
@@ -2021,6 +2040,11 @@
   })();
 
 })();
+
+
+
+
+  
 </script>
 </body>
 </html>
