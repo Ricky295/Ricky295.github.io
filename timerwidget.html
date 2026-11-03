@@ -2,429 +2,514 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Timer Widget</title>
 <style>
-  * { box-sizing: border-box; }
-  html, body {
-    margin: 0; padding: 0; height: 100%;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root {
+    --navy: #1A237E;
+    --navy-dark: #0D1257;
+    --gold: #F5C842;
+    --gold-dark: #D4A800;
+    --cream: #F8F6F0;
+    --white: #FFFFFF;
+    --mono: 'JetBrains Mono', monospace;
+    --serif: 'Playfair Display', Georgia, serif;
+    --ui: 'Inter', system-ui, sans-serif;
   }
 
-  /* ---------- Widget mode ---------- */
-  #widget {
-    display: none;
-    height: 100vh; width: 100vw;
-    align-items: center; justify-content: center;
-    flex-direction: column;
-    gap: 0.5em;
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; }
+
+  /* ── WIDGET MODE ── */
+  body.widget-mode {
+    background: transparent;
+    font-family: var(--ui);
     overflow: hidden;
-    cursor: pointer;
     user-select: none;
+    -webkit-user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  #widget .name {
-    font-size: clamp(12px, 4vw, 20px);
-    opacity: 0.75;
-    letter-spacing: 0.02em;
+
+  #widget { display: none; }
+  body.widget-mode #widget { display: flex; flex-direction: column; align-items: center; }
+  body.widget-mode #designer { display: none; }
+
+  /* Price-tag card */
+  .tag-card {
+    background: var(--white);
+    border: 3px solid var(--navy);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 4px 18px rgba(26,35,126,0.18);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
-  #widget .time {
-    font-size: clamp(28px, 16vw, 96px);
+
+  .tag-header {
+    background: var(--navy);
+    width: 100%;
+    padding: 6px 16px;
+    text-align: center;
+  }
+  .tag-label {
+    font-family: var(--ui);
+    font-size: 11px;
     font-weight: 700;
-    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--white);
+  }
+
+  .tag-body {
+    padding: 10px 20px 6px;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    position: relative;
+  }
+
+  /* The big number — same bold serif as the price */
+  .time-main {
+    font-family: var(--serif);
+    font-weight: 900;
+    color: var(--navy);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  /* Superscript-style unit (like the € in the photo) */
+  .time-unit {
+    font-family: var(--serif);
+    font-weight: 700;
+    color: var(--navy);
+    align-self: flex-start;
+    margin-top: 4px;
     line-height: 1;
   }
-  #widget .hint {
-    font-size: clamp(9px, 2.5vw, 12px);
-    opacity: 0.5;
-  }
-  #widget.done .time { animation: pulse 1s ease-in-out infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
-  /* ---------- Designer mode ---------- */
-  #designer {
-    display: none;
-    min-height: 100vh;
-    background: #f4f5f7;
-    padding: 24px;
+  /* Gold underline bar — identical to the photo */
+  .tag-stripe {
+    background: var(--gold);
+    height: 10px;
+    width: 100%;
   }
-  #designer .wrap {
-    max-width: 920px;
-    margin: 0 auto;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
+
+  /* Controls row below card */
+  .tag-controls {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
   }
-  @media (max-width: 720px) {
-    #designer .wrap { grid-template-columns: 1fr; }
-  }
-  .card {
-    background: #fff;
-    border-radius: 14px;
-    padding: 20px 22px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
-  }
-  .card h1 {
-    font-size: 18px;
-    margin: 0 0 16px;
-  }
-  .field { margin-bottom: 14px; }
-  .field label {
-    display: block;
-    font-size: 12px;
+  .tag-btn {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border: 1.5px solid var(--navy);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--navy);
+    cursor: pointer;
     font-weight: 600;
-    color: #555;
-    margin-bottom: 5px;
+    transition: background 0.1s, color 0.1s;
   }
-  .field input[type="text"],
-  .field input[type="number"] {
+  .tag-btn:hover { background: var(--navy); color: var(--white); }
+  .tag-btn.running { background: var(--navy); color: var(--white); }
+  .tag-btn.danger { border-color: #b71c1c; color: #b71c1c; }
+  .tag-btn.danger:hover { background: #b71c1c; color: var(--white); }
+
+  /* Done state */
+  .tag-card.done .time-main { color: var(--gold-dark); }
+  .tag-card.done .tag-stripe { background: var(--navy); }
+  .tag-card.done .tag-header { background: var(--gold-dark); }
+
+  /* ── DESIGNER MODE ── */
+  body.designer-mode {
+    background: var(--cream);
+    font-family: var(--ui);
+    color: var(--navy-dark);
+    -webkit-font-smoothing: antialiased;
+  }
+  body.designer-mode #widget { display: none; }
+  #designer {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 48px;
+    align-items: start;
+  }
+  @media (max-width: 720px) { #designer { grid-template-columns: 1fr; } }
+
+  .d-header {
+    grid-column: 1/-1;
+    padding-bottom: 28px;
+    border-bottom: 2px solid var(--navy);
+    margin-bottom: 4px;
+  }
+  .d-eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gold-dark);
+    margin-bottom: 10px;
+  }
+  .d-title {
+    font-family: var(--serif);
+    font-size: clamp(28px, 4vw, 46px);
+    font-weight: 900;
+    color: var(--navy);
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin-bottom: 8px;
+  }
+  .d-sub { font-size: 15px; color: #444; line-height: 1.5; max-width: 520px; }
+
+  .panel {
+    background: var(--white);
+    border: 1.5px solid #C5C8D6;
+    border-radius: 10px;
+    padding: 22px;
+    position: sticky;
+    top: 24px;
+  }
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #888;
+    margin-bottom: 18px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+  }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: var(--navy-dark); margin-bottom: 6px; }
+  .field input[type="text"], .field input[type="number"], .field select {
     width: 100%;
     padding: 8px 10px;
-    border: 1px solid #d9dce1;
-    border-radius: 8px;
-    font-size: 14px;
-  }
-  .row { display: flex; gap: 10px; }
-  .row .field { flex: 1; }
-  .colorrow { display: flex; align-items: center; gap: 8px; }
-  .colorrow input[type="color"] {
-    width: 40px; height: 34px; border: none; border-radius: 6px; padding: 0; cursor: pointer;
-  }
-  .colorrow input[type="text"] { flex: 1; }
-  .toggle-group { display: flex; gap: 8px; }
-  .toggle-group button {
-    flex: 1;
-    padding: 8px 10px;
-    border: 1px solid #d9dce1;
-    background: #fff;
-    border-radius: 8px;
+    border: 1px solid #C5C8D6;
+    border-radius: 6px;
+    font-family: var(--mono);
     font-size: 13px;
-    cursor: pointer;
+    color: var(--navy-dark);
+    background: var(--cream);
   }
-  .toggle-group button.active {
-    background: #2563eb;
-    color: #fff;
-    border-color: #2563eb;
+  .field .hint { font-size: 11px; color: #888; margin-top: 4px; line-height: 1.4; }
+  .range-row { display: flex; gap: 10px; align-items: center; }
+  .range-row input { flex: 1; }
+  .range-row .val { font-family: var(--mono); font-size: 12px; color: var(--gold-dark); font-weight: 700; min-width: 28px; text-align: right; }
+
+  .preview-area {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
   }
-  #preview-frame-wrap {
+  .preview-box {
+    background: var(--white);
+    border: 1.5px solid #C5C8D6;
     border-radius: 10px;
-    overflow: hidden;
-    border: 1px solid #e2e4e8;
-    height: 220px;
-    margin-bottom: 16px;
+    padding: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 160px;
   }
-  #preview-frame { width: 100%; height: 100%; border: 0; }
-  .urlbox {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  .code-box {
+    background: var(--navy-dark);
+    border-radius: 10px;
+    padding: 18px;
+    position: relative;
+  }
+  .code-box pre {
+    font-family: var(--mono);
     font-size: 12px;
-    background: #f1f2f5;
-    border-radius: 8px;
-    padding: 10px 12px;
+    color: var(--gold);
+    white-space: pre-wrap;
     word-break: break-all;
-    max-height: 140px;
-    overflow: auto;
+    line-height: 1.6;
   }
-  .copybtn {
-    margin-top: 10px;
-    padding: 8px 14px;
-    border: none;
-    border-radius: 8px;
-    background: #111827;
-    color: #fff;
-    font-size: 13px;
+  .copy-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border: 1px solid var(--gold);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--gold);
     cursor: pointer;
+    font-weight: 600;
   }
-  .copybtn:active { transform: translateY(1px); }
-  .iframebox {
-    margin-top: 14px;
+  .copy-btn.copied { background: var(--gold); color: var(--navy-dark); }
+
+  .d-build-btn {
+    width: 100%;
+    padding: 10px;
+    background: var(--navy);
+    color: var(--white);
+    border: none;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 4px;
   }
+  .d-build-btn:hover { background: var(--navy-dark); }
 </style>
 </head>
 <body>
 
-<!-- ================= WIDGET MODE ================= -->
+<!-- ═══════════════════════ WIDGET ═══════════════════════ -->
 <div id="widget">
-  <div class="name" id="w-name"></div>
-  <div class="time" id="w-time">00:00</div>
-  <div class="hint" id="w-hint">tap to start</div>
+  <div class="tag-card" id="tag">
+    <div class="tag-header"><span class="tag-label" id="wg-label">Timer</span></div>
+    <div class="tag-body">
+      <span class="time-main" id="wg-display">3:00</span>
+      <span class="time-unit" id="wg-unit">m</span>
+    </div>
+    <div class="tag-stripe"></div>
+  </div>
+  <div class="tag-controls" id="wg-controls">
+    <button class="tag-btn" id="wg-startstop">Start</button>
+    <button class="tag-btn danger" id="wg-reset">Reset</button>
+  </div>
 </div>
 
-<!-- ================= DESIGNER MODE ================= -->
+<!-- ═══════════════════════ DESIGNER ═══════════════════════ -->
 <div id="designer">
-  <div class="wrap">
-    <div class="card">
-      <h1>Timer Widget Designer</h1>
+  <div class="d-header">
+    <div class="d-eyebrow">— Timer Widget</div>
+    <div class="d-title">Price-Tag<br><em style="font-style:italic;color:var(--gold-dark)">Countdown</em></div>
+    <p class="d-sub">Configure your timer below. Embed it anywhere with an <code style="font-family:var(--mono);font-size:13px">&lt;iframe&gt;</code>.</p>
+  </div>
 
-      <div class="field">
-        <label>Name</label>
-        <input type="text" id="d-name" placeholder="e.g. Pasta">
-      </div>
-
-      <div class="row">
-        <div class="field">
-          <label>Duration (hh:mm:ss)</label>
-          <input type="text" id="d-duration" placeholder="00:05:00" value="00:05:00">
-        </div>
-        <div class="field">
-          <label>Direction</label>
-          <div class="toggle-group">
-            <button id="d-countdown-btn" class="active" type="button">Count down</button>
-            <button id="d-countup-btn" type="button">Count up</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="field">
-          <label>Background color</label>
-          <div class="colorrow">
-            <input type="color" id="d-bgcolor-picker" value="#111827">
-            <input type="text" id="d-bgcolor" value="#111827">
-          </div>
-        </div>
-        <div class="field">
-          <label>Text color</label>
-          <div class="colorrow">
-            <input type="color" id="d-textcolor-picker" value="#ffffff">
-            <input type="text" id="d-textcolor" value="#ffffff">
-          </div>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Autostart</label>
-        <div class="toggle-group">
-          <button id="d-autostart-off" class="active" type="button">Off</button>
-          <button id="d-autostart-on" type="button">On</button>
-        </div>
+  <div class="panel">
+    <div class="panel-title">Configure</div>
+    <div class="field">
+      <label>Duration</label>
+      <input type="number" id="d-duration" value="3" min="0" step="0.01" style="font-size:18px;padding:10px 12px;">
+      <div class="hint">Type <strong>3.25</strong> for 3 min 25 sec — decimal part is seconds, not tenths.</div>
+    </div>
+    <div class="field">
+      <label>Unit</label>
+      <select id="d-unit">
+        <option value="m">m — minutes (mm:ss)</option>
+        <option value="h">h — hours (hh:mm)</option>
+      </select>
+      <div class="hint">Shown superscript, like € in the price tag.</div>
+    </div>
+    <div class="field">
+      <label>Label</label>
+      <input type="text" id="d-label" value="Timer" maxlength="20">
+      <div class="hint">Shown in the navy header strip.</div>
+    </div>
+    <div class="field">
+      <label>Font size (px)</label>
+      <div class="range-row">
+        <input type="range" id="d-size" min="48" max="140" value="80">
+        <span class="val" id="d-size-val">80</span>
       </div>
     </div>
+    <div class="field">
+      <label>Show controls</label>
+      <select id="d-controls">
+        <option value="1">Yes</option>
+        <option value="0">No</option>
+      </select>
+    </div>
+    <button class="d-build-btn" id="d-build">Generate Embed ↓</button>
+  </div>
 
-    <div class="card">
-      <h1>Preview</h1>
-      <div id="preview-frame-wrap">
-        <iframe id="preview-frame"></iframe>
-      </div>
-      <label style="font-size:12px;font-weight:600;color:#555;">Embed / Share URL</label>
-      <div class="urlbox" id="url-output"></div>
-      <div class="iframebox">
-        <label style="font-size:12px;font-weight:600;color:#555;">Iframe snippet</label>
-        <div class="urlbox" id="iframe-output"></div>
-      </div>
-      <button class="copybtn" id="copy-url-btn">Copy URL</button>
-      <button class="copybtn" id="copy-iframe-btn" style="margin-left:8px;background:#374151;">Copy Iframe</button>
+  <div class="preview-area">
+    <div class="preview-box" id="d-preview-box">
+      <iframe id="d-iframe" frameborder="0" scrolling="no"></iframe>
+    </div>
+    <div class="code-box">
+      <button class="copy-btn" id="d-copy">Copy</button>
+      <pre id="d-code"></pre>
     </div>
   </div>
 </div>
 
 <script>
-(function() {
-  const params = new URLSearchParams(window.location.search);
-  const hasParams = [...params.keys()].length > 0;
+(() => {
+  const params = new URLSearchParams(location.search);
 
-  if (hasParams) {
-    runWidget(params);
+  // ── decide mode ──
+  if (params.has('t')) {
+    runWidget();
   } else {
+    document.body.classList.add('designer-mode');
     runDesigner();
   }
 
-  // ============================================================
-  // WIDGET MODE
-  // ============================================================
-  function runWidget(params) {
-    document.getElementById('widget').style.display = 'flex';
+  // ════════════════════════════════════════
+  // WIDGET
+  // ════════════════════════════════════════
+  function runWidget() {
+    document.body.classList.add('widget-mode');
 
-    const DEFAULT_DURATION = 2147483647;
-    let duration = parseInt(params.get('duration'), 10);
-    if (isNaN(duration) || duration < 0) duration = DEFAULT_DURATION;
+    const unit     = params.get('unit') || 'm';
+    const totalSec = parseDuration(params.get('t') || '3', unit);
+    const label    = params.get('label') || 'Timer';
+    const fontSize = parseInt(params.get('fs') || '80');
+    const showCtrl = params.get('ctrl') !== '0';
 
-    const countup = params.get('countup') === '1';
-    const bgcolor = params.get('bgcolor') || (countup ? '#111827' : '#111827');
-    const textcolor = params.get('textcolor') || '#ffffff';
-    const autostart = params.get('autostart') === '1';
-    const name = params.get('name') || (formatHMS(duration) + ' timer');
+    const tag      = document.getElementById('tag');
+    const display  = document.getElementById('wg-display');
+    const unitEl   = document.getElementById('wg-unit');
+    const labelEl  = document.getElementById('wg-label');
+    const ctrlRow  = document.getElementById('wg-controls');
+    const startBtn = document.getElementById('wg-startstop');
+    const resetBtn = document.getElementById('wg-reset');
 
-    document.body.style.background = safeColor(bgcolor);
-    document.body.style.color = safeColor(textcolor);
+    display.style.fontSize = fontSize + 'px';
+    unitEl.style.fontSize  = Math.round(fontSize * 0.28) + 'px';
+    labelEl.textContent    = label;
+    unitEl.textContent     = unit;
+    if (!showCtrl) ctrlRow.style.display = 'none';
 
-    const nameEl = document.getElementById('w-name');
-    const timeEl = document.getElementById('w-time');
-    const hintEl = document.getElementById('w-hint');
-    const widgetEl = document.getElementById('widget');
+    let remaining = totalSec;
+    let running   = false;
+    let iv        = null;
 
-    nameEl.textContent = name;
-
-    let remaining = countup ? 0 : duration;
-    let elapsed = 0;
-    let running = false;
-    let intervalId = null;
-    let finished = false;
-
-    render();
-
-    function render() {
-      const displayVal = countup ? elapsed : remaining;
-      timeEl.textContent = formatHMS(displayVal);
-      if (finished) {
-        hintEl.textContent = 'done — tap to reset';
-        widgetEl.classList.add('done');
+    function fmt(sec) {
+      if (unit === 'h') {
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        return pad(h) + ':' + pad(m);
       } else {
-        widgetEl.classList.remove('done');
-        hintEl.textContent = running ? 'tap to pause' : (elapsed > 0 || remaining !== duration ? 'tap to resume' : 'tap to start');
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return pad(m) + ':' + pad(s);
       }
     }
+    function pad(n) { return String(n).padStart(2, '0'); }
 
     function tick() {
-      if (countup) {
-        elapsed++;
-      } else {
-        remaining--;
-        if (remaining <= 0) {
-          remaining = 0;
-          finish();
-        }
+      if (remaining <= 0) {
+        clearInterval(iv);
+        running = false;
+        startBtn.textContent = 'Done';
+        startBtn.classList.remove('running');
+        tag.classList.add('done');
+        display.textContent = fmt(0);
+        window.parent.postMessage({ type: 'timer-done' }, '*');
+        return;
       }
-      render();
+      remaining--;
+      display.textContent = fmt(remaining);
     }
 
-    function start() {
-      if (finished) { reset(); return; }
-      if (running) return;
-      running = true;
-      intervalId = setInterval(tick, 1000);
-      render();
-    }
+    display.textContent = fmt(remaining);
 
-    function pause() {
-      running = false;
-      clearInterval(intervalId);
-      render();
-    }
-
-    function finish() {
-      running = false;
-      finished = true;
-      clearInterval(intervalId);
-      render();
-    }
-
-    function reset() {
-      finished = false;
-      running = false;
-      clearInterval(intervalId);
-      elapsed = 0;
-      remaining = duration;
-      render();
-    }
-
-    widgetEl.addEventListener('click', function() {
-      if (finished) { reset(); return; }
-      if (running) { pause(); } else { start(); }
+    startBtn.addEventListener('click', () => {
+      if (tag.classList.contains('done')) return;
+      running = !running;
+      if (running) {
+        iv = setInterval(tick, 1000);
+        startBtn.textContent = 'Pause';
+        startBtn.classList.add('running');
+      } else {
+        clearInterval(iv);
+        startBtn.textContent = 'Resume';
+        startBtn.classList.remove('running');
+      }
     });
 
-    if (autostart) start();
+    resetBtn.addEventListener('click', () => {
+      clearInterval(iv);
+      running = false;
+      remaining = totalSec;
+      tag.classList.remove('done');
+      startBtn.textContent = 'Start';
+      startBtn.classList.remove('running');
+      display.textContent = fmt(remaining);
+    });
   }
 
-  function formatHMS(totalSeconds) {
-    totalSeconds = Math.max(0, Math.floor(totalSeconds));
-    const h = Math.floor(totalSeconds / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
-    const s = totalSeconds % 60;
-    const pad = n => String(n).padStart(2, '0');
-    if (h > 0) return pad(h) + ':' + pad(m) + ':' + pad(s);
-    return pad(m) + ':' + pad(s);
+  function parseDuration(val, unit) {
+    const n    = parseFloat(val) || 3;
+    const whole = Math.floor(n);
+    const frac  = n - whole;
+    // frac is in "intuitive" units: .25 → 25 sec (or 25 min for hours)
+    // convert: frac / 0.6 gives the real fractional part of the major unit
+    const realFrac = frac / 0.6;
+    if (unit === 'h') {
+      return Math.round((whole + realFrac) * 3600);
+    } else {
+      return Math.round((whole + realFrac) * 60);
+    }
   }
 
-  function safeColor(c) {
-    // allow named colors or hex; browsers will just ignore invalid values
-    return c;
-  }
-
-  // ============================================================
-  // DESIGNER MODE
-  // ============================================================
+  // ════════════════════════════════════════
+  // DESIGNER
+  // ════════════════════════════════════════
   function runDesigner() {
-    document.getElementById('designer').style.display = 'block';
+    const durInput  = document.getElementById('d-duration');
+    const unitSel   = document.getElementById('d-unit');
+    const labelInp  = document.getElementById('d-label');
+    const sizeRange = document.getElementById('d-size');
+    const sizeVal   = document.getElementById('d-size-val');
+    const ctrlSel   = document.getElementById('d-controls');
+    const buildBtn  = document.getElementById('d-build');
+    const iframe    = document.getElementById('d-iframe');
+    const codeEl    = document.getElementById('d-code');
+    const copyBtn   = document.getElementById('d-copy');
 
-    const nameInput = document.getElementById('d-name');
-    const durationInput = document.getElementById('d-duration');
-    const countdownBtn = document.getElementById('d-countdown-btn');
-    const countupBtn = document.getElementById('d-countup-btn');
-    const bgPicker = document.getElementById('d-bgcolor-picker');
-    const bgText = document.getElementById('d-bgcolor');
-    const textPicker = document.getElementById('d-textcolor-picker');
-    const textText = document.getElementById('d-textcolor');
-    const autostartOff = document.getElementById('d-autostart-off');
-    const autostartOn = document.getElementById('d-autostart-on');
-    const previewFrame = document.getElementById('preview-frame');
-    const urlOutput = document.getElementById('url-output');
-    const iframeOutput = document.getElementById('iframe-output');
-    const copyUrlBtn = document.getElementById('copy-url-btn');
-    const copyIframeBtn = document.getElementById('copy-iframe-btn');
+    unitSel.addEventListener('change', update);
+    durInput.addEventListener('input', update);
+    sizeRange.addEventListener('input', () => { sizeVal.textContent = sizeRange.value; update(); });
+    [labelInp, ctrlSel].forEach(el => el.addEventListener('input', update));
+    buildBtn.addEventListener('click', update);
 
-    let isCountup = false;
-    let isAutostart = false;
-
-    function setToggle(activeBtn, inactiveBtn) {
-      activeBtn.classList.add('active');
-      inactiveBtn.classList.remove('active');
-    }
-
-    countdownBtn.addEventListener('click', () => { isCountup = false; setToggle(countdownBtn, countupBtn); update(); });
-    countupBtn.addEventListener('click', () => { isCountup = true; setToggle(countupBtn, countdownBtn); update(); });
-    autostartOff.addEventListener('click', () => { isAutostart = false; setToggle(autostartOff, autostartOn); update(); });
-    autostartOn.addEventListener('click', () => { isAutostart = true; setToggle(autostartOn, autostartOff); update(); });
-
-    bgPicker.addEventListener('input', () => { bgText.value = bgPicker.value; update(); });
-    bgText.addEventListener('input', () => { if (/^#[0-9a-fA-F]{6}$/.test(bgText.value)) bgPicker.value = bgText.value; update(); });
-    textPicker.addEventListener('input', () => { textText.value = textPicker.value; update(); });
-    textText.addEventListener('input', () => { if (/^#[0-9a-fA-F]{6}$/.test(textText.value)) textPicker.value = textText.value; update(); });
-
-    nameInput.addEventListener('input', update);
-    durationInput.addEventListener('input', update);
-
-    function parseDurationInput(str) {
-      // accepts hh:mm:ss, mm:ss, or plain seconds
-      str = str.trim();
-      if (!str) return 300;
-      const parts = str.split(':').map(p => parseInt(p, 10));
-      if (parts.some(isNaN)) return 300;
-      if (parts.length === 3) return parts[0]*3600 + parts[1]*60 + parts[2];
-      if (parts.length === 2) return parts[0]*60 + parts[1];
-      return parts[0];
-    }
-
-    function buildParams() {
-      const duration = parseDurationInput(durationInput.value);
+    function buildURL() {
       const p = new URLSearchParams();
-      p.set('duration', duration);
-      p.set('countup', isCountup ? '1' : '0');
-      p.set('bgcolor', bgText.value);
-      p.set('textcolor', textText.value);
-      p.set('autostart', isAutostart ? '1' : '0');
-      if (nameInput.value.trim()) p.set('name', nameInput.value.trim());
-      return p;
+      p.set('t',     durInput.value || '3');
+      p.set('unit',  unitSel.value);
+      p.set('label', labelInp.value || 'Timer');
+      p.set('fs',    sizeRange.value);
+      if (ctrlSel.value === '0') p.set('ctrl', '0');
+      return location.href.split('?')[0] + '?' + p.toString();
     }
 
     function update() {
-      const p = buildParams();
-      const base = window.location.origin + window.location.pathname;
-      const url = base + '?' + p.toString();
-      previewFrame.src = url;
-      urlOutput.textContent = url;
-      iframeOutput.textContent = '<iframe src="' + url + '" width="500" height="250" frameborder="0"></iframe>';
+      const url = buildURL();
+      const fs  = parseInt(sizeRange.value);
+      const w   = fs * 4;
+      const h   = fs * 2 + 80;
+      iframe.src    = url;
+      iframe.width  = w;
+      iframe.height = h;
+      codeEl.textContent =
+`<iframe src="${url}"
+  width="${w}" height="${h}"
+  frameborder="0" title="Timer"></iframe>`;
     }
 
-    copyUrlBtn.addEventListener('click', () => {
-      navigator.clipboard.writeText(urlOutput.textContent).then(() => flash(copyUrlBtn, 'Copied!'));
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(codeEl.textContent).then(() => {
+        copyBtn.textContent = 'Copied!';
+        copyBtn.classList.add('copied');
+        setTimeout(() => { copyBtn.textContent = 'Copy'; copyBtn.classList.remove('copied'); }, 1400);
+      });
     });
-    copyIframeBtn.addEventListener('click', () => {
-      navigator.clipboard.writeText(iframeOutput.textContent).then(() => flash(copyIframeBtn, 'Copied!'));
-    });
-
-    function flash(btn, msg) {
-      const old = btn.textContent;
-      btn.textContent = msg;
-      setTimeout(() => btn.textContent = old, 1200);
-    }
 
     update();
   }
