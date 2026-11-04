@@ -2429,7 +2429,11 @@ if (typeof module !== 'undefined' && module.exports) {
                     pausedAt = performance.now();
                     clearInterval(timerInterval);
                 } else if (gameActive) {
-                    startTime += performance.now() - pausedAt;
+                    const resumedAt = performance.now();
+                    startTime += resumedAt - pausedAt;
+                    // A deliberate pause is not AFK time. Start a fresh idle
+                    // countdown when gameplay resumes.
+                    lastActivityTime = resumedAt;
                     timerInterval = setInterval(updateRunningTimer, 100);
                 }
                 return;
@@ -2522,8 +2526,9 @@ if (typeof module !== 'undefined' && module.exports) {
             const afkMinutes = Math.min(600, Math.max(0, parseInt(afkPauseInput.value, 10) || 0));
             const afkDurationMs = afkMinutes * 60 * 1000;
             if (!gamePaused && afkDurationMs > 0 && now - lastActivityTime >= afkDurationMs) {
-                // Exclude the configured AFK period from the stopwatch, then pause.
-                startTime += afkDurationMs;
+                // Exclude the entire actual idle interval (including timer tick
+                // delay) from the stopwatch, then pause.
+                startTime += now - lastActivityTime;
                 gamePaused = true;
                 pausedAt = now;
                 clearInterval(timerInterval);
