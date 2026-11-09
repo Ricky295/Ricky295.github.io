@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Candles of Lies</title>
+  <style>
+    :root {
+      --bg: #10131a;
+      --panel: #191e29;
+      --panel-light: #232a38;
+      --text: #f4f1e8;
+      --muted: #a9b1bf;
+      --accent: #f4b942;
+      --accent-dark: #aa7517;
+      --lit: #ffd166;
+      --danger: #ef6f6c;
+      --good: #75c69a;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #263044 0%, var(--bg) 55%);
+      color: var(--text);
+      font: 16px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: min(980px, 100%); margin: 0 auto; padding: 28px 16px 44px; }
+    h1 { margin: 0 0 4px; font-size: clamp(2rem, 7vw, 3.5rem); letter-spacing: .04em; }
+    h2 { margin: 0 0 12px; font-size: 1.2rem; }
+    .subtitle { color: var(--muted); margin: 0 0 24px; }
+    .layout { display: grid; grid-template-columns: 300px 1fr; gap: 18px; align-items: start; }
+    .panel { background: rgba(25, 30, 41, .94); border: 1px solid #30394b; border-radius: 16px; padding: 18px; box-shadow: 0 12px 36px rgba(0,0,0,.22); }
+    label { display: block; margin: 12px 0 6px; color: var(--muted); font-size: .92rem; }
+    select, input, button { font: inherit; }
+    select, input[type="number"] {
+      width: 100%; color: var(--text); background: var(--panel-light); border: 1px solid #465269;
+      border-radius: 8px; padding: 9px 10px;
+    }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    .range-row { display: flex; gap: 10px; align-items: center; }
+    .range-row output { min-width: 38px; text-align: right; color: var(--accent); font-weight: 700; }
+    button { cursor: pointer; border: 0; border-radius: 9px; padding: 10px 14px; color: #19130a; background: var(--accent); font-weight: 700; }
+    button:hover { filter: brightness(1.08); }
+    button:disabled { cursor: not-allowed; opacity: .45; filter: none; }
+    .secondary { color: var(--text); background: #394355; }
+    .button-row { display: flex; gap: 8px; margin-top: 18px; }
+    .button-row button { flex: 1; }
+    .scorebar { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .score { flex: 1; background: var(--panel-light); border-radius: 10px; padding: 10px 12px; }
+    .score strong { display: block; font-size: 1.35rem; color: var(--accent); }
+    .score small { color: var(--muted); }
+    .status { min-height: 48px; color: var(--muted); margin: 10px 0 16px; }
+    .status strong { color: var(--text); }
+    .card-row { display: flex; gap: 10px; margin-bottom: 18px; }
+    .card { flex: 1; padding: 9px 12px; border-radius: 9px; background: #2b3342; color: var(--muted); }
+    .card b { color: var(--accent); font-size: 1.25rem; }
+    .board-wrap { display: grid; place-items: center; }
+    .board { display: grid; grid-template-columns: repeat(5, minmax(42px, 72px)); gap: 7px; width: 100%; max-width: 390px; }
+    .candle {
+      aspect-ratio: 1; padding: 0; border-radius: 12px; color: #51411c; background: #3b4351;
+      border: 2px solid #515d70; box-shadow: inset 0 -8px 0 rgba(0,0,0,.12); font-size: 1.5rem;
+    }
+    .candle:not(:disabled):hover { border-color: var(--accent); transform: translateY(-2px); }
+    .candle.lit { color: #6b4510; background: var(--lit); border-color: #ffe3a1; box-shadow: 0 0 16px rgba(255,209,102,.28), inset 0 -8px 0 rgba(181,112,0,.18); }
+    .legend { margin-top: 16px; color: var(--muted); font-size: .9rem; text-align: center; }
+    .log { max-height: 190px; overflow: auto; margin-top: 16px; padding: 10px 12px; background: #12161f; border-radius: 9px; color: var(--muted); font-size: .9rem; }
+    .log p { margin: 0 0 7px; }
+    .log p:last-child { margin-bottom: 0; }
+    .hint { color: var(--muted); font-size: .85rem; margin-top: 12px; }
+    @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } .settings { order: 2; } .game { order: 1; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Candles of Lies</h1>
+    <p class="subtitle">Light candles, complete hidden shapes, and try to make your opponent reveal their lie.</p>
+
+    <div class="layout">
+      <section class="panel settings">
+        <h2>Game setup</h2>
+        <label for="mode">Game mode</label>
+        <select id="mode">
+          <option value="1">Player vs AI (player first)</option>
+          <option value="2">AI vs Player (AI first)</option>
+          <option value="3">AI vs AI</option>
+        </select>
+
+        <div id="ai1-control">
+          <label for="ai1">AI 1 level: <output id="ai1-value">50</output></label>
+          <div class="range-row"><input id="ai1" type="range" min="0" max="100" value="50"><output id="ai1-value-copy">50</output></div>
+        </div>
+        <div id="ai2-control">
+          <label for="ai2">AI 2 level: <output id="ai2-value">50</output></label>
+          <div class="range-row"><input id="ai2" type="range" min="0" max="100" value="50"><output id="ai2-value-copy">50</output></div>
+        </div>
+
+        <label for="goal">Points to win</label>
+        <input id="goal" type="number" min="1" max="7" value="3">
+
+        <label for="speed">AI vs AI delay: <output id="speed-value">0.8s</output></label>
+        <input id="speed" type="range" min="0" max="2000" step="100" value="800">
+
+        <div class="button-row">
+          <button id="start">Start game</button>
+          <button id="reset" class="secondary">Reset</button>
+        </div>
+        <p class="hint">The player clicks an unlit candle. In AI vs AI mode, set the delay to 0 for the fastest match.</p>
+      </section>
+
+      <section class="panel game">
+        <div class="scorebar">
+          <div class="score"><small>Player 1</small><strong id="score1">0</strong></div>
+          <div class="score"><small>Player 2</small><strong id="score2">0</strong></div>
+          <div class="score"><small>Goal</small><strong id="goal-display">3</strong></div>
+        </div>
+        <div id="status" class="status">Choose the settings and press <strong>Start game</strong>.</div>
+        <div class="card-row">
+          <div class="card">Player 1 card: <b id="card1">?</b></div>
+          <div class="card">Player 2 card: <b id="card2">?</b></div>
+        </div>
+        <div class="board-wrap"><div id="board" class="board" aria-label="5 by 5 candle board"></div></div>
+        <div class="legend">Click any dark candle to light it. A completed shape scores for the player who owns that shape.</div>
+        <div id="log" class="log" aria-live="polite"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    "use strict";
+
+    var BOARD_SIZE = 5;
+    var SHAPES = "ILOTS";
+    var DECK_TEMPLATE = "ILOTSILOTSILOTS".split("");
+    var SHAPE_CELLS = {
+      I: [[0,0],[0,1],[0,2],[0,3]],
+      L: [[0,0],[1,0],[2,0],[2,1]],
+      O: [[0,0],[0,1],[1,0],[1,1]],
+      T: [[0,0],[0,1],[0,2],[1,1]],
+      S: [[0,1],[0,2],[1,0],[1,1]]
+    };
+
+    var state = {
+      running: false, mode: 1, turn: 0, board: [], deck: [], scores: [0,0],
+      goal: 3, levels: [50,50], ai: [false,false], shapes: ["?","?"],
+      memories: [null,null], excluded: [null,null], timer: null
+    };
+
+    function copyCells(cells) { return cells.map(function (p) { return [p[0], p[1]]; }); }
+    function normalize(cells) {
+      var minRow = Math.min.apply(null, cells.map(function (p) { return p[0]; }));
+      var minCol = Math.min.apply(null, cells.map(function (p) { return p[1]; }));
+      return cells.map(function (p) { return [p[0] - minRow, p[1] - minCol]; });
+    }
+    function rotate(cells) { return cells.map(function (p) { return [p[1], -p[0]]; }); }
+    function flip(cells) { return cells.map(function (p) { return [p[0], -p[1]]; }); }
+    function key(cells) {
+      return cells.slice().sort(function (a,b) { return a[0] - b[0] || a[1] - b[1]; })
+        .map(function (p) { return p[0] + "," + p[1]; }).join(";");
+    }
+    function orientations(cells) {
+      var result = [], seen = {};
+      [copyCells(cells), flip(cells)].forEach(function (starting) {
+        var current = starting;
+        for (var i = 0; i < 4; i += 1) {
+          var normalized = normalize(current), k = key(normalized);
+          if (!seen[k]) { seen[k] = true; result.push(normalized); }
+          current = rotate(current);
+        }
+      });
+      return result;
+    }
+    var SHAPE_ORIENTATIONS = {};
+    SHAPES.split("").forEach(function (shape) { SHAPE_ORIENTATIONS[shape] = orientations(SHAPE_CELLS[shape]); });
+
+    function shuffle(items) {
+      for (var i = items.length - 1; i > 0; i -= 1) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var temp = items[i]; items[i] = items[j]; items[j] = temp;
+      }
+    }
+    function choose(items) { return items[Math.floor(Math.random() * items.length)]; }
+    function emptyBoard() { return Array.from({length: BOARD_SIZE}, function () { return Array(BOARD_SIZE).fill(false); }); }
+    function drawShape() {
+      if (!state.deck.length) { state.deck = DECK_TEMPLATE.slice(); shuffle(state.deck); }
+      return state.deck.pop();
+    }
+    function newMemory() { var result = {}; SHAPES.split("").forEach(function (s) { result[s] = 3; }); return result; }
+    function remember(memory, shape) { if (memory && memory[shape] > 0) memory[shape] -= 1; }
+
+    function completedShapes(board, newest) {
+      var occupied = [];
+      for (var r = 0; r < BOARD_SIZE; r += 1) for (var c = 0; c < BOARD_SIZE; c += 1) if (board[r][c]) occupied.push(r + "," + c);
+      if (occupied.length < 4) return [];
+      var completed = [];
+      SHAPES.split("").forEach(function (shape) {
+        SHAPE_ORIENTATIONS[shape].some(function (orientation) {
+          var height = Math.max.apply(null, orientation.map(function (p) { return p[0]; })) + 1;
+          var width = Math.max.apply(null, orientation.map(function (p) { return p[1]; })) + 1;
+          for (var top = 0; top <= BOARD_SIZE - height; top += 1) for (var left = 0; left <= BOARD_SIZE - width; left += 1) {
+            var matches = orientation.every(function (p) { return board[top + p[0]][left + p[1]]; });
+            var includesNew = orientation.some(function (p) { return top + p[0] === newest[0] && left + p[1] === newest[1]; });
+            if (matches && includesNew) { completed.push(shape); return true; }
+          }
+          return false;
+        });
+      });
+      return completed;
+    }
+
+    function probabilities(memory, excluded) {
+      var possible = {}, total = 0;
+      SHAPES.split("").forEach(function (shape) {
+        possible[shape] = excluded.indexOf(shape) >= 0 ? 0 : Math.max(0, memory[shape]);
+        total += possible[shape];
+      });
+      if (!total) { SHAPES.split("").forEach(function (shape) { possible[shape] = excluded.indexOf(shape) < 0 ? 1 : 0; }); total = Object.keys(possible).reduce(function (a,s) { return a + possible[s]; }, 0); }
+      SHAPES.split("").forEach(function (shape) { possible[shape] = possible[shape] / total; });
+      return possible;
+    }
+    function combineScores(safety, bait) {
+      var groups = {}, levels = [], combined = {};
+      Object.keys(safety).forEach(function (move) { var score = safety[move]; if (!groups[score]) { groups[score] = []; levels.push(score); } groups[score].push(move); });
+      levels.sort(function (a,b) { return a-b; });
+      levels.forEach(function (score, index) {
+        var moves = groups[score]; moves.sort(function (a,b) { return bait[b] - bait[a] || a.localeCompare(b); });
+        var count = moves.length;
+        if (index === levels.length - 1) {
+          var lower = index ? (levels[index - 1] + score) / 2 : score;
+          moves.forEach(function (move, rank) { var fraction = count > 1 ? rank / (count - 1) : 0; combined[move] = lower + (score - lower) * fraction; });
+        } else {
+          var upper = levels[index + 1]; if (upper === 100) upper = (score + upper) / 2;
+          moves.forEach(function (move, rank) { combined[move] = score + (upper - score) * rank / count; });
+        }
+      });
+      return combined;
+    }
+    function aiMove() {
+      var legal = [];
+      for (var r = 0; r < BOARD_SIZE; r += 1) for (var c = 0; c < BOARD_SIZE; c += 1) if (!state.board[r][c]) legal.push([r,c]);
+      if (!legal.length) return null;
+      var probs = probabilities(state.memories[state.turn], state.excluded[state.turn]), dangers = {}, bait = {};
+      legal.forEach(function (move) {
+        var r = move[0], c = move[1]; state.board[r][c] = true;
+        var done = completedShapes(state.board, move), danger = 0;
+        done.forEach(function (shape) { danger += probs[shape]; });
+        dangers[r + "," + c] = danger;
+        var lures = 0;
+        legal.forEach(function (next) {
+          if (next[0] === r && next[1] === c) return;
+          if (state.board[next[0]][next[1]]) return;
+          state.board[next[0]][next[1]] = true;
+          if (completedShapes(state.board, next).indexOf(state.shapes[state.turn]) >= 0) lures += 1;
+          state.board[next[0]][next[1]] = false;
+        });
+        bait[r + "," + c] = lures; state.board[r][c] = false;
+      });
+      var values = Object.keys(dangers), low = Math.min.apply(null, values.map(function (m) { return dangers[m]; })), high = Math.max.apply(null, values.map(function (m) { return dangers[m]; })), safety = {};
+      values.forEach(function (m) { safety[m] = high === low ? 100 : 100 * (high - dangers[m]) / (high - low); });
+      var combined = combineScores(safety, bait), level = state.levels[state.turn], closest = Math.min.apply(null, values.map(function (m) { return Math.abs(combined[m] - level); }));
+      return choose(values.filter(function (m) { return Math.abs(combined[m] - level) === closest; })).split(",").map(Number);
+    }
+
+    function log(message) { var item = document.createElement("p"); item.textContent = message; document.getElementById("log").prepend(item); }
+    function render() {
+      document.getElementById("score1").textContent = state.scores[0]; document.getElementById("score2").textContent = state.scores[1]; document.getElementById("goal-display").textContent = state.goal;
+      document.getElementById("card1").textContent = state.ai[0] ? (state.mode === 3 ? state.shapes[0] : "hidden") : state.shapes[0];
+      document.getElementById("card2").textContent = state.ai[1] ? (state.mode === 3 ? state.shapes[1] : "hidden") : state.shapes[1];
+      var board = document.getElementById("board"); board.innerHTML = "";
+      for (var r = 0; r < BOARD_SIZE; r += 1) for (var c = 0; c < BOARD_SIZE; c += 1) {
+        var cell = document.createElement("button"); cell.className = "candle" + (state.board[r][c] ? " lit" : ""); cell.textContent = state.board[r][c] ? "●" : "·"; cell.title = String.fromCharCode(97+c) + (r+1); cell.disabled = !state.running || state.board[r][c] || state.ai[state.turn];
+        (function (row, col) { cell.onclick = function () { playMove([row,col]); }; })(r,c); board.appendChild(cell);
+      }
+      var actor = state.ai[state.turn] ? "AI " + (state.turn + 1) : "Player " + (state.turn + 1);
+      document.getElementById("status").innerHTML = state.running ? "<strong>" + actor + "'s turn.</strong> Light an unlit candle." : "Choose the settings and press <strong>Start game</strong>.";
+    }
+    function startGame() {
+      if (state.timer) clearTimeout(state.timer);
+      state.mode = Number(document.getElementById("mode").value); state.goal = Math.max(1, Math.min(7, Number(document.getElementById("goal").value) || 3));
+      state.levels = [Number(document.getElementById("ai1").value), Number(document.getElementById("ai2").value)]; state.ai = [state.mode === 2 || state.mode === 3, state.mode === 1 || state.mode === 3];
+      state.turn = 0; state.board = emptyBoard(); state.deck = []; state.scores = [0,0]; state.memories = [state.ai[0] ? newMemory() : null, state.ai[1] ? newMemory() : null]; state.excluded = [state.ai[0] ? [] : null, state.ai[1] ? [] : null];
+      state.shapes = [drawShape(), drawShape()]; state.ai.forEach(function (isAI, i) { if (isAI) remember(state.memories[i], state.shapes[i]); }); state.running = true; document.getElementById("log").innerHTML = ""; log("New game started."); render(); maybeAiTurn();
+    }
+    function playMove(move) {
+      if (!state.running || state.board[move[0]][move[1]] || state.ai[state.turn]) return;
+      makeMove(move);
+    }
+    function makeMove(move) {
+      var actor = state.ai[state.turn] ? "AI " + (state.turn + 1) : "Player " + (state.turn + 1); state.board[move[0]][move[1]] = true;
+      var opponent = 1 - state.turn, done = completedShapes(state.board, move), scored = done.indexOf(state.shapes[opponent]) >= 0;
+      log(actor + " lights " + String.fromCharCode(97 + move[1]) + (move[0] + 1) + ".");
+      if (scored) {
+        var revealed = state.shapes[opponent]; state.scores[opponent] += 1; log(actor + " completed Player " + (opponent + 1) + "'s " + revealed + " shape. Player " + (opponent + 1) + " scores!");
+        state.ai.forEach(function (isAI, i) { if (isAI && i !== opponent) remember(state.memories[i], revealed); }); state.board = emptyBoard(); state.shapes[opponent] = drawShape(); if (state.ai[opponent]) remember(state.memories[opponent], state.shapes[opponent]); state.ai.forEach(function (isAI, i) { if (isAI && i !== opponent) state.excluded[i] = []; });
+      } else state.ai.forEach(function (isAI, i) { if (isAI) done.forEach(function (shape) { if (state.excluded[i].indexOf(shape) < 0) state.excluded[i].push(shape); }); });
+      if (state.scores[0] >= state.goal || state.scores[1] >= state.goal) { state.running = false; var winner = state.scores[0] >= state.goal ? 1 : 2; log("Player " + winner + " wins! Final score: " + state.scores[0] + "-" + state.scores[1] + "."); render(); return; }
+      state.turn = opponent; render(); maybeAiTurn();
+    }
+    function maybeAiTurn() {
+      if (!state.running || !state.ai[state.turn]) return;
+      var delay = state.mode === 3 ? Number(document.getElementById("speed").value) : 450;
+      state.timer = setTimeout(function () { if (state.running) makeMove(aiMove()); }, delay);
+    }
+    function updateMode() { var mode = Number(document.getElementById("mode").value); document.getElementById("ai1-control").style.display = mode === 1 ? "none" : "block"; document.getElementById("ai2-control").style.display = mode === 2 ? "none" : "block"; }
+    document.getElementById("start").onclick = startGame;
+    document.getElementById("reset").onclick = function () { if (state.timer) clearTimeout(state.timer); state.running = false; state.board = emptyBoard(); state.shapes = ["?","?"]; state.scores = [0,0]; render(); };
+    document.getElementById("mode").onchange = updateMode;
+    ["ai1","ai2"].forEach(function (id) { document.getElementById(id).oninput = function () { document.getElementById(id + "-value").textContent = this.value; document.getElementById(id + "-value-copy").textContent = this.value; }; });
+    document.getElementById("speed").oninput = function () { document.getElementById("speed-value").textContent = (Number(this.value) / 1000).toFixed(1) + "s"; };
+    updateMode(); state.board = emptyBoard(); render();
+  </script>
+</body>
+</html>
