@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Training Rank</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --border: #e2e2de;
+    --text: #1a1a18;
+    --muted: #8a8a84;
+    --accent: #2563eb;
+    --z0: #9ca3af;
+    --z1: #3b82f6;
+    --z2: #22c55e;
+    --z3: #f59e0b;
+    --z4: #ef4444;
+    --z5: #991b1b;
+    --font: 'Inter', system-ui, sans-serif;
+    --radius: 10px;
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 2rem 1rem;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    width: 100%;
+    max-width: 460px;
+  }
+
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.25rem;
+  }
+  .subtitle {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 1.75rem;
+  }
+
+  /* toggle */
+  .toggle {
+    display: flex;
+    background: var(--bg);
+    border-radius: var(--radius);
+    padding: 3px;
+    margin-bottom: 1.75rem;
+    border: 1px solid var(--border);
+  }
+  .toggle button {
+    flex: 1;
+    padding: 7px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .toggle button.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+
+  /* panels */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* zone rows */
+  .zone-row {
+    display: grid;
+    grid-template-columns: 100px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .zone-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  .dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .zone-row input[type=number] {
+    width: 72px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    text-align: right;
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .zone-row input[type=number]:focus { border-color: var(--accent); }
+  .unit { font-size: 0.75rem; color: var(--muted); width: 24px; }
+
+  /* pct rows */
+  .pct-row {
+    display: grid;
+    grid-template-columns: 100px 1fr 68px auto;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .bar-track {
+    height: 5px;
+    background: var(--bg);
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width 0.2s; }
+  .pct-row input[type=number] {
+    width: 56px;
+    padding: 6px 8px;
+    font-size: 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    text-align: right;
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .pct-row input[type=number]:focus { border-color: var(--accent); }
+
+  /* total time row */
+  .total-time-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .total-time-row label {
+    font-size: 0.82rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .total-time-row input {
+    width: 90px;
+    padding: 7px 10px;
+    font-size: 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    text-align: right;
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .total-time-row input:focus { border-color: var(--accent); }
+
+  /* summary footer */
+  .summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.82rem;
+  }
+  .summary-label { color: var(--muted); }
+  .summary-val { font-weight: 600; font-size: 0.95rem; }
+  .summary-val.ok { color: #16a34a; }
+  .summary-val.warn { color: #d97706; }
+  .summary-val.err { color: #dc2626; }
+
+  /* rank button */
+  .rank-btn {
+    width: 100%;
+    margin-top: 1.5rem;
+    padding: 11px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    background: var(--text);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .rank-btn:hover { opacity: 0.85; }
+
+  .section-eyebrow {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.9rem;
+  }
+
+  /* results */
+  .results {
+    display: none;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  .results.visible { display: block; }
+  .results-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 1rem;
+  }
+  .result-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.9rem 1rem;
+  }
+  .result-card .rc-label {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .result-card .rc-val {
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--text);
+  }
+  .result-card .rc-unit {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-left: 2px;
+  }
+  .zone-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .zb-row {
+    display: grid;
+    grid-template-columns: 70px 1fr 70px;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.78rem;
+  }
+  .zb-label { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+  .zb-bar-track { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .zb-bar-fill { height: 100%; border-radius: 2px; }
+  .zb-pts { text-align: right; color: var(--text); font-weight: 500; }
+
+  /* rank badge */
+  .rank-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 1rem 1.1rem;
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+    border: 1px solid;
+  }
+  .rank-badge .rb-icon { font-size: 1.5rem; line-height: 1; }
+  .rank-badge .rb-name { font-size: 1rem; font-weight: 700; letter-spacing: -0.02em; }
+  .rank-badge .rb-sub  { font-size: 0.72rem; margin-top: 1px; }
+
+  .rank-baseline { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+  .rank-baseline .rb-name { color: #334155; }
+  .rank-ok       { background: #f0fdf4; border-color: #86efac; }
+  .rank-ok .rb-name { color: #15803d; }
+  .rank-ok .rb-sub  { color: #4ade80; }
+  .rank-good     { background: #eff6ff; border-color: #93c5fd; }
+  .rank-good .rb-name { color: #1d4ed8; }
+  .rank-good .rb-sub  { color: #60a5fa; }
+  .rank-excellent { background: #f0fdfa; border-color: #5eead4; }
+  .rank-excellent .rb-name { color: #0f766e; }
+  .rank-excellent .rb-sub  { color: #2dd4bf; }
+  .rank-verygood { background: #fefce8; border-color: #fde047; }
+  .rank-verygood .rb-name { color: #a16207; }
+  .rank-verygood .rb-sub  { color: #facc15; }
+  .rank-amazing  { background: #fff7ed; border-color: #fdba74; }
+  .rank-amazing .rb-name { color: #c2410c; }
+  .rank-amazing .rb-sub  { color: #fb923c; }
+  .rank-superb   { background: #1a1a18; border-color: #4b4b46; }
+  .rank-superb .rb-name { color: #fff; }
+  .rank-superb .rb-sub  { color: #9ca3af; }
+  .rank-below    { background: #fef2f2; border-color: #fca5a5; }
+  .rank-below .rb-name { color: #b91c1c; }
+  .rank-below .rb-sub  { color: #f87171; }
+
+  #next-rank-hint {
+    margin-top: 0.75rem;
+    padding: 0.85rem 1rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .nrh-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 0.6rem;
+  }
+  .nrh-row {
+    display: flex;
+    gap: 2rem;
+  }
+  .nrh-key {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 2px;
+  }
+  .nrh-val {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .nrh-check { color: #16a34a; }
+
+  .rank-hint {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 1rem;
+    display: flex;
+    gap: 12px;
+  }
+  .rank-hint span { display: flex; align-items: center; gap: 4px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Training rank</h1>
+  <p class="subtitle">Enter your time per zone — the formula does the rest.</p>
+
+  <div class="toggle">
+    <button class="active" onclick="switchMode('direct')">Time per zone</button>
+    <button onclick="switchMode('pct')">Total + percentages</button>
+  </div>
+
+  <!-- MODE 1 -->
+  <div class="panel active" id="panel-direct">
+    <div class="section-eyebrow">Minutes in each zone</div>
+    <div id="zone-rows"></div>
+    <div class="summary">
+      <span class="summary-label">Total</span>
+      <span class="summary-val" id="direct-total">0 min</span>
+    </div>
+  </div>
+
+  <!-- MODE 2 -->
+  <div class="panel" id="panel-pct">
+    <div class="total-time-row">
+      <label>Total duration</label>
+      <input type="number" id="total-time" min="0" placeholder="0" oninput="updatePct()">
+      <span style="font-size:0.8rem;color:var(--muted)">min</span>
+    </div>
+    <div class="section-eyebrow">Zone share (zones 1–5)</div>
+    <div id="pct-rows"></div>
+    <div class="summary">
+      <span class="summary-label">Zones 1–5 total</span>
+      <span class="summary-val" id="pct-total">0%</span>
+    </div>
+  </div>
+
+  <button class="rank-btn" onclick="rankIt()">Rank this training</button>
+
+  <div class="results" id="results">
+    <div id="rank-badge-wrap"></div>
+    <div class="results-grid">
+      <div class="result-card">
+        <div class="rc-label">Total points</div>
+        <div><span class="rc-val" id="res-pts">—</span></div>
+      </div>
+      <div class="result-card">
+        <div class="rc-label">Efficiency</div>
+        <div><span class="rc-val" id="res-eff">—</span><span class="rc-unit">pts/min</span></div>
+      </div>
+    </div>
+    <div class="section-eyebrow" style="margin-top:0.5rem">Points by zone</div>
+    <div class="zone-breakdown" id="zone-breakdown"></div>
+    <div id="next-rank-hint" style="display:none"></div>
+    <button class="rank-btn" id="share-btn" style="display:none;margin-top:1rem;background:#2563eb;" onclick="shareCard()">Download card (PNG)</button>
+  </div>
+</div>
+<canvas id="export-canvas" style="display:none"></canvas>
+
+<script>
+const zones = [
+  { id: 0, name: 'Zone 0', color: '#9ca3af' },
+  { id: 1, name: 'Zone 1', color: '#3b82f6' },
+  { id: 2, name: 'Zone 2', color: '#22c55e' },
+  { id: 3, name: 'Zone 3', color: '#f59e0b' },
+  { id: 4, name: 'Zone 4', color: '#ef4444' },
+  { id: 5, name: 'Zone 5', color: '#991b1b' },
+];
+
+function buildDirectRows() {
+  document.getElementById('zone-rows').innerHTML = zones.map(z => `
+    <div class="zone-row">
+      <div class="zone-label">
+        <div class="dot" style="background:${z.color}"></div>
+        ${z.name}
+      </div>
+      <input type="number" min="0" value="0" id="d-z${z.id}" oninput="updateDirectTotal()">
+      <span class="unit">min</span>
+    </div>
+  `).join('');
+}
+
+function buildPctRows() {
+  document.getElementById('pct-rows').innerHTML = zones.filter(z => z.id > 0).map(z => `
+    <div class="pct-row">
+      <div class="zone-label">
+        <div class="dot" style="background:${z.color}"></div>
+        ${z.name}
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" id="bar-z${z.id}" style="background:${z.color};width:0%"></div>
+      </div>
+      <input type="number" min="0" max="100" value="0" id="p-z${z.id}" oninput="updatePct()">
+      <span class="unit">%</span>
+    </div>
+  `).join('');
+}
+
+function updateDirectTotal() {
+  let t = 0;
+  zones.forEach(z => { t += parseFloat(document.getElementById('d-z'+z.id).value) || 0; });
+  document.getElementById('direct-total').textContent = Math.round(t) + ' min';
+}
+
+function updatePct() {
+  let sum = 0;
+  zones.filter(z => z.id > 0).forEach(z => {
+    const v = parseFloat(document.getElementById('p-z'+z.id).value) || 0;
+    sum += v;
+    document.getElementById('bar-z'+z.id).style.width = Math.min(v, 100) + '%';
+  });
+  const el = document.getElementById('pct-total');
+  const rounded = Math.round(sum * 10) / 10;
+  el.textContent = rounded + '%';
+  el.className = 'summary-val' + (Math.abs(sum - 100) < 0.5 ? ' ok' : (sum > 100 ? ' err' : ' warn'));
+}
+
+function switchMode(m) {
+  document.querySelectorAll('.toggle button').forEach((b, i) =>
+    b.classList.toggle('active', (m === 'direct' && i === 0) || (m === 'pct' && i === 1)));
+  document.getElementById('panel-direct').classList.toggle('active', m === 'direct');
+  document.getElementById('panel-pct').classList.toggle('active', m === 'pct');
+}
+
+function getMinutes() {
+  const isDirect = document.getElementById('panel-direct').classList.contains('active');
+  if (isDirect) {
+    return zones.map(z => ({ id: z.id, min: parseFloat(document.getElementById('d-z'+z.id).value) || 0 }));
+  } else {
+    const total = parseFloat(document.getElementById('total-time').value) || 0;
+    let pctSum = 0;
+    const pcts = {};
+    zones.filter(z => z.id > 0).forEach(z => {
+      pcts[z.id] = parseFloat(document.getElementById('p-z'+z.id).value) || 0;
+      pctSum += pcts[z.id];
+    });
+    pcts[0] = Math.max(0, 100 - pctSum);
+    return zones.map(z => ({ id: z.id, min: Math.round(total * pcts[z.id] / 100 * 10) / 10 }));
+  }
+}
+
+const PTS_PER_SEC = { 0: 0, 1: 0, 2: 0.01, 3: 0.5, 4: 2, 5: 10 };
+
+// Ranks: both pts AND eff must be >= threshold to earn that rank
+const RANKS = [
+  { key: 'superb',    label: 'Superb',    icon: '🔥', pts: 3000, eff: 250, cls: 'rank-superb',    sub: 'Extremely hard. Rare.' },
+  { key: 'amazing',   label: 'Amazing',   icon: '⚡', pts: 2500, eff: 130, cls: 'rank-amazing',   sub: 'Elite effort.' },
+  { key: 'excellent', label: 'Excellent', icon: '🎯', pts: 2000, eff: 100, cls: 'rank-excellent',  sub: 'Serious effort.' },
+  { key: 'verygood',  label: 'Very good', icon: '💪', pts: 1200, eff: 70,  cls: 'rank-verygood',  sub: 'Strong session.' },
+  { key: 'good',      label: 'Good',      icon: '✅', pts: 750,  eff: 40,  cls: 'rank-good',      sub: 'Solid work.' },
+  { key: 'ok',        label: 'OK',        icon: '👌', pts: 500,  eff: 20,  cls: 'rank-ok',        sub: 'Decent baseline.' },
+  { key: 'baseline',  label: 'Poor',      icon: '📉', pts: 0,    eff: 0,   cls: 'rank-baseline',  sub: 'Below thresholds.' },
+];
+
+function getRank(pts, eff) {
+  for (const r of RANKS) {
+    if (pts >= r.pts && eff >= r.eff) return r;
+  }
+  return RANKS[RANKS.length - 1];
+}
+
+function rankIt() {
+  const data = getMinutes();
+  const totalMin = data.reduce((s, z) => s + z.min, 0);
+  if (totalMin === 0) {
+    alert('Enter some times first.');
+    return;
+  }
+
+  // compute points per zone (time in seconds * rate)
+  const zonePts = {};
+  let totalPts = 0;
+  data.forEach(z => {
+    const secs = z.min * 60;
+    zonePts[z.id] = secs * PTS_PER_SEC[z.id];
+    totalPts += zonePts[z.id];
+  });
+
+  const efficiency = totalMin > 0 ? totalPts / totalMin : 0;
+
+  // display top cards
+  document.getElementById('res-pts').textContent = totalPts >= 1000
+    ? (totalPts / 1000).toFixed(2) + 'k'
+    : totalPts.toFixed(1);
+  document.getElementById('res-eff').textContent = efficiency.toFixed(2);
+
+  // breakdown bars — scale to max zone pts
+  const maxPts = Math.max(...Object.values(zonePts), 1);
+  const bd = document.getElementById('zone-breakdown');
+  bd.innerHTML = zones.filter(z => z.id > 0).map(z => {
+    const pts = zonePts[z.id];
+    const pct = (pts / maxPts) * 100;
+    const label = pts === 0 ? '—' : (pts >= 1000 ? (pts/1000).toFixed(2)+'k' : pts.toFixed(1));
+    return `
+      <div class="zb-row">
+        <div class="zb-label">
+          <div class="dot" style="background:${zones[z.id].color}"></div>
+          Zone ${z.id}
+        </div>
+        <div class="zb-bar-track">
+          <div class="zb-bar-fill" style="background:${zones[z.id].color};width:${pct.toFixed(1)}%"></div>
+        </div>
+        <div class="zb-pts">${label} pts</div>
+      </div>
+    `;
+  }).join('');
+
+  // rank
+  const rank = getRank(totalPts, efficiency);
+  document.getElementById('rank-badge-wrap').innerHTML = `
+    <div class="rank-badge ${rank.cls}">
+      <div class="rb-icon">${rank.icon}</div>
+      <div>
+        <div class="rb-name">${rank.label}</div>
+        <div class="rb-sub">${rank.sub}</div>
+      </div>
+    </div>
+  `;
+
+  // next rank hint
+  const rankIdx = RANKS.findIndex(rr => rr.key === rank.key);
+  const nextRank = rankIdx > 0 ? RANKS[rankIdx - 1] : null;
+  const nextEl = document.getElementById('next-rank-hint');
+  if (nextRank) {
+    const needPts = Math.max(0, nextRank.pts - totalPts);
+    const needEff = Math.max(0, nextRank.eff - efficiency);
+    const ptsStr = needPts > 0 ? `+${needPts >= 1000 ? (needPts/1000).toFixed(2)+'k' : needPts.toFixed(1)} pts` : '<span class="nrh-check">✓</span>';
+    const effStr = needEff > 0 ? `+${needEff.toFixed(1)} pts/min` : '<span class="nrh-check">✓</span>';
+    nextEl.innerHTML = `
+      <div class="nrh-label">For next rank — ${nextRank.icon} ${nextRank.label}</div>
+      <div class="nrh-row">
+        <div><div class="nrh-key">POINTS</div><div class="nrh-val">${ptsStr}</div></div>
+        <div><div class="nrh-key">EFFICIENCY</div><div class="nrh-val">${effStr}</div></div>
+      </div>
+    `;
+    nextEl.style.display = 'block';
+  } else {
+    nextEl.innerHTML = `<div class="nrh-label">🔥 Peak rank reached.</div>`;
+    nextEl.style.display = 'block';
+  }
+
+  document.getElementById('results').classList.add('visible');
+
+  // store last result for card export
+  window._lastResult = { data, totalMin, zonePts, totalPts, efficiency, rank };
+
+  // show share button
+  document.getElementById('share-btn').style.display = 'block';
+}
+
+// ── card styles per rank ──────────────────────────────────────────
+const CARD_THEMES = {
+  baseline: {
+    bg: '#f4f4f2', fg: '#6b7280', heading: '#374151',
+    accent: '#9ca3af', subtext: '#9ca3af',
+    barBg: '#e5e7eb', font: 'normal', border: '#d1d5db'
+  },
+  ok: {
+    bg: '#f0fdf4', fg: '#374151', heading: '#15803d',
+    accent: '#86efac', subtext: '#6b7280',
+    barBg: '#d1fae5', font: 'normal', border: '#86efac'
+  },
+  good: {
+    bg: '#eff6ff', fg: '#374151', heading: '#1d4ed8',
+    accent: '#3b82f6', subtext: '#6b7280',
+    barBg: '#bfdbfe', font: 'normal', border: '#93c5fd'
+  },
+  verygood: {
+    bg: '#1a1a18', fg: '#fef08a', heading: '#fde047',
+    accent: '#f59e0b', subtext: '#a3a3a3',
+    barBg: '#3a3a2a', font: 'bold', border: '#854d0e'
+  },
+  amazing: {
+    bg: '#1c0a00', fg: '#fed7aa', heading: '#fb923c',
+    accent: '#ef4444', subtext: '#a3a3a3',
+    barBg: '#3a1a0a', font: 'bold', border: '#7c2d12'
+  },
+  superb: {
+    bg: '#0a0a14', fg: '#ffffff', heading: '#ff2d78',
+    accent: '#a855f7', subtext: '#9ca3af',
+    barBg: '#1a0a2a', font: 'bold', border: '#ff2d78'
+  }
+};
+
+function fmtPts(p) {
+  return p >= 1000 ? (p/1000).toFixed(2)+'k' : p.toFixed(1);
+}
+function fmtMin(m) {
+  const h = Math.floor(m/60), min = Math.floor(m%60), s = Math.round((m%1)*60);
+  if (h > 0) return `${h}h ${min}m`;
+  if (s > 0) return `${min}m ${s}s`;
+  return `${min}m`;
+}
+
+function drawCard() {
+  const r = window._lastResult;
+  if (!r) return;
+  const { data, totalMin, zonePts, totalPts, efficiency, rank } = r;
+
+  const W = 420, H = 640;
+  const canvas = document.getElementById('export-canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const pad = 48;
+  const innerW = W - pad * 2;
+  const key = rank.key;
+
+  // ── CLIP to rounded rect ──────────────────────────────
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(0, 0, W, H, 20);
+  ctx.clip();
+
+  // ══════════════════════════════════════════════════════
+  // BACKGROUND — progressive per rank
+  // ══════════════════════════════════════════════════════
+
+  if (key === 'baseline') {
+    // Plain white — receipt vibes
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+
+  } else if (key === 'ok') {
+    // Soft green tint
+    ctx.fillStyle = '#f6fef9';
+    ctx.fillRect(0, 0, W, H);
+    // subtle top accent band
+    ctx.fillStyle = '#d1fae5';
+    ctx.fillRect(0, 0, W, 6);
+
+  } else if (key === 'good') {
+    // Light blue + gentle radial glow top-left
+    ctx.fillStyle = '#eff6ff';
+    ctx.fillRect(0, 0, W, H);
+    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 320);
+    glow.addColorStop(0, 'rgba(59,130,246,0.12)');
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+  } else if (key === 'excellent') {
+    // Dark teal + cyan glow top-left
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+    bgGrad.addColorStop(0, '#001a18');
+    bgGrad.addColorStop(1, '#000f0e');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 340);
+    glow.addColorStop(0, 'rgba(45,212,191,0.18)');
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+  } else if (key === 'verygood') {
+    // Dark + warm gradient from top
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+    bgGrad.addColorStop(0, '#1f1a00');
+    bgGrad.addColorStop(1, '#111108');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+    // amber glow top-right
+    const glow = ctx.createRadialGradient(W, 0, 0, W, 0, 300);
+    glow.addColorStop(0, 'rgba(251,191,36,0.18)');
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+  } else if (key === 'amazing') {
+    // Dark orange + diagonal stripe texture
+    ctx.fillStyle = '#1a0800';
+    ctx.fillRect(0, 0, W, H);
+    // diagonal stripes
+    ctx.save();
+    ctx.strokeStyle = 'rgba(251,146,60,0.06)';
+    ctx.lineWidth = 12;
+    for (let i = -H; i < W + H; i += 28) {
+      ctx.beginPath();
+      ctx.moveTo(i, 0);
+      ctx.lineTo(i + H, H);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // orange glow bottom-right
+    const glow = ctx.createRadialGradient(W, H, 0, W, H, 380);
+    glow.addColorStop(0, 'rgba(251,146,60,0.2)');
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+  } else if (key === 'superb') {
+    // Deep dark + dual radial glows
+    ctx.fillStyle = '#05050f';
+    ctx.fillRect(0, 0, W, H);
+    const g1 = ctx.createRadialGradient(W * 0.2, 0, 0, W * 0.2, 0, 320);
+    g1.addColorStop(0, 'rgba(255,45,120,0.22)');
+    g1.addColorStop(1, 'transparent');
+    ctx.fillStyle = g1;
+    ctx.fillRect(0, 0, W, H);
+    const g2 = ctx.createRadialGradient(W * 0.9, H * 0.6, 0, W * 0.9, H * 0.6, 280);
+    g2.addColorStop(0, 'rgba(168,85,247,0.2)');
+    g2.addColorStop(1, 'transparent');
+    ctx.fillStyle = g2;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  ctx.restore(); // end clip
+
+  // ── BORDER ───────────────────────────────────────────
+  if (key === 'baseline') {
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.lineWidth = 1;
+  } else if (key === 'ok') {
+    ctx.strokeStyle = '#6ee7b7';
+    ctx.lineWidth = 1.5;
+  } else if (key === 'good') {
+    ctx.strokeStyle = '#93c5fd';
+    ctx.lineWidth = 1.5;
+  } else if (key === 'excellent') {
+    ctx.strokeStyle = '#2dd4bf';
+    ctx.lineWidth = 2;
+  } else if (key === 'verygood') {
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 2;
+  } else if (key === 'amazing') {
+    ctx.strokeStyle = '#ea580c';
+    ctx.lineWidth = 2.5;
+  } else if (key === 'superb') {
+    // gradient border
+    const gb = ctx.createLinearGradient(0, 0, W, H);
+    gb.addColorStop(0, '#ff2d78');
+    gb.addColorStop(0.5, '#a855f7');
+    gb.addColorStop(1, '#ff2d78');
+    ctx.strokeStyle = gb;
+    ctx.lineWidth = 3;
+  }
+  ctx.beginPath();
+  ctx.roundRect(1.5, 1.5, W-3, H-3, 20);
+  ctx.stroke();
+
+  // ── SUPERB: top glow line ─────────────────────────────
+  if (key === 'superb') {
+    const gl = ctx.createLinearGradient(0, 0, W, 0);
+    gl.addColorStop(0, 'transparent');
+    gl.addColorStop(0.25, '#ff2d78');
+    gl.addColorStop(0.75, '#a855f7');
+    gl.addColorStop(1, 'transparent');
+    ctx.strokeStyle = gl;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(40, 3); ctx.lineTo(W - 40, 3);
+    ctx.stroke();
+  }
+
+  // ── AMAZING: accent corner marks ─────────────────────
+  if (key === 'amazing') {
+    ctx.strokeStyle = '#ea580c';
+    ctx.lineWidth = 2;
+    const cm = 18;
+    [[pad - 20, pad - 20], [W - pad + 20, pad - 20]].forEach(([cx, cy]) => {
+      ctx.beginPath(); ctx.moveTo(cx - cm, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy + cm); ctx.stroke();
+    });
+  }
+
+  // ── THEME COLORS (text) ───────────────────────────────
+  const T = {
+    baseline:  { fg: '#374151', heading: '#111827', subtext: '#9ca3af', divider: '#f3f4f6', barBg: '#f3f4f6', barH: 5 },
+    ok:        { fg: '#374151', heading: '#065f46', subtext: '#6b7280', divider: '#d1fae5', barBg: '#d1fae5', barH: 6 },
+    good:      { fg: '#1e3a5f', heading: '#1d4ed8', subtext: '#5b7fa6', divider: '#bfdbfe', barBg: '#dbeafe', barH: 7 },
+    verygood:  { fg: '#fef3c7', heading: '#fbbf24', subtext: '#78716c', divider: '#44400a', barBg: '#292600', barH: 8 },
+    excellent: { fg: '#ccfbf1', heading: '#2dd4bf', subtext: '#5e8c87', divider: '#0d2e2b', barBg: '#071a18', barH: 8 },
+    amazing:   { fg: '#fed7aa', heading: '#fb923c', subtext: '#78716c', divider: '#431407', barBg: '#1c0a00', barH: 9 },
+    superb:    { fg: '#f1f5f9', heading: '#ff2d78', subtext: '#6b7280', divider: '#1e1030', barBg: '#0f0820', barH: 10 },
+  }[key];
+
+  const divider = (yy) => {
+    ctx.strokeStyle = T.divider;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, yy); ctx.lineTo(W - pad, yy);
+    ctx.stroke();
+  };
+
+  let y = pad + 14;
+
+  // ══════════════════════════════════════════════════════
+  // RANK HEADER — grows with rank
+  // ══════════════════════════════════════════════════════
+
+  const iconSize = key === 'baseline' ? 26 : key === 'ok' ? 28 : key === 'good' ? 30 : 34;
+  const nameSize = key === 'baseline' ? 22 : key === 'ok' ? 24 : key === 'good' ? 26 : (key === 'verygood' || key === 'excellent') ? 30 : 32;
+
+  // verygood+: draw a pill behind the rank name
+  if (key === 'verygood' || key === 'excellent' || key === 'amazing' || key === 'superb') {
+    const pillColor = key === 'superb' ? 'rgba(255,45,120,0.15)' : key === 'amazing' ? 'rgba(251,146,60,0.12)' : key === 'excellent' ? 'rgba(45,212,191,0.1)' : 'rgba(251,191,36,0.1)';
+    ctx.fillStyle = pillColor;
+    ctx.beginPath();
+    ctx.roundRect(pad - 8, y + 2, innerW + 16, 54, 10);
+    ctx.fill();
+  }
+
+  ctx.font = `${iconSize}px serif`;
+  ctx.fillText(rank.icon, pad, y + iconSize);
+
+  ctx.fillStyle = T.heading;
+  ctx.font = `${key === 'baseline' || key === 'ok' ? '700' : '800'} ${nameSize}px system-ui, sans-serif`;
+  ctx.fillText(rank.label.toUpperCase(), pad + iconSize + 12, y + nameSize - 2);
+
+  ctx.fillStyle = T.subtext;
+  ctx.font = `400 ${key === 'baseline' ? 11 : 12}px system-ui, sans-serif`;
+  ctx.fillText(rank.sub, pad + iconSize + 12, y + nameSize + 16);
+
+  y += (key === 'baseline' ? 60 : 70);
+
+  // ══════════════════════════════════════════════════════
+  // PTS PER MINUTE
+  // ══════════════════════════════════════════════════════
+  divider(y); y += 24;
+
+  ctx.fillStyle = T.subtext;
+  ctx.font = '600 10px system-ui, sans-serif';
+  ctx.fillText('PTS PER MINUTE', pad, y);
+  y += 18;
+
+  const effSize = key === 'baseline' ? 17 : key === 'ok' || key === 'good' ? 19 : 21;
+  ctx.fillStyle = T.fg;
+  ctx.font = `700 ${effSize}px system-ui, sans-serif`;
+  ctx.fillText(efficiency.toFixed(2) + ' pts/min', pad, y);
+  y += effSize + 16;
+
+  // ══════════════════════════════════════════════════════
+  // SESSION POINTS + TIME
+  // ══════════════════════════════════════════════════════
+  divider(y); y += 24;
+
+  ctx.fillStyle = T.subtext;
+  ctx.font = '600 10px system-ui, sans-serif';
+  ctx.fillText('SESSION', pad, y);
+  y += 18;
+
+  const ptsSize = key === 'baseline' ? 18 : key === 'ok' ? 20 : key === 'good' ? 22 : 26;
+  ctx.fillStyle = T.heading;
+  ctx.font = `800 ${ptsSize}px system-ui, sans-serif`;
+  ctx.fillText(fmtPts(totalPts) + ' points', pad, y);
+
+  ctx.fillStyle = T.subtext;
+  ctx.font = `${key === 'baseline' ? '400' : '500'} 13px system-ui, sans-serif`;
+  ctx.textAlign = 'right';
+  ctx.fillText(fmtMin(totalMin), W - pad, y);
+  ctx.textAlign = 'left';
+  y += ptsSize + 14;
+
+  // ══════════════════════════════════════════════════════
+  // ZONE BREAKDOWN
+  // ══════════════════════════════════════════════════════
+  divider(y); y += 22;
+
+  ctx.fillStyle = T.subtext;
+  ctx.font = '600 10px system-ui, sans-serif';
+  ctx.fillText('ZONE BREAKDOWN', pad, y);
+  y += 16;
+
+  const zColors = { 1:'#3b82f6', 2:'#22c55e', 3:'#f59e0b', 4:'#ef4444', 5:'#7f1d1d' };
+  const zonesFiltered = data.filter(z => z.id > 0);
+  const maxZoneMin = Math.max(...zonesFiltered.map(z => z.min), 0.001);
+  const bH = T.barH;
+
+  zonesFiltered.forEach(z => {
+    const pct = totalMin > 0 ? Math.round((z.min / totalMin) * 100) : 0;
+    const barW = (z.min / maxZoneMin) * innerW;
+
+    // dot
+    ctx.fillStyle = zColors[z.id];
+    ctx.beginPath();
+    ctx.arc(pad + 5, y + 5, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // label
+    ctx.fillStyle = T.fg;
+    ctx.font = `${key === 'baseline' ? '400' : '500'} 12px system-ui, sans-serif`;
+    ctx.fillText(`Zone ${z.id}`, pad + 15, y + 13);
+
+    // pct · time
+    ctx.fillStyle = T.subtext;
+    ctx.font = '400 11px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(z.min > 0 ? `${pct}% · ${fmtMin(z.min)}` : '0% · —', pad + innerW, y + 13);
+    ctx.textAlign = 'left';
+
+    y += 18;
+
+    // bar track
+    ctx.fillStyle = T.barBg;
+    ctx.beginPath();
+    ctx.roundRect(pad, y, innerW, bH, bH / 2);
+    ctx.fill();
+
+    // bar fill — gradient for higher ranks
+    if (z.min > 0) {
+      if (key === 'verygood' || key === 'excellent' || key === 'amazing' || key === 'superb') {
+        const barGrad = ctx.createLinearGradient(pad, 0, pad + barW, 0);
+        barGrad.addColorStop(0, zColors[z.id] + 'aa');
+        barGrad.addColorStop(1, zColors[z.id]);
+        ctx.fillStyle = barGrad;
+      } else {
+        ctx.fillStyle = zColors[z.id];
+      }
+      ctx.beginPath();
+      ctx.roundRect(pad, y, barW, bH, bH / 2);
+      ctx.fill();
+
+      // superb/amazing: highlight streak on bar
+      if ((key === 'superb' || key === 'amazing' || key === 'excellent') && barW > 20) {
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.beginPath();
+        ctx.roundRect(pad + 2, y + 1, Math.min(barW * 0.4, 60), bH * 0.4, 2);
+        ctx.fill();
+      }
+    }
+
+    y += bH + 8;
+  });
+
+  // ══════════════════════════════════════════════════════
+  // NEXT RANK HINT
+  // ══════════════════════════════════════════════════════
+  y += 6;
+  divider(y); y += 18;
+
+  const rankIdx = RANKS.findIndex(rr => rr.key === key);
+  const nextRank = rankIdx > 0 ? RANKS[rankIdx - 1] : null;
+
+  if (nextRank) {
+    ctx.fillStyle = T.subtext;
+    ctx.font = '600 10px system-ui, sans-serif';
+    ctx.fillText(`FOR NEXT RANK (${nextRank.label.toUpperCase()})`, pad, y);
+    y += 18;
+
+    const needPts = Math.max(0, nextRank.pts - totalPts);
+    const needEff = Math.max(0, nextRank.eff - efficiency);
+    const half = innerW / 2;
+
+    ctx.fillStyle = T.subtext;
+    ctx.font = '600 10px system-ui, sans-serif';
+    ctx.fillText('POINTS', pad, y);
+    ctx.fillText('EFFICIENCY', pad + half, y);
+    y += 15;
+
+    ctx.fillStyle = needPts > 0 ? T.heading : '#16a34a';
+    ctx.font = `700 15px system-ui, sans-serif`;
+    ctx.fillText(needPts > 0 ? `+${fmtPts(needPts)}` : '✓', pad, y);
+
+    ctx.fillStyle = needEff > 0 ? T.heading : '#16a34a';
+    ctx.fillText(needEff > 0 ? `+${needEff.toFixed(1)} pts/min` : '✓', pad + half, y);
+  } else {
+    ctx.fillStyle = T.heading;
+    ctx.font = `700 14px system-ui, sans-serif`;
+    ctx.fillText('Peak rank reached.', pad, y);
+  }
+
+  // ── WATERMARK ─────────────────────────────────────────
+  ctx.fillStyle = T.subtext;
+  ctx.font = '400 10px system-ui, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('training rank', W - pad, H - 18);
+  ctx.textAlign = 'left';
+
+  return canvas;
+}
+
+function shareCard() {
+  const canvas = drawCard();
+  if (!canvas) return;
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = 'training-card.png';
+  a.click();
+}
+
+buildDirectRows();
+buildPctRows();
+</script>
+</body>
+</html>
