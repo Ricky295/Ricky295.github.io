@@ -220,19 +220,29 @@
       return possible;
     }
     function combineScores(safety, bait) {
-      var groups = {}, levels = [], combined = {};
-      Object.keys(safety).forEach(function (move) { var score = safety[move]; if (!groups[score]) { groups[score] = []; levels.push(score); } groups[score].push(move); });
-      levels.sort(function (a,b) { return a-b; });
-      levels.forEach(function (score, index) {
-        var moves = groups[score]; moves.sort(function (a,b) { return bait[b] - bait[a] || a.localeCompare(b); });
-        var count = moves.length;
-        if (index === levels.length - 1) {
-          var lower = index ? (levels[index - 1] + score) / 2 : score;
-          moves.forEach(function (move, rank) { var fraction = count > 1 ? rank / (count - 1) : 0; combined[move] = lower + (score - lower) * fraction; });
-        } else {
-          var upper = levels[index + 1]; if (upper === 100) upper = (score + upper) / 2;
-          moves.forEach(function (move, rank) { combined[move] = score + (upper - score) * rank / count; });
-        }
+      var groups = {}, tiers = [], combined = {};
+      Object.keys(safety).forEach(function (move) {
+        var score = safety[move];
+        if (!groups[score]) { groups[score] = []; tiers.push(score); }
+        groups[score].push(move);
+      });
+      tiers.sort(function (a, b) { return a - b; });
+      // Compute boundaries: floor of each tier is midpoint with tier below (or 0 for bottom),
+      // ceiling is midpoint with tier above (or 100 for top).
+      var floors = [], ceilings = [];
+      tiers.forEach(function (score, index) {
+        floors[index]   = index === 0                  ? 0   : (tiers[index - 1] + score) / 2;
+        ceilings[index] = index === tiers.length - 1   ? 100 : (score + tiers[index + 1]) / 2;
+      });
+      tiers.forEach(function (score, index) {
+        var moves = groups[score];
+        var maxBait = Math.max.apply(null, moves.map(function (m) { return bait[m]; }));
+        var floor = floors[index], ceiling = ceilings[index];
+        var isTop = (index === tiers.length - 1);
+        moves.forEach(function (move) {
+          var fraction = maxBait > 0 ? (isTop ? bait[move] / maxBait : bait[move] / (maxBait + 1)) : 0;
+          combined[move] = floor + (ceiling - floor) * fraction;
+        });
       });
       return combined;
     }
@@ -259,7 +269,12 @@
       var values = Object.keys(dangers), low = Math.min.apply(null, values.map(function (m) { return dangers[m]; })), high = Math.max.apply(null, values.map(function (m) { return dangers[m]; })), safety = {};
       values.forEach(function (m) { safety[m] = high === low ? 100 : 100 * (high - dangers[m]) / (high - low); });
       var combined = combineScores(safety, bait), level = state.levels[state.turn], closest = Math.min.apply(null, values.map(function (m) { return Math.abs(combined[m] - level); }));
-      return choose(values.filter(function (m) { return Math.abs(combined[m] - level) === closest; })).split(",").map(Number);
+      var chosen = choose(values.filter(function (m) { return Math.abs(combined[m] - level) === closest; }));
+      var moveLog = values.slice().sort(function (a, b) { return combined[b] - combined[a]; }).map(function (m) {
+        return m + " | safety=" + safety[m].toFixed(2) + " bait=" + bait[m] + " score=" + combined[m].toFixed(4) + (m === chosen ? " ← chosen" : "");
+      });
+      console.log("AI " + (state.turn + 1) + " (level " + level + "):\n" + moveLog.join("\n"));
+      return chosen.split(",").map(Number);
     }
 
     function log(message) { var item = document.createElement("p"); item.textContent = message; document.getElementById("log").prepend(item); }
