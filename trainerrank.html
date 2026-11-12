@@ -378,8 +378,8 @@
   <div class="panel" id="panel-pct">
     <div class="total-time-row">
       <label>Total duration</label>
-      <input type="number" id="total-time" min="0" placeholder="0" oninput="updatePct()">
-      <span style="font-size:0.8rem;color:var(--muted)">min</span>
+      <input type="number" id="total-time" min="0" step="any" placeholder="0" oninput="updatePct()">
+      <span style="font-size:0.8rem;color:var(--muted)">m.ss</span>
     </div>
     <div class="section-eyebrow">Zone share (zones 1–5)</div>
     <div id="pct-rows"></div>
@@ -412,6 +412,12 @@
 <canvas id="export-canvas" style="display:none"></canvas>
 
 <script>
+// Convert m.ss input → decimal minutes (3.15 = 3m15s = 3.25 min)
+function mssToMin(val) {
+  const d = parseFloat(val) || 0;
+  return Math.floor(d) + (d - Math.floor(d)) / 0.6;
+}
+
 const zones = [
   { id: 0, name: 'Zone 0', color: '#9ca3af' },
   { id: 1, name: 'Zone 1', color: '#3b82f6' },
@@ -428,8 +434,8 @@ function buildDirectRows() {
         <div class="dot" style="background:${z.color}"></div>
         ${z.name}
       </div>
-      <input type="number" min="0" value="0" id="d-z${z.id}" oninput="updateDirectTotal()">
-      <span class="unit">min</span>
+      <input type="number" min="0" step="any" value="0" id="d-z${z.id}" oninput="updateDirectTotal()">
+      <span class="unit">m.ss</span>
     </div>
   `).join('');
 }
@@ -452,8 +458,10 @@ function buildPctRows() {
 
 function updateDirectTotal() {
   let t = 0;
-  zones.forEach(z => { t += parseFloat(document.getElementById('d-z'+z.id).value) || 0; });
-  document.getElementById('direct-total').textContent = Math.round(t) + ' min';
+  zones.forEach(z => { t += mssToMin(document.getElementById('d-z'+z.id).value); });
+  const m = Math.floor(t);
+  const s = Math.round((t - m) * 60);
+  document.getElementById('direct-total').textContent = s > 0 ? `${m}m ${s}s` : `${m}m`;
 }
 
 function updatePct() {
@@ -479,9 +487,9 @@ function switchMode(m) {
 function getMinutes() {
   const isDirect = document.getElementById('panel-direct').classList.contains('active');
   if (isDirect) {
-    return zones.map(z => ({ id: z.id, min: parseFloat(document.getElementById('d-z'+z.id).value) || 0 }));
+    return zones.map(z => ({ id: z.id, min: mssToMin(document.getElementById('d-z'+z.id).value) }));
   } else {
-    const total = parseFloat(document.getElementById('total-time').value) || 0;
+    const total = mssToMin(document.getElementById('total-time').value);
     let pctSum = 0;
     const pcts = {};
     zones.filter(z => z.id > 0).forEach(z => {
@@ -489,7 +497,7 @@ function getMinutes() {
       pctSum += pcts[z.id];
     });
     pcts[0] = Math.max(0, 100 - pctSum);
-    return zones.map(z => ({ id: z.id, min: Math.round(total * pcts[z.id] / 100 * 10) / 10 }));
+    return zones.map(z => ({ id: z.id, min: total * pcts[z.id] / 100 }));
   }
 }
 
