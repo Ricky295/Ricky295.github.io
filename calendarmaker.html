@@ -373,9 +373,12 @@ const COMP_ICONS = {
 let components = [];
 let selectedId = null;
 let idCounter = 0;
-let canvasW = 794, canvasH = 1123;
+const PREVIEW_DPI = 96;
+let baseCanvasW = 794, baseCanvasH = 1123;
+let canvasW = baseCanvasW, canvasH = baseCanvasH;
 let scale = 1;
 let outputDpi = 300;
+let renderDpi = PREVIEW_DPI;
 
 const canvas = document.getElementById('preview-canvas');
 const ctx = canvas.getContext('2d');
@@ -388,7 +391,13 @@ const customHeightInput = document.getElementById('custom-height-mm');
 const outputQualitySelect = document.getElementById('output-quality');
 
 function mmToPx(mm) {
-  return Math.round(Number(mm) * outputDpi / 25.4);
+  return Math.round(Number(mm) * PREVIEW_DPI / 25.4);
+}
+
+// Component font sizes are authored at the 96-DPI design scale.
+// Convert them to canvas pixels so their physical size stays consistent.
+function px(value) {
+  return Number(value) * renderDpi / PREVIEW_DPI;
 }
 
 function getSelectedPresetDimensions() {
@@ -434,12 +443,15 @@ function applyCanvasDimensions() {
     const heightMm = Math.max(1, Math.min(2000, Number(customHeightInput.value) || 1));
     customWidthInput.value = widthMm;
     customHeightInput.value = heightMm;
-    canvasW = mmToPx(widthMm);
-    canvasH = mmToPx(heightMm);
+    baseCanvasW = mmToPx(widthMm);
+    baseCanvasH = mmToPx(heightMm);
   } else {
     const [w, h] = getSelectedPresetDimensions();
-    canvasW = w; canvasH = h;
+    baseCanvasW = w; baseCanvasH = h;
   }
+  renderDpi = PREVIEW_DPI;
+  canvasW = baseCanvasW;
+  canvasH = baseCanvasH;
   updateCanvasSize();
   refreshCanvas();
 }
@@ -449,7 +461,11 @@ customWidthInput.addEventListener('input', () => { if (canvasSizeSelect.value ==
 customHeightInput.addEventListener('input', () => { if (canvasSizeSelect.value === 'custom') applyCanvasDimensions(); });
 outputQualitySelect.addEventListener('change', () => {
   outputDpi = Math.max(1, Number(outputQualitySelect.value) || 300);
-  applyCanvasDimensions();
+  renderDpi = PREVIEW_DPI;
+  canvasW = baseCanvasW;
+  canvasH = baseCanvasH;
+  updateCanvasSize();
+  refreshCanvas();
 });
 
 canvasScaleInput.addEventListener('input', () => {
@@ -825,7 +841,7 @@ function drawGrid(ctx, c, base, x, y, w, h) {
     ctx.fillStyle = c.headerColor || '#1a1a2e';
     ctx.fillRect(x, y, w, headerH);
     ctx.fillStyle = c.textColor || '#e2e8f0';
-    ctx.font = `bold ${Math.min((c.fontSize || 13) * 1.25, headerH * 0.6, 18)}px Inter,sans-serif`;
+    ctx.font = `bold ${Math.min(px((c.fontSize || 13) * 1.25), headerH * 0.6, px(18))}px Inter,sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`${monthName(date)} ${date.getFullYear()}`, x + w/2, y + headerH/2);
@@ -836,7 +852,7 @@ function drawGrid(ctx, c, base, x, y, w, h) {
   const orderedDays = [...Array(7)].map((_,i) => dayNames[(i + (c.dayStart||1)) % 7]);
   ctx.fillStyle = c.dayColor || '#1e293b';
   ctx.fillRect(x, y + headerH, w, dowH);
-  ctx.font = `600 ${Math.min(c.fontSize || 13, dowH * 0.6, 11)}px Inter,sans-serif`;
+  ctx.font = `600 ${Math.min(px(c.fontSize || 13), dowH * 0.6, px(11))}px Inter,sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -864,7 +880,7 @@ function drawGrid(ctx, c, base, x, y, w, h) {
       ctx.lineWidth = 0.5;
       ctx.strokeRect(x, y + headerH + dowH + r*cellH, cellW, cellH);
       ctx.fillStyle = c.weekendColor || '#4a5568';
-      ctx.font = `500 ${Math.min(cellH*0.45, 10)}px Inter,sans-serif`;
+      ctx.font = `500 ${Math.min(cellH*0.45, px(10))}px Inter,sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(weekNum, x + cellW/2, y + headerH + dowH + r*cellH + cellH/2);
@@ -896,7 +912,7 @@ function drawGrid(ctx, c, base, x, y, w, h) {
         } else {
           ctx.fillStyle = isWE ? (c.weekendColor || '#4a5568') : (c.textColor || '#e2e8f0');
         }
-        ctx.font = `${isToday?'bold':'500'} ${Math.min(c.fontSize || 13, cellH*0.5)}px Inter,sans-serif`;
+        ctx.font = `${isToday?'bold':'500'} ${Math.min(px(c.fontSize || 13), cellH*0.5)}px Inter,sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(dayNum, cellX + cellW/2, cellY + cellH/2);
@@ -930,7 +946,7 @@ function drawRow(ctx, c, base, x, y, w, h) {
     ctx.fillStyle = c.accentColor || '#6c8ef5';
     ctx.fillRect(x, y, nameW, h);
     ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${Math.min(c.fontSize || 11, h*0.45, 11)}px Inter,sans-serif`;
+    ctx.font = `bold ${Math.min(px(c.fontSize || 11), h*0.45, px(11))}px Inter,sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.save();
@@ -959,7 +975,7 @@ function drawRow(ctx, c, base, x, y, w, h) {
     ctx.lineWidth = 0.5;
     ctx.strokeRect(cx, y, cellW, h);
 
-    ctx.font = `500 ${Math.min(c.fontSize || 11, cellW*0.7, h*0.5)}px Inter,sans-serif`;
+    ctx.font = `500 ${Math.min(px(c.fontSize || 11), cellW*0.7, h*0.5)}px Inter,sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(d, cx + cellW/2, y + h/2);
@@ -983,7 +999,7 @@ function drawCol(ctx, c, base, x, y, w, h) {
     ctx.fillStyle = c.accentColor || '#6c8ef5';
     ctx.fillRect(x, y, w, nameH);
     ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${Math.min(c.fontSize || 11, nameH*0.6, 11)}px Inter,sans-serif`;
+    ctx.font = `bold ${Math.min(px(c.fontSize || 11), nameH*0.6, px(11))}px Inter,sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(monthName(date).slice(0,3), x + w/2, y + nameH/2);
@@ -1009,7 +1025,7 @@ function drawCol(ctx, c, base, x, y, w, h) {
     ctx.lineWidth = 0.5;
     ctx.strokeRect(x, cy, w, cellH);
 
-    ctx.font = `500 ${Math.min(c.fontSize || 11, w*0.55, cellH*0.6)}px Inter,sans-serif`;
+    ctx.font = `500 ${Math.min(px(c.fontSize || 11), w*0.55, cellH*0.6)}px Inter,sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(d, x + w/2, cy + cellH/2);
@@ -1046,7 +1062,7 @@ function interpolateText(template, base) {
 
 function drawText(ctx, c, base, x, y, w, h) {
   ctx.fillStyle = c.color || '#1a1a2e';
-  ctx.font = `${c.fontWeight||'bold'} ${c.fontSize||24}px Inter,sans-serif`;
+  ctx.font = `${c.fontWeight||'bold'} ${px(c.fontSize||24)}px Inter,sans-serif`;
   ctx.textBaseline = 'middle';
   const align = c.align || 'center';
   ctx.textAlign = align;
@@ -1061,7 +1077,7 @@ async function drawImage(ctx, c, x, y, w, h) {
     ctx.fillStyle = '#2d2d3a';
     ctx.fillRect(x, y, w, h);
     ctx.fillStyle = '#64748b';
-    ctx.font = '12px Inter,sans-serif';
+    ctx.font = `${px(12)}px Inter,sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('Image not found', x + w/2, y + h/2);
@@ -1130,7 +1146,15 @@ function downloadJSON() {
 
 async function exportCanvas(format) {
   const previousSelection = selectedId;
+  const previousCanvasW = canvasW;
+  const previousCanvasH = canvasH;
+  const previousRenderDpi = renderDpi;
   selectedId = null;
+  renderDpi = outputDpi;
+  canvasW = Math.round(baseCanvasW * outputDpi / PREVIEW_DPI);
+  canvasH = Math.round(baseCanvasH * outputDpi / PREVIEW_DPI);
+  canvas.width = canvasW;
+  canvas.height = canvasH;
   await refreshCanvas();
   const mime = format === 'JPEG' ? 'image/jpeg' : 'image/png';
   const extension = format === 'JPEG' ? 'jpg' : 'png';
@@ -1140,17 +1164,33 @@ async function exportCanvas(format) {
   a.href = url;
   a.download = `calendar-${baseMonthInput.value || 'export'}.${extension}`;
   a.click();
+  canvasW = previousCanvasW;
+  canvasH = previousCanvasH;
+  renderDpi = previousRenderDpi;
+  updateCanvasSize();
   selectedId = previousSelection;
   await refreshCanvas();
 }
 
 function printCanvas() {
   const previousSelection = selectedId;
+  const previousCanvasW = canvasW;
+  const previousCanvasH = canvasH;
+  const previousRenderDpi = renderDpi;
   selectedId = null;
+  renderDpi = outputDpi;
+  canvasW = Math.round(baseCanvasW * outputDpi / PREVIEW_DPI);
+  canvasH = Math.round(baseCanvasH * outputDpi / PREVIEW_DPI);
+  canvas.width = canvasW;
+  canvas.height = canvasH;
   refreshCanvas().then(() => {
     const dataUrl = canvas.toDataURL('image/png');
     const win = window.open('', '_blank');
     if (!win) {
+      canvasW = previousCanvasW;
+      canvasH = previousCanvasH;
+      renderDpi = previousRenderDpi;
+      updateCanvasSize();
       selectedId = previousSelection;
       refreshCanvas();
       alert('Allow pop-ups to print or save as PDF.');
@@ -1158,6 +1198,10 @@ function printCanvas() {
     }
     win.document.write(`<!doctype html><html><head><title>Calendar</title><style>@page{margin:0}body{margin:0;display:flex;justify-content:center;align-items:flex-start}img{max-width:100%;height:auto}</style></head><body><img src="${dataUrl}" onload="window.print()"></body></html>`);
     win.document.close();
+    canvasW = previousCanvasW;
+    canvasH = previousCanvasH;
+    renderDpi = previousRenderDpi;
+    updateCanvasSize();
     selectedId = previousSelection;
     refreshCanvas();
   });
