@@ -291,10 +291,10 @@ header .pill {
       <input type="number" id="canvas-scale" value="100" min="20" max="300" step="10"> <span style="font-size:11px;color:var(--text2)">%</span>
       <label style="margin-left:8px">Canvas</label>
       <select id="canvas-size">
-        <option value="794,1123">A4 Portrait (210×297 mm)</option>
-        <option value="1123,794">A4 Landscape (297×210 mm)</option>
-        <option value="800,1200">4×6 in (100×150 mm)</option>
-        <option value="400,600">2×3 in (50×75 mm)</option>
+        <option value="794,1123" data-width-mm="210" data-height-mm="297">A4 Portrait (210×297 mm)</option>
+        <option value="1123,794" data-width-mm="297" data-height-mm="210">A4 Landscape (297×210 mm)</option>
+        <option value="800,1200" data-width-mm="100" data-height-mm="150">4×6 in (100×150 mm)</option>
+        <option value="400,600" data-width-mm="50" data-height-mm="75">2×3 in (50×75 mm)</option>
         <option value="800,800">Square 800</option>
         <option value="1200,900">Wide 1200×900</option>
         <option value="600,900">Tall 600×900</option>
@@ -332,6 +332,13 @@ header .pill {
   <button class="btn" onclick="copyJSON()">📋 Copy JSON</button>
   <button class="btn" onclick="document.getElementById('json-file-input').click()">⬆️ Import JSON</button>
   <input id="json-file-input" type="file" accept="application/json,.json" hidden onchange="importJSONFile(this)">
+  <label for="output-quality" style="font-size:11px;color:var(--text2);margin-left:8px">Print quality</label>
+  <select id="output-quality" title="Output resolution in dots per inch">
+    <option value="96">Draft (96 DPI)</option>
+    <option value="150">Low (150 DPI)</option>
+    <option value="300" selected>Medium (300 DPI)</option>
+    <option value="600">High (600 DPI)</option>
+  </select>
   <button class="btn" onclick="exportCanvas('PNG')">⬇️ PNG</button>
   <button class="btn" onclick="exportCanvas('JPEG')">⬇️ JPG</button>
   <button class="btn" onclick="printCanvas()">🖨️ PDF / Print</button>
@@ -368,6 +375,7 @@ let selectedId = null;
 let idCounter = 0;
 let canvasW = 794, canvasH = 1123;
 let scale = 1;
+let outputDpi = 300;
 
 const canvas = document.getElementById('preview-canvas');
 const ctx = canvas.getContext('2d');
@@ -377,7 +385,19 @@ const canvasSizeSelect = document.getElementById('canvas-size');
 const customSizeControls = document.getElementById('custom-size-controls');
 const customWidthInput = document.getElementById('custom-width-mm');
 const customHeightInput = document.getElementById('custom-height-mm');
-const MM_TO_PX = 96 / 25.4;
+const outputQualitySelect = document.getElementById('output-quality');
+
+function mmToPx(mm) {
+  return Math.round(Number(mm) * outputDpi / 25.4);
+}
+
+function getSelectedPresetDimensions() {
+  const option = canvasSizeSelect.selectedOptions[0];
+  const widthMm = Number(option?.dataset.widthMm);
+  const heightMm = Number(option?.dataset.heightMm);
+  if (widthMm > 0 && heightMm > 0) return [mmToPx(widthMm), mmToPx(heightMm)];
+  return canvasSizeSelect.value.split(',').map(Number);
+}
 
 function todayMonth() {
   const d = new Date();
@@ -414,10 +434,10 @@ function applyCanvasDimensions() {
     const heightMm = Math.max(1, Math.min(2000, Number(customHeightInput.value) || 1));
     customWidthInput.value = widthMm;
     customHeightInput.value = heightMm;
-    canvasW = Math.round(widthMm * MM_TO_PX);
-    canvasH = Math.round(heightMm * MM_TO_PX);
+    canvasW = mmToPx(widthMm);
+    canvasH = mmToPx(heightMm);
   } else {
-    const [w, h] = canvasSizeSelect.value.split(',').map(Number);
+    const [w, h] = getSelectedPresetDimensions();
     canvasW = w; canvasH = h;
   }
   updateCanvasSize();
@@ -427,6 +447,10 @@ function applyCanvasDimensions() {
 canvasSizeSelect.addEventListener('change', applyCanvasDimensions);
 customWidthInput.addEventListener('input', () => { if (canvasSizeSelect.value === 'custom') applyCanvasDimensions(); });
 customHeightInput.addEventListener('input', () => { if (canvasSizeSelect.value === 'custom') applyCanvasDimensions(); });
+outputQualitySelect.addEventListener('change', () => {
+  outputDpi = Math.max(1, Number(outputQualitySelect.value) || 300);
+  applyCanvasDimensions();
+});
 
 canvasScaleInput.addEventListener('input', () => {
   scale = Math.max(0.2, Math.min(3, Number(canvasScaleInput.value) / 100));
@@ -447,7 +471,7 @@ function updateCanvasSize() {
   canvas.style.height = (canvasH * s) + 'px';
 }
 
-updateCanvasSize();
+applyCanvasDimensions();
 
 // coordinate helpers: -100..100 → px
 function toX(x) { return ((x + 100) / 200) * canvasW; }
@@ -1070,7 +1094,7 @@ async function drawImage(ctx, c, x, y, w, h) {
 function buildJSON() {
   return {
     version: 1,
-    canvas: { width: canvasW, height: canvasH, customWidthMm: canvasSizeSelect.value === 'custom' ? Number(customWidthInput.value) : null, customHeightMm: canvasSizeSelect.value === 'custom' ? Number(customHeightInput.value) : null },
+    canvas: { width: canvasW, height: canvasH, dpi: outputDpi, customWidthMm: canvasSizeSelect.value === 'custom' ? Number(customWidthInput.value) : null, customHeightMm: canvasSizeSelect.value === 'custom' ? Number(customHeightInput.value) : null },
     components: components.map(c => {
       const { id, ...rest } = c;
       return rest;
@@ -1147,6 +1171,12 @@ function importJSONFile(input) {
     try {
       const data = JSON.parse(reader.result);
       if (!data || !Array.isArray(data.components)) throw new Error('Expected a JSON object with a components array.');
+      outputDpi = Math.max(1, Number(data.canvas && data.canvas.dpi) || 96);
+      outputQualitySelect.value = String(outputDpi);
+      if (![...outputQualitySelect.options].some(o => Number(o.value) === outputDpi)) {
+        outputDpi = 96;
+        outputQualitySelect.value = '96';
+      }
       if (data.canvas && data.canvas.customWidthMm && data.canvas.customHeightMm) {
         canvasSizeSelect.value = 'custom';
         customWidthInput.value = data.canvas.customWidthMm;
@@ -1157,8 +1187,8 @@ function importJSONFile(input) {
         if (preset) canvasSizeSelect.value = preset.value;
         else {
           canvasSizeSelect.value = 'custom';
-          customWidthInput.value = Math.round(data.canvas.width / MM_TO_PX);
-          customHeightInput.value = Math.round(data.canvas.height / MM_TO_PX);
+          customWidthInput.value = Math.round(data.canvas.width / (outputDpi / 25.4));
+          customHeightInput.value = Math.round(data.canvas.height / (outputDpi / 25.4));
         }
         applyCanvasDimensions();
       }
