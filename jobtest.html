@@ -462,8 +462,12 @@
     // -------------------------------------------------------------------------
     function encodeWeightsBase64(model) {
       try {
-        // Store only the compact numeric weights array in Base64
-        const compactWeights = model.rawWeights.map((val) => Number(val.toFixed(4)));
+        // Store one compact 8-number array: [b0, ...7 feature weights].
+        // b0 is the base score/intercept and comes first by convention.
+        const compactWeights = [
+          Number(model.intercept.toFixed(4)),
+          ...model.rawWeights.map((val) => Number(val.toFixed(4))),
+        ];
         const jsonStr = JSON.stringify(compactWeights);
         const bytes = new TextEncoder().encode(jsonStr);
         let binary = "";
@@ -495,9 +499,18 @@
 
         if (
           Array.isArray(parsed) &&
+          parsed.length === ALL_FEATURES.length + 1 &&
+          parsed.every((n) => typeof n === "number" && Number.isFinite(n))
+        ) {
+          // Current format: [base score/intercept, ...7 feature weights].
+          interceptVal = parsed[0];
+          weightsArr = parsed.slice(1);
+        } else if (
+          Array.isArray(parsed) &&
           parsed.length === ALL_FEATURES.length &&
           parsed.every((n) => typeof n === "number" && Number.isFinite(n))
         ) {
+          // Backwards compatibility with the previous 7-weight array format.
           weightsArr = parsed;
         } else if (
           parsed &&
@@ -870,6 +883,12 @@
       cBody.textContent = `You care the most about "${model.topQuality}"`;
       callout.appendChild(cTitle);
       callout.appendChild(cBody);
+
+      const baseScore = document.createElement("p");
+      baseScore.className = "text-xs sm:text-sm text-slate-600 mt-2";
+      const baseSign = model.intercept >= 0 ? "+" : "";
+      baseScore.textContent = `Base score (intercept): ${baseSign}${model.intercept.toFixed(4)} before feature contributions.`;
+      callout.appendChild(baseScore);
 
       // Rank features by absolute standardized weight
       const ranked = ALL_FEATURES.map((feat, idx) => ({
