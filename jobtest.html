@@ -68,16 +68,25 @@
       <header class="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-7 shadow-sm">
         <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
           <span class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200/60">
-            40-Scenario Calibration
+            Scenario Calibration
           </span>
-          <span id="progress-badge" class="text-xs font-medium text-slate-500">Scenario 1 of 40</span>
+          <span id="progress-badge" class="text-xs font-medium text-slate-500">Choose a question count to begin</span>
         </div>
         <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
           What Matters Most to You in a Job?
         </h1>
         <p class="mt-2 text-sm sm:text-base text-slate-600 leading-relaxed">
-          Rate 40 random job setups as <strong>Yes</strong>, <strong>Uncertain</strong>, or <strong>No</strong>. At the end, we fit a linear regression model to uncover what matters most to you and generate a shareable text &amp; embeddable widget.
+          Rate randomly generated job setups as <strong>Yes</strong>, <strong>Uncertain</strong>, or <strong>No</strong>. At the end, we fit a linear regression model to uncover what matters most to you and generate a shareable text &amp; embeddable widget.
         </p>
+
+        <div class="mt-5 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div>
+            <label for="scenario-count" class="block text-xs font-semibold uppercase tracking-wider text-slate-500">Number of questions</label>
+            <input id="scenario-count" type="number" min="1" step="1" value="40" class="mt-1.5 w-32 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <button id="btn-start-test" type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition">Start test</button>
+          <p class="text-xs text-slate-500">More questions generally produce more stable estimates, but take more time.</p>
+        </div>
 
         <!-- Progress bar -->
         <div class="mt-5">
@@ -98,7 +107,7 @@
       </header>
 
       <!-- Active Scenario Card -->
-      <section id="scenario-card" class="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-7 shadow-sm">
+      <section id="scenario-card" class="hidden bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-7 shadow-sm">
         <div class="flex items-center justify-between gap-3 pb-4 border-b border-slate-100">
           <div>
             <p id="scenario-title" class="text-lg sm:text-xl font-semibold text-slate-900">Scenario #1</p>
@@ -323,7 +332,8 @@
      *   solver, text share generator, and Base64 iframe embed generator).
      */
 
-    const TOTAL_SCENARIOS = 40;
+    const DEFAULT_SCENARIOS = 40;
+    let totalScenarios = DEFAULT_SCENARIOS;
 
     // 6 qualities on 0.0 - 10.0 scale + weekly hours on 20 - 60 scale
     const SCORED_QUALITIES = [
@@ -592,7 +602,7 @@
       return row;
     }
 
-    function generateAllScenarios(count = TOTAL_SCENARIOS) {
+    function generateAllScenarios(count = totalScenarios) {
       return Array.from({ length: count }, () => generateScenario());
     }
 
@@ -766,13 +776,13 @@
       const scenarioCard = document.getElementById("scenario-card");
       const resultsSection = document.getElementById("results-section");
 
-      const completedCount = Math.min(idx, TOTAL_SCENARIOS);
-      const pct = Math.round((completedCount / TOTAL_SCENARIOS) * 100);
+      const completedCount = Math.min(idx, totalScenarios);
+      const pct = Math.round((completedCount / totalScenarios) * 100);
       bar.style.width = `${Math.max(2.5, pct)}%`;
-      pctLabel.textContent = `${pct}% complete (${completedCount}/${TOTAL_SCENARIOS})`;
+      pctLabel.textContent = `${pct}% complete (${completedCount}/${totalScenarios})`;
 
-      if (idx >= TOTAL_SCENARIOS) {
-        badge.textContent = `Completed ${TOTAL_SCENARIOS} of ${TOTAL_SCENARIOS}`;
+      if (idx >= totalScenarios) {
+        badge.textContent = `Completed ${totalScenarios} of ${totalScenarios}`;
         scenarioCard.classList.add("hidden");
         renderResults();
         resultsSection.classList.remove("hidden");
@@ -781,7 +791,7 @@
 
       scenarioCard.classList.remove("hidden");
       resultsSection.classList.add("hidden");
-      badge.textContent = `Scenario ${idx + 1} of ${TOTAL_SCENARIOS}`;
+      badge.textContent = `Scenario ${idx + 1} of ${totalScenarios}`;
       undoBtn.disabled = idx === 0;
 
       document.getElementById("scenario-title").textContent = `Scenario #${idx + 1}`;
@@ -824,7 +834,7 @@
     }
 
     function recordAnswer(answerType) {
-      if (state.responses.length >= TOTAL_SCENARIOS) return;
+      if (state.responses.length >= totalScenarios) return;
       const scoreMap = { yes: 1.0, uncertain: 0.5, no: 0.0 };
       state.responses.push({
         answer: answerType,
@@ -839,13 +849,28 @@
       renderCurrentScenario();
     }
 
-    function resetTest() {
-      state.scenarios = generateAllScenarios(TOTAL_SCENARIOS);
+    function readScenarioCount() {
+      const input = document.getElementById("scenario-count");
+      const parsed = Number.parseInt(input.value, 10);
+      if (!Number.isInteger(parsed) || parsed < 1) {
+        input.value = String(DEFAULT_SCENARIOS);
+        return DEFAULT_SCENARIOS;
+      }
+      return parsed;
+    }
+
+    function startTest() {
+      totalScenarios = readScenarioCount();
+      state.scenarios = generateAllScenarios(totalScenarios);
       state.responses = [];
       state.fittedModel = null;
       document.getElementById("widget-preview-host").innerHTML = "";
       renderCurrentScenario();
-      showStatus("Started a fresh set of 40 random job scenarios.", "info");
+      showStatus(`Started a fresh set of ${totalScenarios} random job scenarios.`, "info");
+    }
+
+    function resetTest() {
+      startTest();
     }
 
     function buildShareUrlWithWeights(encodedWeights) {
@@ -853,8 +878,8 @@
       return `${base}?weights=${encodeURIComponent(encodedWeights)}`;
     }
 
-    function buildShareText(model, shareUrl) {
-      return `I care the most about ${model.topQuality} in jobs! what about you? ${shareUrl}`;
+    function buildShareText(model, baseUrl) {
+      return `I care the most about ${model.topQuality} in jobs! what about you? ${baseUrl}`;
     }
 
     function buildEmbedCode(encodedWeights) {
@@ -871,7 +896,7 @@
       const noCount = state.responses.filter((r) => r.answer === "no").length;
 
       document.getElementById("model-summary").textContent =
-        `${yesCount} Yes · ${uncCount} Uncertain · ${noCount} No · Model R²: ${(model.r2 * 100).toFixed(1)}%`;
+        `${yesCount} Yes · ${uncCount} Uncertain · ${noCount} No · ${totalScenarios} scenarios · Model R²: ${(model.r2 * 100).toFixed(1)}%`;
 
       const callout = document.getElementById("top-quality-callout");
       callout.innerHTML = "";
@@ -948,7 +973,8 @@
       // Prepare Base64 share text & embed code
       const b64 = encodeWeightsBase64(model);
       const shareUrl = buildShareUrlWithWeights(b64);
-      const shareText = buildShareText(model, shareUrl);
+      const baseUrl = `${window.location.origin}${window.location.pathname}`;
+      const shareText = buildShareText(model, baseUrl);
       const embedCode = buildEmbedCode(b64);
 
       document.getElementById("share-text-box").value = shareText;
@@ -1100,6 +1126,7 @@
     // Event Listeners & Initialization
     // -------------------------------------------------------------------------
     function bindTestEvents() {
+      document.getElementById("btn-start-test").addEventListener("click", startTest);
       document.getElementById("btn-yes").addEventListener("click", () => recordAnswer("yes"));
       document.getElementById("btn-uncertain").addEventListener("click", () => recordAnswer("uncertain"));
       document.getElementById("btn-no").addEventListener("click", () => recordAnswer("no"));
@@ -1149,11 +1176,10 @@
         return;
       }
 
-      // Otherwise render Mode 1: 40-question test + weights + text/embed share
+      // Otherwise render Mode 1: user-configurable test + weights + text/embed share
       bindTestEvents();
-      state.scenarios = generateAllScenarios(TOTAL_SCENARIOS);
       state.responses = [];
-      renderCurrentScenario();
+      document.getElementById("scenario-card").classList.add("hidden");
     }
 
     window.addEventListener("DOMContentLoaded", boot);
