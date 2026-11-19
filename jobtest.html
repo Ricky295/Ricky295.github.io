@@ -266,8 +266,9 @@
           <!-- Probability Readout Pill -->
           <div class="bg-slate-900 text-white rounded-2xl px-4 py-3 text-left sm:text-right shrink-0">
             <div class="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Chance of Yes</div>
-            <div id="widget-prob-value" class="text-2xl sm:text-3xl font-bold tabular-nums text-emerald-400">50.0%</div>
-            <div id="widget-prob-verdict" class="text-xs text-slate-300 font-medium">Toss-up</div>
+            <div id="widget-prob-value" class="text-2xl sm:text-3xl font-bold tabular-nums text-slate-300">Hidden</div>
+            <div id="widget-prob-verdict" class="text-xs text-slate-300 font-medium">Reveal your score</div>
+            <button id="btn-widget-reveal" type="button" class="mt-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 transition">Reveal score</button>
           </div>
         </div>
 
@@ -840,7 +841,7 @@
     }
 
     function buildShareText(model, shareUrl) {
-      return `I care the most about ${model.topQuality} in jobs? what about you? ${shareUrl}`;
+      return `I care the most about ${model.topQuality} in jobs! what about you? ${shareUrl}`;
     }
 
     function buildEmbedCode(encodedWeights) {
@@ -946,7 +947,7 @@
     }
 
     // -------------------------------------------------------------------------
-    // Mode 2 Rendering: Iframe Widget (6 Sliders 0.0-10.0 + Hours)
+    // Mode 2 Rendering: Iframe Widget (6 Sliders 0.0-10.0 + Hours Input)
     // -------------------------------------------------------------------------
     function initWidgetMode(model) {
       document.getElementById("test-mode").classList.add("hidden");
@@ -960,13 +961,14 @@
       takeTestLink.href = `${window.location.origin}${window.location.pathname}`;
 
       document.getElementById("widget-subtitle").textContent =
-        `Calibrated to prefer "${model.topQuality}". Slide the 6 qualities (0.0–10.0) and hours (20–60).`;
+        `Calibrated to prefer "${model.topQuality}". Adjust the 6 qualities (0.0–10.0) and enter whole-number hours (20–60).`;
 
       const slidersContainer = document.getElementById("widget-sliders");
       slidersContainer.innerHTML = "";
 
       const sliderInputs = {};
       const valueLabels = {};
+      let scoreRevealed = false;
 
       const updatePrediction = () => {
         const currentValues = {};
@@ -980,6 +982,14 @@
         const probEl = document.getElementById("widget-prob-value");
         const barEl = document.getElementById("widget-prob-bar");
         const verdictEl = document.getElementById("widget-prob-verdict");
+
+        if (!scoreRevealed) {
+          probEl.textContent = "Hidden";
+          probEl.className = "text-2xl sm:text-3xl font-bold tabular-nums text-slate-300";
+          barEl.style.width = "0%";
+          verdictEl.textContent = "Reveal your score";
+          return;
+        }
 
         probEl.textContent = `${pct}%`;
         barEl.style.width = `${pct}%`;
@@ -1028,12 +1038,14 @@
 
         const slider = document.createElement("input");
         slider.id = `slider-${feat.key}`;
-        slider.type = "range";
+        slider.type = isHours ? "number" : "range";
         slider.min = String(feat.min);
         slider.max = String(feat.max);
         slider.step = String(feat.step);
         slider.value = String(feat.defaultVal);
-        slider.className = "custom-slider w-full";
+        slider.className = isHours
+          ? "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          : "custom-slider w-full";
         sliderInputs[feat.key] = slider;
 
         slider.addEventListener("input", () => {
@@ -1053,6 +1065,12 @@
           sliderInputs[feat.key].value = String(feat.defaultVal);
           valueLabels[feat.key].textContent = feat.decimals > 0 ? feat.defaultVal.toFixed(1) : `${feat.defaultVal} hrs`;
         }
+        updatePrediction();
+      });
+
+      document.getElementById("btn-widget-reveal").addEventListener("click", () => {
+        scoreRevealed = true;
+        document.getElementById("btn-widget-reveal").classList.add("hidden");
         updatePrediction();
       });
 
@@ -1105,9 +1123,10 @@
       const encodedWeights = getQueryOrHashWeights();
       const decodedModel = encodedWeights ? decodeWeightsBase64(encodedWeights) : null;
 
-      // Render Mode 2 if inside an iframe or if a valid ?weights=<base64> payload is passed
-      if (isInsideIframe() || decodedModel) {
-        initWidgetMode(decodedModel || DEFAULT_MODEL);
+      // Render Mode 2 only when valid weights are explicitly loaded.
+      // Without weights, let the user take the calibration test—even in an iframe.
+      if (decodedModel) {
+        initWidgetMode(decodedModel);
         return;
       }
 
@@ -1122,8 +1141,8 @@
     window.addEventListener("hashchange", () => {
       const encodedWeights = getQueryOrHashWeights();
       const decodedModel = encodedWeights ? decodeWeightsBase64(encodedWeights) : null;
-      if (isInsideIframe() || decodedModel) {
-        initWidgetMode(decodedModel || DEFAULT_MODEL);
+      if (decodedModel) {
+        initWidgetMode(decodedModel);
       }
     });
   </script>
