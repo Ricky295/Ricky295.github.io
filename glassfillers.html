@@ -3,143 +3,125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Glass Fillers - Arcade Edition</title>
-    <!-- Tailwind CSS for crisp UI layout -->
+    <title>Glass Fillers</title>
+    <!-- Tailwind CSS for layout and HUD styling -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Tone.js for procedural Web Audio sound effects (pouring water, splashes, chimes) -->
+    <!-- Tone.js for procedural water & arcade sound effects -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-    <!-- Google Fonts: Fredoka for playful arcade headers, JetBrains Mono for precision timers -->
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=JetBrains+Mono:wght@600;800&display=swap" rel="stylesheet">
+    <!-- Google Fonts: Fredoka for friendly arcade headers, JetBrains Mono for precision timers -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
     <style>
         * {
             box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
-            touch-action: manipulation;
+            -webkit-touch-callout: none;
         }
 
         body {
+            font-family: 'Fredoka', sans-serif;
+            background: radial-gradient(circle at 50% 20%, #0f172a 0%, #020617 100%);
+            color: #f8fafc;
             margin: 0;
             padding: 0;
-            font-family: 'Fredoka', sans-serif;
-            background: radial-gradient(circle at 50% 20%, #1e293b 0%, #090d16 100%);
-            color: #f8fafc;
             overflow: hidden;
-            height: 100dvh;
-            display: flex;
-            flex-direction: column;
+            touch-action: manipulation;
         }
 
         .mono {
             font-family: 'JetBrains Mono', monospace;
         }
 
-        /* Arcade Push Button Styling */
+        /* Custom arcade action button styling */
         .arcade-btn {
             background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
-            box-shadow: 0 8px 0 #0369a1, 0 15px 25px rgba(2, 132, 199, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.5);
-            transition: transform 0.06s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.06s ease, background 0.15s ease;
+            box-shadow: 0 6px 0 #0369a1, 0 12px 24px rgba(2, 132, 199, 0.45);
+            transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.15s ease;
         }
 
-        .arcade-btn:active, .arcade-btn.pressed {
-            transform: translateY(6px);
-            box-shadow: 0 2px 0 #0369a1, 0 5px 12px rgba(2, 132, 199, 0.4), inset 0 2px 4px rgba(0, 0, 0, 0.25);
+        .arcade-btn:active,
+        .arcade-btn.is-pressed {
+            transform: translateY(5px);
+            box-shadow: 0 1px 0 #0369a1, 0 4px 12px rgba(2, 132, 199, 0.35);
             background: linear-gradient(180deg, #0ea5e9 0%, #0369a1 100%);
         }
 
-        .arcade-btn-next {
+        .arcade-btn.is-next {
             background: linear-gradient(180deg, #34d399 0%, #059669 100%);
-            box-shadow: 0 8px 0 #047857, 0 15px 25px rgba(5, 150, 105, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.5);
+            box-shadow: 0 6px 0 #047857, 0 12px 24px rgba(5, 150, 105, 0.4);
         }
 
-        .arcade-btn-next:active, .arcade-btn-next.pressed {
-            transform: translateY(6px);
-            box-shadow: 0 2px 0 #047857, 0 5px 12px rgba(5, 150, 105, 0.4);
+        .arcade-btn.is-next:active,
+        .arcade-btn.is-next.is-pressed {
+            transform: translateY(5px);
+            box-shadow: 0 1px 0 #047857, 0 4px 12px rgba(5, 150, 105, 0.3);
         }
 
-        .arcade-btn-danger {
-            background: linear-gradient(180deg, #fb7185 0%, #e11d48 100%);
-            box-shadow: 0 8px 0 #9f1239, 0 15px 25px rgba(225, 29, 72, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.5);
-        }
-
-        .arcade-btn-danger:active, .arcade-btn-danger.pressed {
-            transform: translateY(6px);
-            box-shadow: 0 2px 0 #9f1239, 0 5px 12px rgba(225, 29, 72, 0.4);
-        }
-
-        /* Glassmorphism HUD Cards */
+        /* Glassmorphism HUD panels */
         .hud-panel {
-            background: rgba(15, 23, 42, 0.65);
+            background: rgba(15, 23, 42, 0.72);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(148, 163, 184, 0.18);
         }
 
-        /* Pop-in animation for judgment badge */
-        @keyframes badgePop {
-            0% { transform: scale(0.4) translateY(20px); opacity: 0; }
-            70% { transform: scale(1.08) translateY(-4px); opacity: 1; }
+        @keyframes popIn {
+            0% { transform: scale(0.75) translateY(-8px); opacity: 0; }
+            70% { transform: scale(1.04) translateY(0); opacity: 1; }
             100% { transform: scale(1) translateY(0); opacity: 1; }
         }
 
         .badge-animate {
-            animation: badgePop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-        }
-
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
+            animation: popIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) forwards;
         }
     </style>
 </head>
-<body class="items-center justify-between p-3 sm:p-5">
+<body class="h-screen w-screen flex flex-col items-center justify-between p-3 sm:p-5">
 
-    <!-- Top HUD Bar -->
-    <header class="w-full max-w-2xl flex items-center justify-between gap-2 sm:gap-4 z-10">
-        <!-- Lives -->
-        <div class="hud-panel rounded-2xl px-3.5 py-2 sm:px-5 sm:py-2.5 flex items-center gap-2.5">
+    <!-- Top Header & Live Stats HUD -->
+    <header class="w-full max-w-2xl flex items-center justify-between gap-2 z-10">
+        <!-- Lives Panel -->
+        <div class="hud-panel rounded-2xl px-3.5 py-2 flex items-center gap-2 shadow-lg">
             <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold hidden sm:inline">Lives</span>
-            <div id="lives-container" class="flex items-center gap-1.5 text-rose-500">
+            <div id="lives-container" class="flex items-center gap-1 text-rose-500">
                 <!-- Hearts injected via JS -->
             </div>
         </div>
 
-        <!-- Target Time (Center Focal Point) -->
-        <div class="hud-panel rounded-2xl px-5 py-2 sm:px-7 sm:py-2.5 flex flex-col items-center border-sky-500/30 bg-slate-900/80">
+        <!-- Target Time Display (Centerpiece) -->
+        <div class="hud-panel rounded-2xl px-4 py-1.5 sm:px-6 sm:py-2 flex flex-col items-center shadow-lg border-sky-500/30">
             <span class="text-[10px] sm:text-xs uppercase tracking-widest text-sky-400 font-bold">Target Time</span>
             <div class="flex items-baseline gap-1">
-                <span id="target-display" class="mono text-2xl sm:text-3xl font-extrabold text-white tracking-tight">3.0s</span>
+                <span id="target-display" class="mono text-2xl sm:text-3xl font-bold text-white tracking-tight">3.0</span>
+                <span class="text-xs sm:text-sm font-semibold text-slate-400">sec</span>
             </div>
         </div>
 
-        <!-- Score & Filled Count -->
-        <div class="hud-panel rounded-2xl px-3.5 py-2 sm:px-5 sm:py-2.5 flex items-center gap-3 sm:gap-4">
-            <div class="flex flex-col items-end">
-                <span class="text-[10px] sm:text-xs uppercase tracking-wider text-slate-400 font-semibold">Score</span>
-                <span id="score-display" class="mono text-lg sm:text-2xl font-extrabold text-amber-400 leading-none">0</span>
+        <!-- Score & Sound Toggle -->
+        <div class="flex items-center gap-2">
+            <div class="hud-panel rounded-2xl px-3.5 py-2 flex flex-col items-end shadow-lg">
+                <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Score</span>
+                <span id="score-display" class="mono text-lg sm:text-xl font-bold text-amber-400 leading-none">0</span>
             </div>
-            <div class="h-7 w-[1px] bg-slate-700/70"></div>
-            <div class="flex flex-col items-end">
-                <span class="text-[10px] sm:text-xs uppercase tracking-wider text-slate-400 font-semibold">Glass</span>
-                <span id="glass-count-display" class="mono text-lg sm:text-2xl font-extrabold text-sky-300 leading-none">#1</span>
-            </div>
-            <!-- Mute Toggle -->
-            <button id="mute-btn" title="Toggle Sound" class="ml-1 p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition">
-                <svg id="sound-on-icon" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+
+            <button id="mute-btn" aria-label="Toggle Sound" class="hud-panel rounded-2xl p-2.5 sm:p-3 text-slate-300 hover:text-white hover:border-slate-500 transition shadow-lg">
+                <!-- Speaker On Icon -->
+                <svg id="icon-sound-on" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"></path>
                 </svg>
-                <svg id="sound-off-icon" class="w-5 h-5 hidden text-rose-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/>
+                <!-- Speaker Off Icon -->
+                <svg id="icon-sound-off" class="w-5 h-5 hidden text-rose-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M23 9l-6 6M17 9l6 6"></path>
                 </svg>
             </button>
         </div>
     </header>
 
-    <!-- Main Interactive Canvas Area -->
-    <main id="canvas-wrapper" class="relative w-full max-w-2xl flex-1 my-2 sm:my-4 rounded-3xl overflow-hidden hud-panel border-slate-700/50 flex items-center justify-center">
-        <canvas id="gameCanvas"></canvas>
+    <!-- Main Game Stage (Responsive Canvas Container) -->
+    <main id="canvas-wrapper" class="relative w-full max-w-2xl flex-1 my-3 rounded-3xl overflow-hidden hud-panel shadow-2xl flex items-center justify-center">
+        <canvas id="game-canvas" class="w-full h-full block"></canvas>
 
         <!-- Curtain Active Indicator Pill -->
         <div id="curtain-badge" class="hidden absolute top-4 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full bg-rose-950/85 border border-rose-500/40 text-rose-200 text-xs font-semibold tracking-wide flex items-center gap-1.5 shadow-lg pointer-events-none">
@@ -147,72 +129,71 @@
             BLIND POUR MODE
         </div>
 
-        <!-- Round Result Floating Banner -->
-        <div id="result-overlay" class="hidden absolute inset-0 pointer-events-none flex flex-col items-center justify-center z-20 p-4">
-            <div id="result-card" class="badge-animate hud-panel bg-slate-900/90 border-2 rounded-3xl px-8 py-5 flex flex-col items-center text-center shadow-2xl">
-                <span id="result-title" class="text-4xl sm:text-5xl font-bold tracking-tight mb-1">PERFECT!</span>
-                <div class="flex items-center gap-3 mt-1">
-                    <span id="result-diff" class="mono text-lg sm:text-xl font-bold px-3 py-0.5 rounded-lg bg-slate-800 text-slate-200">+0ms</span>
-                    <span id="result-percent" class="mono text-sm sm:text-base font-semibold text-slate-400">100.0%</span>
+        <!-- Round Result Floating Banner (Top-Left Corner) -->
+        <div id="result-overlay" class="hidden absolute top-3 left-3 sm:top-4 sm:left-4 pointer-events-none z-20">
+            <div id="result-card" class="badge-animate hud-panel bg-slate-900/90 border-2 rounded-2xl px-4 py-2.5 sm:px-5 sm:py-3 flex flex-col items-start text-left shadow-2xl">
+                <span id="result-title" class="text-2xl sm:text-3xl font-bold tracking-tight leading-none mb-1">PERFECT!</span>
+                <div class="flex items-center gap-2 mt-0.5">
+                    <span id="result-diff" class="mono text-xs sm:text-sm font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-200">+0ms</span>
+                    <span id="result-percent" class="mono text-xs sm:text-sm font-semibold text-slate-400">100.0%</span>
                 </div>
-                <p id="result-sub" class="text-xs sm:text-sm text-slate-400 mt-2 font-medium">+3 Points</p>
+                <p id="result-sub" class="text-[11px] sm:text-xs text-slate-400 mt-1 font-medium">+3 Points</p>
             </div>
         </div>
 
         <!-- Game Over Modal Overlay -->
-        <div id="gameover-overlay" class="hidden absolute inset-0 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center z-30 p-6 text-center">
-            <div class="badge-animate max-w-sm w-full hud-panel bg-slate-900/95 border-rose-500/30 rounded-3xl p-7 flex flex-col items-center">
-                <div class="w-16 h-16 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-4">
-                    <svg class="w-9 h-9" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                    </svg>
-                </div>
-                <h2 class="text-3xl sm:text-4xl font-bold text-white tracking-tight">GAME OVER</h2>
-                <p class="text-slate-400 text-sm mt-1">Out of lives! Great pouring.</p>
+        <div id="gameover-overlay" class="hidden absolute inset-0 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20">
+            <div class="badge-animate max-w-sm w-full flex flex-col items-center">
+                <span class="px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-400 text-xs font-bold uppercase tracking-widest mb-3">Out of Lives</span>
+                <h2 class="text-4xl sm:text-5xl font-bold text-white tracking-tight mb-2">GAME OVER</h2>
+                <p class="text-slate-400 text-sm mb-6">Your internal clock ran out of water!</p>
 
-                <div class="grid grid-cols-2 gap-3 w-full my-6">
-                    <div class="bg-slate-800/70 rounded-2xl p-3 border border-slate-700/50">
-                        <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Final Score</div>
-                        <div id="final-score" class="mono text-2xl font-extrabold text-amber-400 mt-0.5">0</div>
+                <div class="w-full grid grid-cols-2 gap-3 mb-6">
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3">
+                        <span class="text-xs text-slate-400 uppercase font-semibold block">Final Score</span>
+                        <span id="final-score" class="mono text-2xl sm:text-3xl font-bold text-amber-400">0</span>
                     </div>
-                    <div class="bg-slate-800/70 rounded-2xl p-3 border border-slate-700/50">
-                        <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Glasses Filled</div>
-                        <div id="final-glasses" class="mono text-2xl font-extrabold text-sky-400 mt-0.5">0</div>
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3">
+                        <span class="text-xs text-slate-400 uppercase font-semibold block">Glasses Filled</span>
+                        <span id="final-glasses" class="mono text-2xl sm:text-3xl font-bold text-sky-400">0</span>
                     </div>
                 </div>
 
-                <button id="restart-btn" class="arcade-btn-danger w-full py-4 rounded-2xl text-white font-bold text-lg tracking-wide cursor-pointer">
+                <button id="restart-btn" class="arcade-btn w-full py-4 rounded-2xl text-white font-bold text-lg tracking-wide cursor-pointer">
                     PLAY AGAIN
                 </button>
             </div>
         </div>
     </main>
 
-    <!-- Bottom Arcade Control Pad -->
+    <!-- Bottom Interactive Controls -->
     <footer class="w-full max-w-2xl flex flex-col items-center gap-2 z-10 pb-1">
-        <button id="action-btn" class="arcade-btn w-full py-4 sm:py-5 rounded-2xl text-white font-bold text-xl sm:text-2xl tracking-wider uppercase cursor-pointer flex items-center justify-center gap-3">
+        <button id="action-btn" class="arcade-btn w-full py-4 sm:py-5 rounded-2xl text-white font-bold text-lg sm:text-xl tracking-wider uppercase flex items-center justify-center gap-3 cursor-pointer">
+            <svg id="btn-icon-drop" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+            </svg>
             <span id="action-btn-text">HOLD TO POUR</span>
         </button>
-        <p id="hint-text" class="text-xs text-slate-400 font-medium text-center">
-            Hold <span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 mono text-[11px] border border-slate-700">SPACE</span>, <span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 mono text-[11px] border border-slate-700">0</span>, or press &amp; hold the button
+        <p id="helper-hint" class="text-xs text-slate-400 text-center">
+            Hold <span class="text-slate-200 font-semibold">Button</span>, <span class="text-slate-200 font-semibold">Space</span>, or <span class="text-slate-200 font-semibold">0</span> to fill to the 100% dashed line!
         </p>
     </footer>
 
     <script>
         /**
-         * GLASS FILLERS - Upgraded HTML5 Canvas & Web Audio Edition
-         * --------------------------------------------------------
-         * Faithfully preserves the original NumWorks game mechanics:
-         * - Hold input to pour water toward the target time.
-         * - 100% fill line sits at 1.0 / 1.1 of the glass height (overflowing above 100%!).
-         * - First glass is visible; once 1+ glasses are filled, velvet curtains close
-         *   during pouring (showing only the top nozzle stream) and dramatically open on release!
-         * - Exact scoring tiers:
-         *   * |diff| * 60 < 1 (<16.67ms): PERFECT! (+3 pts, +1 glass)
-         *   * |1 - pct| < 0.10: Good! (+1 pt, +1 glass)
-         *   * |1 - pct| < 0.15: Barely... (+0 pts, +1 glass)
-         *   * Else: Miss... (-1 life)
-         * - Escalating target time: random(30, 30 + 3 * filled_glasses) / 10
+         * GLASS FILLERS - Upgraded HTML5 Edition
+         * -------------------------------------------------------------
+         * Faithfully preserves the NumWorks Python game mechanics:
+         * - Hold input to fill the glass; release right at the target time.
+         * - 100% fill corresponds to targetTime; glass brim is at 110%.
+         * - After filling 1+ glasses, velvet curtains close over the glass
+         *   during subsequent pours (Blind Pour Mode) until released.
+         * - Scoring thresholds:
+         *     * |diff| * 60 < 1 (~16.6ms) -> PERFECT! (+3 pts, golden sparks at 100% line)
+         *     * |1 - pct| < 0.10          -> Good! (+1 pt)
+         *     * |1 - pct| < 0.15          -> Barely... (+0 pts, keeps life)
+         *     * Otherwise                 -> Miss... (-1 life)
+         * - Target time scales randomly from 3.0s up to (3.0 + 0.3 * filledGlasses)s.
          */
 
         // ==========================================
@@ -220,13 +201,12 @@
         // ==========================================
         class SoundEffects {
             constructor() {
-                this.initialized = false;
                 this.muted = false;
+                this.initialized = false;
                 this.pourNoise = null;
                 this.pourFilter = null;
                 this.pourGain = null;
                 this.synth = null;
-                this.isPouringSound = false;
             }
 
             async init() {
@@ -234,56 +214,53 @@
                 try {
                     await Tone.start();
 
-                    // Synthesized water stream sound (Pink noise -> Bandpass filter -> Gain)
+                    // Synthesized water stream sound using filtered pink noise
+                    this.pourGain = new Tone.Gain(0).toDestination();
                     this.pourFilter = new Tone.Filter({
                         type: "bandpass",
                         frequency: 420,
-                        Q: 2.2
-                    }).toDestination();
+                        Q: 3.5
+                    }).connect(this.pourGain);
 
-                    this.pourGain = new Tone.Gain(0).connect(this.pourFilter);
-
-                    this.pourNoise = new Tone.Noise("pink").connect(this.pourGain);
+                    this.pourNoise = new Tone.Noise("pink").connect(this.pourFilter);
                     this.pourNoise.start();
 
-                    // Polyphonic chime synth for judgments & UI feedback
+                    // Polyphonic synth for chimes and feedback
                     this.synth = new Tone.PolySynth(Tone.Synth, {
                         oscillator: { type: "triangle" },
-                        envelope: {
-                            attack: 0.01,
-                            decay: 0.2,
-                            sustain: 0.1,
-                            release: 0.6
-                        }
+                        envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.4 }
                     }).toDestination();
                     this.synth.volume.value = -6;
 
                     this.initialized = true;
                 } catch (e) {
-                    console.warn("Audio initialization deferred:", e);
+                    // Audio context blocked or unsupported; fail silently
+                }
+            }
+
+            setMuted(muteState) {
+                this.muted = muteState;
+                if (this.muted && this.pourGain) {
+                    this.pourGain.gain.rampTo(0, 0.05);
                 }
             }
 
             startPour() {
                 if (!this.initialized || this.muted) return;
-                this.isPouringSound = true;
-                this.pourFilter.frequency.setValueAtTime(380, Tone.now());
-                this.pourGain.gain.cancelScheduledValues(Tone.now());
-                this.pourGain.gain.rampTo(0.22, 0.08);
+                this.pourFilter.frequency.value = 380;
+                this.pourGain.gain.rampTo(0.28, 0.08);
             }
 
             updatePourPitch(fillPercent) {
-                if (!this.initialized || !this.isPouringSound || this.muted) return;
-                // Pitch rises realistically as the air column inside the glass shrinks!
-                const clamped = Math.min(fillPercent, 1.3);
-                const freq = 380 + (clamped * 680);
-                this.pourFilter.frequency.setTargetAtTime(freq, Tone.now(), 0.05);
+                if (!this.initialized || this.muted) return;
+                // Pitch rises realistically as air column in the glass shrinks
+                const clamped = Math.min(Math.max(fillPercent, 0), 1.2);
+                const targetFreq = 380 + clamped * 680;
+                this.pourFilter.frequency.rampTo(targetFreq, 0.05);
             }
 
             stopPour() {
                 if (!this.initialized) return;
-                this.isPouringSound = false;
-                this.pourGain.gain.cancelScheduledValues(Tone.now());
                 this.pourGain.gain.rampTo(0, 0.06);
             }
 
@@ -293,26 +270,18 @@
                 if (tier === "PERFECT") {
                     this.synth.triggerAttackRelease(["C5", "E5", "G5", "C6"], "8n", now);
                 } else if (tier === "GOOD") {
-                    this.synth.triggerAttackRelease(["C5", "E5", "G5"], "8n", now);
+                    this.synth.triggerAttackRelease(["E5", "G5"], "8n", now);
                 } else if (tier === "BARELY") {
-                    this.synth.triggerAttackRelease(["E4", "G4"], "8n", now);
+                    this.synth.triggerAttackRelease(["D4", "A4"], "8n", now);
                 } else {
-                    // Miss / Overflow
-                    this.synth.triggerAttackRelease(["Eb3", "D3"], "4n", now);
+                    // Miss / Lose life
+                    this.synth.triggerAttackRelease(["Eb3", "A2"], "4n", now);
                 }
             }
 
             playClick() {
                 if (!this.initialized || this.muted) return;
-                this.synth.triggerAttackRelease("G5", "32n");
-            }
-
-            toggleMute() {
-                this.muted = !this.muted;
-                if (this.muted) {
-                    this.stopPour();
-                }
-                return this.muted;
+                this.synth.triggerAttackRelease("C5", "32n");
             }
         }
 
@@ -325,6 +294,7 @@
             READY: "READY",         // Waiting for player to press & hold
             POURING: "POURING",     // Player is holding button; water is flowing
             REVEALED: "REVEALED",   // Released; curtain opened, showing result
+            SLIDING: "SLIDING",     // Conveyor slide transition to next glass
             GAMEOVER: "GAMEOVER"    // 0 lives left
         };
 
@@ -344,6 +314,10 @@
             streamActive: false,
             streamGapY: 0,          // For trailing water tail when released
 
+            // Slide transition state between glasses
+            slideProgress: 0,
+            outgoingFillPercent: 0,
+
             // Curtain animation (0 = fully open, 1 = fully closed)
             curtainProgress: 0,
             targetCurtainProgress: 0,
@@ -353,6 +327,7 @@
             shakeIntensity: 0,
             bubbles: [],
             particles: [],
+            sparks: [],
             overflowDrops: [],
 
             // Input lock to prevent accidental double-triggers
@@ -362,14 +337,13 @@
         // ==========================================
         // 3. DOM ELEMENTS & CANVAS SETUP
         // ==========================================
-        const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d");
         const canvasWrapper = document.getElementById("canvas-wrapper");
+        const canvas = document.getElementById("game-canvas");
+        const ctx = canvas.getContext("2d");
 
         const livesContainer = document.getElementById("lives-container");
         const targetDisplay = document.getElementById("target-display");
         const scoreDisplay = document.getElementById("score-display");
-        const glassCountDisplay = document.getElementById("glass-count-display");
         const curtainBadge = document.getElementById("curtain-badge");
 
         const resultOverlay = document.getElementById("result-overlay");
@@ -382,21 +356,21 @@
         const gameoverOverlay = document.getElementById("gameover-overlay");
         const finalScore = document.getElementById("final-score");
         const finalGlasses = document.getElementById("final-glasses");
+        const restartBtn = document.getElementById("restart-btn");
 
         const actionBtn = document.getElementById("action-btn");
         const actionBtnText = document.getElementById("action-btn-text");
-        const restartBtn = document.getElementById("restart-btn");
         const muteBtn = document.getElementById("mute-btn");
-        const soundOnIcon = document.getElementById("sound-on-icon");
-        const soundOffIcon = document.getElementById("sound-off-icon");
+        const iconSoundOn = document.getElementById("icon-sound-on");
+        const iconSoundOff = document.getElementById("icon-sound-off");
 
-        let dpr = window.devicePixelRatio || 1;
         let width = 0;
         let height = 0;
+        let dpr = 1;
 
         function resizeCanvas() {
             const rect = canvasWrapper.getBoundingClientRect();
-            dpr = window.devicePixelRatio || 1;
+            dpr = Math.min(window.devicePixelRatio || 1, 2);
             width = rect.width;
             height = rect.height;
             canvas.width = width * dpr;
@@ -407,27 +381,26 @@
         window.addEventListener("resize", resizeCanvas);
 
         // ==========================================
-        // 4. UI UPDATES & GAME FLOW LOGIC
+        // 4. HUD & UI HELPERS
         // ==========================================
         function updateHUD() {
-            // Render Hearts
+            targetDisplay.textContent = game.targetTime.toFixed(1);
+            scoreDisplay.textContent = game.score;
+
+            // Render heart icons
             livesContainer.innerHTML = "";
             for (let i = 0; i < 3; i++) {
                 const active = i < game.lives;
                 const heart = document.createElement("span");
                 heart.innerHTML = `
-                    <svg class="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 ${active ? 'text-rose-500 scale-100 drop-shadow-[0_0_8px_rgba(244,63,94,0.6)]' : 'text-slate-700 scale-90'}" fill="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 ${active ? 'text-rose-500 scale-100' : 'text-slate-700 scale-90'}" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                     </svg>
                 `;
                 livesContainer.appendChild(heart);
             }
 
-            targetDisplay.textContent = `${game.targetTime.toFixed(1)}s`;
-            scoreDisplay.textContent = game.score;
-            glassCountDisplay.textContent = `#${game.filledGlasses + 1}`;
-
-            // Show curtain badge if blind mode is active (after 1st filled glass)
+            // Show Blind Pour badge whenever curtains are scheduled to be closed
             if (game.filledGlasses > 0 && game.state !== STATE.GAMEOVER) {
                 curtainBadge.classList.remove("hidden");
             } else {
@@ -436,24 +409,28 @@
         }
 
         function setButtonAppearance(mode) {
-            actionBtn.classList.remove("arcade-btn", "arcade-btn-next", "pressed");
+            actionBtn.classList.remove("is-next", "is-pressed");
             if (mode === "POUR") {
-                actionBtn.classList.add("arcade-btn");
                 actionBtnText.textContent = "HOLD TO POUR";
             } else if (mode === "POURING") {
-                actionBtn.classList.add("arcade-btn", "pressed");
-                actionBtnText.textContent = "RELEASE AT TARGET!";
+                actionBtnText.textContent = "RELEASE AT 100%!";
+                actionBtn.classList.add("is-pressed");
             } else if (mode === "NEXT") {
-                actionBtn.classList.add("arcade-btn-next");
                 actionBtnText.textContent = "NEXT GLASS";
+                actionBtn.classList.add("is-next");
             }
         }
 
+        // ==========================================
+        // 5. CORE GAME LOGIC
+        // ==========================================
         function resetGame() {
             game.lives = 3;
             game.score = 0;
             game.targetTime = 3.0;
             game.filledGlasses = 0;
+            game.curtainProgress = 0;
+            game.targetCurtainProgress = 0;
             gameoverOverlay.classList.add("hidden");
             prepareRound();
         }
@@ -466,6 +443,7 @@
             game.streamActive = false;
             game.bubbles = [];
             game.particles = [];
+            game.sparks = [];
             game.overflowDrops = [];
 
             // In the original script: once 1 or more glasses have been filled,
@@ -518,6 +496,7 @@
                 game.score += 3;
                 game.filledGlasses += 1;
                 spawnCelebrationParticles(38, "#fbbf24");
+                spawnTargetLineSparks();
             } else if (percentDifference < 0.10) {
                 tier = "GOOD";
                 title = "Good!";
@@ -548,18 +527,18 @@
             sfx.playResult(tier);
             updateHUD();
 
-            // Populate Result Card
+            // Populate Result Card in Top-Left Corner
             const sign = difference >= 0 ? "+" : "-";
             const ms = Math.round(absoluteDifference * 1000);
             const pctDisplay = (game.fillPercent * 100).toFixed(1);
 
             resultTitle.textContent = title;
-            resultTitle.className = `text-4xl sm:text-5xl font-bold tracking-tight mb-1 ${titleColor}`;
+            resultTitle.className = `text-2xl sm:text-3xl font-bold tracking-tight leading-none mb-1 ${titleColor}`;
             resultDiff.textContent = `${sign}${ms}ms`;
             resultPercent.textContent = `${pctDisplay}% Full`;
             resultSub.textContent = subText;
 
-            resultCard.className = `badge-animate hud-panel bg-slate-900/90 border-2 ${borderColor} rounded-3xl px-8 py-5 flex flex-col items-center text-center shadow-2xl`;
+            resultCard.className = `badge-animate hud-panel bg-slate-900/90 border-2 ${borderColor} rounded-2xl px-4 py-2.5 sm:px-5 sm:py-3 flex flex-col items-start text-left shadow-2xl`;
             resultOverlay.classList.remove("hidden");
 
             if (game.lives <= 0) {
@@ -586,11 +565,22 @@
             const randDeci = Math.floor(Math.random() * (maxDeciSeconds - 30 + 1)) + 30;
             game.targetTime = randDeci / 10;
 
-            prepareRound();
+            // Start conveyor-belt slide transition
+            game.outgoingFillPercent = game.visualPercent;
+            game.slideProgress = 0;
+            game.fillPercent = 0;
+            game.visualPercent = 0;
+            game.bubbles = [];
+            game.overflowDrops = [];
+            game.sparks = [];
+            game.state = STATE.SLIDING;
+
+            resultOverlay.classList.add("hidden");
+            updateHUD();
         }
 
         // ==========================================
-        // 5. UNIFIED INPUT HANDLERS (Touch, Mouse, Keyboard)
+        // 6. INPUT HANDLING (Touch, Mouse, Keyboard)
         // ==========================================
         function handlePressDown(e) {
             if (e && e.cancelable) e.preventDefault();
@@ -614,22 +604,23 @@
             }
         }
 
-        // Action Button Events
+        // Action Button Listeners
         actionBtn.addEventListener("mousedown", handlePressDown);
-        actionBtn.addEventListener("touchstart", handlePressDown, { passive: false });
         window.addEventListener("mouseup", handlePressUp);
-        window.addEventListener("touchend", handlePressUp);
 
-        // Allow tapping directly on canvas as well for effortless mobile play
+        actionBtn.addEventListener("touchstart", handlePressDown, { passive: false });
+        window.addEventListener("touchend", handlePressUp, { passive: false });
+        window.addEventListener("touchcancel", handlePressUp, { passive: false });
+
+        // Allow tapping directly on the canvas to play as well
         canvas.addEventListener("mousedown", handlePressDown);
         canvas.addEventListener("touchstart", handlePressDown, { passive: false });
 
-        // Keyboard Support (Space, Enter, 0, Numpad0)
+        // Keyboard support (Space, Enter, Digit0, Numpad0)
         window.addEventListener("keydown", (e) => {
             if (e.repeat) return;
-            if (e.code === "Space" || e.key === "0" || e.code === "Numpad0" || e.code === "Enter") {
+            if (e.code === "Space" || e.code === "Enter" || e.code === "Digit0" || e.code === "Numpad0") {
                 if (game.state === STATE.GAMEOVER) {
-                    sfx.playClick();
                     resetGame();
                 } else {
                     handlePressDown(e);
@@ -638,26 +629,50 @@
         });
 
         window.addEventListener("keyup", (e) => {
-            if (e.code === "Space" || e.key === "0" || e.code === "Numpad0" || e.code === "Enter") {
+            if (e.code === "Space" || e.code === "Enter" || e.code === "Digit0" || e.code === "Numpad0") {
                 handlePressUp(e);
             }
         });
 
         restartBtn.addEventListener("click", () => {
+            sfx.init();
             sfx.playClick();
             resetGame();
         });
 
         muteBtn.addEventListener("click", () => {
             sfx.init();
-            const isMuted = sfx.toggleMute();
-            soundOnIcon.classList.toggle("hidden", isMuted);
-            soundOffIcon.classList.toggle("hidden", !isMuted);
+            const nextMute = !sfx.muted;
+            sfx.setMuted(nextMute);
+            iconSoundOn.classList.toggle("hidden", nextMute);
+            iconSoundOff.classList.toggle("hidden", !nextMute);
         });
 
         // ==========================================
-        // 6. PARTICLE & SCREEN SHAKE HELPERS
+        // 7. PARTICLES & GEOMETRY HELPERS
         // ==========================================
+        function getGlassGeometry() {
+            const glassW = Math.min(Math.max(width * 0.34, 128), 185);
+            const glassH = Math.min(Math.max(height * 0.54, 210), 320);
+            const glassX = (width - glassW) * 0.5;
+            const glassBottom = height * 0.87;
+            const glassY = glassBottom - glassH;
+
+            // In original Python code: 100% fill is at 1.0 / 1.1 of total glass height
+            const targetLineY = glassBottom - (glassH * (1.0 / 1.1));
+            const nozzleY = Math.max(24, glassY - Math.min(height * 0.14, 72));
+
+            return {
+                x: glassX,
+                y: glassY,
+                w: glassW,
+                h: glassH,
+                bottom: glassBottom,
+                targetLineY,
+                nozzleY
+            };
+        }
+
         function triggerShake(duration, intensity) {
             game.shakeTime = duration;
             game.shakeIntensity = intensity;
@@ -682,68 +697,71 @@
             }
         }
 
-        // ==========================================
-        // 7. SIMULATION & HIGH-CRAFT CANVAS RENDERING
-        // ==========================================
-        function getGlassGeometry() {
-            // Responsive glass dimensions centered on canvas
-            const glassW = Math.min(width * 0.44, 185);
-            const glassH = Math.min(height * 0.64, 320);
-            const glassX = (width - glassW) / 2;
-            const glassBottom = height * 0.87;
-            const glassTop = glassBottom - glassH;
-
-            // In original Python code: height = 200 - percent * (175 / 1.1)
-            // Meaning 100% target fill is at 1.0 / 1.1 (90.9%) of the glass interior height!
-            const targetLineY = glassBottom - (glassH * (1.0 / 1.1));
-
-            return {
-                x: glassX,
-                y: glassTop,
-                w: glassW,
-                h: glassH,
-                bottom: glassBottom,
-                targetLineY: targetLineY,
-                nozzleY: Math.max(18, glassTop - 52)
-            };
+        function spawnTargetLineSparks() {
+            const g = getGlassGeometry();
+            const count = 48;
+            for (let i = 0; i < count; i++) {
+                const t = i / (count - 1);
+                const sx = g.x + t * g.w + (Math.random() - 0.5) * 8;
+                const sy = g.targetLineY + (Math.random() - 0.5) * 4;
+                // Bias outward and upward along the 100% line
+                const angle = -Math.PI * 0.5 + (t - 0.5) * Math.PI * 0.9 + (Math.random() - 0.5) * 0.5;
+                const speed = 90 + Math.random() * 230;
+                game.sparks.push({
+                    x: sx,
+                    y: sy,
+                    px: sx,
+                    py: sy,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 40,
+                    life: 0.45 + Math.random() * 0.35,
+                    maxLife: 0.8,
+                    color: Math.random() < 0.45 ? "#fef08a" : (Math.random() < 0.75 ? "#fbbf24" : "#ffffff")
+                });
+            }
         }
 
+        function easeInOutCubic(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+
+        // ==========================================
+        // 8. UPDATE LOOP (Physics & Animations)
+        // ==========================================
         let lastFrameTime = performance.now();
 
-        function update(dt) {
-            const now = performance.now();
+        function update(now) {
+            const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
+            lastFrameTime = now;
 
-            // Update Pouring Physics
+            const g = getGlassGeometry();
+
             if (game.state === STATE.POURING) {
                 game.elapsedPourTime = (now - game.pourStartTime) / 1000;
                 game.fillPercent = game.elapsedPourTime / game.targetTime;
                 sfx.updatePourPitch(game.fillPercent);
 
-                // Spawn rising carbonation/aerated bubbles in the liquid
+                // Spawn aeration bubbles near stream impact
                 if (Math.random() < 0.65) {
-                    const g = getGlassGeometry();
                     const clampedPct = Math.min(game.fillPercent, 1.1);
                     const surfaceY = g.bottom - (g.h * (clampedPct / 1.1));
-                    if (g.bottom - surfaceY > 12) {
-                        game.bubbles.push({
-                            x: g.x + g.w * 0.5 + (Math.random() - 0.5) * (g.w * 0.68),
-                            y: g.bottom - 6,
-                            vy: 45 + Math.random() * 75,
-                            r: 1.5 + Math.random() * 3,
-                            surfaceY: surfaceY
-                        });
-                    }
+                    game.bubbles.push({
+                        x: width * 0.5 + (Math.random() - 0.5) * 26,
+                        y: surfaceY + 6 + Math.random() * 14,
+                        r: 1.5 + Math.random() * 3.2,
+                        vy: -35 - Math.random() * 55,
+                        wobble: Math.random() * Math.PI * 2
+                    });
                 }
 
-                // Overflow droplets if filled past 110% (brim of the glass)
-                if (game.fillPercent > 1.1 && Math.random() < 0.7) {
-                    const g = getGlassGeometry();
+                // Spawn overflow droplets if player holds past 110% (the glass brim)
+                if (game.fillPercent > 1.1 && Math.random() < 0.75) {
                     const side = Math.random() < 0.5 ? -1 : 1;
                     game.overflowDrops.push({
-                        x: side === -1 ? g.x - 2 : g.x + g.w + 2,
+                        x: (side === -1 ? g.x : g.x + g.w) + side * 3,
                         y: g.y + 4,
-                        vx: side * (15 + Math.random() * 25),
-                        vy: 30 + Math.random() * 50,
+                        vx: side * (18 + Math.random() * 35),
+                        vy: 20 + Math.random() * 40,
                         r: 2.5 + Math.random() * 2.5
                     });
                 }
@@ -753,19 +771,28 @@
             game.visualPercent += (game.fillPercent - game.visualPercent) * Math.min(1, dt * 24);
             game.wavePhase += dt * (game.state === STATE.POURING ? 11 : 3.5);
 
+            // Conveyor slide animation between glasses
+            if (game.state === STATE.SLIDING) {
+                game.slideProgress += dt * 2.4; // ~0.42s crisp slide
+                if (game.slideProgress >= 1) {
+                    game.slideProgress = 1;
+                    prepareRound();
+                }
+            }
+
             // Smooth curtain open/close transition
             game.curtainProgress += (game.targetCurtainProgress - game.curtainProgress) * Math.min(1, dt * 11);
 
-            // Update Bubbles
-            const g = getGlassGeometry();
-            const currentClamped = Math.min(game.visualPercent, 1.1);
-            const currentSurfaceY = g.bottom - (g.h * (currentClamped / 1.1));
+            // Update Bubbles inside liquid
+            const clampedVisual = Math.min(game.visualPercent, 1.1);
+            const liquidTopY = g.bottom - (g.h * (clampedVisual / 1.1));
 
             for (let i = game.bubbles.length - 1; i >= 0; i--) {
                 const b = game.bubbles[i];
-                b.y -= b.vy * dt;
-                b.x += Math.sin(b.y * 0.08) * 12 * dt;
-                if (b.y <= currentSurfaceY + 2) {
+                b.y += b.vy * dt;
+                b.wobble += dt * 8;
+                b.x += Math.sin(b.wobble) * 18 * dt;
+                if (b.y <= liquidTopY + 2) {
                     game.bubbles.splice(i, 1);
                 }
             }
@@ -773,10 +800,10 @@
             // Update Overflow Drops
             for (let i = game.overflowDrops.length - 1; i >= 0; i--) {
                 const d = game.overflowDrops[i];
-                d.vy += 420 * dt; // Gravity
+                d.vy += 520 * dt;
                 d.x += d.vx * dt;
                 d.y += d.vy * dt;
-                if (d.y > g.bottom + 14) {
+                if (d.y > g.bottom + 12) {
                     game.overflowDrops.splice(i, 1);
                 }
             }
@@ -794,25 +821,43 @@
                 }
             }
 
+            // Update 100% Line Sparks
+            for (let i = game.sparks.length - 1; i >= 0; i--) {
+                const s = game.sparks[i];
+                s.px = s.x;
+                s.py = s.y;
+                s.vy += 460 * dt;
+                s.vx *= Math.pow(0.18, dt);
+                s.x += s.vx * dt;
+                s.y += s.vy * dt;
+                s.life -= dt;
+                if (s.life <= 0) {
+                    game.sparks.splice(i, 1);
+                }
+            }
+
             // Update Screen Shake
             if (game.shakeTime > 0) {
                 game.shakeTime -= dt;
             }
         }
 
+        // ==========================================
+        // 9. RENDER LOOP (Upgraded Canvas Graphics)
+        // ==========================================
         function drawBackgroundAndTable(g) {
             // Subtle radial spotlight behind the glass
-            const spotlight = ctx.createRadialGradient(
-                width * 0.5, g.y + g.h * 0.5, 10,
-                width * 0.5, g.y + g.h * 0.5, Math.max(width, height) * 0.65
+            const spotGrad = ctx.createRadialGradient(
+                width * 0.5, g.y + g.h * 0.45, 20,
+                width * 0.5, g.y + g.h * 0.45, width * 0.6
             );
-            spotlight.addColorStop(0, "rgba(56, 189, 248, 0.12)");
-            spotlight.addColorStop(0.6, "rgba(15, 23, 42, 0.05)");
-            spotlight.addColorStop(1, "rgba(2, 6, 23, 0.35)");
-            ctx.fillStyle = spotlight;
+            spotGrad.addColorStop(0, "rgba(14, 165, 233, 0.14)");
+            spotGrad.addColorStop(0.6, "rgba(15, 23, 42, 0.05)");
+            spotGrad.addColorStop(1, "rgba(2, 6, 23, 0)");
+            ctx.fillStyle = spotGrad;
             ctx.fillRect(0, 0, width, height);
 
-            // Sleek reflective counter/pedestal surface
+            // Countertop / Table Surface
             const tableY = g.bottom + 8;
             const tableGrad = ctx.createLinearGradient(0, tableY, 0, height);
             tableGrad.addColorStop(0, "#1e293b");
@@ -825,7 +870,81 @@
             ctx.fillStyle = "rgba(148, 163, 184, 0.22)";
             ctx.fillRect(0, tableY, width, 2);
 
-            // Soft shadow under the glass base
+            // Subtle conveyor belt rollers along the counter edge
+            const slideDist = width * 0.72;
+            const beltShift = game.state === STATE.SLIDING
+                ? easeInOutCubic(game.slideProgress) * slideDist
+                : 0;
+            const rollerSpacing = 36;
+            const offset = ((beltShift % rollerSpacing) + rollerSpacing) % rollerSpacing;
+            ctx.fillStyle = "rgba(71, 85, 105, 0.45)";
+            for (let rx = offset - rollerSpacing; rx < width + rollerSpacing; rx += rollerSpacing) {
+                ctx.beginPath();
+                ctx.arc(rx, tableY + 12, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawNozzle(g) {
+            const cx = width * 0.5;
+            const topY = 0;
+            const botY = g.nozzleY;
+
+            // Pipe stem
+            const pipeGrad = ctx.createLinearGradient(cx - 18, 0, cx + 18, 0);
+            pipeGrad.addColorStop(0, "#334155");
+            pipeGrad.addColorStop(0.35, "#94a3b8");
+            pipeGrad.addColorStop(0.7, "#475569");
+            pipeGrad.addColorStop(1, "#1e293b");
+
+            ctx.fillStyle = pipeGrad;
+            ctx.fillRect(cx - 14, topY, 28, botY - 8);
+
+            // Spout collar
+            ctx.beginPath();
+            ctx.roundRect(cx - 20, botY - 12, 40, 12, 4);
+            ctx.fillStyle = pipeGrad;
+            ctx.fill();
+
+            // Active status LED on dispenser
+            ctx.beginPath();
+            ctx.arc(cx, botY - 6, 3, 0, Math.PI * 2);
+            ctx.fillStyle = game.state === STATE.POURING ? "#38bdf8" : "#475569";
+            ctx.fill();
+        }
+
+        function drawWaterStream(g, surfaceY) {
+            if (!game.streamActive) return;
+
+            const cx = width * 0.5;
+            const streamTop = g.nozzleY;
+            const streamBottom = Math.min(surfaceY + 6, g.bottom - 4);
+            const streamW = 14 + Math.sin(game.wavePhase * 1.7) * 1.8;
+
+            const streamGrad = ctx.createLinearGradient(cx - streamW, 0, cx + streamW, 0);
+            streamGrad.addColorStop(0, "rgba(2, 132, 199, 0.85)");
+            streamGrad.addColorStop(0.4, "rgba(186, 230, 253, 0.95)");
+            streamGrad.addColorStop(0.7, "rgba(56, 189, 248, 0.9)");
+            streamGrad.addColorStop(1, "rgba(3, 105, 161, 0.85)");
+
+            ctx.fillStyle = streamGrad;
+            ctx.fillRect(cx - streamW * 0.5, streamTop, streamW, Math.max(0, streamBottom - streamTop));
+
+            // Splash crown where stream hits liquid surface
+            if (game.visualPercent > 0.01 && game.visualPercent <= 1.1) {
+                ctx.fillStyle = "rgba(224, 242, 254, 0.7)";
+                ctx.beginPath();
+                ctx.ellipse(cx, surfaceY, 16 + Math.sin(game.wavePhase * 2) * 4, 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawGlassAndLiquid(g, fillPct = game.visualPercent, offsetX = 0, includeDrops = true) {
+            ctx.save();
+            ctx.translate(offsetX, 0);
+
+            // Soft shadow under this glass base
+            const tableY = g.bottom + 8;
             const shadowGrad = ctx.createRadialGradient(
                 width * 0.5, tableY + 4, 8,
                 width * 0.5, tableY + 4, g.w * 0.72
@@ -836,66 +955,8 @@
             ctx.beginPath();
             ctx.ellipse(width * 0.5, tableY + 4, g.w * 0.72, 12, 0, 0, Math.PI * 2);
             ctx.fill();
-        }
 
-        function drawNozzle(g) {
-            const cx = width * 0.5;
-            const ny = g.nozzleY;
-
-            // Metallic dispenser pipe coming from top of frame
-            const pipeGrad = ctx.createLinearGradient(cx - 18, 0, cx + 18, 0);
-            pipeGrad.addColorStop(0, "#334155");
-            pipeGrad.addColorStop(0.35, "#94a3b8");
-            pipeGrad.addColorStop(0.65, "#475569");
-            pipeGrad.addColorStop(1, "#1e293b");
-
-            ctx.fillStyle = pipeGrad;
-            ctx.fillRect(cx - 14, 0, 28, ny);
-
-            // Dispenser nozzle collar
-            ctx.fillStyle = "#0f172a";
-            ctx.beginPath();
-            ctx.roundRect(cx - 20, ny - 8, 40, 12, 4);
-            ctx.fill();
-            ctx.strokeStyle = "#64748b";
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-
-            // Glowing status LED on nozzle
-            ctx.fillStyle = game.streamActive ? "#38bdf8" : "#475569";
-            ctx.beginPath();
-            ctx.arc(cx, ny - 2, 2.5, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        function drawWaterStream(g, surfaceY) {
-            if (!game.streamActive) return;
-
-            const cx = width * 0.5;
-            const startY = g.nozzleY + 4;
-            const endY = Math.min(surfaceY + 4, g.bottom - 2);
-            const streamWidth = 14 + Math.sin(game.wavePhase * 2) * 1.5;
-
-            const streamGrad = ctx.createLinearGradient(cx - streamWidth / 2, 0, cx + streamWidth / 2, 0);
-            streamGrad.addColorStop(0, "rgba(2, 132, 199, 0.85)");
-            streamGrad.addColorStop(0.35, "rgba(125, 211, 252, 0.95)");
-            streamGrad.addColorStop(0.7, "rgba(14, 165, 233, 0.9)");
-            streamGrad.addColorStop(1, "rgba(3, 105, 161, 0.85)");
-
-            ctx.fillStyle = streamGrad;
-            ctx.fillRect(cx - streamWidth / 2, startY, streamWidth, Math.max(0, endY - startY));
-
-            // Splash foam ring where stream hits water surface
-            if (game.curtainProgress < 0.85) {
-                ctx.fillStyle = "rgba(224, 242, 254, 0.75)";
-                ctx.beginPath();
-                ctx.ellipse(cx, endY, streamWidth * 1.15, 4, 0, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-
-        function drawGlassAndLiquid(g) {
-            const clampedPct = Math.max(0, Math.min(game.visualPercent, 1.1));
+            const clampedPct = Math.max(0, Math.min(fillPct, 1.1));
             const liquidHeight = g.h * (clampedPct / 1.1);
             const surfaceY = g.bottom - liquidHeight;
 
@@ -914,7 +975,7 @@
             if (liquidHeight > 0.5) {
                 // Liquid body gradient
                 const liqGrad = ctx.createLinearGradient(0, surfaceY, 0, g.bottom);
-                if (game.visualPercent > 1.1) {
+                if (fillPct > 1.1) {
                     // Slight warning tint when overflowing
                     liqGrad.addColorStop(0, "#38bdf8");
                     liqGrad.addColorStop(1, "#0369a1");
@@ -961,28 +1022,32 @@
                 ctx.stroke();
 
                 // Rising Bubbles
-                ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
-                for (const b of game.bubbles) {
-                    ctx.beginPath();
-                    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-                    ctx.fill();
+                if (includeDrops) {
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+                    for (const b of game.bubbles) {
+                        ctx.beginPath();
+                        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
                 }
             }
 
             ctx.restore();
 
             // 3. Overflowing water streams down exterior walls if > 110%
-            if (game.visualPercent > 1.1) {
+            if (fillPct > 1.1) {
                 ctx.fillStyle = "rgba(56, 189, 248, 0.7)";
                 ctx.fillRect(g.x - 3, g.y + 4, 3, g.h - 4);
                 ctx.fillRect(g.x + g.w, g.y + 4, 3, g.h - 4);
             }
 
-            for (const d of game.overflowDrops) {
-                ctx.fillStyle = "#7dd3fc";
-                ctx.beginPath();
-                ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-                ctx.fill();
+            if (includeDrops) {
+                for (const d of game.overflowDrops) {
+                    ctx.fillStyle = "#7dd3fc";
+                    ctx.beginPath();
+                    ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
 
             // 4. 100% Target Fill Line (Dashed precision marker + side ticks)
@@ -1036,78 +1101,91 @@
             glareGrad.addColorStop(1, "rgba(255, 255, 255, 0.0)");
             ctx.fillStyle = glareGrad;
             ctx.fillRect(g.x + 10, g.y + 8, 14, g.h - 24);
+
+            ctx.restore();
         }
 
         function drawVelvetCurtains(g) {
             if (game.curtainProgress <= 0.01) return;
 
-            // Curtain covers the entire glass area, leaving ONLY the top nozzle stream visible!
-            const areaW = g.w + 90;
-            const areaH = g.h + 26;
-            const areaX = (width - areaW) / 2;
-            const areaY = g.y - 10;
+            // Covers the glass & lower stream, leaving the top nozzle stream visible
+            // just like the original NumWorks curtain mechanic!
+            const coverTop = g.nozzleY + 14;
+            const coverBottom = g.bottom + 8;
+            const coverH = coverBottom - coverTop;
 
-            const halfW = (areaW / 2) * game.curtainProgress;
-            const centerX = width / 2;
+            const totalCoverW = g.w + 96;
+            const halfW = (totalCoverW * 0.5) * game.curtainProgress;
+            const leftEdge = (width * 0.5) - (totalCoverW * 0.5);
+            const rightEdge = (width * 0.5) + (totalCoverW * 0.5);
 
-            // Curtain Rod across the top of the glass
-            ctx.fillStyle = "#d97706";
-            ctx.beginPath();
-            ctx.roundRect(areaX - 10, areaY - 6, areaW + 20, 7, 3.5);
-            ctx.fill();
-
-            // Gold finials on rod ends
-            ctx.fillStyle = "#fbbf24";
-            ctx.beginPath();
-            ctx.arc(areaX - 10, areaY - 2.5, 6, 0, Math.PI * 2);
-            ctx.arc(areaX + areaW + 10, areaY - 2.5, 6, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Helper to draw pleated crimson velvet half-curtain
-            const drawHalfCurtain = (startX, panelW, isLeft) => {
-                if (panelW <= 1) return;
+            // Helper to render pleated crimson velvet fabric
+            const drawPanel = (x, w, isLeft) => {
+                if (w <= 1) return;
                 ctx.save();
                 ctx.beginPath();
-                ctx.roundRect(startX, areaY, panelW, areaH, [2, 2, 10, 10]);
+                ctx.roundRect(x, coverTop, w, coverH, 8);
                 ctx.clip();
 
-                // Deep crimson base
-                ctx.fillStyle = "#881337";
-                ctx.fillRect(startX, areaY, panelW, areaH);
+                // Base rich crimson gradient
+                const baseGrad = ctx.createLinearGradient(x, coverTop, x + w, coverTop);
+                baseGrad.addColorStop(0, "#7f1d1d");
+                baseGrad.addColorStop(0.5, "#be123c");
+                baseGrad.addColorStop(1, "#4c0519");
+                ctx.fillStyle = baseGrad;
+                ctx.fillRect(x, coverTop, w, coverH);
 
-                // Vertical velvet folds
-                const folds = 5;
-                const foldW = panelW / folds;
-                for (let i = 0; i < folds; i++) {
-                    const fx = startX + i * foldW;
-                    const foldGrad = ctx.createLinearGradient(fx, 0, fx + foldW, 0);
-                    foldGrad.addColorStop(0, "rgba(76, 5, 25, 0.75)");
-                    foldGrad.addColorStop(0.45, "rgba(225, 29, 72, 0.55)");
-                    foldGrad.addColorStop(1, "rgba(76, 5, 25, 0.8)");
-                    ctx.fillStyle = foldGrad;
-                    ctx.fillRect(fx, areaY, foldW + 1, areaH);
+                // Vertical velvet pleats
+                const pleatCount = 5;
+                const pleatW = w / pleatCount;
+                for (let i = 0; i < pleatCount; i++) {
+                    const px = x + i * pleatW;
+                    const pGrad = ctx.createLinearGradient(px, 0, px + pleatW, 0);
+                    pGrad.addColorStop(0, "rgba(0, 0, 0, 0.32)");
+                    pGrad.addColorStop(0.45, "rgba(255, 255, 255, 0.12)");
+                    pGrad.addColorStop(1, "rgba(0, 0, 0, 0.35)");
+                    ctx.fillStyle = pGrad;
+                    ctx.fillRect(px, coverTop, pleatW, coverH);
                 }
 
-                // Gold trim on inner meeting edge
-                const trimX = isLeft ? startX + panelW - 4 : startX;
+                // Gold trim border along inner meeting edge
                 ctx.fillStyle = "#fbbf24";
-                ctx.fillRect(trimX, areaY, 4, areaH);
+                if (isLeft) {
+                    ctx.fillRect(x + w - 3, coverTop, 3, coverH);
+                } else {
+                    ctx.fillRect(x, coverTop, 3, coverH);
+                }
 
                 ctx.restore();
             };
 
-            drawHalfCurtain(areaX, halfW, true);
-            drawHalfCurtain(areaX + areaW - halfW, halfW, false);
+            drawPanel(leftEdge, halfW, true);
+            drawPanel(rightEdge - halfW, halfW, false);
 
-            // Question mark emblem when fully closed
+            // Overhead curtain rod
+            ctx.fillStyle = "#334155";
+            ctx.beginPath();
+            ctx.roundRect(leftEdge - 10, coverTop - 6, totalCoverW + 20, 8, 4);
+            ctx.fill();
+
+            // Question mark badge on closed curtain
             if (game.curtainProgress > 0.85) {
                 ctx.save();
                 ctx.globalAlpha = (game.curtainProgress - 0.85) / 0.15;
-                ctx.fillStyle = "rgba(254, 243, 199, 0.9)";
-                ctx.font = "700 44px 'Fredoka', sans-serif";
+                ctx.fillStyle = "rgba(15, 23, 42, 0.75)";
+                ctx.beginPath();
+                ctx.arc(width * 0.5, coverTop + coverH * 0.5, 24, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = "#fbbf24";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.fillStyle = "#fbbf24";
+                ctx.font = "700 24px 'Fredoka', sans-serif";
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
-                ctx.fillText("?", centerX, areaY + areaH * 0.52);
+                ctx.fillText("?", width * 0.5, coverTop + coverH * 0.5 + 1);
                 ctx.restore();
             }
         }
@@ -1120,6 +1198,23 @@
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
                 ctx.fill();
+                ctx.restore();
+            }
+
+            // Glowing sparks at the 100% target line on PERFECT!
+            for (const s of game.sparks) {
+                const alpha = Math.max(0, Math.min(1, s.life / (s.maxLife * 0.65)));
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.strokeStyle = s.color;
+                ctx.shadowColor = "#fbbf24";
+                ctx.shadowBlur = 10;
+                ctx.lineWidth = 2.4;
+                ctx.lineCap = "round";
+                ctx.beginPath();
+                ctx.moveTo(s.px, s.py);
+                ctx.lineTo(s.x, s.y);
+                ctx.stroke();
                 ctx.restore();
             }
         }
@@ -1142,7 +1237,18 @@
             drawBackgroundAndTable(g);
             drawWaterStream(g, surfaceY);
             drawNozzle(g);
-            drawGlassAndLiquid(g);
+
+            if (game.state === STATE.SLIDING) {
+                const eased = easeInOutCubic(game.slideProgress);
+                const slideDist = width * 0.72;
+                // Outgoing filled glass slides to the right
+                drawGlassAndLiquid(g, game.outgoingFillPercent, eased * slideDist, false);
+                // Incoming empty glass slides in from the left
+                drawGlassAndLiquid(g, 0, -slideDist + eased * slideDist, false);
+            } else {
+                drawGlassAndLiquid(g, game.visualPercent, 0, true);
+            }
+
             drawVelvetCurtains(g);
             drawParticles();
 
@@ -1150,20 +1256,15 @@
         }
 
         function gameLoop(now) {
-            const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
-            lastFrameTime = now;
-
-            update(dt);
+            update(now);
             render();
-
             requestAnimationFrame(gameLoop);
         }
 
-        // Start application on window load
+        // Start on window load
         window.onload = function () {
             resizeCanvas();
             resetGame();
-            lastFrameTime = performance.now();
             requestAnimationFrame(gameLoop);
         };
     </script>
