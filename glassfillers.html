@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Glass Fillers - Arcade Edition</title>
+    <!-- Tailwind CSS for crisp UI layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js for procedural Web Audio sound effects (pouring water, splashes, chimes) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Google Fonts: Fredoka for playful arcade headers, JetBrains Mono for precision timers -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=JetBrains+Mono:wght@600;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Fredoka', sans-serif;
+            background: radial-gradient(circle at 50% 20%, #1e293b 0%, #090d16 100%);
+            color: #f8fafc;
+            overflow: hidden;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Arcade Push Button Styling */
+        .arcade-btn {
+            background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+            box-shadow: 0 8px 0 #0369a1, 0 15px 25px rgba(2, 132, 199, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.5);
+            transition: transform 0.06s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.06s ease, background 0.15s ease;
+        }
+
+        .arcade-btn:active, .arcade-btn.pressed {
+            transform: translateY(6px);
+            box-shadow: 0 2px 0 #0369a1, 0 5px 12px rgba(2, 132, 199, 0.4), inset 0 2px 4px rgba(0, 0, 0, 0.25);
+            background: linear-gradient(180deg, #0ea5e9 0%, #0369a1 100%);
+        }
+
+        .arcade-btn-next {
+            background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+            box-shadow: 0 8px 0 #047857, 0 15px 25px rgba(5, 150, 105, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.5);
+        }
+
+        .arcade-btn-next:active, .arcade-btn-next.pressed {
+            transform: translateY(6px);
+            box-shadow: 0 2px 0 #047857, 0 5px 12px rgba(5, 150, 105, 0.4);
+        }
+
+        .arcade-btn-danger {
+            background: linear-gradient(180deg, #fb7185 0%, #e11d48 100%);
+            box-shadow: 0 8px 0 #9f1239, 0 15px 25px rgba(225, 29, 72, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.5);
+        }
+
+        .arcade-btn-danger:active, .arcade-btn-danger.pressed {
+            transform: translateY(6px);
+            box-shadow: 0 2px 0 #9f1239, 0 5px 12px rgba(225, 29, 72, 0.4);
+        }
+
+        /* Glassmorphism HUD Cards */
+        .hud-panel {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+
+        /* Pop-in animation for judgment badge */
+        @keyframes badgePop {
+            0% { transform: scale(0.4) translateY(20px); opacity: 0; }
+            70% { transform: scale(1.08) translateY(-4px); opacity: 1; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+
+        .badge-animate {
+            animation: badgePop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body class="items-center justify-between p-3 sm:p-5">
+
+    <!-- Top HUD Bar -->
+    <header class="w-full max-w-2xl flex items-center justify-between gap-2 sm:gap-4 z-10">
+        <!-- Lives -->
+        <div class="hud-panel rounded-2xl px-3.5 py-2 sm:px-5 sm:py-2.5 flex items-center gap-2.5">
+            <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold hidden sm:inline">Lives</span>
+            <div id="lives-container" class="flex items-center gap-1.5 text-rose-500">
+                <!-- Hearts injected via JS -->
+            </div>
+        </div>
+
+        <!-- Target Time (Center Focal Point) -->
+        <div class="hud-panel rounded-2xl px-5 py-2 sm:px-7 sm:py-2.5 flex flex-col items-center border-sky-500/30 bg-slate-900/80">
+            <span class="text-[10px] sm:text-xs uppercase tracking-widest text-sky-400 font-bold">Target Time</span>
+            <div class="flex items-baseline gap-1">
+                <span id="target-display" class="mono text-2xl sm:text-3xl font-extrabold text-white tracking-tight">3.0s</span>
+            </div>
+        </div>
+
+        <!-- Score & Filled Count -->
+        <div class="hud-panel rounded-2xl px-3.5 py-2 sm:px-5 sm:py-2.5 flex items-center gap-3 sm:gap-4">
+            <div class="flex flex-col items-end">
+                <span class="text-[10px] sm:text-xs uppercase tracking-wider text-slate-400 font-semibold">Score</span>
+                <span id="score-display" class="mono text-lg sm:text-2xl font-extrabold text-amber-400 leading-none">0</span>
+            </div>
+            <div class="h-7 w-[1px] bg-slate-700/70"></div>
+            <div class="flex flex-col items-end">
+                <span class="text-[10px] sm:text-xs uppercase tracking-wider text-slate-400 font-semibold">Glass</span>
+                <span id="glass-count-display" class="mono text-lg sm:text-2xl font-extrabold text-sky-300 leading-none">#1</span>
+            </div>
+            <!-- Mute Toggle -->
+            <button id="mute-btn" title="Toggle Sound" class="ml-1 p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition">
+                <svg id="sound-on-icon" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+                </svg>
+                <svg id="sound-off-icon" class="w-5 h-5 hidden text-rose-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Interactive Canvas Area -->
+    <main id="canvas-wrapper" class="relative w-full max-w-2xl flex-1 my-2 sm:my-4 rounded-3xl overflow-hidden hud-panel border-slate-700/50 flex items-center justify-center">
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- Curtain Active Indicator Pill -->
+        <div id="curtain-badge" class="hidden absolute top-4 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full bg-rose-950/85 border border-rose-500/40 text-rose-200 text-xs font-semibold tracking-wide flex items-center gap-1.5 shadow-lg pointer-events-none">
+            <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+            BLIND POUR MODE
+        </div>
+
+        <!-- Round Result Floating Banner -->
+        <div id="result-overlay" class="hidden absolute inset-0 pointer-events-none flex flex-col items-center justify-center z-20 p-4">
+            <div id="result-card" class="badge-animate hud-panel bg-slate-900/90 border-2 rounded-3xl px-8 py-5 flex flex-col items-center text-center shadow-2xl">
+                <span id="result-title" class="text-4xl sm:text-5xl font-bold tracking-tight mb-1">PERFECT!</span>
+                <div class="flex items-center gap-3 mt-1">
+                    <span id="result-diff" class="mono text-lg sm:text-xl font-bold px-3 py-0.5 rounded-lg bg-slate-800 text-slate-200">+0ms</span>
+                    <span id="result-percent" class="mono text-sm sm:text-base font-semibold text-slate-400">100.0%</span>
+                </div>
+                <p id="result-sub" class="text-xs sm:text-sm text-slate-400 mt-2 font-medium">+3 Points</p>
+            </div>
+        </div>
+
+        <!-- Game Over Modal Overlay -->
+        <div id="gameover-overlay" class="hidden absolute inset-0 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center z-30 p-6 text-center">
+            <div class="badge-animate max-w-sm w-full hud-panel bg-slate-900/95 border-rose-500/30 rounded-3xl p-7 flex flex-col items-center">
+                <div class="w-16 h-16 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-4">
+                    <svg class="w-9 h-9" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <h2 class="text-3xl sm:text-4xl font-bold text-white tracking-tight">GAME OVER</h2>
+                <p class="text-slate-400 text-sm mt-1">Out of lives! Great pouring.</p>
+
+                <div class="grid grid-cols-2 gap-3 w-full my-6">
+                    <div class="bg-slate-800/70 rounded-2xl p-3 border border-slate-700/50">
+                        <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Final Score</div>
+                        <div id="final-score" class="mono text-2xl font-extrabold text-amber-400 mt-0.5">0</div>
+                    </div>
+                    <div class="bg-slate-800/70 rounded-2xl p-3 border border-slate-700/50">
+                        <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Glasses Filled</div>
+                        <div id="final-glasses" class="mono text-2xl font-extrabold text-sky-400 mt-0.5">0</div>
+                    </div>
+                </div>
+
+                <button id="restart-btn" class="arcade-btn-danger w-full py-4 rounded-2xl text-white font-bold text-lg tracking-wide cursor-pointer">
+                    PLAY AGAIN
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Arcade Control Pad -->
+    <footer class="w-full max-w-2xl flex flex-col items-center gap-2 z-10 pb-1">
+        <button id="action-btn" class="arcade-btn w-full py-4 sm:py-5 rounded-2xl text-white font-bold text-xl sm:text-2xl tracking-wider uppercase cursor-pointer flex items-center justify-center gap-3">
+            <span id="action-btn-text">HOLD TO POUR</span>
+        </button>
+        <p id="hint-text" class="text-xs text-slate-400 font-medium text-center">
+            Hold <span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 mono text-[11px] border border-slate-700">SPACE</span>, <span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 mono text-[11px] border border-slate-700">0</span>, or press &amp; hold the button
+        </p>
+    </footer>
+
+    <script>
+        /**
+         * GLASS FILLERS - Upgraded HTML5 Canvas & Web Audio Edition
+         * --------------------------------------------------------
+         * Faithfully preserves the original NumWorks game mechanics:
+         * - Hold input to pour water toward the target time.
+         * - 100% fill line sits at 1.0 / 1.1 of the glass height (overflowing above 100%!).
+         * - First glass is visible; once 1+ glasses are filled, velvet curtains close
+         *   during pouring (showing only the top nozzle stream) and dramatically open on release!
+         * - Exact scoring tiers:
+         *   * |diff| * 60 < 1 (<16.67ms): PERFECT! (+3 pts, +1 glass)
+         *   * |1 - pct| < 0.10: Good! (+1 pt, +1 glass)
+         *   * |1 - pct| < 0.15: Barely... (+0 pts, +1 glass)
+         *   * Else: Miss... (-1 life)
+         * - Escalating target time: random(30, 30 + 3 * filled_glasses) / 10
+         */
+
+        // ==========================================
+        // 1. PROCEDURAL AUDIO ENGINE (Tone.js)
+        // ==========================================
+        class SoundEffects {
+            constructor() {
+                this.initialized = false;
+                this.muted = false;
+                this.pourNoise = null;
+                this.pourFilter = null;
+                this.pourGain = null;
+                this.synth = null;
+                this.isPouringSound = false;
+            }
+
+            async init() {
+                if (this.initialized) return;
+                try {
+                    await Tone.start();
+
+                    // Synthesized water stream sound (Pink noise -> Bandpass filter -> Gain)
+                    this.pourFilter = new Tone.Filter({
+                        type: "bandpass",
+                        frequency: 420,
+                        Q: 2.2
+                    }).toDestination();
+
+                    this.pourGain = new Tone.Gain(0).connect(this.pourFilter);
+
+                    this.pourNoise = new Tone.Noise("pink").connect(this.pourGain);
+                    this.pourNoise.start();
+
+                    // Polyphonic chime synth for judgments & UI feedback
+                    this.synth = new Tone.PolySynth(Tone.Synth, {
+                        oscillator: { type: "triangle" },
+                        envelope: {
+                            attack: 0.01,
+                            decay: 0.2,
+                            sustain: 0.1,
+                            release: 0.6
+                        }
+                    }).toDestination();
+                    this.synth.volume.value = -6;
+
+                    this.initialized = true;
+                } catch (e) {
+                    console.warn("Audio initialization deferred:", e);
+                }
+            }
+
+            startPour() {
+                if (!this.initialized || this.muted) return;
+                this.isPouringSound = true;
+                this.pourFilter.frequency.setValueAtTime(380, Tone.now());
+                this.pourGain.gain.cancelScheduledValues(Tone.now());
+                this.pourGain.gain.rampTo(0.22, 0.08);
+            }
+
+            updatePourPitch(fillPercent) {
+                if (!this.initialized || !this.isPouringSound || this.muted) return;
+                // Pitch rises realistically as the air column inside the glass shrinks!
+                const clamped = Math.min(fillPercent, 1.3);
+                const freq = 380 + (clamped * 680);
+                this.pourFilter.frequency.setTargetAtTime(freq, Tone.now(), 0.05);
+            }
+
+            stopPour() {
+                if (!this.initialized) return;
+                this.isPouringSound = false;
+                this.pourGain.gain.cancelScheduledValues(Tone.now());
+                this.pourGain.gain.rampTo(0, 0.06);
+            }
+
+            playResult(tier) {
+                if (!this.initialized || this.muted) return;
+                const now = Tone.now();
+                if (tier === "PERFECT") {
+                    this.synth.triggerAttackRelease(["C5", "E5", "G5", "C6"], "8n", now);
+                } else if (tier === "GOOD") {
+                    this.synth.triggerAttackRelease(["C5", "E5", "G5"], "8n", now);
+                } else if (tier === "BARELY") {
+                    this.synth.triggerAttackRelease(["E4", "G4"], "8n", now);
+                } else {
+                    // Miss / Overflow
+                    this.synth.triggerAttackRelease(["Eb3", "D3"], "4n", now);
+                }
+            }
+
+            playClick() {
+                if (!this.initialized || this.muted) return;
+                this.synth.triggerAttackRelease("G5", "32n");
+            }
+
+            toggleMute() {
+                this.muted = !this.muted;
+                if (this.muted) {
+                    this.stopPour();
+                }
+                return this.muted;
+            }
+        }
+
+        const sfx = new SoundEffects();
+
+        // ==========================================
+        // 2. GAME STATE & CONFIGURATION
+        // ==========================================
+        const STATE = {
+            READY: "READY",         // Waiting for player to press & hold
+            POURING: "POURING",     // Player is holding button; water is flowing
+            REVEALED: "REVEALED",   // Released; curtain opened, showing result
+            GAMEOVER: "GAMEOVER"    // 0 lives left
+        };
+
+        const game = {
+            state: STATE.READY,
+            lives: 3,
+            score: 0,
+            targetTime: 3.0,
+            filledGlasses: 0,
+
+            // Timing & Fluid variables
+            pourStartTime: 0,
+            elapsedPourTime: 0,
+            fillPercent: 0,         // 1.0 = 100% target line; 1.1 = glass brim
+            visualPercent: 0,       // Smoothed liquid level for rendering
+            wavePhase: 0,
+            streamActive: false,
+            streamGapY: 0,          // For trailing water tail when released
+
+            // Curtain animation (0 = fully open, 1 = fully closed)
+            curtainProgress: 0,
+            targetCurtainProgress: 0,
+
+            // Screen shake & visual particles
+            shakeTime: 0,
+            shakeIntensity: 0,
+            bubbles: [],
+            particles: [],
+            overflowDrops: [],
+
+            // Input lock to prevent accidental double-triggers
+            inputHeld: false
+        };
+
+        // ==========================================
+        // 3. DOM ELEMENTS & CANVAS SETUP
+        // ==========================================
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const canvasWrapper = document.getElementById("canvas-wrapper");
+
+        const livesContainer = document.getElementById("lives-container");
+        const targetDisplay = document.getElementById("target-display");
+        const scoreDisplay = document.getElementById("score-display");
+        const glassCountDisplay = document.getElementById("glass-count-display");
+        const curtainBadge = document.getElementById("curtain-badge");
+
+        const resultOverlay = document.getElementById("result-overlay");
+        const resultCard = document.getElementById("result-card");
+        const resultTitle = document.getElementById("result-title");
+        const resultDiff = document.getElementById("result-diff");
+        const resultPercent = document.getElementById("result-percent");
+        const resultSub = document.getElementById("result-sub");
+
+        const gameoverOverlay = document.getElementById("gameover-overlay");
+        const finalScore = document.getElementById("final-score");
+        const finalGlasses = document.getElementById("final-glasses");
+
+        const actionBtn = document.getElementById("action-btn");
+        const actionBtnText = document.getElementById("action-btn-text");
+        const restartBtn = document.getElementById("restart-btn");
+        const muteBtn = document.getElementById("mute-btn");
+        const soundOnIcon = document.getElementById("sound-on-icon");
+        const soundOffIcon = document.getElementById("sound-off-icon");
+
+        let dpr = window.devicePixelRatio || 1;
+        let width = 0;
+        let height = 0;
+
+        function resizeCanvas() {
+            const rect = canvasWrapper.getBoundingClientRect();
+            dpr = window.devicePixelRatio || 1;
+            width = rect.width;
+            height = rect.height;
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+
+        window.addEventListener("resize", resizeCanvas);
+
+        // ==========================================
+        // 4. UI UPDATES & GAME FLOW LOGIC
+        // ==========================================
+        function updateHUD() {
+            // Render Hearts
+            livesContainer.innerHTML = "";
+            for (let i = 0; i < 3; i++) {
+                const active = i < game.lives;
+                const heart = document.createElement("span");
+                heart.innerHTML = `
+                    <svg class="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 ${active ? 'text-rose-500 scale-100 drop-shadow-[0_0_8px_rgba(244,63,94,0.6)]' : 'text-slate-700 scale-90'}" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                    </svg>
+                `;
+                livesContainer.appendChild(heart);
+            }
+
+            targetDisplay.textContent = `${game.targetTime.toFixed(1)}s`;
+            scoreDisplay.textContent = game.score;
+            glassCountDisplay.textContent = `#${game.filledGlasses + 1}`;
+
+            // Show curtain badge if blind mode is active (after 1st filled glass)
+            if (game.filledGlasses > 0 && game.state !== STATE.GAMEOVER) {
+                curtainBadge.classList.remove("hidden");
+            } else {
+                curtainBadge.classList.add("hidden");
+            }
+        }
+
+        function setButtonAppearance(mode) {
+            actionBtn.classList.remove("arcade-btn", "arcade-btn-next", "pressed");
+            if (mode === "POUR") {
+                actionBtn.classList.add("arcade-btn");
+                actionBtnText.textContent = "HOLD TO POUR";
+            } else if (mode === "POURING") {
+                actionBtn.classList.add("arcade-btn", "pressed");
+                actionBtnText.textContent = "RELEASE AT TARGET!";
+            } else if (mode === "NEXT") {
+                actionBtn.classList.add("arcade-btn-next");
+                actionBtnText.textContent = "NEXT GLASS";
+            }
+        }
+
+        function resetGame() {
+            game.lives = 3;
+            game.score = 0;
+            game.targetTime = 3.0;
+            game.filledGlasses = 0;
+            gameoverOverlay.classList.add("hidden");
+            prepareRound();
+        }
+
+        function prepareRound() {
+            game.state = STATE.READY;
+            game.elapsedPourTime = 0;
+            game.fillPercent = 0;
+            game.visualPercent = 0;
+            game.streamActive = false;
+            game.bubbles = [];
+            game.particles = [];
+            game.overflowDrops = [];
+
+            // In the original script: once 1 or more glasses have been filled,
+            // the curtain stays active before & during the pour.
+            game.targetCurtainProgress = game.filledGlasses > 0 ? 1 : 0;
+
+            resultOverlay.classList.add("hidden");
+            setButtonAppearance("POUR");
+            updateHUD();
+        }
+
+        function startPouring() {
+            if (game.state !== STATE.READY) return;
+            sfx.init();
+            sfx.startPour();
+
+            game.state = STATE.POURING;
+            game.pourStartTime = performance.now();
+            game.streamActive = true;
+            setButtonAppearance("POURING");
+        }
+
+        function stopPouring() {
+            if (game.state !== STATE.POURING) return;
+            sfx.stopPour();
+
+            game.state = STATE.REVEALED;
+            game.streamActive = false;
+
+            // Open curtains immediately to reveal the liquid level!
+            game.targetCurtainProgress = 0;
+
+            // Evaluate accuracy using exact formulas from original Python script
+            const difference = game.elapsedPourTime - game.targetTime;
+            const absoluteDifference = Math.abs(difference);
+            const percentDifference = Math.abs(1 - game.fillPercent);
+
+            let tier = "MISS";
+            let title = "Miss...";
+            let subText = "-1 Life";
+            let titleColor = "text-rose-400";
+            let borderColor = "border-rose-500/50";
+
+            if (absoluteDifference * 60 < 1) {
+                tier = "PERFECT";
+                title = "PERFECT!";
+                subText = "+3 Points • Bullseye!";
+                titleColor = "text-amber-300";
+                borderColor = "border-amber-400/60";
+                game.score += 3;
+                game.filledGlasses += 1;
+                spawnCelebrationParticles(38, "#fbbf24");
+            } else if (percentDifference < 0.10) {
+                tier = "GOOD";
+                title = "Good!";
+                subText = "+1 Point • Clean Pour";
+                titleColor = "text-emerald-400";
+                borderColor = "border-emerald-500/50";
+                game.score += 1;
+                game.filledGlasses += 1;
+                spawnCelebrationParticles(20, "#34d399");
+            } else if (percentDifference < 0.15) {
+                tier = "BARELY";
+                title = "Barely...";
+                subText = "+0 Points • Glass Saved";
+                titleColor = "text-orange-400";
+                borderColor = "border-orange-500/50";
+                game.filledGlasses += 1;
+                spawnCelebrationParticles(10, "#fb923c");
+            } else {
+                tier = "MISS";
+                title = game.fillPercent > 1.1 ? "OVERFLOW!" : "Miss...";
+                subText = "-1 Life";
+                titleColor = "text-rose-400";
+                borderColor = "border-rose-500/50";
+                game.lives -= 1;
+                triggerShake(0.35, 9);
+            }
+
+            sfx.playResult(tier);
+            updateHUD();
+
+            // Populate Result Card
+            const sign = difference >= 0 ? "+" : "-";
+            const ms = Math.round(absoluteDifference * 1000);
+            const pctDisplay = (game.fillPercent * 100).toFixed(1);
+
+            resultTitle.textContent = title;
+            resultTitle.className = `text-4xl sm:text-5xl font-bold tracking-tight mb-1 ${titleColor}`;
+            resultDiff.textContent = `${sign}${ms}ms`;
+            resultPercent.textContent = `${pctDisplay}% Full`;
+            resultSub.textContent = subText;
+
+            resultCard.className = `badge-animate hud-panel bg-slate-900/90 border-2 ${borderColor} rounded-3xl px-8 py-5 flex flex-col items-center text-center shadow-2xl`;
+            resultOverlay.classList.remove("hidden");
+
+            if (game.lives <= 0) {
+                setTimeout(() => {
+                    game.state = STATE.GAMEOVER;
+                    resultOverlay.classList.add("hidden");
+                    finalScore.textContent = game.score;
+                    finalGlasses.textContent = game.filledGlasses;
+                    gameoverOverlay.classList.remove("hidden");
+                    updateHUD();
+                }, 1150);
+            } else {
+                setButtonAppearance("NEXT");
+            }
+        }
+
+        function advanceToNextRound() {
+            if (game.state !== STATE.REVEALED || game.lives <= 0) return;
+            sfx.playClick();
+
+            // Original Python difficulty curve:
+            // values[2] = random.randint(30, 30 + (3 * values[3])) / 10
+            const maxDeciSeconds = 30 + (3 * game.filledGlasses);
+            const randDeci = Math.floor(Math.random() * (maxDeciSeconds - 30 + 1)) + 30;
+            game.targetTime = randDeci / 10;
+
+            prepareRound();
+        }
+
+        // ==========================================
+        // 5. UNIFIED INPUT HANDLERS (Touch, Mouse, Keyboard)
+        // ==========================================
+        function handlePressDown(e) {
+            if (e && e.cancelable) e.preventDefault();
+            if (game.inputHeld) return;
+            game.inputHeld = true;
+
+            if (game.state === STATE.READY) {
+                startPouring();
+            } else if (game.state === STATE.REVEALED) {
+                advanceToNextRound();
+            }
+        }
+
+        function handlePressUp(e) {
+            if (e && e.cancelable) e.preventDefault();
+            if (!game.inputHeld) return;
+            game.inputHeld = false;
+
+            if (game.state === STATE.POURING) {
+                stopPouring();
+            }
+        }
+
+        // Action Button Events
+        actionBtn.addEventListener("mousedown", handlePressDown);
+        actionBtn.addEventListener("touchstart", handlePressDown, { passive: false });
+        window.addEventListener("mouseup", handlePressUp);
+        window.addEventListener("touchend", handlePressUp);
+
+        // Allow tapping directly on canvas as well for effortless mobile play
+        canvas.addEventListener("mousedown", handlePressDown);
+        canvas.addEventListener("touchstart", handlePressDown, { passive: false });
+
+        // Keyboard Support (Space, Enter, 0, Numpad0)
+        window.addEventListener("keydown", (e) => {
+            if (e.repeat) return;
+            if (e.code === "Space" || e.key === "0" || e.code === "Numpad0" || e.code === "Enter") {
+                if (game.state === STATE.GAMEOVER) {
+                    sfx.playClick();
+                    resetGame();
+                } else {
+                    handlePressDown(e);
+                }
+            }
+        });
+
+        window.addEventListener("keyup", (e) => {
+            if (e.code === "Space" || e.key === "0" || e.code === "Numpad0" || e.code === "Enter") {
+                handlePressUp(e);
+            }
+        });
+
+        restartBtn.addEventListener("click", () => {
+            sfx.playClick();
+            resetGame();
+        });
+
+        muteBtn.addEventListener("click", () => {
+            sfx.init();
+            const isMuted = sfx.toggleMute();
+            soundOnIcon.classList.toggle("hidden", isMuted);
+            soundOffIcon.classList.toggle("hidden", !isMuted);
+        });
+
+        // ==========================================
+        // 6. PARTICLE & SCREEN SHAKE HELPERS
+        // ==========================================
+        function triggerShake(duration, intensity) {
+            game.shakeTime = duration;
+            game.shakeIntensity = intensity;
+        }
+
+        function spawnCelebrationParticles(count, color) {
+            const cx = width * 0.5;
+            const cy = height * 0.45;
+            for (let i = 0; i < count; i++) {
+                const angle = (Math.PI * 2 * i) / count + (Math.random() * 0.3);
+                const speed = 110 + Math.random() * 240;
+                game.particles.push({
+                    x: cx,
+                    y: cy,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 60,
+                    size: 4 + Math.random() * 5,
+                    color: color,
+                    alpha: 1,
+                    life: 0.7 + Math.random() * 0.5
+                });
+            }
+        }
+
+        // ==========================================
+        // 7. SIMULATION & HIGH-CRAFT CANVAS RENDERING
+        // ==========================================
+        function getGlassGeometry() {
+            // Responsive glass dimensions centered on canvas
+            const glassW = Math.min(width * 0.44, 185);
+            const glassH = Math.min(height * 0.64, 320);
+            const glassX = (width - glassW) / 2;
+            const glassBottom = height * 0.87;
+            const glassTop = glassBottom - glassH;
+
+            // In original Python code: height = 200 - percent * (175 / 1.1)
+            // Meaning 100% target fill is at 1.0 / 1.1 (90.9%) of the glass interior height!
+            const targetLineY = glassBottom - (glassH * (1.0 / 1.1));
+
+            return {
+                x: glassX,
+                y: glassTop,
+                w: glassW,
+                h: glassH,
+                bottom: glassBottom,
+                targetLineY: targetLineY,
+                nozzleY: Math.max(18, glassTop - 52)
+            };
+        }
+
+        let lastFrameTime = performance.now();
+
+        function update(dt) {
+            const now = performance.now();
+
+            // Update Pouring Physics
+            if (game.state === STATE.POURING) {
+                game.elapsedPourTime = (now - game.pourStartTime) / 1000;
+                game.fillPercent = game.elapsedPourTime / game.targetTime;
+                sfx.updatePourPitch(game.fillPercent);
+
+                // Spawn rising carbonation/aerated bubbles in the liquid
+                if (Math.random() < 0.65) {
+                    const g = getGlassGeometry();
+                    const clampedPct = Math.min(game.fillPercent, 1.1);
+                    const surfaceY = g.bottom - (g.h * (clampedPct / 1.1));
+                    if (g.bottom - surfaceY > 12) {
+                        game.bubbles.push({
+                            x: g.x + g.w * 0.5 + (Math.random() - 0.5) * (g.w * 0.68),
+                            y: g.bottom - 6,
+                            vy: 45 + Math.random() * 75,
+                            r: 1.5 + Math.random() * 3,
+                            surfaceY: surfaceY
+                        });
+                    }
+                }
+
+                // Overflow droplets if filled past 110% (brim of the glass)
+                if (game.fillPercent > 1.1 && Math.random() < 0.7) {
+                    const g = getGlassGeometry();
+                    const side = Math.random() < 0.5 ? -1 : 1;
+                    game.overflowDrops.push({
+                        x: side === -1 ? g.x - 2 : g.x + g.w + 2,
+                        y: g.y + 4,
+                        vx: side * (15 + Math.random() * 25),
+                        vy: 30 + Math.random() * 50,
+                        r: 2.5 + Math.random() * 2.5
+                    });
+                }
+            }
+
+            // Smooth liquid visual interpolation
+            game.visualPercent += (game.fillPercent - game.visualPercent) * Math.min(1, dt * 24);
+            game.wavePhase += dt * (game.state === STATE.POURING ? 11 : 3.5);
+
+            // Smooth curtain open/close transition
+            game.curtainProgress += (game.targetCurtainProgress - game.curtainProgress) * Math.min(1, dt * 11);
+
+            // Update Bubbles
+            const g = getGlassGeometry();
+            const currentClamped = Math.min(game.visualPercent, 1.1);
+            const currentSurfaceY = g.bottom - (g.h * (currentClamped / 1.1));
+
+            for (let i = game.bubbles.length - 1; i >= 0; i--) {
+                const b = game.bubbles[i];
+                b.y -= b.vy * dt;
+                b.x += Math.sin(b.y * 0.08) * 12 * dt;
+                if (b.y <= currentSurfaceY + 2) {
+                    game.bubbles.splice(i, 1);
+                }
+            }
+
+            // Update Overflow Drops
+            for (let i = game.overflowDrops.length - 1; i >= 0; i--) {
+                const d = game.overflowDrops[i];
+                d.vy += 420 * dt; // Gravity
+                d.x += d.vx * dt;
+                d.y += d.vy * dt;
+                if (d.y > g.bottom + 14) {
+                    game.overflowDrops.splice(i, 1);
+                }
+            }
+
+            // Update Celebration Particles
+            for (let i = game.particles.length - 1; i >= 0; i--) {
+                const p = game.particles[i];
+                p.vy += 320 * dt;
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.life -= dt;
+                p.alpha = Math.max(0, p.life);
+                if (p.life <= 0) {
+                    game.particles.splice(i, 1);
+                }
+            }
+
+            // Update Screen Shake
+            if (game.shakeTime > 0) {
+                game.shakeTime -= dt;
+            }
+        }
+
+        function drawBackgroundAndTable(g) {
+            // Subtle radial spotlight behind the glass
+            const spotlight = ctx.createRadialGradient(
+                width * 0.5, g.y + g.h * 0.5, 10,
+                width * 0.5, g.y + g.h * 0.5, Math.max(width, height) * 0.65
+            );
+            spotlight.addColorStop(0, "rgba(56, 189, 248, 0.12)");
+            spotlight.addColorStop(0.6, "rgba(15, 23, 42, 0.05)");
+            spotlight.addColorStop(1, "rgba(2, 6, 23, 0.35)");
+            ctx.fillStyle = spotlight;
+            ctx.fillRect(0, 0, width, height);
+
+            // Sleek reflective counter/pedestal surface
+            const tableY = g.bottom + 8;
+            const tableGrad = ctx.createLinearGradient(0, tableY, 0, height);
+            tableGrad.addColorStop(0, "#1e293b");
+            tableGrad.addColorStop(0.15, "#0f172a");
+            tableGrad.addColorStop(1, "#020617");
+            ctx.fillStyle = tableGrad;
+            ctx.fillRect(0, tableY, width, height - tableY);
+
+            // Top rim highlight of table
+            ctx.fillStyle = "rgba(148, 163, 184, 0.22)";
+            ctx.fillRect(0, tableY, width, 2);
+
+            // Soft shadow under the glass base
+            const shadowGrad = ctx.createRadialGradient(
+                width * 0.5, tableY + 4, 8,
+                width * 0.5, tableY + 4, g.w * 0.72
+            );
+            shadowGrad.addColorStop(0, "rgba(0, 0, 0, 0.75)");
+            shadowGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
+            ctx.fillStyle = shadowGrad;
+            ctx.beginPath();
+            ctx.ellipse(width * 0.5, tableY + 4, g.w * 0.72, 12, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawNozzle(g) {
+            const cx = width * 0.5;
+            const ny = g.nozzleY;
+
+            // Metallic dispenser pipe coming from top of frame
+            const pipeGrad = ctx.createLinearGradient(cx - 18, 0, cx + 18, 0);
+            pipeGrad.addColorStop(0, "#334155");
+            pipeGrad.addColorStop(0.35, "#94a3b8");
+            pipeGrad.addColorStop(0.65, "#475569");
+            pipeGrad.addColorStop(1, "#1e293b");
+
+            ctx.fillStyle = pipeGrad;
+            ctx.fillRect(cx - 14, 0, 28, ny);
+
+            // Dispenser nozzle collar
+            ctx.fillStyle = "#0f172a";
+            ctx.beginPath();
+            ctx.roundRect(cx - 20, ny - 8, 40, 12, 4);
+            ctx.fill();
+            ctx.strokeStyle = "#64748b";
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Glowing status LED on nozzle
+            ctx.fillStyle = game.streamActive ? "#38bdf8" : "#475569";
+            ctx.beginPath();
+            ctx.arc(cx, ny - 2, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawWaterStream(g, surfaceY) {
+            if (!game.streamActive) return;
+
+            const cx = width * 0.5;
+            const startY = g.nozzleY + 4;
+            const endY = Math.min(surfaceY + 4, g.bottom - 2);
+            const streamWidth = 14 + Math.sin(game.wavePhase * 2) * 1.5;
+
+            const streamGrad = ctx.createLinearGradient(cx - streamWidth / 2, 0, cx + streamWidth / 2, 0);
+            streamGrad.addColorStop(0, "rgba(2, 132, 199, 0.85)");
+            streamGrad.addColorStop(0.35, "rgba(125, 211, 252, 0.95)");
+            streamGrad.addColorStop(0.7, "rgba(14, 165, 233, 0.9)");
+            streamGrad.addColorStop(1, "rgba(3, 105, 161, 0.85)");
+
+            ctx.fillStyle = streamGrad;
+            ctx.fillRect(cx - streamWidth / 2, startY, streamWidth, Math.max(0, endY - startY));
+
+            // Splash foam ring where stream hits water surface
+            if (game.curtainProgress < 0.85) {
+                ctx.fillStyle = "rgba(224, 242, 254, 0.75)";
+                ctx.beginPath();
+                ctx.ellipse(cx, endY, streamWidth * 1.15, 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawGlassAndLiquid(g) {
+            const clampedPct = Math.max(0, Math.min(game.visualPercent, 1.1));
+            const liquidHeight = g.h * (clampedPct / 1.1);
+            const surfaceY = g.bottom - liquidHeight;
+
+            // 1. Glass Interior Back Tint
+            ctx.fillStyle = "rgba(15, 23, 42, 0.55)";
+            ctx.beginPath();
+            ctx.roundRect(g.x, g.y, g.w, g.h, [4, 4, 18, 18]);
+            ctx.fill();
+
+            // 2. Clip inside the glass for liquid & bubbles
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(g.x + 3, g.y + 2, g.w - 6, g.h - 5, [2, 2, 15, 15]);
+            ctx.clip();
+
+            if (liquidHeight > 0.5) {
+                // Liquid body gradient
+                const liqGrad = ctx.createLinearGradient(0, surfaceY, 0, g.bottom);
+                if (game.visualPercent > 1.1) {
+                    // Slight warning tint when overflowing
+                    liqGrad.addColorStop(0, "#38bdf8");
+                    liqGrad.addColorStop(1, "#0369a1");
+                } else {
+                    liqGrad.addColorStop(0, "#38bdf8");
+                    liqGrad.addColorStop(0.45, "#0284c7");
+                    liqGrad.addColorStop(1, "#075985");
+                }
+
+                // Back wave layer for 3D depth
+                ctx.fillStyle = "rgba(125, 211, 252, 0.45)";
+                ctx.beginPath();
+                ctx.moveTo(g.x, g.bottom);
+                const waveAmp = game.state === STATE.POURING ? 4.5 : 1.8;
+                for (let x = g.x; x <= g.x + g.w; x += 6) {
+                    const wy = surfaceY + Math.cos((x * 0.045) - game.wavePhase) * waveAmp;
+                    ctx.lineTo(x, wy);
+                }
+                ctx.lineTo(g.x + g.w, g.bottom);
+                ctx.closePath();
+                ctx.fill();
+
+                // Front main liquid wave layer
+                ctx.fillStyle = liqGrad;
+                ctx.beginPath();
+                ctx.moveTo(g.x, g.bottom);
+                for (let x = g.x; x <= g.x + g.w; x += 6) {
+                    const wy = surfaceY + Math.sin((x * 0.05) + game.wavePhase) * waveAmp;
+                    ctx.lineTo(x, wy);
+                }
+                ctx.lineTo(g.x + g.w, g.bottom);
+                ctx.closePath();
+                ctx.fill();
+
+                // Bright meniscus surface highlight
+                ctx.strokeStyle = "rgba(224, 242, 254, 0.85)";
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                for (let x = g.x; x <= g.x + g.w; x += 6) {
+                    const wy = surfaceY + Math.sin((x * 0.05) + game.wavePhase) * waveAmp;
+                    if (x === g.x) ctx.moveTo(x, wy);
+                    else ctx.lineTo(x, wy);
+                }
+                ctx.stroke();
+
+                // Rising Bubbles
+                ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+                for (const b of game.bubbles) {
+                    ctx.beginPath();
+                    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            ctx.restore();
+
+            // 3. Overflowing water streams down exterior walls if > 110%
+            if (game.visualPercent > 1.1) {
+                ctx.fillStyle = "rgba(56, 189, 248, 0.7)";
+                ctx.fillRect(g.x - 3, g.y + 4, 3, g.h - 4);
+                ctx.fillRect(g.x + g.w, g.y + 4, 3, g.h - 4);
+            }
+
+            for (const d of game.overflowDrops) {
+                ctx.fillStyle = "#7dd3fc";
+                ctx.beginPath();
+                ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 4. 100% Target Fill Line (Dashed precision marker + side ticks)
+            const ty = g.targetLineY;
+            ctx.save();
+            ctx.strokeStyle = "#fbbf24";
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([8, 6]);
+            ctx.beginPath();
+            ctx.moveTo(g.x + 6, ty);
+            ctx.lineTo(g.x + g.w - 6, ty);
+            ctx.stroke();
+            ctx.restore();
+
+            // Target Line Side Badges
+            ctx.fillStyle = "#fbbf24";
+            ctx.beginPath();
+            ctx.moveTo(g.x - 10, ty - 5);
+            ctx.lineTo(g.x - 2, ty);
+            ctx.lineTo(g.x - 10, ty + 5);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.font = "700 11px 'JetBrains Mono', monospace";
+            ctx.fillStyle = "#fbbf24";
+            ctx.textAlign = "left";
+            ctx.fillText("100%", g.x + g.w + 8, ty + 4);
+
+            // 5. Glass Beaker Walls & Specular Reflections
+            ctx.strokeStyle = "rgba(226, 232, 240, 0.75)";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            // Open top beaker shape with rounded bottom corners
+            ctx.moveTo(g.x, g.y);
+            ctx.lineTo(g.x, g.bottom - 18);
+            ctx.quadraticCurveTo(g.x, g.bottom, g.x + 18, g.bottom);
+            ctx.lineTo(g.x + g.w - 18, g.bottom);
+            ctx.quadraticCurveTo(g.x + g.w, g.bottom, g.x + g.w, g.bottom - 18);
+            ctx.lineTo(g.x + g.w, g.y);
+            ctx.stroke();
+
+            // Thick glass base
+            ctx.fillStyle = "rgba(148, 163, 184, 0.35)";
+            ctx.beginPath();
+            ctx.roundRect(g.x + 2, g.bottom - 9, g.w - 4, 8, [0, 0, 14, 14]);
+            ctx.fill();
+
+            // Vertical glass glare reflection on left side
+            const glareGrad = ctx.createLinearGradient(g.x + 10, 0, g.x + 26, 0);
+            glareGrad.addColorStop(0, "rgba(255, 255, 255, 0.24)");
+            glareGrad.addColorStop(1, "rgba(255, 255, 255, 0.0)");
+            ctx.fillStyle = glareGrad;
+            ctx.fillRect(g.x + 10, g.y + 8, 14, g.h - 24);
+        }
+
+        function drawVelvetCurtains(g) {
+            if (game.curtainProgress <= 0.01) return;
+
+            // Curtain covers the entire glass area, leaving ONLY the top nozzle stream visible!
+            const areaW = g.w + 90;
+            const areaH = g.h + 26;
+            const areaX = (width - areaW) / 2;
+            const areaY = g.y - 10;
+
+            const halfW = (areaW / 2) * game.curtainProgress;
+            const centerX = width / 2;
+
+            // Curtain Rod across the top of the glass
+            ctx.fillStyle = "#d97706";
+            ctx.beginPath();
+            ctx.roundRect(areaX - 10, areaY - 6, areaW + 20, 7, 3.5);
+            ctx.fill();
+
+            // Gold finials on rod ends
+            ctx.fillStyle = "#fbbf24";
+            ctx.beginPath();
+            ctx.arc(areaX - 10, areaY - 2.5, 6, 0, Math.PI * 2);
+            ctx.arc(areaX + areaW + 10, areaY - 2.5, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Helper to draw pleated crimson velvet half-curtain
+            const drawHalfCurtain = (startX, panelW, isLeft) => {
+                if (panelW <= 1) return;
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(startX, areaY, panelW, areaH, [2, 2, 10, 10]);
+                ctx.clip();
+
+                // Deep crimson base
+                ctx.fillStyle = "#881337";
+                ctx.fillRect(startX, areaY, panelW, areaH);
+
+                // Vertical velvet folds
+                const folds = 5;
+                const foldW = panelW / folds;
+                for (let i = 0; i < folds; i++) {
+                    const fx = startX + i * foldW;
+                    const foldGrad = ctx.createLinearGradient(fx, 0, fx + foldW, 0);
+                    foldGrad.addColorStop(0, "rgba(76, 5, 25, 0.75)");
+                    foldGrad.addColorStop(0.45, "rgba(225, 29, 72, 0.55)");
+                    foldGrad.addColorStop(1, "rgba(76, 5, 25, 0.8)");
+                    ctx.fillStyle = foldGrad;
+                    ctx.fillRect(fx, areaY, foldW + 1, areaH);
+                }
+
+                // Gold trim on inner meeting edge
+                const trimX = isLeft ? startX + panelW - 4 : startX;
+                ctx.fillStyle = "#fbbf24";
+                ctx.fillRect(trimX, areaY, 4, areaH);
+
+                ctx.restore();
+            };
+
+            drawHalfCurtain(areaX, halfW, true);
+            drawHalfCurtain(areaX + areaW - halfW, halfW, false);
+
+            // Question mark emblem when fully closed
+            if (game.curtainProgress > 0.85) {
+                ctx.save();
+                ctx.globalAlpha = (game.curtainProgress - 0.85) / 0.15;
+                ctx.fillStyle = "rgba(254, 243, 199, 0.9)";
+                ctx.font = "700 44px 'Fredoka', sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText("?", centerX, areaY + areaH * 0.52);
+                ctx.restore();
+            }
+        }
+
+        function drawParticles() {
+            for (const p of game.particles) {
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, width, height);
+
+            ctx.save();
+            // Apply screen shake if active
+            if (game.shakeTime > 0) {
+                const dx = (Math.random() - 0.5) * game.shakeIntensity * 2;
+                const dy = (Math.random() - 0.5) * game.shakeIntensity * 2;
+                ctx.translate(dx, dy);
+            }
+
+            const g = getGlassGeometry();
+            const clampedPct = Math.max(0, Math.min(game.visualPercent, 1.1));
+            const surfaceY = g.bottom - (g.h * (clampedPct / 1.1));
+
+            drawBackgroundAndTable(g);
+            drawWaterStream(g, surfaceY);
+            drawNozzle(g);
+            drawGlassAndLiquid(g);
+            drawVelvetCurtains(g);
+            drawParticles();
+
+            ctx.restore();
+        }
+
+        function gameLoop(now) {
+            const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
+            lastFrameTime = now;
+
+            update(dt);
+            render();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start application on window load
+        window.onload = function () {
+            resizeCanvas();
+            resetGame();
+            lastFrameTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
