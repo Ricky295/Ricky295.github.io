@@ -70,7 +70,7 @@
           <span class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200/60">
             Scenario Calibration
           </span>
-          <span id="progress-badge" class="text-xs font-medium text-slate-500">Choose a question count to begin</span>
+          <span id="progress-badge" class="text-xs font-medium text-slate-500">Ready when you are</span>
         </div>
         <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
           What Matters Most to You in a Job?
@@ -79,13 +79,8 @@
           Rate randomly generated job setups as <strong>Yes</strong>, <strong>Uncertain</strong>, or <strong>No</strong>. At the end, we fit a linear regression model to uncover what matters most to you and generate a shareable text &amp; embeddable widget.
         </p>
 
-        <div class="mt-5 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div>
-            <label for="scenario-count" class="block text-xs font-semibold uppercase tracking-wider text-slate-500">Number of questions</label>
-            <input id="scenario-count" type="number" min="1" step="1" value="40" class="mt-1.5 w-32 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <button id="btn-start-test" type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition">Start test</button>
-          <p class="text-xs text-slate-500">More questions generally produce more stable estimates, but take more time.</p>
+        <div class="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p class="text-sm text-slate-700">Answer as many scenarios as you like. You can see your results after <strong>20 answers</strong>; more answers can make your preference estimates more stable.</p>
         </div>
 
         <!-- Progress bar -->
@@ -94,7 +89,7 @@
             <div id="progress-bar" class="h-full bg-blue-600 rounded-full transition-all duration-300" style="width: 2.5%;"></div>
           </div>
           <div class="mt-2 flex items-center justify-between text-xs text-slate-500">
-            <span id="progress-percent">0% complete</span>
+            <span id="progress-percent">0 scenarios answered</span>
             <button
               id="btn-reset-top"
               type="button"
@@ -154,6 +149,11 @@
           </button>
         </div>
 
+        <div class="mt-5 flex flex-col items-center gap-2">
+          <button id="btn-finish-test" type="button" disabled class="rounded-lg bg-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 transition disabled:cursor-not-allowed">End test &amp; see results</button>
+          <p id="finish-hint" class="text-center text-xs text-slate-500">Answer 20 scenarios to unlock your results.</p>
+        </div>
+
         <p class="mt-3 text-center text-xs text-slate-400">
           Keyboard shortcuts: <kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600">1</kbd> Yes,
           <kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600">2</kbd> Uncertain,
@@ -161,7 +161,7 @@
         </p>
       </section>
 
-      <!-- Results & Share Section (Hidden until 40 scenarios completed) -->
+      <!-- Results & Share Section (Hidden until the user ends the test) -->
       <section id="results-section" class="hidden space-y-6">
         <div class="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-7 shadow-sm">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-4 border-b border-slate-100">
@@ -306,7 +306,7 @@
             target="_top"
             class="font-semibold text-blue-600 hover:text-blue-700 underline underline-offset-2"
           >
-            Take the 40-question test →
+            Take the preference test →
           </a>
         </div>
       </div>
@@ -328,12 +328,13 @@
      *   Plus weekly hours (20..60).
      * - When loaded inside an iframe with a #w=<base64> payload (or if explicitly
      *   viewing the embedded widget), we render Mode 2 (the interactive slider widget).
-     * - Otherwise we render Mode 1 (the 40-scenario test, linear regression weight
+     * - Otherwise we render Mode 1 (the open-ended scenario test, linear regression weight
      *   solver, text share generator, and Base64 iframe embed generator).
      */
 
-    const DEFAULT_SCENARIOS = 40;
-    let totalScenarios = DEFAULT_SCENARIOS;
+    const MIN_SCENARIOS_FOR_RESULTS = 20;
+    const SCENARIO_BATCH_SIZE = 20;
+    let totalScenarios = SCENARIO_BATCH_SIZE;
 
     // 6 qualities on 0.0 - 10.0 scale + weekly hours on 20 - 60 scale
     const SCORED_QUALITIES = [
@@ -421,7 +422,7 @@
       topQuality: "boss quality",
     };
 
-    // State for the 40-question test
+    // State for the open-ended preference test
     const state = {
       scenarios: [],
       responses: [], // { answer: 'yes' | 'uncertain' | 'no', score: 1.0 | 0.5 | 0.0 }
@@ -656,7 +657,7 @@
     }
 
     /**
-     * Fits standardized ridge linear regression on the 40 scenarios and converts
+     * Fits standardized ridge linear regression on the answered scenarios and converts
      * back to raw feature units so we can predict "chance of yes" (0.0 to 1.0).
      */
     function fitLinearRegression(scenarios, responses, ridgeAlpha = 0.02) {
@@ -776,22 +777,21 @@
       const scenarioCard = document.getElementById("scenario-card");
       const resultsSection = document.getElementById("results-section");
 
-      const completedCount = Math.min(idx, totalScenarios);
-      const pct = Math.round((completedCount / totalScenarios) * 100);
-      bar.style.width = `${Math.max(2.5, pct)}%`;
-      pctLabel.textContent = `${pct}% complete (${completedCount}/${totalScenarios})`;
-
-      if (idx >= totalScenarios) {
-        badge.textContent = `Completed ${totalScenarios} of ${totalScenarios}`;
-        scenarioCard.classList.add("hidden");
-        renderResults();
-        resultsSection.classList.remove("hidden");
-        return;
-      }
+      pctLabel.textContent = `${idx} scenario${idx === 1 ? "" : "s"} answered`;
+      bar.style.width = `${Math.min(100, Math.max(2.5, (idx / MIN_SCENARIOS_FOR_RESULTS) * 100))}%`;
+      const finishBtn = document.getElementById("btn-finish-test");
+      const finishHint = document.getElementById("finish-hint");
+      finishBtn.disabled = idx < MIN_SCENARIOS_FOR_RESULTS;
+      finishBtn.className = idx < MIN_SCENARIOS_FOR_RESULTS
+        ? "rounded-lg bg-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 transition disabled:cursor-not-allowed"
+        : "rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition";
+      finishHint.textContent = idx < MIN_SCENARIOS_FOR_RESULTS
+        ? `Answer ${MIN_SCENARIOS_FOR_RESULTS - idx} more scenario${MIN_SCENARIOS_FOR_RESULTS - idx === 1 ? "" : "s"} to unlock your results.`
+        : "Your results are ready whenever you are. More answers may improve the estimate.";
 
       scenarioCard.classList.remove("hidden");
       resultsSection.classList.add("hidden");
-      badge.textContent = `Scenario ${idx + 1} of ${totalScenarios}`;
+      badge.textContent = `${idx} answered · scenario ${idx + 1}`;
       undoBtn.disabled = idx === 0;
 
       document.getElementById("scenario-title").textContent = `Scenario #${idx + 1}`;
@@ -834,12 +834,12 @@
     }
 
     function recordAnswer(answerType) {
-      if (state.responses.length >= totalScenarios) return;
+      const idx = state.responses.length;
+      if (idx >= state.scenarios.length) {
+        state.scenarios.push(...generateAllScenarios(SCENARIO_BATCH_SIZE));
+      }
       const scoreMap = { yes: 1.0, uncertain: 0.5, no: 0.0 };
-      state.responses.push({
-        answer: answerType,
-        score: scoreMap[answerType],
-      });
+      state.responses.push({ answer: answerType, score: scoreMap[answerType] });
       renderCurrentScenario();
     }
 
@@ -849,28 +849,31 @@
       renderCurrentScenario();
     }
 
-    function readScenarioCount() {
-      const input = document.getElementById("scenario-count");
-      const parsed = Number.parseInt(input.value, 10);
-      if (!Number.isInteger(parsed) || parsed < 1) {
-        input.value = String(DEFAULT_SCENARIOS);
-        return DEFAULT_SCENARIOS;
-      }
-      return parsed;
-    }
-
     function startTest() {
-      totalScenarios = readScenarioCount();
+      totalScenarios = SCENARIO_BATCH_SIZE;
       state.scenarios = generateAllScenarios(totalScenarios);
       state.responses = [];
       state.fittedModel = null;
       document.getElementById("widget-preview-host").innerHTML = "";
       renderCurrentScenario();
-      showStatus(`Started a fresh set of ${totalScenarios} random job scenarios.`, "info");
+      showStatus("Your test is ready. Answer at your own pace, then end it when you’re ready.", "info");
     }
 
     function resetTest() {
       startTest();
+    }
+
+    function finishTest() {
+      if (state.responses.length < MIN_SCENARIOS_FOR_RESULTS) {
+        showStatus(`Answer at least ${MIN_SCENARIOS_FOR_RESULTS} scenarios before viewing results.`, "info");
+        return;
+      }
+      document.getElementById("scenario-card").classList.add("hidden");
+      document.getElementById("progress-badge").textContent = `Finished after ${state.responses.length} scenarios`;
+      document.getElementById("progress-percent").textContent = `${state.responses.length} scenarios answered`;
+      document.getElementById("progress-bar").style.width = "100%";
+      renderResults();
+      document.getElementById("results-section").classList.remove("hidden");
     }
 
     function buildShareUrlWithWeights(encodedWeights) {
@@ -896,7 +899,7 @@
       const noCount = state.responses.filter((r) => r.answer === "no").length;
 
       document.getElementById("model-summary").textContent =
-        `${yesCount} Yes · ${uncCount} Uncertain · ${noCount} No · ${totalScenarios} scenarios · Model R²: ${(model.r2 * 100).toFixed(1)}%`;
+        `${yesCount} Yes · ${uncCount} Uncertain · ${noCount} No · ${state.responses.length} scenarios answered · Model R²: ${(model.r2 * 100).toFixed(1)}%`;
 
       const callout = document.getElementById("top-quality-callout");
       callout.innerHTML = "";
@@ -1126,7 +1129,7 @@
     // Event Listeners & Initialization
     // -------------------------------------------------------------------------
     function bindTestEvents() {
-      document.getElementById("btn-start-test").addEventListener("click", startTest);
+      document.getElementById("btn-finish-test").addEventListener("click", finishTest);
       document.getElementById("btn-yes").addEventListener("click", () => recordAnswer("yes"));
       document.getElementById("btn-uncertain").addEventListener("click", () => recordAnswer("uncertain"));
       document.getElementById("btn-no").addEventListener("click", () => recordAnswer("no"));
@@ -1178,8 +1181,7 @@
 
       // Otherwise render Mode 1: user-configurable test + weights + text/embed share
       bindTestEvents();
-      state.responses = [];
-      document.getElementById("scenario-card").classList.add("hidden");
+      startTest();
     }
 
     window.addEventListener("DOMContentLoaded", boot);
