@@ -250,28 +250,39 @@
       var legal = [];
       for (var r = 0; r < BOARD_SIZE; r += 1) for (var c = 0; c < BOARD_SIZE; c += 1) if (!state.board[r][c]) legal.push([r,c]);
       if (!legal.length) return null;
-      var probs = probabilities(state.memories[state.turn], state.excluded[state.turn]), dangers = {}, bait = {};
+      var probs = probabilities(state.memories[state.turn], state.excluded[state.turn]), dangers = {}, bait = {}, otherBait = {};
       legal.forEach(function (move) {
         var r = move[0], c = move[1]; state.board[r][c] = true;
         var done = completedShapes(state.board, move), danger = 0;
         done.forEach(function (shape) { danger += probs[shape]; });
         dangers[r + "," + c] = danger;
-        var lures = 0;
+        var lures = 0, otherLures = {};
         legal.forEach(function (next) {
           if (next[0] === r && next[1] === c) return;
           if (state.board[next[0]][next[1]]) return;
           state.board[next[0]][next[1]] = true;
-          if (completedShapes(state.board, next).indexOf(state.shapes[state.turn]) >= 0) lures += 1;
+          var nextShapes = completedShapes(state.board, next);
+          if (nextShapes.indexOf(state.shapes[state.turn]) >= 0) lures += 1;
+          nextShapes.forEach(function (shape) {
+            if (shape !== state.shapes[state.turn]) otherLures[shape] = true;
+          });
           state.board[next[0]][next[1]] = false;
         });
-        bait[r + "," + c] = lures; state.board[r][c] = false;
+        bait[r + "," + c] = lures;
+        // Tiebreaker: reward setting up one-candle-away completions of shapes other than the AI's.
+        otherBait[r + "," + c] = Object.keys(otherLures).length;
+        state.board[r][c] = false;
       });
       var values = Object.keys(dangers), low = Math.min.apply(null, values.map(function (m) { return dangers[m]; })), high = Math.max.apply(null, values.map(function (m) { return dangers[m]; })), safety = {};
       values.forEach(function (m) { safety[m] = high === low ? 100 : 100 * (high - dangers[m]) / (high - low); });
-      var combined = combineScores(safety, bait), level = state.levels[state.turn], closest = Math.min.apply(null, values.map(function (m) { return Math.abs(combined[m] - level); }));
+      // Keep the existing bait count primary; use non-AI-shape bait only to break ties.
+      var maxOtherBait = Math.max.apply(null, values.map(function (m) { return otherBait[m]; }));
+      var rankedBait = {};
+      values.forEach(function (m) { rankedBait[m] = bait[m] + (maxOtherBait > 0 ? otherBait[m] / (maxOtherBait + 1) : 0); });
+      var combined = combineScores(safety, rankedBait), level = state.levels[state.turn], closest = Math.min.apply(null, values.map(function (m) { return Math.abs(combined[m] - level); }));
       var chosen = choose(values.filter(function (m) { return Math.abs(combined[m] - level) === closest; }));
       var moveLog = values.slice().sort(function (a, b) { return combined[b] - combined[a]; }).map(function (m) {
-        return m + " | safety=" + safety[m].toFixed(2) + " bait=" + bait[m] + " score=" + combined[m].toFixed(4) + (m === chosen ? " ← chosen" : "");
+        return m + " | safety=" + safety[m].toFixed(2) + " bait=" + bait[m] + " other-shape bait=" + otherBait[m] + " score=" + combined[m].toFixed(4) + (m === chosen ? " ← chosen" : "");
       });
       console.log("AI " + (state.turn + 1) + " (level " + level + "):\n" + moveLog.join("\n"));
       return chosen.split(",").map(Number);
