@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeSync — Share Your Local Time</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for crisp icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between items-center p-4 sm:p-6 selection:bg-indigo-500 selection:text-white relative overflow-x-hidden">
+
+    <!-- Subtle Ambient Background Glow -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+        <div class="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl"></div>
+        <div class="absolute top-1/2 -right-40 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl"></div>
+    </div>
+
+    <!-- Top Navigation / Header -->
+    <header class="w-full max-w-2xl flex items-center justify-between py-2">
+        <a href="?" id="brandLogo" class="flex items-center gap-2.5 text-lg font-bold tracking-tight text-white hover:opacity-90 transition-opacity">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-sky-400 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+                <i class="fa-regular fa-clock text-white text-base"></i>
+            </div>
+            <span>TimeSync</span>
+        </a>
+        <div id="headerActionArea"></div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="w-full max-w-lg my-auto py-8">
+
+        <!-- VIEW 1: GENERATOR VIEW (When no URL attributes are present) -->
+        <section id="generatorView" class="hidden bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
+            <div class="mb-6">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/20 mb-3">
+                    <i class="fa-solid fa-link text-[10px]"></i> Instant Timezone Link
+                </span>
+                <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Share your live time</h1>
+                <p class="text-slate-400 text-sm sm:text-base mt-1.5">
+                    Create a personal link that shows your exact local time and time difference to anyone who opens it.
+                </p>
+            </div>
+
+            <form id="linkGeneratorForm" class="space-y-5">
+                <!-- Username Input -->
+                <div>
+                    <label for="usernameInput" class="block text-sm font-medium text-slate-300 mb-1.5">
+                        Your Name or Handle
+                    </label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                            <i class="fa-regular fa-user"></i>
+                        </div>
+                        <input 
+                            type="text" 
+                            id="usernameInput" 
+                            required 
+                            maxlength="40"
+                            placeholder="e.g. Alex, Sarah, @dev_mike" 
+                            class="w-full pl-10 pr-4 py-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                        >
+                    </div>
+                </div>
+
+                <!-- Timezone Selector -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label for="timezoneSelect" class="block text-sm font-medium text-slate-300">
+                            Your Timezone
+                        </label>
+                        <button type="button" id="autoDetectBtn" class="text-xs font-medium text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors">
+                            <i class="fa-solid fa-location-crosshairs"></i> Auto-detect
+                        </button>
+                    </div>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                            <i class="fa-solid fa-globe"></i>
+                        </div>
+                        <select 
+                            id="timezoneSelect" 
+                            required
+                            class="w-full pl-10 pr-10 py-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all cursor-pointer"
+                        >
+                            <!-- Populated dynamically via JS -->
+                        </select>
+                        <div class="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-500">
+                            <i class="fa-solid fa-chevron-down text-xs"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Preview of Selected Timezone -->
+                <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-400 font-medium">Current time in selected zone</p>
+                        <p id="generatorPreviewDate" class="text-xs text-slate-500 mt-0.5">Loading...</p>
+                    </div>
+                    <div id="generatorPreviewClock" class="font-mono text-xl font-bold text-indigo-400">
+                        --:--:--
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <button 
+                    type="submit" 
+                    class="w-full py-3.5 px-5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/25 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                    <span>Generate Shareable Link</span>
+                    <i class="fa-solid fa-arrow-right text-sm"></i>
+                </button>
+            </form>
+
+            <!-- Generated Link Result Card -->
+            <div id="resultBox" class="hidden mt-6 pt-6 border-t border-slate-800 animate-fade-in">
+                <label class="block text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-2">
+                    <i class="fa-solid fa-circle-check mr-1"></i> Your Link is Ready
+                </label>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input 
+                        type="text" 
+                        id="generatedUrlInput" 
+                        readonly 
+                        class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono text-slate-300 focus:outline-none select-all"
+                    >
+                    <button 
+                        type="button" 
+                        id="copyLinkBtn" 
+                        class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl border border-slate-700 transition-colors flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                    >
+                        <i class="fa-regular fa-copy"></i>
+                        <span id="copyBtnText">Copy</span>
+                    </button>
+                </div>
+                <div class="mt-3 flex items-center justify-between">
+                    <span class="text-xs text-slate-500">Share this URL anywhere</span>
+                    <a id="openGeneratedLinkBtn" href="#" class="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+                        Preview live view <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- VIEW 2: TIMEZONE VIEWER (When ?name=...&tz=... attributes are present) -->
+        <section id="viewerView" class="hidden bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
+            
+            <!-- Error Banner (shown if timezone attribute is invalid) -->
+            <div id="invalidTzBanner" class="hidden mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-200 text-sm flex items-start gap-3">
+                <i class="fa-solid fa-triangle-exclamation text-rose-400 mt-0.5"></i>
+                <div>
+                    <p class="font-semibold text-rose-300">Invalid Timezone Parameter</p>
+                    <p class="text-xs text-rose-200/80 mt-0.5" id="invalidTzMessage">The timezone in the URL could not be recognized.</p>
+                </div>
+            </div>
+
+            <!-- User Header & Time of Day Badge -->
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+                <div class="flex items-center gap-3">
+                    <div id="userAvatar" class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                        U
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Local Time For</p>
+                        <h1 id="displayUserName" class="text-xl sm:text-2xl font-bold text-white leading-tight break-all">
+                            User
+                        </h1>
+                    </div>
+                </div>
+
+                <!-- Day / Night Status Pill -->
+                <div id="dayNightBadge" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-200 border border-slate-700">
+                    <i id="dayNightIcon" class="fa-solid fa-sun text-amber-400"></i>
+                    <span id="dayNightText">Daytime</span>
+                </div>
+            </div>
+
+            <!-- Giant Digital Clock Display -->
+            <div class="bg-slate-950/80 border border-slate-800/90 rounded-2xl p-6 sm:p-8 text-center relative overflow-hidden mb-6">
+                <div class="flex items-baseline justify-center gap-2">
+                    <span id="viewerClockMain" class="font-mono text-4xl sm:text-6xl font-bold tracking-tight text-white">
+                        12:00
+                    </span>
+                    <div class="flex flex-col items-start">
+                        <span id="viewerClockAmPm" class="text-sm sm:text-base font-bold text-indigo-400 uppercase">PM</span>
+                        <span id="viewerClockSeconds" class="font-mono text-xs sm:text-sm text-slate-500">00</span>
+                    </div>
+                </div>
+                <p id="viewerDateFull" class="text-sm sm:text-base text-slate-400 font-medium mt-3">
+                    Thursday, November 26, 2026
+                </p>
+
+                <!-- 12h / 24h Format Toggle -->
+                <button 
+                    type="button" 
+                    id="toggleFormatBtn" 
+                    class="mt-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                >
+                    <i class="fa-solid fa-repeat text-[10px]"></i>
+                    <span id="formatBtnLabel">Switch to 24-hour</span>
+                </button>
+            </div>
+
+            <!-- Metadata Grid: Timezone Details & Relative Comparison -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+                <div class="bg-slate-950/50 border border-slate-800/80 rounded-2xl p-4">
+                    <div class="flex items-center gap-2 text-slate-400 text-xs font-medium mb-1">
+                        <i class="fa-solid fa-globe text-indigo-400"></i>
+                        <span>Timezone</span>
+                    </div>
+                    <p id="viewerTzName" class="text-sm font-semibold text-white truncate" title="">America/New_York</p>
+                    <p id="viewerTzOffset" class="text-xs text-slate-500 mt-0.5">UTC-5 (EST)</p>
+                </div>
+
+                <div class="bg-slate-950/50 border border-slate-800/80 rounded-2xl p-4">
+                    <div class="flex items-center gap-2 text-slate-400 text-xs font-medium mb-1">
+                        <i class="fa-solid fa-right-left text-sky-400"></i>
+                        <span>Compared to You</span>
+                    </div>
+                    <p id="viewerRelativeDiff" class="text-sm font-semibold text-white">Same time as you</p>
+                    <p id="viewerLocalComparison" class="text-xs text-slate-500 mt-0.5">Your time: --:--</p>
+                </div>
+            </div>
+
+            <!-- Footer Actions inside Viewer -->
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-800/80">
+                <button 
+                    type="button" 
+                    id="copyCurrentUrlBtn" 
+                    class="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                >
+                    <i class="fa-solid fa-share-nodes"></i>
+                    <span id="copyCurrentUrlText">Copy Link</span>
+                </button>
+
+                <button 
+                    type="button" 
+                    id="createOwnBtn" 
+                    class="w-full sm:w-auto px-4 py-2.5 bg-indigo-600/15 hover:bg-indigo-600/25 text-indigo-300 text-xs font-semibold rounded-xl border border-indigo-500/30 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                >
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Create Your Own Link</span>
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Custom Toast Notification (Replaces alert()) -->
+    <div id="toastNotification" class="fixed bottom-5 left-1/2 -translate-x-1/2 translate-y-20 opacity-0 pointer-events-none transition-all duration-300 z-50 bg-slate-800 text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-xl border border-slate-700 flex items-center gap-2">
+        <i class="fa-solid fa-circle-check text-emerald-400"></i>
+        <span id="toastMessage">Copied to clipboard!</span>
+    </div>
+
+    <!-- Footer -->
+    <footer class="w-full max-w-2xl text-center py-2 text-xs text-slate-500">
+        No accounts or database required — state is stored directly in your shareable URL.
+    </footer>
+
+    <script>
+        /**
+         * TimeSync Application Logic
+         * Handles URL parameter parsing, timezone enumeration, live clock updates,
+         * relative offset calculation, and clipboard sharing without external backend dependencies.
+         */
+
+        // State variables
+        let is24Hour = false;
+        let clockInterval = null;
+        let activeViewerData = null;
+
+        // DOM References
+        const generatorView = document.getElementById('generatorView');
+        const viewerView = document.getElementById('viewerView');
+        const headerActionArea = document.getElementById('headerActionArea');
+        const brandLogo = document.getElementById('brandLogo');
+
+        // Generator DOM Elements
+        const linkGeneratorForm = document.getElementById('linkGeneratorForm');
+        const usernameInput = document.getElementById('usernameInput');
+        const timezoneSelect = document.getElementById('timezoneSelect');
+        const autoDetectBtn = document.getElementById('autoDetectBtn');
+        const generatorPreviewClock = document.getElementById('generatorPreviewClock');
+        const generatorPreviewDate = document.getElementById('generatorPreviewDate');
+        const resultBox = document.getElementById('resultBox');
+        const generatedUrlInput = document.getElementById('generatedUrlInput');
+        const copyLinkBtn = document.getElementById('copyLinkBtn');
+        const openGeneratedLinkBtn = document.getElementById('openGeneratedLinkBtn');
+
+        // Viewer DOM Elements
+        const invalidTzBanner = document.getElementById('invalidTzBanner');
+        const invalidTzMessage = document.getElementById('invalidTzMessage');
+        const userAvatar = document.getElementById('userAvatar');
+        const displayUserName = document.getElementById('displayUserName');
+        const dayNightBadge = document.getElementById('dayNightBadge');
+        const dayNightIcon = document.getElementById('dayNightIcon');
+        const dayNightText = document.getElementById('dayNightText');
+        const viewerClockMain = document.getElementById('viewerClockMain');
+        const viewerClockAmPm = document.getElementById('viewerClockAmPm');
+        const viewerClockSeconds = document.getElementById('viewerClockSeconds');
+        const viewerDateFull = document.getElementById('viewerDateFull');
+        const toggleFormatBtn = document.getElementById('toggleFormatBtn');
+        const formatBtnLabel = document.getElementById('formatBtnLabel');
+        const viewerTzName = document.getElementById('viewerTzName');
+        const viewerTzOffset = document.getElementById('viewerTzOffset');
+        const viewerRelativeDiff = document.getElementById('viewerRelativeDiff');
+        const viewerLocalComparison = document.getElementById('viewerLocalComparison');
+        const copyCurrentUrlBtn = document.getElementById('copyCurrentUrlBtn');
+        const createOwnBtn = document.getElementById('createOwnBtn');
+
+        // Toast Elements
+        const toastNotification = document.getElementById('toastNotification');
+        const toastMessage = document.getElementById('toastMessage');
+        let toastTimeout = null;
+
+        /**
+         * Displays a non-intrusive toast message
+         */
+        function showToast(message) {
+            toastMessage.textContent = message;
+            toastNotification.classList.remove('translate-y-20', 'opacity-0');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toastNotification.classList.add('translate-y-20', 'opacity-0');
+            }, 2600);
+        }
+
+        /**
+         * Copies text reliably using a temporary textarea + execCommand('copy')
+         */
+        function copyToClipboard(text, successMsg = 'Link copied to clipboard!') {
+            const tempInput = document.createElement('textarea');
+            tempInput.value = text;
+            tempInput.style.position = 'fixed';
+            tempInput.style.opacity = '0';
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            try {
+                document.execCommand('copy');
+                showToast(successMsg);
+            } catch (err) {
+                showToast('Press Ctrl+C / Cmd+C to copy');
+            }
+            document.body.removeChild(tempInput);
+        }
+
+        /**
+         * Validates whether an IANA timezone string is supported by the browser
+         */
+        function isValidTimeZone(tz) {
+            if (!tz || typeof tz !== 'string') return false;
+            try {
+                Intl.DateTimeFormat(undefined, { timeZone: tz });
+                return true;
+            } catch (ex) {
+                return false;
+            }
+        }
+
+        /**
+         * Gets the UTC offset in minutes for a specific Date and IANA timezone
+         */
+        function getTimezoneOffsetMinutes(date, timeZone) {
+            try {
+                // Format date in target timezone in ISO-like parts to calculate exact wall-clock difference
+                const dtf = new Intl.DateTimeFormat('en-US', {
+                    timeZone,
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+                const parts = dtf.formatToParts(date);
+                const map = {};
+                parts.forEach(p => { map[p.type] = p.value; });
+                
+                // Handle midnight edge case ("24" in some engines)
+                const hour = map.hour === '24' ? '00' : map.hour;
+                const tzAsUtc = Date.UTC(
+                    parseInt(map.year, 10),
+                    parseInt(map.month, 10) - 1,
+                    parseInt(map.day, 10),
+                    parseInt(hour, 10),
+                    parseInt(map.minute, 10),
+                    parseInt(map.second, 10)
+                );
+                
+                // Compare against UTC timestamp (truncated to seconds)
+                const utcSeconds = Math.floor(date.getTime() / 1000) * 1000;
+                return Math.round((tzAsUtc - utcSeconds) / 60000);
+            } catch (e) {
+                return 0;
+            }
+        }
+
+        /**
+         * Formats an offset in minutes to a readable string like "UTC+02:00" or "UTC-5"
+         */
+        function formatUtcOffset(offsetMinutes) {
+            if (offsetMinutes === 0) return 'UTC+0';
+            const sign = offsetMinutes > 0 ? '+' : '-';
+            const abs = Math.abs(offsetMinutes);
+            const hrs = Math.floor(abs / 60);
+            const mins = abs % 60;
+            return mins === 0 
+                ? `UTC${sign}${hrs}` 
+                : `UTC${sign}${hrs}:${String(mins).padStart(2, '0')}`;
+        }
+
+        /**
+         * Retrieves short timezone abbreviation (e.g., EST, CEST, JST)
+         */
+        function getShortTzName(date, timeZone) {
+            try {
+                const parts = new Intl.DateTimeFormat('en-US', {
+                    timeZone,
+                    timeZoneName: 'short'
+                }).formatToParts(date);
+                const tzPart = parts.find(p => p.type === 'timeZoneName');
+                return tzPart ? tzPart.value : '';
+            } catch (e) {
+                return '';
+            }
+        }
+
+        /**
+         * Populates the timezone dropdown with all supported IANA timezones
+         */
+        function populateTimezones() {
+            let zones = [];
+            if (typeof Intl.supportedValuesOf === 'function') {
+                zones = Intl.supportedValuesOf('timeZone');
+            } else {
+                // Fallback list for older environments
+                zones = [
+                    'UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 
+                    'America/Los_Angeles', 'America/Sao_Paulo', 'Europe/London', 
+                    'Europe/Paris', 'Europe/Berlin', 'Europe/Rome', 'Asia/Dubai', 
+                    'Asia/Kolkata', 'Asia/Singapore', 'Asia/Tokyo', 'Australia/Sydney', 
+                    'Pacific/Auckland'
+                ];
+            }
+
+            const now = new Date();
+            const fragment = document.createDocumentFragment();
+
+            zones.forEach(tz => {
+                const option = document.createElement('option');
+                option.value = tz;
+                const offsetMins = getTimezoneOffsetMinutes(now, tz);
+                const offsetStr = formatUtcOffset(offsetMins);
+                const cleanName = tz.replace(/_/g, ' ');
+                option.textContent = `(${offsetStr}) ${cleanName}`;
+                fragment.appendChild(option);
+            });
+
+            timezoneSelect.innerHTML = '';
+            timezoneSelect.appendChild(fragment);
+            detectUserTimezone();
+        }
+
+        /**
+         * Sets the dropdown to the user's browser-detected timezone
+         */
+        function detectUserTimezone() {
+            try {
+                const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                if (userTz && Array.from(timezoneSelect.options).some(opt => opt.value === userTz)) {
+                    timezoneSelect.value = userTz;
+                }
+            } catch (e) {
+                console.warn('Could not auto-detect timezone');
+            }
+            updateGeneratorPreview();
+        }
+
+        /**
+         * Updates the live preview clock inside the Generator view
+         */
+        function updateGeneratorPreview() {
+            const selectedTz = timezoneSelect.value;
+            if (!isValidTimeZone(selectedTz)) return;
+
+            const now = new Date();
+            const timeStr = new Intl.DateTimeFormat('en-US', {
+                timeZone: selectedTz,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            }).format(now);
+
+            const dateStr = new Intl.DateTimeFormat('en-US', {
+                timeZone: selectedTz,
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric'
+            }).format(now);
+
+            generatorPreviewClock.textContent = timeStr;
+            generatorPreviewDate.textContent = dateStr;
+        }
+
+        /**
+         * Builds the shareable URL with ?name=...&tz=... attributes
+         */
+        function buildShareableUrl(name, tz) {
+            const url = new URL(window.location.href);
+            url.search = ''; // Clear existing params
+            url.searchParams.set('name', name.trim());
+            url.searchParams.set('tz', tz);
+            return url.toString();
+        }
+
+        /**
+         * Updates the Viewer UI with live time, day/night status, and offset comparison
+         */
+        function updateViewerClock() {
+            if (!activeViewerData) return;
+
+            const { tz } = activeViewerData;
+            const now = new Date();
+
+            // 1. Extract exact hour (0-23) in target timezone for day/night badge
+            const hour24Str = new Intl.DateTimeFormat('en-US', {
+                timeZone: tz,
+                hour: 'numeric',
+                hour12: false
+            }).format(now);
+            const hour24 = parseInt(hour24Str, 10) % 24;
+
+            // Update Day/Night status badge
+            if (hour24 >= 6 && hour24 < 18) {
+                dayNightIcon.className = 'fa-solid fa-sun text-amber-400';
+                dayNightText.textContent = hour24 < 12 ? 'Morning' : 'Afternoon';
+                dayNightBadge.className = 'inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-200 border border-amber-500/25';
+            } else if (hour24 >= 18 && hour24 < 21) {
+                dayNightIcon.className = 'fa-solid fa-cloud-sun text-orange-400';
+                dayNightText.textContent = 'Evening';
+                dayNightBadge.className = 'inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-orange-500/10 text-orange-200 border border-orange-500/25';
+            } else {
+                dayNightIcon.className = 'fa-solid fa-moon text-indigo-400';
+                dayNightText.textContent = 'Nighttime';
+                dayNightBadge.className = 'inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-indigo-500/15 text-indigo-200 border border-indigo-500/30';
+            }
+
+            // 2. Format Main Time Parts
+            const timeParts = new Intl.DateTimeFormat('en-US', {
+                timeZone: tz,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: !is24Hour
+            }).formatToParts(now);
+
+            const partMap = {};
+            timeParts.forEach(p => { partMap[p.type] = p.value; });
+
+            viewerClockMain.textContent = `${partMap.hour}:${partMap.minute}`;
+            viewerClockSeconds.textContent = partMap.second;
+            
+            if (!is24Hour && partMap.dayPeriod) {
+                viewerClockAmPm.textContent = partMap.dayPeriod;
+                viewerClockAmPm.classList.remove('hidden');
+            } else {
+                viewerClockAmPm.classList.add('hidden');
+            }
+
+            // 3. Full Date String
+            viewerDateFull.textContent = new Intl.DateTimeFormat('en-US', {
+                timeZone: tz,
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            }).format(now);
+
+            // 4. Timezone Metadata & Offset
+            const targetOffsetMins = getTimezoneOffsetMinutes(now, tz);
+            const shortAbbr = getShortTzName(now, tz);
+            const utcStr = formatUtcOffset(targetOffsetMins);
+            viewerTzOffset.textContent = shortAbbr && shortAbbr !== utcStr ? `${utcStr} (${shortAbbr})` : utcStr;
+
+            // 5. Compare with Viewer's Local Timezone
+            const viewerLocalTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const localOffsetMins = getTimezoneOffsetMinutes(now, viewerLocalTz);
+            const diffMins = targetOffsetMins - localOffsetMins;
+
+            if (diffMins === 0) {
+                viewerRelativeDiff.textContent = 'Same time as you';
+            } else {
+                const absDiff = Math.abs(diffMins);
+                const diffHrs = Math.floor(absDiff / 60);
+                const remMins = absDiff % 60;
+                const hrLabel = diffHrs > 0 ? `${diffHrs}h` : '';
+                const minLabel = remMins > 0 ? ` ${remMins}m` : '';
+                const direction = diffMins > 0 ? 'ahead of you' : 'behind you';
+                viewerRelativeDiff.textContent = `${hrLabel}${minLabel} ${direction}`.trim();
+            }
+
+            const viewerLocalTimeStr = new Intl.DateTimeFormat('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: !is24Hour
+            }).format(now);
+            viewerLocalComparison.textContent = `Your local time: ${viewerLocalTimeStr}`;
+        }
+
+        /**
+         * Switches the UI to Generator Mode
+         */
+        function renderGeneratorMode() {
+            clearInterval(clockInterval);
+            viewerView.classList.add('hidden');
+            generatorView.classList.remove('hidden');
+            headerActionArea.innerHTML = '';
+
+            populateTimezones();
+            clockInterval = setInterval(updateGeneratorPreview, 1000);
+        }
+
+        /**
+         * Switches the UI to Viewer Mode with parsed URL attributes
+         */
+        function renderViewerMode(rawName, rawTz) {
+            clearInterval(clockInterval);
+            generatorView.classList.add('hidden');
+            viewerView.classList.remove('hidden');
+
+            // Top right shortcut to create a new link
+            headerActionArea.innerHTML = `
+                <button id="headerNewLinkBtn" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition-colors cursor-pointer">
+                    + New Link
+                </button>
+            `;
+            document.getElementById('headerNewLinkBtn').addEventListener('click', resetToGenerator);
+
+            const cleanName = (rawName || 'Someone').trim();
+            displayUserName.textContent = cleanName;
+            userAvatar.textContent = cleanName.charAt(0).toUpperCase();
+            document.title = `${cleanName}'s Time — TimeSync`;
+
+            // Validate timezone from URL
+            let validTz = rawTz;
+            if (!isValidTimeZone(rawTz)) {
+                invalidTzBanner.classList.remove('hidden');
+                invalidTzMessage.textContent = `"${rawTz || 'empty'}" is not a valid IANA timezone. Showing UTC instead.`;
+                validTz = 'UTC';
+            } else {
+                invalidTzBanner.classList.add('hidden');
+            }
+
+            viewerTzName.textContent = validTz.replace(/_/g, ' ');
+            viewerTzName.title = validTz;
+
+            activeViewerData = { name: cleanName, tz: validTz };
+            updateViewerClock();
+            clockInterval = setInterval(updateViewerClock, 1000);
+        }
+
+        /**
+         * Resets URL query attributes cleanly and shows the Generator view
+         */
+        function resetToGenerator(e) {
+            if (e) e.preventDefault();
+            const cleanUrl = window.location.pathname;
+            window.history.pushState({}, '', cleanUrl);
+            document.title = 'TimeSync — Share Your Local Time';
+            resultBox.classList.add('hidden');
+            renderGeneratorMode();
+        }
+
+        /**
+         * Main Router: Checks URL parameters on load or navigation
+         */
+        function routeFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const nameParam = params.get('name');
+            const tzParam = params.get('tz') || params.get('timezone');
+
+            if (nameParam || tzParam) {
+                renderViewerMode(nameParam || 'Friend', tzParam);
+            } else {
+                renderGeneratorMode();
+            }
+        }
+
+        // --- Event Listeners ---
+
+        // Form submission -> Generate URL
+        linkGeneratorForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = usernameInput.value.trim();
+            const tz = timezoneSelect.value;
+
+            if (!name) {
+                showToast('Please enter your name');
+                return;
+            }
+
+            const shareUrl = buildShareableUrl(name, tz);
+            generatedUrlInput.value = shareUrl;
+            openGeneratedLinkBtn.href = shareUrl;
+            resultBox.classList.remove('hidden');
+            
+            // Automatically copy to clipboard for convenience
+            copyToClipboard(shareUrl, 'Shareable link generated & copied!');
+        });
+
+        // Preview generated link directly via SPA navigation
+        openGeneratedLinkBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetUrl = openGeneratedLinkBtn.href;
+            window.history.pushState({}, '', targetUrl);
+            routeFromUrl();
+        });
+
+        // Copy button inside Generator
+        copyLinkBtn.addEventListener('click', () => {
+            copyToClipboard(generatedUrlInput.value);
+        });
+
+        // Auto-detect button
+        autoDetectBtn.addEventListener('click', () => {
+            detectUserTimezone();
+            showToast('Timezone auto-detected');
+        });
+
+        // Update preview clock when dropdown changes
+        timezoneSelect.addEventListener('change', updateGeneratorPreview);
+
+        // Toggle 12h / 24h in Viewer
+        toggleFormatBtn.addEventListener('click', () => {
+            is24Hour = !is24Hour;
+            formatBtnLabel.textContent = is24Hour ? 'Switch to 12-hour' : 'Switch to 24-hour';
+            updateViewerClock();
+        });
+
+        // Copy current URL in Viewer
+        copyCurrentUrlBtn.addEventListener('click', () => {
+            copyToClipboard(window.location.href);
+        });
+
+        // Create Own Link button in Viewer
+        createOwnBtn.addEventListener('click', resetToGenerator);
+
+        // Brand Logo resets to Generator
+        brandLogo.addEventListener('click', resetToGenerator);
+
+        // Handle browser back/forward buttons
+        window.addEventListener('popstate', routeFromUrl);
+
+        // Initialize application
+        routeFromUrl();
+    </script>
+</body>
+</html>
