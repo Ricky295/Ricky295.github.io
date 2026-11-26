@@ -41,7 +41,7 @@
             </div>
             <span>TimeSync</span>
         </a>
-        <div id="headerActionArea"></div>
+        <div id="headerActionArea" class="flex items-center gap-2"></div>
     </header>
 
     <!-- Main Content Container -->
@@ -239,15 +239,26 @@
             </div>
 
             <!-- Footer Actions inside Viewer -->
-            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-800/80">
-                <button 
-                    type="button" 
-                    id="copyCurrentUrlBtn" 
-                    class="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                >
-                    <i class="fa-solid fa-share-nodes"></i>
-                    <span id="copyCurrentUrlText">Copy Link</span>
-                </button>
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-4 border-t border-slate-800/80">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <button 
+                        type="button" 
+                        id="saveFriendBtn" 
+                        class="flex-1 sm:flex-initial px-4 py-2.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-semibold rounded-xl border border-emerald-500/30 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                        <i id="saveFriendIcon" class="fa-regular fa-bookmark"></i>
+                        <span id="saveFriendText">Save Friend</span>
+                    </button>
+
+                    <button 
+                        type="button" 
+                        id="copyCurrentUrlBtn" 
+                        class="flex-1 sm:flex-initial px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                        <i class="fa-solid fa-share-nodes"></i>
+                        <span id="copyCurrentUrlText">Copy Link</span>
+                    </button>
+                </div>
 
                 <button 
                     type="button" 
@@ -255,8 +266,51 @@
                     class="w-full sm:w-auto px-4 py-2.5 bg-indigo-600/15 hover:bg-indigo-600/25 text-indigo-300 text-xs font-semibold rounded-xl border border-indigo-500/30 transition-colors flex items-center justify-center gap-2 cursor-pointer"
                 >
                     <i class="fa-solid fa-plus"></i>
-                    <span>Create Your Own Link</span>
+                    <span>Create Link</span>
                 </button>
+            </div>
+        </section>
+
+        <!-- VIEW 3: HOME / SAVED FRIENDS VIEW (When ?view=home is active) -->
+        <section id="homeView" class="hidden bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
+            <div class="flex items-center justify-between gap-3 mb-6">
+                <div>
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/20 mb-2">
+                        <i class="fa-solid fa-users text-[10px]"></i> Saved Timezones
+                    </span>
+                    <h1 class="text-2xl font-extrabold text-white tracking-tight">Friends' Clocks</h1>
+                </div>
+                <button 
+                    type="button" 
+                    id="homeCreateLinkBtn" 
+                    class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                    <i class="fa-solid fa-plus"></i>
+                    <span>New Link</span>
+                </button>
+            </div>
+
+            <!-- Empty State when no friends are saved yet -->
+            <div id="emptyFriendsState" class="hidden text-center py-10 px-4 bg-slate-950/50 border border-slate-800/80 rounded-2xl">
+                <div class="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto mb-3 text-slate-500">
+                    <i class="fa-regular fa-bookmark text-lg"></i>
+                </div>
+                <h2 class="text-base font-semibold text-slate-200">No saved friends yet</h2>
+                <p class="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">
+                    Open a friend's TimeSync link and click <span class="text-emerald-400 font-medium">Save Friend</span> to keep track of their live local time here.
+                </p>
+                <button 
+                    type="button" 
+                    id="emptyStateCreateBtn" 
+                    class="mt-5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-colors cursor-pointer"
+                >
+                    Create a Timezone Link
+                </button>
+            </div>
+
+            <!-- List of Saved Friends -->
+            <div id="friendsListContainer" class="space-y-3">
+                <!-- Populated dynamically via JS -->
             </div>
         </section>
 
@@ -284,10 +338,12 @@
         let is24Hour = false;
         let clockInterval = null;
         let activeViewerData = null;
+        const STORAGE_KEY = 'timesync_saved_friends_v1';
 
         // DOM References
         const generatorView = document.getElementById('generatorView');
         const viewerView = document.getElementById('viewerView');
+        const homeView = document.getElementById('homeView');
         const headerActionArea = document.getElementById('headerActionArea');
         const brandLogo = document.getElementById('brandLogo');
 
@@ -321,8 +377,17 @@
         const viewerTzOffset = document.getElementById('viewerTzOffset');
         const viewerRelativeDiff = document.getElementById('viewerRelativeDiff');
         const viewerLocalComparison = document.getElementById('viewerLocalComparison');
+        const saveFriendBtn = document.getElementById('saveFriendBtn');
+        const saveFriendIcon = document.getElementById('saveFriendIcon');
+        const saveFriendText = document.getElementById('saveFriendText');
         const copyCurrentUrlBtn = document.getElementById('copyCurrentUrlBtn');
         const createOwnBtn = document.getElementById('createOwnBtn');
+
+        // Home / Saved Friends DOM Elements
+        const homeCreateLinkBtn = document.getElementById('homeCreateLinkBtn');
+        const emptyFriendsState = document.getElementById('emptyFriendsState');
+        const emptyStateCreateBtn = document.getElementById('emptyStateCreateBtn');
+        const friendsListContainer = document.getElementById('friendsListContainer');
 
         // Toast Elements
         const toastNotification = document.getElementById('toastNotification');
@@ -532,6 +597,116 @@
         }
 
         /**
+         * LocalStorage Helpers for Saved Friends
+         */
+        function getSavedFriends() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                const parsed = raw ? JSON.parse(raw) : [];
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+                console.warn('Error reading saved friends from localStorage', e);
+                return [];
+            }
+        }
+
+        function setSavedFriends(friends) {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(friends));
+            } catch (e) {
+                showToast('Could not save to browser storage');
+            }
+        }
+
+        function isFriendSaved(name, tz) {
+            const friends = getSavedFriends();
+            return friends.some(f => f.name.toLowerCase() === name.toLowerCase() && f.tz === tz);
+        }
+
+        function toggleSaveFriend(name, tz) {
+            const friends = getSavedFriends();
+            const existingIndex = friends.findIndex(
+                f => f.name.toLowerCase() === name.toLowerCase() && f.tz === tz
+            );
+
+            if (existingIndex >= 0) {
+                friends.splice(existingIndex, 1);
+                setSavedFriends(friends);
+                showToast(`Removed ${name} from saved`);
+                return false;
+            } else {
+                friends.unshift({
+                    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                    name: name.trim(),
+                    tz: tz
+                });
+                setSavedFriends(friends);
+                showToast(`Saved ${name} to Home!`);
+                return true;
+            }
+        }
+
+        function removeFriendById(id) {
+            const friends = getSavedFriends().filter(f => f.id !== id);
+            setSavedFriends(friends);
+            renderHomeList();
+            updateHeaderActions();
+            showToast('Removed from saved');
+        }
+
+        /**
+         * Updates the top-right header navigation buttons dynamically
+         */
+        function updateHeaderActions(currentMode) {
+            const count = getSavedFriends().length;
+            const badgeHtml = count > 0 
+                ? `<span class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-indigo-500/30 text-indigo-200">${count}</span>` 
+                : '';
+
+            let html = '';
+            if (currentMode !== 'home') {
+                html += `
+                    <button id="headerHomeBtn" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 transition-colors flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-solid fa-house text-[11px] text-sky-400"></i>
+                        <span>Home</span>${badgeHtml}
+                    </button>
+                `;
+            }
+            if (currentMode !== 'generator') {
+                html += `
+                    <button id="headerNewLinkBtn" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition-colors cursor-pointer">
+                        + New
+                    </button>
+                `;
+            }
+
+            headerActionArea.innerHTML = html;
+
+            const homeBtn = document.getElementById('headerHomeBtn');
+            if (homeBtn) homeBtn.addEventListener('click', navigateToHome);
+
+            const newLinkBtn = document.getElementById('headerNewLinkBtn');
+            if (newLinkBtn) newLinkBtn.addEventListener('click', resetToGenerator);
+        }
+
+        /**
+         * Updates the Save button appearance in Viewer Mode
+         */
+        function updateSaveButtonState() {
+            if (!activeViewerData) return;
+            const saved = isFriendSaved(activeViewerData.name, activeViewerData.tz);
+            if (saved) {
+                saveFriendIcon.className = 'fa-solid fa-bookmark text-emerald-400';
+                saveFriendText.textContent = 'Saved';
+                saveFriendBtn.className = 'flex-1 sm:flex-initial px-4 py-2.5 bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-200 text-xs font-semibold rounded-xl border border-emerald-400/40 transition-colors flex items-center justify-center gap-2 cursor-pointer';
+            } else {
+                saveFriendIcon.className = 'fa-regular fa-bookmark';
+                saveFriendText.textContent = 'Save Friend';
+                saveFriendBtn.className = 'flex-1 sm:flex-initial px-4 py-2.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-semibold rounded-xl border border-emerald-500/30 transition-colors flex items-center justify-center gap-2 cursor-pointer';
+            }
+        }
+
+        /**
          * Updates the Viewer UI with live time, day/night status, and offset comparison
          */
         function updateViewerClock() {
@@ -631,8 +806,9 @@
         function renderGeneratorMode() {
             clearInterval(clockInterval);
             viewerView.classList.add('hidden');
+            homeView.classList.add('hidden');
             generatorView.classList.remove('hidden');
-            headerActionArea.innerHTML = '';
+            updateHeaderActions('generator');
 
             populateTimezones();
             clockInterval = setInterval(updateGeneratorPreview, 1000);
@@ -644,15 +820,9 @@
         function renderViewerMode(rawName, rawTz) {
             clearInterval(clockInterval);
             generatorView.classList.add('hidden');
+            homeView.classList.add('hidden');
             viewerView.classList.remove('hidden');
-
-            // Top right shortcut to create a new link
-            headerActionArea.innerHTML = `
-                <button id="headerNewLinkBtn" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition-colors cursor-pointer">
-                    + New Link
-                </button>
-            `;
-            document.getElementById('headerNewLinkBtn').addEventListener('click', resetToGenerator);
+            updateHeaderActions('viewer');
 
             const cleanName = (rawName || 'Someone').trim();
             displayUserName.textContent = cleanName;
@@ -673,8 +843,142 @@
             viewerTzName.title = validTz;
 
             activeViewerData = { name: cleanName, tz: validTz };
+            updateSaveButtonState();
             updateViewerClock();
             clockInterval = setInterval(updateViewerClock, 1000);
+        }
+
+        /**
+         * Renders the Home / Saved Friends dashboard list
+         */
+        function renderHomeList() {
+            const friends = getSavedFriends();
+            friendsListContainer.innerHTML = '';
+
+            if (friends.length === 0) {
+                emptyFriendsState.classList.remove('hidden');
+                return;
+            }
+
+            emptyFriendsState.classList.add('hidden');
+            const now = new Date();
+            const viewerLocalTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const localOffsetMins = getTimezoneOffsetMinutes(now, viewerLocalTz);
+
+            friends.forEach(friend => {
+                const validTz = isValidTimeZone(friend.tz) ? friend.tz : 'UTC';
+                
+                // Time & Date formatting
+                const timeStr = new Intl.DateTimeFormat('en-US', {
+                    timeZone: validTz,
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: !is24Hour
+                }).format(now);
+
+                const dayStr = new Intl.DateTimeFormat('en-US', {
+                    timeZone: validTz,
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric'
+                }).format(now);
+
+                // Day/Night icon
+                const hour24 = parseInt(new Intl.DateTimeFormat('en-US', {
+                    timeZone: validTz,
+                    hour: 'numeric',
+                    hour12: false
+                }).format(now), 10) % 24;
+
+                let statusIcon = '<i class="fa-solid fa-moon text-indigo-400 text-xs"></i>';
+                if (hour24 >= 6 && hour24 < 18) {
+                    statusIcon = '<i class="fa-solid fa-sun text-amber-400 text-xs"></i>';
+                } else if (hour24 >= 18 && hour24 < 21) {
+                    statusIcon = '<i class="fa-solid fa-cloud-sun text-orange-400 text-xs"></i>';
+                }
+
+                // Relative offset badge
+                const targetOffsetMins = getTimezoneOffsetMinutes(now, validTz);
+                const diffMins = targetOffsetMins - localOffsetMins;
+                let diffText = 'Same time';
+                if (diffMins !== 0) {
+                    const absDiff = Math.abs(diffMins);
+                    const hrs = Math.floor(absDiff / 60);
+                    const mins = absDiff % 60;
+                    const label = `${hrs > 0 ? hrs + 'h' : ''}${mins > 0 ? ' ' + mins + 'm' : ''}`.trim();
+                    diffText = diffMins > 0 ? `+${label}` : `-${label}`;
+                }
+
+                const card = document.createElement('div');
+                card.className = 'group bg-slate-950/60 hover:bg-slate-950 border border-slate-800/90 hover:border-slate-700 rounded-2xl p-4 flex items-center justify-between gap-3 transition-all';
+                card.innerHTML = `
+                    <a href="?name=${encodeURIComponent(friend.name)}&tz=${encodeURIComponent(validTz)}" class="flex items-center gap-3.5 min-w-0 flex-1 friend-link">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/80 to-purple-600/80 flex items-center justify-center text-white font-bold text-base shrink-0">
+                            ${friend.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <h3 class="font-bold text-white text-sm sm:text-base truncate">${friend.name}</h3>
+                                ${statusIcon}
+                            </div>
+                            <p class="text-xs text-slate-400 truncate">${validTz.replace(/_/g, ' ')} · <span class="text-slate-500">${diffText}</span></p>
+                        </div>
+                    </a>
+                    <div class="flex items-center gap-3 shrink-0">
+                        <div class="text-right">
+                            <div class="font-mono text-lg sm:text-xl font-bold text-white leading-none">${timeStr}</div>
+                            <div class="text-[11px] text-slate-500 mt-1">${dayStr}</div>
+                        </div>
+                        <button type="button" data-remove-id="${friend.id}" title="Remove saved friend" class="p-2 text-slate-600 hover:text-rose-400 rounded-lg hover:bg-slate-900 transition-colors cursor-pointer">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
+                `;
+
+                // Handle SPA link click
+                const linkEl = card.querySelector('.friend-link');
+                linkEl.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    window.history.pushState({}, '', linkEl.getAttribute('href'));
+                    routeFromUrl();
+                });
+
+                // Handle delete click
+                const removeBtn = card.querySelector('[data-remove-id]');
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removeFriendById(friend.id);
+                });
+
+                friendsListContainer.appendChild(card);
+            });
+        }
+
+        /**
+         * Switches the UI to Home / Saved Friends Mode
+         */
+        function renderHomeMode() {
+            clearInterval(clockInterval);
+            generatorView.classList.add('hidden');
+            viewerView.classList.add('hidden');
+            homeView.classList.remove('hidden');
+            updateHeaderActions('home');
+            document.title = 'Home — TimeSync';
+
+            renderHomeList();
+            clockInterval = setInterval(renderHomeList, 1000);
+        }
+
+        /**
+         * Navigates to the Home view via URL query parameter (?view=home)
+         */
+        function navigateToHome(e) {
+            if (e) e.preventDefault();
+            const url = new URL(window.location.href);
+            url.search = '';
+            url.searchParams.set('view', 'home');
+            window.history.pushState({}, '', url.toString());
+            routeFromUrl();
         }
 
         /**
@@ -694,10 +998,13 @@
          */
         function routeFromUrl() {
             const params = new URLSearchParams(window.location.search);
+            const viewParam = params.get('view');
             const nameParam = params.get('name');
             const tzParam = params.get('tz') || params.get('timezone');
 
-            if (nameParam || tzParam) {
+            if (viewParam === 'home') {
+                renderHomeMode();
+            } else if (nameParam || tzParam) {
                 renderViewerMode(nameParam || 'Friend', tzParam);
             } else {
                 renderGeneratorMode();
@@ -760,8 +1067,18 @@
             copyToClipboard(window.location.href);
         });
 
-        // Create Own Link button in Viewer
+        // Save / Unsave Friend button in Viewer
+        saveFriendBtn.addEventListener('click', () => {
+            if (!activeViewerData) return;
+            toggleSaveFriend(activeViewerData.name, activeViewerData.tz);
+            updateSaveButtonState();
+            updateHeaderActions('viewer');
+        });
+
+        // Create Own Link button in Viewer & Home
         createOwnBtn.addEventListener('click', resetToGenerator);
+        homeCreateLinkBtn.addEventListener('click', resetToGenerator);
+        emptyStateCreateBtn.addEventListener('click', resetToGenerator);
 
         // Brand Logo resets to Generator
         brandLogo.addEventListener('click', resetToGenerator);
